@@ -1,1 +1,3 @@
 *.code-workspace
+*.sh
+.DS_Store
