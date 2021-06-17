@@ -11,11 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	filename = "hello"
-	contents = "hello, world\n"
-)
-
 const sRDONLY = 00555
 
 // Connectfs stores the filesystem structure
@@ -50,6 +45,7 @@ func CreateFileSystem() *Connectfs {
 	return &c
 }
 
+// populateDirectory creates the nodes (files and directories) of the filesystem
 func (fs *Connectfs) populateDirectory(dir string, timestamp fuse.Timespec) {
 	// Remove characters which may interfere with filesystem structure
 	//dir = strings.Replace(dir, "/", "_", -1)
@@ -85,6 +81,7 @@ func (fs *Connectfs) populateDirectory(dir string, timestamp fuse.Timespec) {
 	}
 }
 
+// dirChildren will be replaced with a function that gets this info from api
 func (fs *Connectfs) dirChildren(dir string) (dirs []string, files []os.FileInfo, err error) {
 	ch, err := ioutil.ReadDir(filepath.FromSlash(fs.origin + "/" + dir))
 
