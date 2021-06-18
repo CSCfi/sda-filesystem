@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const sRDONLY = 00555
+const sRDONLY = 00444
 
 // Connectfs stores the filesystem structure
 type Connectfs struct {

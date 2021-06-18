@@ -89,7 +89,11 @@ func main() {
 
 	connectfs := filesystem.CreateFileSystem()
 	host := fuse.NewFileSystemHost(connectfs)
-	host.Mount(mount, []string{})
+	options := []string{}
+	if runtime.GOOS == "darwin" {
+		options = append(options, "-o", "defer_permissions")
+	}
+	host.Mount(mount, options)
 
 	<-done
 }

@@ -78,7 +78,7 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	return
 }
 
-// Readdir reads the contents of a directory
+// Readdir reads the contents of a directory.
 func (fs *Connectfs) Readdir(path string,
 	fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
 	ofst int64, fh uint64) (errc int) {
