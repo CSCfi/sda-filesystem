@@ -1,23 +1,9 @@
 package filesystem
 
 import (
-	"fmt"
-
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
 )
-
-// Destroy is called when filesystem is unmounted.
-func (fs *Connectfs) Destroy() {
-	defer fs.synchronize()()
-	fmt.Println("I am destroyed :(")
-}
-
-// Init is called when filesystem is initialized.
-func (fs *Connectfs) Init() {
-	defer fs.synchronize()()
-	fmt.Println("I am initialized :)")
-}
 
 // Open opens a file.
 func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
@@ -58,7 +44,7 @@ func (fs *Connectfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc in
 	return 0
 }
 
-// Read returns bytes from a file. (Will be implemented when api is ready)
+// Read returns bytes from a file
 func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n int) {
 	defer fs.synchronize()()
 	log.Debugf("Read %s", path)

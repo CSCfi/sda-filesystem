@@ -1,14 +1,14 @@
 package filesystem
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/cscfi/sd-connect-fuse/internal/api"
 )
 
 const sRDONLY = 00444
@@ -20,7 +20,6 @@ type Connectfs struct {
 	ino     uint64
 	root    *node
 	openmap map[uint64]*node
-	origin  string
 }
 
 type node struct {
@@ -32,79 +31,93 @@ type node struct {
 
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
 func CreateFileSystem() *Connectfs {
-	log.Debug("Creating in-memory filesystem database")
+	log.Info("Creating in-memory filesystem database")
 	timestamp := fuse.Now()
 	c := Connectfs{}
 	defer c.synchronize()()
 	c.ino++
 	c.openmap = map[uint64]*node{}
 	c.root = newNode(0, c.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-	c.origin = "/Users/emrehn/Documents/work/examples" // Remove this!
-	c.populateDirectory("", timestamp)
-	log.Debug("Filesystem database completed")
+	c.populateFilesystem(timestamp)
+	log.Info("Filesystem database completed")
 	return &c
 }
 
 // populateDirectory creates the nodes (files and directories) of the filesystem
-func (fs *Connectfs) populateDirectory(dir string, timestamp fuse.Timespec) {
-	// Remove characters which may interfere with filesystem structure
-	//dir = strings.Replace(dir, "/", "_", -1)
-	//dir = strings.Replace(dir, ":", ".", -1) // For Windows
-
-	// Create a dataset directory
-	log.Debugf("Creating directory %v", dir)
-	fs.makeNode(dir, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-
-	/*files, err := doa.GetDatasetFiles(datasets[i])
+func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
+	projects, err := api.GetProjects()
 	if err != nil {
 		log.Error(err)
-	}*/
-	dirs, files, err := fs.dirChildren(dir)
-
-	if err != nil {
-		log.Error(err)
-		return
 	}
-
-	// Create file handles
-	for j := range files {
-		// Create a file handle
-		log.Debugf("Creating file handler for file %s", files[j].Name())
-		p := filepath.FromSlash(dir + "/" + files[j].Name())
-		log.Debug(p)
-		fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, files[j].Size(), timestamp)
+	if len(projects) == 0 {
+		log.Fatal("No project permissions found")
 	}
+	log.Infof("Receiving %d projects", len(projects))
 
-	for j := range dirs {
-		p := filepath.FromSlash(dir + "/" + dirs[j])
-		fs.populateDirectory(p, timestamp)
+	// Create dataset directories
+	for i := range projects {
+		// Remove characters which may interfere with filesystem structure
+		project := removeInvalidChars(projects[i])
+
+		// Create a project directory
+		log.Debugf("Creating project %s", project)
+		fs.makeNode(project, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+
+		containers, err := api.GetContainers(projects[i])
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+
+		for j := range containers {
+			// Remove characters which may interfere with filesystem structure
+			container := removeInvalidChars(containers[j].Name)
+			containerPath := project + "/" + container
+
+			// Create a project directory
+			log.Debugf("Creating container %s", containerPath)
+			p := filepath.FromSlash(containerPath)
+			fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+
+			objects, err := api.GetObjects(project, container)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+
+			for _, obj := range objects {
+				nodes := split(obj.Name)
+				objectPath := containerPath
+
+				for n := range nodes {
+					objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
+					p := filepath.FromSlash(objectPath)
+
+					if n == len(nodes)-1 {
+						fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp) // TODO: size
+					} else {
+						fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+					}
+				}
+			}
+		}
 	}
 }
 
-// dirChildren will be replaced with a function that gets this info from api
-func (fs *Connectfs) dirChildren(dir string) (dirs []string, files []os.FileInfo, err error) {
-	ch, err := ioutil.ReadDir(filepath.FromSlash(fs.origin + "/" + dir))
+// split deconstructs a filepath string into an array of strings
+func split(path string) []string {
+	return strings.Split(path, "/")
+}
 
-	if err != nil {
-		log.Errorf("Couldn't read directory %v. Directory left empty.", dir)
-		return
-	}
-
-	for _, entry := range ch {
-		if entry.IsDir() {
-			dirs = append(dirs, entry.Name())
-		} else {
-			files = append(files, entry)
-		}
-	}
-	return
+func removeInvalidChars(str string) string {
+	return strings.Replace(strings.Replace(str, "/", "_", -1), ":", ".", -1)
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
 func (fs *Connectfs) lookupNode(path string, ancestor *node) (prnt *node, name string, node *node) {
 	prnt, node = fs.root, fs.root
 	name = ""
-	for _, c := range strings.Split(filepath.ToSlash(path), "/") {
+	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
 			if len(c) > 255 {
 				panic(fuse.Error(-fuse.ENAMETOOLONG))
