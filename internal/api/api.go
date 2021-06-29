@@ -86,19 +86,21 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
-		caCertPool = nil // So that default root ca are used
+		caCertPool = nil // So that default root certs are used
 	}
 
 	// Set up HTTP client
 	timeout := time.Duration(RequestTimeout) * time.Second
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns = 100
+	t.MaxConnsPerHost = 100
+	t.MaxIdleConnsPerHost = 100
+	t.TLSClientConfig = &tls.Config{
+		RootCAs: caCertPool,
+	}
 	client := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: caCertPool,
-			},
-			ForceAttemptHTTP2: true,
-		},
+		Timeout:   timeout,
+		Transport: t,
 	}
 
 	// Build HTTP request
@@ -123,7 +125,6 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 	for count := 0; count == 0 || (err != nil && count < httpRetry); {
 		response, err = client.Do(request)
 		log.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, httpRetry)
-		log.Debug(err)
 		count++
 	}
 	if err != nil {
@@ -132,7 +133,7 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 	defer response.Body.Close()
 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
-		return nil, fmt.Errorf("Metadata API responded with status %d", response.StatusCode)
+		return nil, fmt.Errorf("API responded with status %d", response.StatusCode)
 	}
 
 	// Parse request
@@ -197,8 +198,22 @@ func GetObjects(project, container string) ([]DataObject, error) {
 	return objects, nil
 }
 
-/*
 // DownloadData ...
-func DownloadData(fileID string, start int64, end int64) ([]byte, error) {
+func DownloadData(path string, start int64, end int64) ([]byte, error) {
+	parts := strings.SplitN(strings.TrimLeft(path, "/"), "/", 3)
+	// Query params
+	query := map[string]string{
+		"project":   parts[0],
+		"container": parts[1],
+		"object":    parts[2],
+	}
+
+	// Download data
+	response, err := makeRequest(strings.TrimRight(DataURL, "/")+"/data", query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Downloaded object %s", path)
+	//log.Infof("Downloaded object %s from coordinates %d-%d", path, start, end)
+	return response, nil
 }
-*/

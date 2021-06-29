@@ -1,35 +1,35 @@
 package filesystem
 
 import (
+	"path/filepath"
+
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/cscfi/sd-connect-fuse/internal/api"
 )
 
 // Open opens a file.
 func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 	defer fs.synchronize()()
-	log.Debugf("Open %s", path)
 	return fs.openNode(path, false)
 }
 
 // Opendir opens a directory.
 func (fs *Connectfs) Opendir(path string) (errc int, fh uint64) {
 	defer fs.synchronize()()
-	log.Debugf("Opendir %s", path)
 	return fs.openNode(path, true)
 }
 
 // Release closes a file.
 func (fs *Connectfs) Release(path string, fh uint64) (errc int) {
 	defer fs.synchronize()()
-	log.Debugf("Release %s", path)
 	return fs.closeNode(fh)
 }
 
 // Releasedir closes a directory.
 func (fs *Connectfs) Releasedir(path string, fh uint64) (errc int) {
 	defer fs.synchronize()()
-	log.Debugf("Releasedir %s", path)
 	return fs.closeNode(fh)
 }
 
@@ -50,8 +50,11 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	log.Debugf("Read %s", path)
 	node := fs.getNode(path, fh)
 	if nil == node {
+		log.Errorf("Read %s, inode does't exist", path)
 		return -fuse.ENOENT
 	}
+	path = filepath.ToSlash(path)
+	// Get file end coordinate
 	endofst := ofst + int64(len(buff))
 	if endofst > node.stat.Size {
 		endofst = node.stat.Size
@@ -59,8 +62,22 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	if endofst < ofst {
 		return 0
 	}
-	n = 0 //copy(buff, node.data[ofst:endofst])
+
+	if len(node.data) == 0 {
+		// Download data from file
+		data, err := api.DownloadData(path, ofst, endofst)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		node.data = make([]byte, len(data))
+		copy(node.data, data)
+	}
+
+	n = copy(buff, node.data[ofst:endofst])
+	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
+	log.Debugf("File %s has been accessed/read", path)
 	return
 }
 
@@ -68,7 +85,6 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 func (fs *Connectfs) Readdir(path string,
 	fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
 	ofst int64, fh uint64) (errc int) {
-	log.Debugf("Readdir %s", path)
 	defer fs.synchronize()()
 	node := fs.openmap[fh]
 	fill(".", &node.stat, 0)
@@ -80,5 +96,3 @@ func (fs *Connectfs) Readdir(path string,
 	}
 	return 0
 }
-
-//func (*FileSystemHost) Unmount

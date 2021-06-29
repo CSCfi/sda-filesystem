@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -19,7 +20,10 @@ import (
 	"github.com/cscfi/sd-connect-fuse/internal/filesystem"
 )
 
+const dirName = "Projects"
+
 var mount string
+var daemonTimeout int
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
@@ -27,7 +31,7 @@ func mountPoint() string {
 	if err != nil {
 		log.Fatal("Could not find user home directory", err)
 	}
-	p := filepath.FromSlash(filepath.ToSlash(home) + "/Projects")
+	p := filepath.FromSlash(filepath.ToSlash(home) + "/" + dirName)
 	return p
 }
 
@@ -76,7 +80,8 @@ func init() {
 	flag.StringVar(&api.MetadataURL, "metadataurl", "", "URL to sd-connect metadata API repository")
 	flag.StringVar(&api.Certificate, "certificate", "", "TLS certificates for repositories")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&api.RequestTimeout, "timeout", 600, "Number of seconds to wait before timing out an HTTP request")
+	flag.IntVar(&api.RequestTimeout, "http_timeout", 3000, "Number of seconds to wait before timing out an HTTP request")
+	flag.IntVar(&daemonTimeout, "daemon_timeout", 3000, "Number of seconds during which fuse has to answer kernel")
 	flag.Parse()
 
 	setLogger(logLevel)
@@ -133,6 +138,8 @@ func main() {
 	options := []string{}
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
+		options = append(options, "-o", "volname="+dirName)
+		options = append(options, "-o", "daemon_timeout="+strconv.Itoa(daemonTimeout))
 	}
 	host.Mount(mount, options)
 

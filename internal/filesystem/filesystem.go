@@ -79,6 +79,12 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 			p := filepath.FromSlash(containerPath)
 			fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 
+			// TODO: Temporary
+			if containers[j].Count > 200000 {
+				log.Errorf("Container %s too large (%d)", containers[j].Name, containers[j].Count)
+				continue
+			}
+
 			objects, err := api.GetObjects(project, container)
 			if err != nil {
 				log.Error(err)
@@ -94,7 +100,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 					p := filepath.FromSlash(objectPath)
 
 					if n == len(nodes)-1 {
-						fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp) // TODO: size
+						fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
 					} else {
 						fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 					}
