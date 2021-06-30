@@ -19,30 +19,26 @@ import (
 )
 
 var (
-	// Certificate ...
+	// Certificate is the TLS certificate to repositories
 	Certificate string
-	// RequestTimeout ...
+	// RequestTimeout dictates the number of seconds to wait before timing out an http request
 	RequestTimeout int
-	// MetadataURL ...
+	// MetadataURL is url to metadata API
 	MetadataURL string
-	// DataURL ...
-	DataURL string
-	// Project ...
-	Project string
-	// hhtpRetry ...
+	// DataURL is url to data API
+	DataURL   string
 	httpRetry int = 5
-	// token ...
-	token string
+	token     string
 )
 
-// Container ...
+// Container stores container data from metadata API
 type Container struct {
 	Bytes int64  `json:"bytes"`
 	Count int64  `json:"count"`
 	Name  string `json:"name"`
 }
 
-// DataObject ...
+// DataObject stores object data from metadata API
 type DataObject struct {
 	Bytes       int64  `json:"bytes"`
 	ContentType string `json:"content_type"`
@@ -51,7 +47,7 @@ type DataObject struct {
 	Subdir      string `json:"subdir"`
 }
 
-// CreateToken ...
+// CreateToken creates the authorization token based on username + password
 func CreateToken() {
 	fmt.Print("Enter username: ")
 	scanner := bufio.NewScanner(os.Stdin)
@@ -73,6 +69,8 @@ func CreateToken() {
 	token = base64.StdEncoding.EncodeToString([]byte(username + ":" + string(password)))
 }
 
+// makeRequest builds an authenticated HTTP client
+// which sends HTTP requests and parses the responses
 func makeRequest(url string, query map[string]string) ([]byte, error) {
 	var response *http.Response
 
@@ -92,9 +90,12 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 	// Set up HTTP client
 	timeout := time.Duration(RequestTimeout) * time.Second
 	t := http.DefaultTransport.(*http.Transport).Clone()
+
+	// Don't know if these are needed
 	t.MaxIdleConns = 100
 	t.MaxConnsPerHost = 100
 	t.MaxIdleConnsPerHost = 100
+
 	t.TLSClientConfig = &tls.Config{
 		RootCAs: caCertPool,
 	}
@@ -145,7 +146,7 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 	return r, nil
 }
 
-// GetProjects ...
+// GetProjects gets all projects user has access to
 func GetProjects() ([]string, error) {
 	// Request projects
 	response, err := makeRequest(strings.TrimRight(MetadataURL, "/")+"/projects", nil)
@@ -163,9 +164,9 @@ func GetProjects() ([]string, error) {
 	return projects, nil
 }
 
-// GetContainers ...
+// GetContainers gets conatiners inside the object
 func GetContainers(project string) ([]Container, error) {
-	// Request datasets
+	// Request conteiners
 	response, err := makeRequest(strings.TrimRight(MetadataURL, "/")+"/project/"+project+"/containers", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving container from project %s failed: %w", project, err)
@@ -181,9 +182,9 @@ func GetContainers(project string) ([]Container, error) {
 	return containers, nil
 }
 
-// GetObjects ...
+// GetObjects gets objects inside container
 func GetObjects(project, container string) ([]DataObject, error) {
-	// Request object details
+	// Request objects
 	response, err := makeRequest(strings.TrimRight(MetadataURL, "/")+"/project/"+project+"/container/"+container+"/objects", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects from container %s failed: %w", container, err)
@@ -198,7 +199,7 @@ func GetObjects(project, container string) ([]DataObject, error) {
 	return objects, nil
 }
 
-// DownloadData ...
+// DownloadData gets content of object from data API
 func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	parts := strings.SplitN(strings.TrimLeft(path, "/"), "/", 3)
 	// Query params
@@ -208,7 +209,7 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 		"object":    parts[2],
 	}
 
-	// Download data
+	// Request data
 	response, err := makeRequest(strings.TrimRight(DataURL, "/")+"/data", query)
 	if err != nil {
 		return nil, err

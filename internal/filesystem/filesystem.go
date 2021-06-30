@@ -54,7 +54,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	}
 	log.Infof("Receiving %d projects", len(projects))
 
-	// Create dataset directories
 	for i := range projects {
 		// Remove characters which may interfere with filesystem structure
 		project := removeInvalidChars(projects[i])
@@ -72,14 +71,15 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 		for j := range containers {
 			// Remove characters which may interfere with filesystem structure
 			container := removeInvalidChars(containers[j].Name)
+
 			containerPath := project + "/" + container
 
-			// Create a project directory
+			// Create a container directory
 			log.Debugf("Creating container %s", containerPath)
 			p := filepath.FromSlash(containerPath)
 			fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 
-			// TODO: Temporary
+			// TODO: Remove
 			if containers[j].Count > 200000 {
 				log.Errorf("Container %s too large (%d)", containers[j].Name, containers[j].Count)
 				continue
@@ -91,11 +91,14 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 				continue
 			}
 
+			// Object names contain their path from container
+			// Create both subdirectories and the files
 			for _, obj := range objects {
 				nodes := split(obj.Name)
 				objectPath := containerPath
 
 				for n := range nodes {
+					// Full path of dir/file
 					objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
 					p := filepath.FromSlash(objectPath)
 
@@ -115,39 +118,39 @@ func split(path string) []string {
 	return strings.Split(path, "/")
 }
 
+// Characters '/' and ':' are not allowed in names of directories or files
 func removeInvalidChars(str string) string {
 	return strings.Replace(strings.Replace(str, "/", "_", -1), ":", ".", -1)
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
-func (fs *Connectfs) lookupNode(path string, ancestor *node) (prnt *node, name string, node *node) {
+func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *node) {
 	prnt, node = fs.root, fs.root
 	name = ""
 	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
 			if len(c) > 255 {
-				panic(fuse.Error(-fuse.ENAMETOOLONG))
+				log.Fatalf("Path %s is too long: %w", path, fuse.Error(-fuse.ENAMETOOLONG))
 			}
 			prnt, name = node, c
 			if node == nil {
 				return
 			}
 			node = node.chld[c]
-			if ancestor != nil && node == ancestor {
-				name = "" // special case loop condition
-				return
-			}
 		}
 	}
 	return
 }
 
+// makeNode adds a node into the fuse
 func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, timestamp fuse.Timespec) int {
-	prnt, name, node := fs.lookupNode(path, nil)
+	prnt, name, node := fs.lookupNode(path)
 	if prnt == nil {
+		// No such file or directory
 		return -fuse.ENOENT
 	}
 	if node != nil {
+		// File exists
 		return -fuse.EEXIST
 	}
 	fs.ino++
@@ -159,6 +162,7 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 	return 0
 }
 
+// newNode initializes a node struct
 func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
 	self := node{
 		fuse.Stat_t{
@@ -177,6 +181,7 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 		nil,
 		nil,
 		0}
+	// Initialize map of children if node is a directory
 	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
 		self.chld = map[string]*node{}
 	}
@@ -184,7 +189,7 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 }
 
 func (fs *Connectfs) openNode(path string, dir bool) (int, uint64) {
-	_, _, node := fs.lookupNode(path, nil)
+	_, _, node := fs.lookupNode(path)
 	if node == nil {
 		return -fuse.ENOENT, ^uint64(0)
 	}
@@ -212,7 +217,7 @@ func (fs *Connectfs) closeNode(fh uint64) int {
 
 func (fs *Connectfs) getNode(path string, fh uint64) *node {
 	if fh == ^uint64(0) {
-		_, _, node := fs.lookupNode(path, nil)
+		_, _, node := fs.lookupNode(path)
 		return node
 	}
 	return fs.openmap[fh]

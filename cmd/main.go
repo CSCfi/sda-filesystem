@@ -20,6 +20,7 @@ import (
 	"github.com/cscfi/sd-connect-fuse/internal/filesystem"
 )
 
+// dirName is name of the directory where the projects are stored
 const dirName = "Projects"
 
 var mount string
@@ -36,7 +37,6 @@ func mountPoint() string {
 }
 
 func verifyURL(apiURL, name string) {
-	// Verify repository URL is set
 	if apiURL == "" {
 		log.Fatalf("%s must be set with command line argument -%s=address", name, strings.ToLower(name))
 	}
@@ -57,7 +57,7 @@ func setLogger(inputLevel string) {
 	// Output to stdout instead of the default stderr
 	log.SetOutput(os.Stdout)
 
-	// Only log the warning severity or above.
+	// Only log given severity or above
 	var m = map[string]logrus.Level{
 		"debug": logrus.DebugLevel,
 		"info":  logrus.InfoLevel,
@@ -113,7 +113,7 @@ func init() {
 		}
 	}
 
-	log.Debug("Filesystem will be mounted at " + mount)
+	log.Debugf("Filesystem will be mounted at %s", mount)
 }
 
 func shutdown() <-chan bool {
