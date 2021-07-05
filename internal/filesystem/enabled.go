@@ -6,7 +6,7 @@ import (
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/cscfi/sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/api"
 )
 
 // Open opens a file.
@@ -75,6 +75,7 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	}
 
 	n = copy(buff, node.data[ofst:endofst])
+
 	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
 	log.Debugf("File %s has been accessed/read", path)

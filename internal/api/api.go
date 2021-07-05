@@ -9,26 +9,25 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 var (
-	// Certificate is the TLS certificate to repositories
-	Certificate string
 	// RequestTimeout dictates the number of seconds to wait before timing out an http request
 	RequestTimeout int
-	// MetadataURL is url to metadata API
-	MetadataURL string
-	// DataURL is url to data API
-	DataURL   string
-	httpRetry int = 5
-	token     string
+	certPath       string
+	metadataURL    string
+	dataURL        string
+	httpRetry      int
+	token          string
+	client         *http.Client
 )
 
 // Container stores container data from metadata API
@@ -47,6 +46,33 @@ type DataObject struct {
 	Subdir      string `json:"subdir"`
 }
 
+func init() {
+	certPath = os.Getenv("SD_CONNECT_CERTS")
+	metadataURL = os.Getenv("SD_CONNECT_METADATA_API")
+	dataURL = os.Getenv("SD_CONNECT_DATA_API")
+	httpRetry = 5
+
+	// init() has not been called in main yet so logger will be at level info.
+	// Take this into consideration if more logs are added
+	verifyURL(metadataURL, "SD_CONNECT_METADATA_API")
+	verifyURL(dataURL, "SD_CONNECT_DATA_API")
+}
+
+func verifyURL(apiURL, env string) {
+	if apiURL == "" {
+		log.Fatalf("Environment variable %s not set", env)
+	}
+	// Verify that repository URL is valid
+	u, err := url.ParseRequestURI(apiURL)
+	if err != nil {
+		log.Error(err)
+		log.Fatalf("%s is not valid", env)
+	}
+	if u.Scheme != "https" {
+		log.Fatalf("URL %s does not have scheme 'https'", apiURL)
+	}
+}
+
 // CreateToken creates the authorization token based on username + password
 func CreateToken() {
 	fmt.Print("Enter username: ")
@@ -60,7 +86,7 @@ func CreateToken() {
 	}
 
 	fmt.Print("Enter password: ")
-	password, err := terminal.ReadPassword(syscall.Stdin)
+	password, err := term.ReadPassword(syscall.Stdin)
 	fmt.Println()
 	if err != nil {
 		log.Fatal(err)
@@ -69,18 +95,14 @@ func CreateToken() {
 	token = base64.StdEncoding.EncodeToString([]byte(username + ":" + string(password)))
 }
 
-// makeRequest builds an authenticated HTTP client
-// which sends HTTP requests and parses the responses
-func makeRequest(url string, query map[string]string) ([]byte, error) {
-	var response *http.Response
-
+// InitializeClient ...
+func InitializeClient() {
 	// Handle certificate if one is set
 	caCertPool := x509.NewCertPool()
-	if len(Certificate) > 0 {
-		caCert, err := ioutil.ReadFile(Certificate)
+	if len(certPath) > 0 {
+		caCert, err := ioutil.ReadFile(certPath)
 		if err != nil {
-			log.Error(err)
-			return nil, err
+			log.Fatal(err)
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -89,20 +111,39 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 
 	// Set up HTTP client
 	timeout := time.Duration(RequestTimeout) * time.Second
-	t := http.DefaultTransport.(*http.Transport).Clone()
+	tr := http.DefaultTransport.(*http.Transport).Clone()
 
-	// Don't know if these are needed
-	t.MaxIdleConns = 100
-	t.MaxConnsPerHost = 100
-	t.MaxIdleConnsPerHost = 100
+	//tr.MaxIdleConns = 100
+	//tr.MaxConnsPerHost = 100
+	//tr.MaxIdleConnsPerHost = 100
 
-	t.TLSClientConfig = &tls.Config{
+	tr.TLSClientConfig = &tls.Config{
 		RootCAs: caCertPool,
 	}
-	client := &http.Client{
+	client = &http.Client{
 		Timeout:   timeout,
-		Transport: t,
+		Transport: tr,
 	}
+
+	_, err := client.Get(metadataURL)
+	if err != nil {
+		log.Error(err)
+		log.Fatal("Cannot connect to metadata API")
+	}
+
+	_, err = client.Get(dataURL)
+	if err != nil {
+		log.Error(err)
+		log.Fatal("Cannot connect to data API")
+	}
+
+	log.Debug("Initializing http client successful")
+}
+
+// makeRequest builds an authenticated HTTP client
+// which sends HTTP requests and parses the responses
+func makeRequest(url string, query map[string]string) ([]byte, error) {
+	var response *http.Response
 
 	// Build HTTP request
 	request, err := http.NewRequest("GET", url, nil)
@@ -129,6 +170,7 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 		count++
 	}
 	if err != nil {
+		fmt.Println(request.Close)
 		return nil, err
 	}
 	defer response.Body.Close()
@@ -149,7 +191,7 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 // GetProjects gets all projects user has access to
 func GetProjects() ([]string, error) {
 	// Request projects
-	response, err := makeRequest(strings.TrimRight(MetadataURL, "/")+"/projects", nil)
+	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/projects", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving projects failed: %w", err)
 	}
@@ -167,7 +209,8 @@ func GetProjects() ([]string, error) {
 // GetContainers gets conatiners inside the object
 func GetContainers(project string) ([]Container, error) {
 	// Request conteiners
-	response, err := makeRequest(strings.TrimRight(MetadataURL, "/")+"/project/"+project+"/containers", nil)
+	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
+		url.QueryEscape(project)+"/containers", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving container from project %s failed: %w", project, err)
 	}
@@ -185,7 +228,8 @@ func GetContainers(project string) ([]Container, error) {
 // GetObjects gets objects inside container
 func GetObjects(project, container string) ([]DataObject, error) {
 	// Request objects
-	response, err := makeRequest(strings.TrimRight(MetadataURL, "/")+"/project/"+project+"/container/"+container+"/objects", nil)
+	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
+		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects from container %s failed: %w", container, err)
 	}
@@ -210,7 +254,7 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	}
 
 	// Request data
-	response, err := makeRequest(strings.TrimRight(DataURL, "/")+"/data", query)
+	response, err := makeRequest(strings.TrimRight(dataURL, "/")+"/data", query)
 	if err != nil {
 		return nil, err
 	}

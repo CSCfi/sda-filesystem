@@ -8,7 +8,7 @@ import (
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/cscfi/sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/api"
 )
 
 const sRDONLY = 00444
@@ -130,7 +130,7 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
 			if len(c) > 255 {
-				log.Fatalf("Path %s is too long: %w", path, fuse.Error(-fuse.ENAMETOOLONG))
+				log.Fatalf("Name %s in path %s is too long", c, path)
 			}
 			prnt, name = node, c
 			if node == nil {
