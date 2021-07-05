@@ -54,63 +54,72 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	}
 	log.Infof("Receiving %d projects", len(projects))
 
+	var wg sync.WaitGroup
+
 	for i := range projects {
-		// Remove characters which may interfere with filesystem structure
-		project := removeInvalidChars(projects[i])
+		wg.Add(1)
 
-		// Create a project directory
-		log.Debugf("Creating project %s", project)
-		fs.makeNode(project, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-
-		containers, err := api.GetContainers(projects[i])
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-
-		for j := range containers {
+		go func(project string) {
+			defer wg.Done()
 			// Remove characters which may interfere with filesystem structure
-			container := removeInvalidChars(containers[j].Name)
+			projectSafe := removeInvalidChars(project)
 
-			containerPath := project + "/" + container
+			// Create a project directory
+			log.Debugf("Creating project %s", projectSafe)
+			fs.makeNode(projectSafe, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 
-			// Create a container directory
-			log.Debugf("Creating container %s", containerPath)
-			p := filepath.FromSlash(containerPath)
-			fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-
-			// TODO: Remove
-			if containers[j].Count > 200000 {
-				log.Errorf("Container %s too large (%d)", containers[j].Name, containers[j].Count)
-				continue
-			}
-
-			objects, err := api.GetObjects(project, container)
+			containers, err := api.GetContainers(project)
 			if err != nil {
 				log.Error(err)
-				continue
+				return
 			}
 
-			// Object names contain their path from container
-			// Create both subdirectories and the files
-			for _, obj := range objects {
-				nodes := split(obj.Name)
-				objectPath := containerPath
+			for j := range containers {
+				// Remove characters which may interfere with filesystem structure
+				containerSafe := removeInvalidChars(containers[j].Name)
 
-				for n := range nodes {
-					// Full path of dir/file
-					objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
-					p := filepath.FromSlash(objectPath)
+				containerPath := projectSafe + "/" + containerSafe
 
-					if n == len(nodes)-1 {
-						fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
-					} else {
-						fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+				// Create a container directory
+				log.Debugf("Creating container %s", containerPath)
+				p := filepath.FromSlash(containerPath)
+				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+
+				// TODO: Remove
+				if containers[j].Count > 200000 {
+					log.Errorf("Container %s too large (%d)", containerSafe, containers[j].Count)
+					continue
+				}
+
+				objects, err := api.GetObjects(project, containers[j].Name)
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+
+				// Object names contain their path from container
+				// Create both subdirectories and the files
+				for _, obj := range objects {
+					nodes := split(obj.Name)
+					objectPath := containerPath
+
+					for n := range nodes {
+						// Full path of dir/file
+						objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
+						p := filepath.FromSlash(objectPath)
+
+						if n == len(nodes)-1 {
+							fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
+						} else {
+							fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+						}
 					}
 				}
 			}
-		}
+		}(projects[i])
 	}
+
+	wg.Wait()
 }
 
 // split deconstructs a filepath string into an array of strings
