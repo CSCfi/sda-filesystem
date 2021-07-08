@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -151,7 +152,7 @@ func InitializeClient() {
 
 // makeRequest builds an authenticated HTTP client
 // which sends HTTP requests and parses the responses
-func makeRequest(url string, query map[string]string) ([]byte, error) {
+func makeRequest(url string, query map[string]string, headers map[string]string) ([]byte, error) {
 	var response *http.Response
 
 	// Build HTTP request
@@ -170,6 +171,11 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 	// Place mandatory headers
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Basic "+token)
+
+	// Place additional headers if any are available
+	for k, v := range headers {
+		request.Header.Set(k, v)
+	}
 
 	// Execute HTTP request
 	// retry the request as specified by httpRetry variable
@@ -199,7 +205,7 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 // GetProjects gets all projects user has access to
 func GetProjects() ([]string, error) {
 	// Request projects
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/projects", nil)
+	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/projects", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving projects failed:\n%w", err)
 	}
@@ -218,7 +224,7 @@ func GetProjects() ([]string, error) {
 func GetContainers(project string) ([]Container, error) {
 	// Request conteiners
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
-		url.QueryEscape(project)+"/containers", nil)
+		url.QueryEscape(project)+"/containers", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving container from project %s failed:\n%w", project, err)
 	}
@@ -237,7 +243,7 @@ func GetContainers(project string) ([]Container, error) {
 func GetObjects(project, container string) ([]DataObject, error) {
 	// Request objects
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
-		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil)
+		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects from container %s failed:\n%w", container, err)
 	}
@@ -261,12 +267,14 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 		"object":    parts[2],
 	}
 
+	// Additional headers
+	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)}
+
 	// Request data
-	response, err := makeRequest(strings.TrimRight(dataURL, "/")+"/data", query)
+	response, err := makeRequest(strings.TrimRight(dataURL, "/")+"/data", query, headers)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Downloaded object %s", path)
-	//log.Infof("Downloaded object %s from coordinates %d-%d", path, start, end)
+	log.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
 	return response, nil
 }

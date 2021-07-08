@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -23,7 +22,8 @@ import (
 const dirName = "Projects"
 
 var mount string
-var daemonTimeout int
+
+//var daemonTimeout int
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
@@ -69,7 +69,7 @@ func init() {
 	//flag.StringVar(&api.Certificate, "certificate", "", "TLS certificates for repositories")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
 	flag.IntVar(&api.RequestTimeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
-	flag.IntVar(&daemonTimeout, "daemon_timeout", 3000, "Number of seconds during which fuse has to answer kernel")
+	//flag.IntVar(&daemonTimeout, "daemon_timeout", 10, "Number of seconds during which fuse has to answer kernel")
 	flag.Parse()
 
 	setLogger(logLevel)
@@ -106,7 +106,7 @@ func init() {
 func shutdown() <-chan bool {
 	done := make(chan bool)
 	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-s
 		log.Info("Shutting down SD-Connect FUSE")
@@ -130,7 +130,7 @@ func main() {
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+dirName)
-		options = append(options, "-o", "daemon_timeout="+strconv.Itoa(daemonTimeout))
+		//options = append(options, "-o", "daemon_timeout="+strconv.Itoa(daemonTimeout))
 	}
 	host.Mount(mount, options)
 

@@ -26,7 +26,6 @@ type Connectfs struct {
 type node struct {
 	stat    fuse.Stat_t
 	chld    map[string]*node
-	data    []byte
 	opencnt int
 }
 
@@ -244,7 +243,6 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 			Birthtim: tmsp,
 			Flags:    0,
 		},
-		nil,
 		nil,
 		0}
 	// Initialize map of children if node is a directory

@@ -54,6 +54,7 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 		return -fuse.ENOENT
 	}
 	path = filepath.ToSlash(path)
+
 	// Get file end coordinate
 	endofst := ofst + int64(len(buff))
 	if endofst > node.stat.Size {
@@ -63,18 +64,13 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 		return 0
 	}
 
-	if len(node.data) == 0 {
-		// Download data from file
-		data, err := api.DownloadData(path, ofst, endofst)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		node.data = make([]byte, len(data))
-		copy(node.data, data)
+	// Download data from file
+	data, err := api.DownloadData(path, ofst, endofst)
+	if err != nil {
+		log.Error(err)
+		return
 	}
-
-	n = copy(buff, node.data[ofst:endofst])
+	n = copy(buff, data)
 
 	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
