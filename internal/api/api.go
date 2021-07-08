@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -113,9 +114,9 @@ func InitializeClient() {
 	timeout := time.Duration(RequestTimeout) * time.Second
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 
-	//tr.MaxIdleConns = 100
-	//tr.MaxConnsPerHost = 100
-	//tr.MaxIdleConnsPerHost = 100
+	tr.MaxConnsPerHost = 100
+	tr.MaxIdleConnsPerHost = 100
+	//tr.MaxIdleConns
 
 	tr.TLSClientConfig = &tls.Config{
 		RootCAs: caCertPool,
@@ -125,17 +126,25 @@ func InitializeClient() {
 		Transport: tr,
 	}
 
-	_, err := client.Get(metadataURL)
+	resp, err := client.Get(metadataURL)
 	if err != nil {
 		log.Error(err)
 		log.Fatal("Cannot connect to metadata API")
 	}
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
 
-	_, err = client.Get(dataURL)
+	// Temporarily disabling the keep-alive feature so that this unnecessary
+	// connection does not take one of our goroutines
+	tr.DisableKeepAlives = true
+	resp, err = client.Get(dataURL)
 	if err != nil {
 		log.Error(err)
 		log.Fatal("Cannot connect to data API")
 	}
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+	tr.DisableKeepAlives = false
 
 	log.Debug("Initializing http client successful")
 }
@@ -170,7 +179,6 @@ func makeRequest(url string, query map[string]string) ([]byte, error) {
 		count++
 	}
 	if err != nil {
-		fmt.Println(request.Close)
 		return nil, err
 	}
 	defer response.Body.Close()
@@ -193,13 +201,13 @@ func GetProjects() ([]string, error) {
 	// Request projects
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/projects", nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving projects failed: %w", err)
+		return nil, fmt.Errorf("Retrieving projects failed:\n%w", err)
 	}
 
 	// Parse the JSON response into a slice
 	var projects []string
 	if err := json.Unmarshal(response, &projects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects: %w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects:\n%w", err)
 	}
 
 	log.Info("Retrieved projects as per request")
@@ -212,13 +220,13 @@ func GetContainers(project string) ([]Container, error) {
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
 		url.QueryEscape(project)+"/containers", nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving container from project %s failed: %w", project, err)
+		return nil, fmt.Errorf("Retrieving container from project %s failed:\n%w", project, err)
 	}
 
 	// Parse the JSON response into a slice
 	var containers []Container
 	if err := json.Unmarshal(response, &containers); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving containers: %w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response for retrieving containers:\n%w", err)
 	}
 
 	log.Infof("Retrieved containers for project %s", project)
@@ -231,13 +239,13 @@ func GetObjects(project, container string) ([]DataObject, error) {
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
 		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving objects from container %s failed: %w", container, err)
+		return nil, fmt.Errorf("Retrieving objects from container %s failed:\n%w", container, err)
 	}
 
 	// Parse the JSON response into a struct
 	var objects []DataObject
 	if err := json.Unmarshal(response, &objects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving objects: %w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response for retrieving objects:\n%w", err)
 	}
 	log.Infof("Retrieved objects for %s", project+"/"+container)
 	return objects, nil

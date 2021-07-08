@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"io"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -34,21 +33,6 @@ func mountPoint() string {
 	}
 	p := filepath.FromSlash(filepath.ToSlash(home) + "/" + dirName)
 	return p
-}
-
-func verifyURL(apiURL, name string) {
-	if apiURL == "" {
-		log.Fatalf("%s must be set with command line argument -%s=address", name, strings.ToLower(name))
-	}
-	// Verify that repository URL is valid
-	u, err := url.ParseRequestURI(apiURL)
-	if err != nil {
-		log.Error(err)
-		log.Fatalf("%s is not valid", name)
-	}
-	if u.Scheme != "https" {
-		log.Fatalf("URL %s does not have scheme 'https'", apiURL)
-	}
 }
 
 func setLogger(inputLevel string) {
@@ -84,14 +68,11 @@ func init() {
 	//flag.StringVar(&api.MetadataURL, "metadataurl", "", "URL to sd-connect metadata API repository")
 	//flag.StringVar(&api.Certificate, "certificate", "", "TLS certificates for repositories")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&api.RequestTimeout, "http_timeout", 3000, "Number of seconds to wait before timing out an HTTP request")
+	flag.IntVar(&api.RequestTimeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
 	flag.IntVar(&daemonTimeout, "daemon_timeout", 3000, "Number of seconds during which fuse has to answer kernel")
 	flag.Parse()
 
 	setLogger(logLevel)
-
-	//verifyURL(api.DataURL, "DataURL")
-	//verifyURL(api.MetadataURL, "MetadataURL")
 
 	// Verify mount point directory
 	if _, err := os.Stat(mount); os.IsNotExist(err) {
@@ -125,7 +106,7 @@ func init() {
 func shutdown() <-chan bool {
 	done := make(chan bool)
 	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-s
 		log.Info("Shutting down SD-Connect FUSE")
@@ -135,11 +116,15 @@ func shutdown() <-chan bool {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	done := shutdown()
 
 	api.CreateToken()
+	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 	api.InitializeClient()
+	//fmt.Println(runtime.NumGoroutine())
 	connectfs := filesystem.CreateFileSystem()
+	//fmt.Println(runtime.NumGoroutine())
 	host := fuse.NewFileSystemHost(connectfs)
 	options := []string{}
 	if runtime.GOOS == "darwin" {
