@@ -1,24 +1,20 @@
 package api
 
 import (
-	"bufio"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/term"
 )
 
 var (
@@ -76,35 +72,18 @@ func verifyURL(apiURL, env string) {
 }
 
 // CreateToken creates the authorization token based on username + password
-func CreateToken() {
-	fmt.Print("Enter username: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	var username string
-	if scanner.Scan() {
-		username = scanner.Text()
-	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Print("Enter password: ")
-	password, err := term.ReadPassword(syscall.Stdin)
-	fmt.Println()
-	if err != nil {
-		log.Fatal(err)
-	}
-
+func CreateToken(username, password string) {
 	token = base64.StdEncoding.EncodeToString([]byte(username + ":" + string(password)))
 }
 
 // InitializeClient ...
-func InitializeClient() {
+func InitializeClient() error {
 	// Handle certificate if one is set
 	caCertPool := x509.NewCertPool()
 	if len(certPath) > 0 {
 		caCert, err := ioutil.ReadFile(certPath)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -127,27 +106,22 @@ func InitializeClient() {
 		Transport: tr,
 	}
 
-	resp, err := client.Get(metadataURL)
+	_, err := client.Head(metadataURL)
 	if err != nil {
-		log.Error(err)
-		log.Fatal("Cannot connect to metadata API")
+		return err
 	}
-	io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close()
 
 	// Temporarily disabling the keep-alive feature so that this unnecessary
 	// connection does not take one of our goroutines
 	tr.DisableKeepAlives = true
-	resp, err = client.Get(dataURL)
+	_, err = client.Head(dataURL)
 	if err != nil {
-		log.Error(err)
-		log.Fatal("Cannot connect to data API")
+		return err
 	}
-	io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close()
 	tr.DisableKeepAlives = false
 
 	log.Debug("Initializing http client successful")
+	return nil
 }
 
 // makeRequest builds an authenticated HTTP client

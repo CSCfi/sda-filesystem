@@ -2,3 +2,9 @@
 *.sh
 .DS_Store
 *.pem
+moc*
+rcc*
+sd-connect-fuse
+.go-version
+vendor/*
+deploy/*
