@@ -3,6 +3,7 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Window 2.13
+import csc 1.0 as CSC
 
 Window {
 	id: loginWindow
@@ -12,13 +13,17 @@ Window {
     minimumHeight: 400
 
 	property int margins: 20
-	property color primaryColor: "#2B6676"
+	Material.accent: CSC.Style.primaryColor
+
+	CSC.Popup {
+		id: popup
+		errorTextContent: ""
+	}
 
 	Item {
-		focus: true
 		anchors.fill: parent
-		Keys.onReturnPressed: loginButton.login() // Enter key
-    	Keys.onEnterPressed: loginButton.login() // Numpad enter key
+		Keys.onReturnPressed: loginButton.clicked() // Enter key
+    	Keys.onEnterPressed: loginButton.clicked() // Numpad enter key
 
 		RowLayout {
 			anchors.fill: parent
@@ -27,10 +32,10 @@ Window {
 			Rectangle {
 				Layout.fillHeight: true
 				Layout.preferredWidth: parent.width * 0.4
-				color: primaryColor
+				color: CSC.Style.primaryColor
 
 				Image {
-					source: "CSC_logo_no_tagline.svg"
+					source: "qrc:/qml/images/CSC_logo.svg"
 					fillMode: Image.PreserveAspectFit
 					width: parent.width - loginWindow.margins
 					anchors.centerIn: parent
@@ -47,53 +52,22 @@ Window {
 					color: "grey"
 				}
 
-				Label {
-					id: loginError
-					text: "Incorrect username or password"
-					color: "#A91C29"
-					padding: 10
-					visible: false
-					Layout.fillWidth: true
-					background: Rectangle {
-						color: "#4DA91C29"
-						radius: 4
-
-						Image {
-							source: "x-lg.svg"
-							opacity: closeLoginError.containsMouse ? 0.7 : 1.0
-							height: parent.height / 3
-							fillMode: Image.PreserveAspectFit
-							anchors.verticalCenter: parent.verticalCenter
-							anchors.right: parent.right
-							anchors.rightMargin: loginError.padding
-
-							MouseArea {
-								id: closeLoginError
-								anchors.fill: parent
-								hoverEnabled: true
-								onClicked: {
-									loginError.visible = false
-								}
-							}
-						}
-					}
-				}
-
 				TextField {
 					id: usernameField
 					placeholderText: "Username"
+					focus: true
+					selectByMouse: true
 					Layout.alignment: Qt.AlignCenter
 					Layout.fillWidth: true
-					Material.accent: primaryColor
 				}
 
 				TextField {
 					id: passwordField
 					placeholderText: "Password"
+					selectByMouse: true
 					echoMode: TextInput.Password
 					Layout.alignment: Qt.AlignCenter
 					Layout.fillWidth: true
-					Material.accent: primaryColor
 				}
 
 				Button {
@@ -107,10 +81,10 @@ Window {
 
 					background: Rectangle {
 						radius: 4
-						color: loginButton.pressed ? "#9BBCB7" : (loginButton.hovered ? "#61958D" : primaryColor)
+						color: loginButton.pressed ? "#9BBCB7" : (loginButton.hovered ? "#61958D" : CSC.Style.primaryColor)
 					}
 
-					onClicked: loginButton.login()
+					onClicked: login()
 					
 					function login() {
 						if (usernameField.text != "" && passwordField.text != "") {
@@ -120,14 +94,14 @@ Window {
 								var homewindow = component.createObject(loginWindow)
 								if (homewindow == null) {
 									console.log("Error creating home window")
-									return;
+									// TODO
 								}
 								loginWindow.hide()
 								homewindow.show()
 								return
-							}
+							} 
 						}
-						loginError.visible = true
+						popup.open()
 					}
 				}
 
@@ -147,18 +121,34 @@ Window {
 	}
 }
 
-/*ApplicationWindow {
-    visible: true
-    title: "SD-Connect FUSE"
+/*Label {
+	id: loginError
+	text: "Incorrect username or password"
+	color: CSC.Style.red
+	padding: 10
+	visible: false
+	Layout.fillWidth: true
+	background: Rectangle {
+		color: Qt.rgba(CSC.Style.red.r, CSC.Style.red.g, CSC.Style.red.b, 0.3)
+		radius: 4
 
-	header: TabBar {
-        TabButton {
-        	text: qsTr("Home")
-			width: implicitWidth
-    	}
-		TabButton {
-        	text: qsTr("Logs")
-			width: implicitWidth
-    	}
-    }
+		Image {
+			source: "qrc:/qml/images/x-lg.svg"
+			opacity: closeLoginError.containsMouse ? 0.7 : 1.0
+			height: parent.height / 3
+			fillMode: Image.PreserveAspectFit
+			anchors.verticalCenter: parent.verticalCenter
+			anchors.right: parent.right
+			anchors.rightMargin: loginError.padding
+
+			MouseArea {
+				id: closeLoginError
+				anchors.fill: parent
+				hoverEnabled: true
+				onClicked: {
+					loginError.visible = false
+				}
+			}
+		}
+	}
 }*/

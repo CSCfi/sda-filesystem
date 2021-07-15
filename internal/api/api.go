@@ -187,7 +187,7 @@ func GetProjects() ([]string, error) {
 	// Parse the JSON response into a slice
 	var projects []string
 	if err := json.Unmarshal(response, &projects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects:\n%w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects: %w", err)
 	}
 
 	log.Info("Retrieved projects as per request")
@@ -200,7 +200,7 @@ func GetContainers(project string) ([]Container, error) {
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
 		url.QueryEscape(project)+"/containers", nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving container from project %s failed:\n%w", project, err)
+		return nil, fmt.Errorf("Retrieving container from project %s failed: %w", project, err)
 	}
 
 	// Parse the JSON response into a slice
@@ -219,7 +219,7 @@ func GetObjects(project, container string) ([]DataObject, error) {
 	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
 		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving objects from container %s failed:\n%w", container, err)
+		return nil, fmt.Errorf("Retrieving objects from container %s failed: %w", container, err)
 	}
 
 	// Parse the JSON response into a struct

@@ -1,0 +1,3 @@
+module csc
+singleton Style 1.0 Style.qml
+Popup 1.0 Popup.qml

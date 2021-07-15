@@ -19,7 +19,6 @@ type QmlBridge struct {
 
 	_ func()                               `constructor:"init"`
 	_ func(username, password string) bool `slot:"sendLoginRequest"`
-	//_ func(data string) bool          `slot:"sendLoginResponse"`
 }
 
 func (qb *QmlBridge) init() {
@@ -51,7 +50,8 @@ func main() {
 	quickcontrols2.QQuickStyle_SetStyle("Material")
 
 	var app = qml.NewQQmlApplicationEngine(nil)
-	app.Load(core.NewQUrl3("qrc:/qml/login.qml", 0))
+	app.AddImportPath("qrc:/qml/") // Do I need three slashes?
+	app.Load(core.NewQUrl3("qrc:/qml/main/login.qml", 0))
 
 	var qmlBridge = NewQmlBridge(nil)
 	app.RootContext().SetContextProperty("qmlBridge", qmlBridge)
