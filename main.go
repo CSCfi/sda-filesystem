@@ -13,6 +13,8 @@ import (
 	"sd-connect-fuse/internal/api"
 )
 
+// TODO: Think about logs. Should I use go or qt?
+
 // QmlBridge is the link between QML and Go
 type QmlBridge struct {
 	core.QObject
@@ -22,6 +24,7 @@ type QmlBridge struct {
 }
 
 func (qb *QmlBridge) init() {
+	log.Info("qb init")
 	qb.ConnectSendLoginRequest(func(username, password string) bool {
 		api.CreateToken(username, password)
 		err := api.InitializeClient()
@@ -36,6 +39,10 @@ func (qb *QmlBridge) init() {
 		}
 		return true
 	})
+}
+
+func init() {
+	log.Info("main init")
 }
 
 func main() {
@@ -58,13 +65,3 @@ func main() {
 
 	gui.QGuiApplication_Exec()
 }
-
-/*app := widgets.NewQApplication(len(os.Args), os.Args)
-
-view := quick.NewQQuickView(nil)
-view.SetTitle("SD-Connect FUSE")
-view.SetResizeMode(quick.QQuickView__SizeRootObjectToView)
-view.SetSource(core.NewQUrl3("qrc:/qml/main.qml", 0))
-view.Show()
-
-app.Exec()*/

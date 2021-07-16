@@ -45,6 +45,12 @@ type DataObject struct {
 }
 
 func init() {
+	/*certPath, ok := os.LookupEnv("SD_CONNECT_CERTS")
+	if !ok {
+		//...
+	} else {
+		//
+	}*/
 	certPath = os.Getenv("SD_CONNECT_CERTS")
 	metadataURL = os.Getenv("SD_CONNECT_METADATA_API")
 	dataURL = os.Getenv("SD_CONNECT_DATA_API")

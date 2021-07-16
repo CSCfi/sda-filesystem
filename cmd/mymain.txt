@@ -23,8 +23,6 @@ const dirName = "Projects"
 
 var mount string
 
-//var daemonTimeout int
-
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
 	home, err := os.UserHomeDir()
@@ -64,12 +62,8 @@ func setLogger(inputLevel string) {
 func init() {
 	var logLevel string
 	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
-	//flag.StringVar(&api.DataURL, "dataurl", "", "URL to sd-connect data API repository")
-	//flag.StringVar(&api.MetadataURL, "metadataurl", "", "URL to sd-connect metadata API repository")
-	//flag.StringVar(&api.Certificate, "certificate", "", "TLS certificates for repositories")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
 	flag.IntVar(&api.RequestTimeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
-	//flag.IntVar(&daemonTimeout, "daemon_timeout", 10, "Number of seconds during which fuse has to answer kernel")
 	flag.Parse()
 
 	setLogger(logLevel)

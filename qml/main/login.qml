@@ -11,6 +11,8 @@ Window {
 	title: "SD-Connect FUSE"
 	minimumWidth: 500
     minimumHeight: 400
+	maximumWidth: minimumWidth
+    maximumHeight: minimumHeight
 
 	property int margins: 20
 	Material.accent: CSC.Style.primaryColor
@@ -47,9 +49,9 @@ Window {
 				Layout.margins: loginWindow.margins
 				spacing: 10
 
-				Text {
+				Label {
 					text: "<h1>CSC Login</h1>"
-					color: "grey"
+					color: CSC.Style.grey
 				}
 
 				TextField {
@@ -57,6 +59,7 @@ Window {
 					placeholderText: "Username"
 					focus: true
 					selectByMouse: true
+					mouseSelectionMode: TextInput.SelectWords
 					Layout.alignment: Qt.AlignCenter
 					Layout.fillWidth: true
 				}
@@ -65,6 +68,7 @@ Window {
 					id: passwordField
 					placeholderText: "Password"
 					selectByMouse: true
+					mouseSelectionMode: TextInput.SelectWords
 					echoMode: TextInput.Password
 					Layout.alignment: Qt.AlignCenter
 					Layout.fillWidth: true
@@ -91,7 +95,7 @@ Window {
 							var loginSuccess = qmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
 							if (loginSuccess) {
 								var component = Qt.createComponent("home.qml")
-								var homewindow = component.createObject(loginWindow)
+								var homewindow = component.createObject(loginWindow, {username: usernameField.text})
 								if (homewindow == null) {
 									console.log("Error creating home window")
 									// TODO
@@ -99,7 +103,9 @@ Window {
 								loginWindow.hide()
 								homewindow.show()
 								return
-							} 
+							}
+							passwordField.selectAll()
+							passwordField.focus = true
 						}
 						popup.open()
 					}
