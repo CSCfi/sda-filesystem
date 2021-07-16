@@ -8,15 +8,17 @@ import (
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/cscfi/sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/api"
 )
 
 const sRDONLY = 00444
+const numRoutines = 4
 
 // Connectfs stores the filesystem structure
 type Connectfs struct {
 	fuse.FileSystemBase
 	lock    sync.Mutex
+	inoLock sync.RWMutex
 	ino     uint64
 	root    *node
 	openmap map[uint64]*node
@@ -25,8 +27,14 @@ type Connectfs struct {
 type node struct {
 	stat    fuse.Stat_t
 	chld    map[string]*node
-	data    []byte
 	opencnt int
+}
+
+type containerInfo struct {
+	project   string
+	container string
+	timestamp fuse.Timespec
+	fs        *Connectfs
 }
 
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
@@ -54,59 +62,112 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	}
 	log.Infof("Receiving %d projects", len(projects))
 
+	var wg sync.WaitGroup
+	forChannel := make(map[string][]api.Container)
+	numJobs := 0
+	mapLock := sync.RWMutex{}
+	//start := time.Now()
+
 	for i := range projects {
+		wg.Add(1)
+
 		// Remove characters which may interfere with filesystem structure
-		project := removeInvalidChars(projects[i])
+		projectSafe := removeInvalidChars(projects[i])
 
 		// Create a project directory
-		log.Debugf("Creating project %s", project)
-		fs.makeNode(project, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+		log.Debugf("Creating project %s", projectSafe)
+		fs.makeNode(projectSafe, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 
-		containers, err := api.GetContainers(projects[i])
+		go func(project string) {
+			defer wg.Done()
+
+			log.Debugf("Fetching containers for project %s", project)
+			containers, err := api.GetContainers(project)
+
+			if err != nil {
+				log.Error(err)
+				return
+			}
+
+			mapLock.Lock()
+			forChannel[project] = containers // LOCK
+			numJobs += len(containers)       // LOCK
+			mapLock.Unlock()
+
+			for _, c := range containers {
+				containerSafe := removeInvalidChars(c.Name)
+				containerPath := projectSafe + "/" + containerSafe
+
+				// Create a container directory
+				log.Debugf("Creating container %s", containerPath)
+				p := filepath.FromSlash(containerPath)
+				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+			}
+		}(projects[i])
+	}
+
+	wg.Wait()
+
+	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
+	//elapsed := time.Since(start)
+	//fmt.Printf("Time: %s\n", elapsed)
+
+	jobs := make(chan containerInfo, numJobs)
+
+	//fmt.Println(numJobs)
+	//start = time.Now()
+
+	for w := 1; w <= numRoutines; w++ {
+		wg.Add(1)
+		go createObjects(w, jobs, &wg)
+	}
+
+	for key, value := range forChannel {
+		for i := range value {
+			jobs <- containerInfo{project: key, container: value[i].Name, timestamp: timestamp, fs: fs}
+		}
+	}
+	close(jobs)
+
+	wg.Wait()
+	//elapsed = time.Since(start)
+	//fmt.Printf("Time: %s\n", elapsed)
+}
+
+func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for j := range jobs {
+		project := j.project
+		container := j.container
+		fs := j.fs
+		timestamp := j.timestamp
+
+		projectSafe := removeInvalidChars(project)
+		containerSafe := removeInvalidChars(container)
+		containerPath := projectSafe + "/" + containerSafe
+
+		objects, err := api.GetObjects(project, container)
 		if err != nil {
 			log.Error(err)
 			continue
 		}
 
-		for j := range containers {
-			// Remove characters which may interfere with filesystem structure
-			container := removeInvalidChars(containers[j].Name)
+		// Object names contain their path from container
+		// Create both subdirectories and the files
+		for _, obj := range objects {
+			nodes := split(obj.Name)
+			objectPath := containerPath
 
-			containerPath := project + "/" + container
+			for n := range nodes {
+				// Full path of dir/file
+				objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
+				p := filepath.FromSlash(objectPath)
 
-			// Create a container directory
-			log.Debugf("Creating container %s", containerPath)
-			p := filepath.FromSlash(containerPath)
-			fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-
-			// TODO: Remove
-			if containers[j].Count > 200000 {
-				log.Errorf("Container %s too large (%d)", containers[j].Name, containers[j].Count)
-				continue
-			}
-
-			objects, err := api.GetObjects(project, container)
-			if err != nil {
-				log.Error(err)
-				continue
-			}
-
-			// Object names contain their path from container
-			// Create both subdirectories and the files
-			for _, obj := range objects {
-				nodes := split(obj.Name)
-				objectPath := containerPath
-
-				for n := range nodes {
-					// Full path of dir/file
-					objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
-					p := filepath.FromSlash(objectPath)
-
-					if n == len(nodes)-1 {
-						fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
-					} else {
-						fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-					}
+				if n == len(nodes)-1 {
+					fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
+				} else {
+					fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 				}
 			}
 		}
@@ -130,7 +191,7 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
 			if len(c) > 255 {
-				log.Fatalf("Path %s is too long: %w", path, fuse.Error(-fuse.ENAMETOOLONG))
+				log.Fatalf("Name %s in path %s is too long", c, path)
 			}
 			prnt, name = node, c
 			if node == nil {
@@ -153,8 +214,12 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 		// File exists
 		return -fuse.EEXIST
 	}
-	fs.ino++
-	node = newNode(dev, fs.ino, mode, 0, 0, timestamp)
+
+	fs.inoLock.Lock()
+	fs.ino++                                           // LOCK
+	node = newNode(dev, fs.ino, mode, 0, 0, timestamp) // LOCK
+	fs.inoLock.Unlock()
+
 	node.stat.Size = size
 	prnt.chld[name] = node
 	prnt.stat.Ctim = node.stat.Ctim
@@ -178,7 +243,6 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 			Birthtim: tmsp,
 			Flags:    0,
 		},
-		nil,
 		nil,
 		0}
 	// Initialize map of children if node is a directory

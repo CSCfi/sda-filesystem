@@ -3,12 +3,10 @@ package main
 import (
 	"flag"
 	"io"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -16,15 +14,14 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/cscfi/sd-connect-fuse/internal/api"
-	"github.com/cscfi/sd-connect-fuse/internal/filesystem"
+	"sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/filesystem"
 )
 
 // dirName is name of the directory where the projects are stored
 const dirName = "Projects"
 
 var mount string
-var daemonTimeout int
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
@@ -34,17 +31,6 @@ func mountPoint() string {
 	}
 	p := filepath.FromSlash(filepath.ToSlash(home) + "/" + dirName)
 	return p
-}
-
-func verifyURL(apiURL, name string) {
-	if apiURL == "" {
-		log.Fatalf("%s must be set with command line argument -%s=address", name, strings.ToLower(name))
-	}
-	// Verify that repository URL is valid
-	if _, err := url.ParseRequestURI(apiURL); err != nil {
-		log.Error(err)
-		log.Fatalf("%s is not valid", name)
-	}
 }
 
 func setLogger(inputLevel string) {
@@ -70,31 +56,26 @@ func setLogger(inputLevel string) {
 	}
 
 	log.Infof("-loglevel=%s is not supported, possible values are {debug,info,error}, setting fallback loglevel to 'info'", inputLevel)
+	log.SetLevel(logrus.InfoLevel)
 }
 
 func init() {
 	var logLevel string
-	//??? flag.StringVar(&api.Token, "token", os.Getenv("TOKEN"), "Authorization token, read from ENV $TOKEN by default")
 	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
-	flag.StringVar(&api.DataURL, "dataurl", "", "URL to sd-connect data API repository")
-	flag.StringVar(&api.MetadataURL, "metadataurl", "", "URL to sd-connect metadata API repository")
-	flag.StringVar(&api.Certificate, "certificate", "", "TLS certificates for repositories")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&api.RequestTimeout, "http_timeout", 3000, "Number of seconds to wait before timing out an HTTP request")
-	flag.IntVar(&daemonTimeout, "daemon_timeout", 3000, "Number of seconds during which fuse has to answer kernel")
+	flag.IntVar(&api.RequestTimeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
 	flag.Parse()
 
 	setLogger(logLevel)
-
-	verifyURL(api.DataURL, "DataURL")
-	verifyURL(api.MetadataURL, "MetadataURL")
 
 	// Verify mount point directory
 	if _, err := os.Stat(mount); os.IsNotExist(err) {
 		// In other OSs except Windows, the mount point must exist and be empty
 		if runtime.GOOS != "windows" {
 			log.Debugf("Mount point %s does not exist, so it will be created", mount)
-			os.Mkdir(mount, 0777)
+			if err = os.Mkdir(mount, 0777); err != nil {
+				log.Fatalf("Could not create directory %s", mount)
+			}
 		}
 	} else {
 		// Mount directory must not already exist in Windows
@@ -119,27 +100,30 @@ func init() {
 func shutdown() <-chan bool {
 	done := make(chan bool)
 	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-s
-		log.Info("Shutting down SDA FUSE client")
-		// additional clean up procedures can be done here if necessary
+		log.Info("Shutting down SD-Connect FUSE")
 		done <- true
 	}()
 	return done
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	done := shutdown()
 
 	api.CreateToken()
+	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
+	api.InitializeClient()
+	//fmt.Println(runtime.NumGoroutine())
 	connectfs := filesystem.CreateFileSystem()
+	//fmt.Println(runtime.NumGoroutine())
 	host := fuse.NewFileSystemHost(connectfs)
 	options := []string{}
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+dirName)
-		options = append(options, "-o", "daemon_timeout="+strconv.Itoa(daemonTimeout))
 	}
 	host.Mount(mount, options)
 
