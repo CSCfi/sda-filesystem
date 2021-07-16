@@ -6,9 +6,12 @@ See [cgofuse](https://github.com/billziss-gh/cgofuse#how-to-build) for dependenc
 
 ## Run
 Set environment variables `SD_CONNECT_METADATA_API`, `SD_CONNECT_DATA_API` and `SD_CONNECT_CERTS` before running program.
+
 ```
 export SD_CONNECT_METADATA_API=https://connect-metadata-api-test.sd.csc.fi
 export SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
 export SD_CONNECT_CERTS=cert.pem
 
 go run cmd/main.go
+```
+

@@ -97,7 +97,7 @@ func CreateToken() {
 	token = base64.StdEncoding.EncodeToString([]byte(username + ":" + string(password)))
 }
 
-// InitializeClient ...
+// InitializeClient initializes the global http client
 func InitializeClient() {
 	// Handle certificate if one is set
 	caCertPool := x509.NewCertPool()

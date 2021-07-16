@@ -12,6 +12,7 @@ import (
 )
 
 const sRDONLY = 00444
+const numRoutines = 4
 
 // Connectfs stores the filesystem structure
 type Connectfs struct {
@@ -116,7 +117,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	//fmt.Println(numJobs)
 	//start = time.Now()
 
-	numRoutines := 4
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
 		go createObjects(w, jobs, &wg)
