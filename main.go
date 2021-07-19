@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"runtime"
 
@@ -19,30 +20,48 @@ import (
 type QmlBridge struct {
 	core.QObject
 
-	_ func()                               `constructor:"init"`
-	_ func(username, password string) bool `slot:"sendLoginRequest"`
+	_ func()                                 `constructor:"init"`
+	_ func(username, password string) string `slot:"sendLoginRequest"`
+	_ func(err error)                        `signal:"envError"`
 }
 
 func (qb *QmlBridge) init() {
-	log.Info("qb init")
-	qb.ConnectSendLoginRequest(func(username, password string) bool {
+	qb.ConnectSendLoginRequest(func(username, password string) string {
 		api.CreateToken(username, password)
-		err := api.InitializeClient()
+		text, err := api.InitializeClient()
 		if err != nil {
-			log.Fatal(err)
+			log.Error(err)
+			return text
 		}
+
 		log.Info("Retrieving projects in order to test login")
 		_, err = api.GetProjects()
 		if err != nil {
 			log.Error(err)
-			return false
+
+			var re *api.RequestError
+			if errors.As(err, &re) && re.StatusCode == 401 {
+				return "Incorrect username or password"
+			}
+
+			return "HTTP failed to get a response from metadata API"
 		}
-		return true
+
+		return ""
 	})
 }
 
 func init() {
-	log.Info("main init")
+	// Configure Log Text Formatter
+	log.SetFormatter(&log.TextFormatter{
+		DisableColors: false,
+		FullTimestamp: true,
+	})
+
+	// Output to stdout instead of the default stderr
+	log.SetOutput(os.Stdout)
+
+	log.SetLevel(log.InfoLevel)
 }
 
 func main() {
@@ -57,11 +76,17 @@ func main() {
 	quickcontrols2.QQuickStyle_SetStyle("Material")
 
 	var app = qml.NewQQmlApplicationEngine(nil)
-	app.AddImportPath("qrc:/qml/") // Do I need three slashes?
-	app.Load(core.NewQUrl3("qrc:/qml/main/login.qml", 0))
 
 	var qmlBridge = NewQmlBridge(nil)
 	app.RootContext().SetContextProperty("qmlBridge", qmlBridge)
+
+	app.AddImportPath("qrc:/qml/") // Do I need three slashes?
+	app.Load(core.NewQUrl3("qrc:/qml/main/login.qml", 0))
+
+	err := api.GetEnvs()
+	if err != nil {
+		qmlBridge.EnvError(err)
+	}
 
 	gui.QGuiApplication_Exec()
 }

@@ -3,6 +3,7 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Window 2.13
+import QtQml 2.13
 import csc 1.0 as CSC
 
 Window {
@@ -22,7 +23,18 @@ Window {
 		errorTextContent: ""
 	}
 
+	Connections
+	{
+		target: qmlBridge
+		onEnvError: {
+			itemWrap.enabled = false
+			popup.errorTextContent = err
+			popup.open()
+		}
+	}
+
 	Item {
+		id: itemWrap
 		anchors.fill: parent
 		Keys.onReturnPressed: loginButton.clicked() // Enter key
     	Keys.onEnterPressed: loginButton.clicked() // Numpad enter key
@@ -81,24 +93,28 @@ Window {
 					padding: 15
 					Layout.alignment: Qt.AlignCenter
 					Layout.fillWidth: true
-					Material.foreground: "white"
+					Material.foreground: loginButton.enabled ? "white" : CSC.Style.disabledForeground
 
 					background: Rectangle {
 						radius: 4
-						color: loginButton.pressed ? "#9BBCB7" : (loginButton.hovered ? "#61958D" : CSC.Style.primaryColor)
+						color: loginButton.enabled ? (loginButton.pressed ? "#9BBCB7" : (loginButton.hovered ? "#61958D" : CSC.Style.primaryColor)) : CSC.Style.disabledBackground
 					}
 
 					onClicked: login()
 					
 					function login() {
+						var loginError = "Incorrect username or password"
+
 						if (usernameField.text != "" && passwordField.text != "") {
-							var loginSuccess = qmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
-							if (loginSuccess) {
+							loginError = qmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
+							if (!loginError) {
 								var component = Qt.createComponent("home.qml")
 								var homewindow = component.createObject(loginWindow, {username: usernameField.text})
 								if (homewindow == null) {
 									console.log("Error creating home window")
-									// TODO
+									popup.errorTextContent = "Could not create home window. Our bad :/"
+									popup.open()
+									return
 								}
 								loginWindow.hide()
 								homewindow.show()
@@ -107,6 +123,8 @@ Window {
 							passwordField.selectAll()
 							passwordField.focus = true
 						}
+
+						popup.errorTextContent = loginError
 						popup.open()
 					}
 				}

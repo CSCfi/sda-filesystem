@@ -17,16 +17,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	// RequestTimeout dictates the number of seconds to wait before timing out an http request
-	RequestTimeout int
+var hi = HTTPInfo{requestTimeout: 10, httpRetry: 5}
+
+// HTTPInfo ...
+type HTTPInfo struct {
+	requestTimeout int
+	httpRetry      int
 	certPath       string
 	metadataURL    string
 	dataURL        string
-	httpRetry      int
 	token          string
 	client         *http.Client
-)
+}
 
 // Container stores container data from metadata API
 type Container struct {
@@ -44,52 +46,69 @@ type DataObject struct {
 	Subdir      string `json:"subdir"`
 }
 
-func init() {
-	/*certPath, ok := os.LookupEnv("SD_CONNECT_CERTS")
-	if !ok {
-		//...
-	} else {
-		//
-	}*/
-	certPath = os.Getenv("SD_CONNECT_CERTS")
-	metadataURL = os.Getenv("SD_CONNECT_METADATA_API")
-	dataURL = os.Getenv("SD_CONNECT_DATA_API")
-	httpRetry = 5
-
-	// init() has not been called in main yet so logger will be at level info.
-	// Take this into consideration if more logs are added
-	verifyURL(metadataURL, "SD_CONNECT_METADATA_API")
-	verifyURL(dataURL, "SD_CONNECT_DATA_API")
+// RequestError is used to obtain the status code from the HTTP request
+type RequestError struct {
+	StatusCode int
 }
 
-func verifyURL(apiURL, env string) {
-	if apiURL == "" {
-		log.Fatalf("Environment variable %s not set", env)
-	}
-	// Verify that repository URL is valid
-	u, err := url.ParseRequestURI(apiURL)
+func (re *RequestError) Error() string {
+	return fmt.Sprintf("API responded with status %d", re.StatusCode)
+}
+
+// GetEnvs looks up the necessary environment variables
+func GetEnvs() error {
+	var err error
+	hi.certPath, err = getEnv("SD_CONNECT_CERTS", false)
 	if err != nil {
-		log.Error(err)
-		log.Fatalf("%s is not valid", env)
+		return err
 	}
-	if u.Scheme != "https" {
-		log.Fatalf("URL %s does not have scheme 'https'", apiURL)
+	hi.metadataURL, err = getEnv("SD_CONNECT_METADATA_API", true)
+	if err != nil {
+		return err
 	}
+	hi.dataURL, err = getEnv("SD_CONNECT_DATA_API", true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getEnv(name string, verifyURL bool) (string, error) {
+	env, ok := os.LookupEnv(name)
+
+	if !ok {
+		return "", fmt.Errorf("Environment variable %s not set", name)
+	}
+
+	if verifyURL {
+		// Verify that repository URL is valid
+		u, err := url.ParseRequestURI(env)
+		if err != nil {
+			log.Error(err)
+			return "", fmt.Errorf("Environment variable %s is an invalid URL", name)
+		}
+		if u.Scheme != "https" {
+			return "", fmt.Errorf("Environment variable %s does not have scheme 'https'", name)
+		}
+	}
+
+	return env, nil
 }
 
 // CreateToken creates the authorization token based on username + password
 func CreateToken(username, password string) {
-	token = base64.StdEncoding.EncodeToString([]byte(username + ":" + string(password)))
+	hi.token = base64.StdEncoding.EncodeToString([]byte(username + ":" + string(password)))
 }
 
-// InitializeClient ...
-func InitializeClient() error {
+// InitializeClient initializes a global http client
+// The returned string is the message shown to the user in the gui when the accompanying error occurs
+func InitializeClient() (string, error) {
 	// Handle certificate if one is set
 	caCertPool := x509.NewCertPool()
-	if len(certPath) > 0 {
-		caCert, err := ioutil.ReadFile(certPath)
+	if len(hi.certPath) > 0 {
+		caCert, err := ioutil.ReadFile(hi.certPath)
 		if err != nil {
-			return err
+			return "Reading certificate file failed", err
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -97,7 +116,7 @@ func InitializeClient() error {
 	}
 
 	// Set up HTTP client
-	timeout := time.Duration(RequestTimeout) * time.Second
+	timeout := time.Duration(hi.requestTimeout) * time.Second
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 
 	tr.MaxConnsPerHost = 100
@@ -107,27 +126,27 @@ func InitializeClient() error {
 	tr.TLSClientConfig = &tls.Config{
 		RootCAs: caCertPool,
 	}
-	client = &http.Client{
+	hi.client = &http.Client{
 		Timeout:   timeout,
 		Transport: tr,
 	}
 
-	_, err := client.Head(metadataURL)
+	// Temporarily disabling the keep-alive feature so that
+	// connections do not hog goroutines
+	tr.DisableKeepAlives = true
+	_, err := hi.client.Head(hi.metadataURL)
 	if err != nil {
-		return err
+		return "Cannot connect to metadata API. Certificate possibly missing or invalid, or url incorrect", err
 	}
 
-	// Temporarily disabling the keep-alive feature so that this unnecessary
-	// connection does not take one of our goroutines
-	tr.DisableKeepAlives = true
-	_, err = client.Head(dataURL)
+	_, err = hi.client.Head(hi.dataURL)
 	if err != nil {
-		return err
+		return "Cannot connect to data API. Certificate possibly missing or invalid, or url incorrect", err
 	}
 	tr.DisableKeepAlives = false
 
 	log.Debug("Initializing http client successful")
-	return nil
+	return "", nil
 }
 
 // makeRequest builds an authenticated HTTP client
@@ -150,7 +169,7 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 
 	// Place mandatory headers
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Basic "+token)
+	request.Header.Set("Authorization", "Basic "+hi.token)
 
 	// Place additional headers if any are available
 	for k, v := range headers {
@@ -159,9 +178,9 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 
 	// Execute HTTP request
 	// retry the request as specified by httpRetry variable
-	for count := 0; count == 0 || (err != nil && count < httpRetry); {
-		response, err = client.Do(request)
-		log.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, httpRetry)
+	for count := 0; count == 0 || (err != nil && count < hi.httpRetry); {
+		response, err = hi.client.Do(request)
+		log.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
 		count++
 	}
 	if err != nil {
@@ -170,7 +189,7 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 	defer response.Body.Close()
 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
-		return nil, fmt.Errorf("API responded with status %d", response.StatusCode)
+		return nil, &RequestError{response.StatusCode}
 	}
 
 	// Parse request
@@ -185,9 +204,9 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 // GetProjects gets all projects user has access to
 func GetProjects() ([]string, error) {
 	// Request projects
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/projects", nil, nil)
+	response, err := makeRequest(strings.TrimRight(hi.metadataURL, "/")+"/projects", nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving projects failed:\n%w", err)
+		return nil, fmt.Errorf("Retrieving projects failed: %w", err)
 	}
 
 	// Parse the JSON response into a slice
@@ -203,7 +222,7 @@ func GetProjects() ([]string, error) {
 // GetContainers gets conatiners inside the object
 func GetContainers(project string) ([]Container, error) {
 	// Request conteiners
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
+	response, err := makeRequest(strings.TrimRight(hi.metadataURL, "/")+"/project/"+
 		url.QueryEscape(project)+"/containers", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving container from project %s failed: %w", project, err)
@@ -222,7 +241,7 @@ func GetContainers(project string) ([]Container, error) {
 // GetObjects gets objects inside container
 func GetObjects(project, container string) ([]DataObject, error) {
 	// Request objects
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
+	response, err := makeRequest(strings.TrimRight(hi.metadataURL, "/")+"/project/"+
 		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects from container %s failed: %w", container, err)
@@ -251,7 +270,7 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)}
 
 	// Request data
-	response, err := makeRequest(strings.TrimRight(dataURL, "/")+"/data", query, headers)
+	response, err := makeRequest(strings.TrimRight(hi.dataURL, "/")+"/data", query, headers)
 	if err != nil {
 		return nil, err
 	}

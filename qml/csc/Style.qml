@@ -8,4 +8,6 @@ QtObject {
 	property color red: "#A9252F"
     property color grey: "#595959"
     property color lightBlue: "#EFF2F7"
+    property color disabledBackground: "#E8E8E8"
+    property color foreBackground: "#8C8C8C"
 }
