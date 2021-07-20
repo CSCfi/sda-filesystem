@@ -59,31 +59,23 @@ Window {
 			ColumnLayout {
 				Layout.fillHeight: true
 				Layout.margins: loginWindow.margins
-				spacing: 10
+				spacing: 0
 
 				Label {
 					text: "<h1>CSC Login</h1>"
 					color: CSC.Style.grey
 				}
 
-				TextField {
+				CSC.TextField {
 					id: usernameField
 					placeholderText: "Username"
 					focus: true
-					selectByMouse: true
-					mouseSelectionMode: TextInput.SelectWords
-					Layout.alignment: Qt.AlignCenter
-					Layout.fillWidth: true
 				}
 
-				TextField {
+				CSC.TextField {
 					id: passwordField
 					placeholderText: "Password"
-					selectByMouse: true
-					mouseSelectionMode: TextInput.SelectWords
 					echoMode: TextInput.Password
-					Layout.alignment: Qt.AlignCenter
-					Layout.fillWidth: true
 				}
 
 				Button {
