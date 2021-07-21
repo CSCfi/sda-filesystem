@@ -100,7 +100,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 				// Create a container directory
 				log.Debugf("Creating container %s", containerPath)
 				p := filepath.FromSlash(containerPath)
-				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, c.Bytes, timestamp)
 			}
 		}(projects[i])
 	}
@@ -153,23 +153,44 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 			continue
 		}
 
+		level := 1
+
 		// Object names contain their path from container
 		// Create both subdirectories and the files
-		for _, obj := range objects {
-			nodes := split(obj.Name)
-			objectPath := containerPath
+		for len(objects) > 0 {
+			// uniqueDirs contains the unique directory paths for this particular level
+			uniqueDirs := make(map[string]int64)
+			remove := make([]int, 0, len(objects))
 
-			for n := range nodes {
-				// Full path of dir/file
-				objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
-				p := filepath.FromSlash(objectPath)
+			for i, obj := range objects {
+				parts := strings.SplitN(obj.Name, "/", level+1)
 
-				if n == len(nodes)-1 {
+				if len(parts) < level+1 {
+					objectPath := containerPath + "/" + removeInvalidChars(obj.Name, "/")
+					p := filepath.FromSlash(objectPath)
 					fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
-				} else {
-					fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+					remove = append(remove, i)
+					continue
 				}
+
+				dir := strings.Join(parts[:len(parts)-1], "/")
+				uniqueDirs[dir] += obj.Bytes
 			}
+
+			// remove is in increasing order. In order to index objects correctly,
+			// remove has to be iterated in decreasing order.
+			for i := len(remove) - 1; i >= 0; i-- {
+				idx := remove[i]
+				objects[idx] = objects[len(objects)-len(remove)+i]
+			}
+			objects = objects[:len(objects)-len(remove)]
+
+			for key, value := range uniqueDirs {
+				p := filepath.FromSlash(containerPath + "/" + removeInvalidChars(key, "/"))
+				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, value, timestamp)
+			}
+
+			level++
 		}
 	}
 }
@@ -180,8 +201,24 @@ func split(path string) []string {
 }
 
 // Characters '/' and ':' are not allowed in names of directories or files
-func removeInvalidChars(str string) string {
-	return strings.Replace(strings.Replace(str, "/", "_", -1), ":", ".", -1)
+func removeInvalidChars(str string, ignore ...string) string {
+	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
+		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
+		"<", ".", ">", ".", "'", ".", "\"", "."}
+
+	if len(ignore) == 1 {
+		for i := 0; i < len(forReplacer)-1; i += 2 {
+			if forReplacer[i] == ignore[0] {
+				forReplacer[i] = forReplacer[len(forReplacer)-2]
+				forReplacer[i+1] = forReplacer[len(forReplacer)-1]
+				forReplacer = forReplacer[:len(forReplacer)-2]
+				break
+			}
+		}
+	}
+
+	r := strings.NewReplacer(forReplacer...)
+	return r.Replace(str)
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
