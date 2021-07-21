@@ -101,7 +101,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 				// Create a container directory
 				log.Debugf("Creating container %s", containerPath)
 				p := filepath.FromSlash(containerPath)
-				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, c.Bytes, timestamp)
 			}
 		}(projects[i])
 	}
@@ -153,23 +153,53 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 			continue
 		}
 
+		// There didn't seem to be a good place to do this in the next part of the code
+		for _, obj := range objects {
+			parts := split(obj.Name)
+			for i := range parts {
+				parts[i] = removeInvalidChars(parts[i])
+			}
+			obj.Name = strings.Join(parts, "/")
+		}
+
+		level := 1
+
 		// Object names contain their path from container
 		// Create both subdirectories and the files
-		for _, obj := range objects {
-			nodes := split(obj.Name)
-			objectPath := containerPath
+		for len(objects) > 0 {
+			// uniqueDirs contains the unique directory paths for this particular level
+			uniqueDirs := make(map[string]int64)
+			remove := make([]int, 0, len(objects))
 
-			for n := range nodes {
-				// Full path of dir/file
-				objectPath = objectPath + "/" + removeInvalidChars(nodes[n])
-				p := filepath.FromSlash(objectPath)
+			for i, obj := range objects {
+				parts := strings.SplitN(obj.Name, "/", level+1)
 
-				if n == len(nodes)-1 {
+				if len(parts) < level+1 {
+					objectPath := containerPath + "/" + obj.Name
+					p := filepath.FromSlash(objectPath)
 					fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
-				} else {
-					fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+					remove = append(remove, i)
+					continue
 				}
+
+				dir := strings.Join(parts[:len(parts)-1], "/")
+				uniqueDirs[dir] += obj.Bytes
 			}
+
+			// remove is in increasing order. In order to index objects correctly,
+			// remove has to be iterated in decreasing order.
+			for i := len(remove) - 1; i >= 0; i-- {
+				idx := remove[i]
+				objects[idx] = objects[len(objects)-len(remove)+i]
+			}
+			objects = objects[:len(objects)-len(remove)]
+
+			for key, value := range uniqueDirs {
+				p := filepath.FromSlash(containerPath + "/" + key)
+				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, value, timestamp)
+			}
+
+			level++
 		}
 	}
 }
