@@ -154,12 +154,12 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 		}
 
 		// There didn't seem to be a good place to do this in the next part of the code
-		for _, obj := range objects {
-			parts := split(obj.Name)
+		for k := range objects {
+			parts := split(objects[k].Name)
 			for i := range parts {
 				parts[i] = removeInvalidChars(parts[i])
 			}
-			obj.Name = strings.Join(parts, "/")
+			objects[k].Name = strings.Join(parts, "/")
 		}
 
 		level := 1
