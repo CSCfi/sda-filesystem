@@ -153,15 +153,6 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 			continue
 		}
 
-		// There didn't seem to be a good place to do this in the next part of the code
-		for k := range objects {
-			parts := split(objects[k].Name)
-			for i := range parts {
-				parts[i] = removeInvalidChars(parts[i])
-			}
-			objects[k].Name = strings.Join(parts, "/")
-		}
-
 		level := 1
 
 		// Object names contain their path from container
@@ -175,7 +166,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 				parts := strings.SplitN(obj.Name, "/", level+1)
 
 				if len(parts) < level+1 {
-					objectPath := containerPath + "/" + obj.Name
+					objectPath := containerPath + "/" + removeInvalidChars(obj.Name, "/")
 					p := filepath.FromSlash(objectPath)
 					fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
 					remove = append(remove, i)
@@ -195,7 +186,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 			objects = objects[:len(objects)-len(remove)]
 
 			for key, value := range uniqueDirs {
-				p := filepath.FromSlash(containerPath + "/" + key)
+				p := filepath.FromSlash(containerPath + "/" + removeInvalidChars(key, "/"))
 				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, value, timestamp)
 			}
 
@@ -210,8 +201,24 @@ func split(path string) []string {
 }
 
 // Characters '/' and ':' are not allowed in names of directories or files
-func removeInvalidChars(str string) string {
-	return strings.Replace(strings.Replace(str, "/", "_", -1), ":", ".", -1)
+func removeInvalidChars(str string, ignore ...string) string {
+	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
+		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
+		"<", ".", ">", ".", "'", ".", "\"", "."}
+
+	if len(ignore) == 1 {
+		for i := 0; i < len(forReplacer)-1; i += 2 {
+			if forReplacer[i] == ignore[0] {
+				forReplacer[i] = forReplacer[len(forReplacer)-2]
+				forReplacer[i+1] = forReplacer[len(forReplacer)-1]
+				forReplacer = forReplacer[:len(forReplacer)-2]
+				break
+			}
+		}
+	}
+
+	r := strings.NewReplacer(forReplacer...)
+	return r.Replace(str)
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
