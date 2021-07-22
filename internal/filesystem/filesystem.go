@@ -72,11 +72,11 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 		wg.Add(1)
 
 		// Remove characters which may interfere with filesystem structure
-		projectSafe := removeInvalidChars(projects[i])
+		projectSafe := removeInvalidChars(projects[i].Name)
 
 		// Create a project directory
 		log.Debugf("Creating project %s", projectSafe)
-		fs.makeNode(projectSafe, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+		fs.makeNode(projectSafe, fuse.S_IFDIR|sRDONLY, 0, projects[i].Bytes, timestamp)
 
 		go func(project string) {
 			defer wg.Done()
@@ -103,7 +103,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 				p := filepath.FromSlash(containerPath)
 				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, c.Bytes, timestamp)
 			}
-		}(projects[i])
+		}(projects[i].Name)
 	}
 
 	wg.Wait()
