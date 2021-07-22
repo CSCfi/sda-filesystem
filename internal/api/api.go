@@ -202,7 +202,7 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 }
 
 // GetProjects gets all projects user has access to
-func GetProjects() ([]string, error) {
+func GetProjects() ([]Container, error) {
 	// Request projects
 	response, err := makeRequest(strings.TrimRight(hi.metadataURL, "/")+"/projects", nil, nil)
 	if err != nil {
@@ -210,7 +210,7 @@ func GetProjects() ([]string, error) {
 	}
 
 	// Parse the JSON response into a slice
-	var projects []string
+	var projects []Container
 	if err := json.Unmarshal(response, &projects); err != nil {
 		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects: %w", err)
 	}
