@@ -35,17 +35,13 @@ var (
 // Container stores container data from metadata API
 type Container struct {
 	Bytes int64  `json:"bytes"`
-	Count int64  `json:"count"`
 	Name  string `json:"name"`
 }
 
 // DataObject stores object data from metadata API
 type DataObject struct {
-	Bytes       int64  `json:"bytes"`
-	ContentType string `json:"content_type"`
-	Hash        string `json:"hash"`
-	Name        string `json:"name"`
-	Subdir      string `json:"subdir"`
+	Bytes int64  `json:"bytes"`
+	Name  string `json:"name"`
 }
 
 func init() {
@@ -205,7 +201,9 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 // GetProjects gets all projects user has access to
 func GetProjects() ([]string, error) {
 	// Request projects
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/projects", nil, nil)
+	response, err := makeRequest(
+		strings.TrimSuffix(metadataURL, "/")+
+			"/projects", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving projects failed:\n%w", err)
 	}
@@ -223,8 +221,10 @@ func GetProjects() ([]string, error) {
 // GetContainers gets conatiners inside the object
 func GetContainers(project string) ([]Container, error) {
 	// Request conteiners
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
-		url.QueryEscape(project)+"/containers", nil, nil)
+	response, err := makeRequest(
+		strings.TrimSuffix(metadataURL, "/")+
+			"/project/"+
+			url.PathEscape(project)+"/containers", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving container from project %s failed:\n%w", project, err)
 	}
@@ -242,8 +242,11 @@ func GetContainers(project string) ([]Container, error) {
 // GetObjects gets objects inside container
 func GetObjects(project, container string) ([]DataObject, error) {
 	// Request objects
-	response, err := makeRequest(strings.TrimRight(metadataURL, "/")+"/project/"+
-		url.QueryEscape(project)+"/container/"+url.QueryEscape(container)+"/objects", nil, nil)
+	response, err := makeRequest(
+		strings.TrimSuffix(metadataURL, "/")+
+			"/project/"+
+			url.PathEscape(project)+"/container/"+
+			url.PathEscape(container)+"/objects", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects from container %s failed:\n%w", container, err)
 	}
@@ -259,7 +262,7 @@ func GetObjects(project, container string) ([]DataObject, error) {
 
 // DownloadData gets content of object from data API
 func DownloadData(path string, start int64, end int64) ([]byte, error) {
-	parts := strings.SplitN(strings.TrimLeft(path, "/"), "/", 3)
+	parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 3)
 	// Query params
 	query := map[string]string{
 		"project":   parts[0],
@@ -271,7 +274,7 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)}
 
 	// Request data
-	response, err := makeRequest(strings.TrimRight(dataURL, "/")+"/data", query, headers)
+	response, err := makeRequest(strings.TrimSuffix(dataURL, "/")+"/data", query, headers)
 	if err != nil {
 		return nil, err
 	}
