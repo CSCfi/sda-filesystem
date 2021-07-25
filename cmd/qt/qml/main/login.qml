@@ -16,20 +16,28 @@ Window {
     maximumHeight: minimumHeight
 
 	property int margins: 20
+	property ApplicationWindow homeWindow
 	Material.accent: CSC.Style.primaryColor
 
 	CSC.Popup {
 		id: popup
-		errorTextContent: ""
 	}
 
 	Connections
 	{
-		target: qmlBridge
+		target: QmlBridge
 		onEnvError: {
 			itemWrap.enabled = false
 			popup.errorTextContent = err
 			popup.open()
+		}
+	}
+
+	Connections
+	{
+		target: homeWindow
+		onLogout: {
+			console.log("Logging out...")
 		}
 	}
 
@@ -78,93 +86,44 @@ Window {
 					echoMode: TextInput.Password
 				}
 
-				Button {
+				CSC.Button {
 					id: loginButton
-					text: "<b>Login</b>"
-					hoverEnabled: true
+					text: "Login"
 					padding: 15
 					Layout.alignment: Qt.AlignCenter
 					Layout.fillWidth: true
-					Material.foreground: loginButton.enabled ? "white" : CSC.Style.disabledForeground
-
-					background: Rectangle {
-						radius: 4
-						color: loginButton.enabled ? (loginButton.pressed ? "#9BBCB7" : (loginButton.hovered ? "#61958D" : CSC.Style.primaryColor)) : CSC.Style.disabledBackground
-					}
-
+					
 					onClicked: login()
 					
 					function login() {
 						var loginError = "Incorrect username or password"
 
 						if (usernameField.text != "" && passwordField.text != "") {
-							loginError = qmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
+							loginError = QmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
 							if (!loginError) {
 								var component = Qt.createComponent("home.qml")
-								var homewindow = component.createObject(loginWindow, {username: usernameField.text})
-								if (homewindow == null) {
+								homeWindow = component.createObject(loginWindow, {username: usernameField.text})
+								if (homeWindow == null) {
 									console.log("Error creating home window")
 									popup.errorTextContent = "Could not create home window. Our bad :/"
 									popup.open()
 									return
 								}
 								loginWindow.hide()
-								homewindow.show()
+								homeWindow.show()
 								return
 							}
 							passwordField.selectAll()
 							passwordField.focus = true
 						}
-
 						popup.errorTextContent = loginError
+						if (popup.opened) {
+							popup.visible = false
+						}
 						popup.open()
 					}
 				}
-
-				/*Text {
-					text: "<a href='https://my.csc.fi/forgotPassword'>Forgot your password?</a>"
-					onLinkActivated: Qt.openUrlExternally(link)
-					Layout.alignment: Qt.AlignCenter
-
-					MouseArea {
-						anchors.fill: parent
-						acceptedButtons: Qt.NoButton 
-						cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor
-					}
-				}*/
 			}
 		}
 	}
 }
-
-/*Label {
-	id: loginError
-	text: "Incorrect username or password"
-	color: CSC.Style.red
-	padding: 10
-	visible: false
-	Layout.fillWidth: true
-	background: Rectangle {
-		color: Qt.rgba(CSC.Style.red.r, CSC.Style.red.g, CSC.Style.red.b, 0.3)
-		radius: 4
-
-		Image {
-			source: "qrc:/qml/images/x-lg.svg"
-			opacity: closeLoginError.containsMouse ? 0.7 : 1.0
-			height: parent.height / 3
-			fillMode: Image.PreserveAspectFit
-			anchors.verticalCenter: parent.verticalCenter
-			anchors.right: parent.right
-			anchors.rightMargin: loginError.padding
-
-			MouseArea {
-				id: closeLoginError
-				anchors.fill: parent
-				hoverEnabled: true
-				onClicked: {
-					loginError.visible = false
-				}
-			}
-		}
-	}
-}*/

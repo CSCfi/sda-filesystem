@@ -16,7 +16,7 @@ Popup {
     rightMargin: loginWindow.margins
     leftMargin: loginWindow.margins
 
-    property string errorTextContent
+    property string errorTextContent: ""
 
     background: Rectangle {
         border.width: 2
@@ -41,20 +41,18 @@ Popup {
     contentItem: RowLayout {
         spacing: 0
 
-        Rectangle {
+        // This is a button only so that the svg is easier to color
+        Button {
             property var diameter: popup.height * 0.25
-            radius: diameter * 0.5
-            color: CSC.Style.red
-            Layout.preferredHeight: diameter
-            Layout.preferredWidth: diameter
-            Layout.leftMargin: loginWindow.margins
-            Layout.rightMargin: loginWindow.margins
+            icon.source: "qrc:/qml/images/x-circle-fill.svg"
+            icon.color: CSC.Style.red
+            icon.width: diameter
+            icon.height: diameter
+            enabled: false
+            Layout.preferredWidth: diameter + 2*loginWindow.margins
 
-            Image {
-                source: "qrc:/qml/images/x-lg.svg"
-                height: parent.height * 0.6
-                fillMode: Image.PreserveAspectFit
-                anchors.centerIn: parent
+            background: Rectangle {
+                color: "transparent"
             }
         }
         

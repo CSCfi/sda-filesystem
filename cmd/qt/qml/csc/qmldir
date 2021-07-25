@@ -2,3 +2,4 @@ module csc
 singleton Style 1.0 Style.qml
 Popup 1.0 Popup.qml
 TextField 1.0 TextField.qml
+Button 1.0 Button.qml

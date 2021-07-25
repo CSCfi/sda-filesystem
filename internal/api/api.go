@@ -30,14 +30,8 @@ type HTTPInfo struct {
 	client         *http.Client
 }
 
-// Container stores container data from metadata API
-type Container struct {
-	Bytes int64  `json:"bytes"`
-	Name  string `json:"name"`
-}
-
-// DataObject stores object data from metadata API
-type DataObject struct {
+// APIData stores data from either a call to a project, container or object
+type APIData struct {
 	Bytes int64  `json:"bytes"`
 	Name  string `json:"name"`
 }
@@ -198,7 +192,7 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 }
 
 // GetProjects gets all projects user has access to
-func GetProjects() ([]Container, error) {
+func GetProjects() ([]APIData, error) {
 	// Request projects
 	response, err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
@@ -208,7 +202,7 @@ func GetProjects() ([]Container, error) {
 	}
 
 	// Parse the JSON response into a slice
-	var projects []Container
+	var projects []APIData
 	if err := json.Unmarshal(response, &projects); err != nil {
 		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects: %w", err)
 	}
@@ -218,7 +212,7 @@ func GetProjects() ([]Container, error) {
 }
 
 // GetContainers gets conatiners inside the object
-func GetContainers(project string) ([]Container, error) {
+func GetContainers(project string) ([]APIData, error) {
 	// Request conteiners
 	response, err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
@@ -229,7 +223,7 @@ func GetContainers(project string) ([]Container, error) {
 	}
 
 	// Parse the JSON response into a slice
-	var containers []Container
+	var containers []APIData
 	if err := json.Unmarshal(response, &containers); err != nil {
 		return nil, fmt.Errorf("Unable to unmarshal response for retrieving containers:\n%w", err)
 	}
@@ -239,7 +233,7 @@ func GetContainers(project string) ([]Container, error) {
 }
 
 // GetObjects gets objects inside container
-func GetObjects(project, container string) ([]DataObject, error) {
+func GetObjects(project, container string) ([]APIData, error) {
 	// Request objects
 	response, err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
@@ -251,7 +245,7 @@ func GetObjects(project, container string) ([]DataObject, error) {
 	}
 
 	// Parse the JSON response into a struct
-	var objects []DataObject
+	var objects []APIData
 	if err := json.Unmarshal(response, &objects); err != nil {
 		return nil, fmt.Errorf("Unable to unmarshal response for retrieving objects:\n%w", err)
 	}

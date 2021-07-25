@@ -8,3 +8,6 @@ sd-connect-fuse
 .go-version
 vendor/*
 deploy/*
+cmd/qt/moc*
+cmd/qt/rcc*
+cmd/qt/deploy*

@@ -10,12 +10,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/billziss-gh/cgofuse/fuse"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
-
-	"sd-connect-fuse/internal/api"
-	"sd-connect-fuse/internal/filesystem"
 )
 
 // dirName is name of the directory where the projects are stored
@@ -63,7 +59,7 @@ func init() {
 	var logLevel string
 	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&api.RequestTimeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
+	//flag.IntVar(&api.RequestTimeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
 	flag.Parse()
 
 	setLogger(logLevel)
@@ -113,7 +109,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	done := shutdown()
 
-	api.CreateToken()
+	/*api.CreateToken()
 	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 	api.InitializeClient()
 	//fmt.Println(runtime.NumGoroutine())
@@ -126,7 +122,7 @@ func main() {
 		options = append(options, "-o", "volname="+dirName)
 		//options = append(options, "-o", "daemon_timeout="+strconv.Itoa(daemonTimeout))
 	}
-	host.Mount(mount, options)
+	host.Mount(mount, options)*/
 
 	<-done
 }

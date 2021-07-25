@@ -12,6 +12,7 @@ import (
 )
 
 const sRDONLY = 00444
+const numRoutines = 8
 
 // Connectfs stores the filesystem structure
 type Connectfs struct {
@@ -62,7 +63,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	log.Infof("Receiving %d projects", len(projects))
 
 	var wg sync.WaitGroup
-	forChannel := make(map[string][]api.Container)
+	forChannel := make(map[string][]api.APIData)
 	numJobs := 0
 	mapLock := sync.RWMutex{}
 	//start := time.Now()
@@ -116,7 +117,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	//fmt.Println(numJobs)
 	//start = time.Now()
 
-	numRoutines := 4
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
 		go createObjects(w, jobs, &wg)
@@ -154,6 +154,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 		}
 
 		level := 1
+		//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 
 		// Object names contain their path from container
 		// Create both subdirectories and the files
