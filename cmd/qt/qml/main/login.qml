@@ -112,7 +112,7 @@ Window {
 									return
 								}
 								loginWindow.hide()
-								homeWindow.showMaximized()
+								homeWindow.show()
 								return
 							}
 							passwordField.selectAll()

@@ -108,6 +108,7 @@ Page {
                         running: false
                         anchors.fill: parent
                         anchors.centerIn: parent
+                        anchors.margins: 5
                     }
 
                     Connections {
@@ -120,12 +121,22 @@ Page {
                         QmlBridge.loadFuse()
                     }
 
+                    /*onCompleted: {
+                        implicitWidth: width
+                        implicitHeight: height
+                    }*/
+
                     states: [
                         State {
                             name: "loading"; 
-                            PropertyChanges { target: loadButton; text: "" }
-                            PropertyChanges { target: loadButton; disableBackgound: CSC.Style.primaryColor }
-                            PropertyChanges { target: loadButton; enabled: false }
+                            PropertyChanges { 
+                                target: loadButton
+                                text: ""
+                                disableBackgound: CSC.Style.primaryColor
+                                enabled: false 
+                                Layout.minimumWidth: openButton.implicitWidth
+                                Layout.minimumHeight: openButton.implicitHeight
+                            }
                             PropertyChanges { target: acceptFrame; enabled: false }
                             PropertyChanges { target: busy; running: true }
                         },
@@ -133,8 +144,7 @@ Page {
                             name: "finished"
                             PropertyChanges { target: openButton; enabled: true }
                             PropertyChanges { target: acceptFrame; enabled: false }
-                            PropertyChanges { target: loadButton; enabled: false }
-                            PropertyChanges { target: loadButton; text: "Refresh FUSE"}
+                            PropertyChanges { target: loadButton; text: "Refresh FUSE"; enabled: false }
                         }
                     ]			
                 }

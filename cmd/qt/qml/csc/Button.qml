@@ -20,7 +20,7 @@ Button {
     background: Rectangle {
         radius: 4
         border.width: outlined ? 2 : 0
-        border.color: button.pressed ? "#779DA7" : CSC.Style.primaryColor
+        border.color: !button.enabled ? disableForeground : (button.pressed ? "#779DA7" : CSC.Style.primaryColor)
         color: !button.enabled ? disableBackgound : (button.pressed ? pressedColor : (button.hovered ? hoveredColor : backgroundColor))
     }
 }

@@ -9,6 +9,8 @@ ApplicationWindow {
 	id: mainWindow
     visible: true
     title: "SD-Connect FUSE"
+	width: 1000
+	height: 600
 	minimumHeight: sideBarView.height + toolbar.height
 	minimumWidth: homePage.implicitWidth + sideBarView.width
 
