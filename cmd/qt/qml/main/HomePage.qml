@@ -121,11 +121,6 @@ Page {
                         QmlBridge.loadFuse()
                     }
 
-                    /*onCompleted: {
-                        implicitWidth: width
-                        implicitHeight: height
-                    }*/
-
                     states: [
                         State {
                             name: "loading"; 
@@ -159,15 +154,31 @@ Page {
 
         ListView {
             id: projectView
+            interactive: false
+            implicitWidth: dialogColumn.implicitWidth
             Layout.fillHeight: true
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            implicitWidth: dialogColumn.implicitWidth
+
+            Material.accent: CSC.Style.altGreen
 
             model: ProjectModel
-            delegate: ItemDelegate {
-                text: projectName + "  " + containerCount
-                width: parent.width
+            delegate: RowLayout {
+                id: projectRow
+                anchors.right: parent.right
+                anchors.left: parent.left
+
+                property real value: (containerCount == -1) ? 0 : (containerCount == 0) ? 1 : loadedContainers / containerCount
+
+                Text {
+                    text: "<h4>" + projectName + "</h4>"
+                }
+                ProgressBar {
+                    value: projectRow.value
+                }
+                Text {
+                    text: Math.round(projectRow.value * 100) + "%"
+                }
             }
         }
     }

@@ -12,7 +12,7 @@ import (
 )
 
 const sRDONLY = 00444
-const numRoutines = 8
+const numRoutines = 4
 
 // Connectfs stores the filesystem structure
 type Connectfs struct {
@@ -37,8 +37,13 @@ type containerInfo struct {
 	fs        *Connectfs
 }
 
+type LoadProjectInfo struct {
+	Project string
+	Count   int
+}
+
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
-func CreateFileSystem() *Connectfs {
+func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	log.Info("Creating in-memory filesystem database")
 	timestamp := fuse.Now()
 	c := Connectfs{}
@@ -46,13 +51,13 @@ func CreateFileSystem() *Connectfs {
 	c.ino++
 	c.openmap = map[uint64]*node{}
 	c.root = newNode(0, c.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-	c.populateFilesystem(timestamp)
+	c.populateFilesystem(timestamp, send...)
 	log.Info("Filesystem database completed")
 	return &c
 }
 
 // populateDirectory creates the nodes (files and directories) of the filesystem
-func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
+func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
 	projects, err := api.GetProjects()
 	if err != nil {
 		log.Error(err)
@@ -89,6 +94,10 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 				return
 			}
 
+			if len(send) > 0 {
+				send[0] <- LoadProjectInfo{Project: project, Count: len(containers)}
+			}
+
 			mapLock.Lock()
 			forChannel[project] = containers // LOCK
 			numJobs += len(containers)       // LOCK
@@ -119,7 +128,11 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
-		go createObjects(w, jobs, &wg)
+		if len(send) > 0 {
+			go createObjects(w, jobs, &wg, send[0])
+		} else {
+			go createObjects(w, jobs, &wg)
+		}
 	}
 
 	for key, value := range forChannel {
@@ -130,11 +143,14 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	close(jobs)
 
 	wg.Wait()
+	if len(send) > 0 {
+		close(send[0])
+	}
 	//elapsed = time.Since(start)
 	//fmt.Printf("Time: %s\n", elapsed)
 }
 
-func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
+func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
 	defer wg.Done()
 
 	for j := range jobs {
@@ -192,6 +208,10 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 			}
 
 			level++
+		}
+
+		if len(send) > 0 {
+			send[0] <- LoadProjectInfo{Project: project, Count: 1}
 		}
 	}
 }

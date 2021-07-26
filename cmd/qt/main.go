@@ -73,8 +73,10 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) string {
 }
 
 func (qb *QmlBridge) loadFuse() {
+	sendToModel := make(chan filesystem.LoadProjectInfo)
+	go projectModel.waitForInfo(sendToModel)
 	go func() {
-		connectfs := filesystem.CreateFileSystem()
+		connectfs := filesystem.CreateFileSystem(sendToModel)
 		host := fuse.NewFileSystemHost(connectfs)
 		qb.SetFileSystemHost(host)
 		options := []string{}
