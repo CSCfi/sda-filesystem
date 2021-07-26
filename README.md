@@ -15,5 +15,8 @@ export SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
 export SD_CONNECT_CERTS=cert.pem
 ```
 
+```
 qtdeploy build desktop
-./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OSs
+./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OS`
+```
+
