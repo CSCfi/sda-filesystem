@@ -16,4 +16,4 @@ export SD_CONNECT_CERTS=cert.pem
 ```
 
 qtdeploy build desktop
-./deploy/darwin/sd-connect-fuse.app/Contents/MacOS/sd-connect-fuse  // Path slightly different for other OSs
+./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OSs
