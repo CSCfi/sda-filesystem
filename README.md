@@ -16,7 +16,7 @@ export SD_CONNECT_CERTS=cert.pem
 ```
 
 ```
-qtdeploy build desktop
+qtdeploy build desktop cmd/qt/main.go
 ./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OS`
 ```
 
