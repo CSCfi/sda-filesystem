@@ -23,8 +23,7 @@ Window {
 		id: popup
 	}
 
-	Connections
-	{
+	Connections {
 		target: QmlBridge
 		onEnvError: {
 			itemWrap.enabled = false
@@ -33,8 +32,7 @@ Window {
 		}
 	}
 
-	Connections
-	{
+	Connections {
 		target: homeWindow
 		onLogout: {
 			console.log("Logging out...")
@@ -78,12 +76,16 @@ Window {
 					id: usernameField
 					placeholderText: "Username"
 					focus: true
+					Layout.alignment: Qt.AlignCenter
+    				Layout.fillWidth: true
 				}
 
 				CSC.TextField {
 					id: passwordField
 					placeholderText: "Password"
 					echoMode: TextInput.Password
+					Layout.alignment: Qt.AlignCenter
+    				Layout.fillWidth: true
 				}
 
 				CSC.Button {
@@ -101,7 +103,7 @@ Window {
 						if (usernameField.text != "" && passwordField.text != "") {
 							loginError = QmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
 							if (!loginError) {
-								var component = Qt.createComponent("home.qml")
+								var component = Qt.createComponent("mainWindow.qml")
 								homeWindow = component.createObject(loginWindow, {username: usernameField.text})
 								if (homeWindow == null) {
 									console.log("Error creating home window")
@@ -110,7 +112,7 @@ Window {
 									return
 								}
 								loginWindow.hide()
-								homeWindow.show()
+								homeWindow.showMaximized()
 								return
 							}
 							passwordField.selectAll()

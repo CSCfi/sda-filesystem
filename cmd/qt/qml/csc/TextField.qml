@@ -11,8 +11,6 @@ TextField {
     rightPadding: 8
     selectByMouse: true
     mouseSelectionMode: TextInput.SelectWords
-    Layout.alignment: Qt.AlignCenter
-    Layout.fillWidth: true
 
     //Material.accent: CSC.Style.primaryColor
 
