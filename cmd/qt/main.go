@@ -159,7 +159,7 @@ func main() {
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)
 
-	// Inbuild styles are:
+	// Inbuilt styles are:
 	// Default, Material, Fusion, Imagine, Universal
 	quickcontrols2.QQuickStyle_SetStyle("Material")
 

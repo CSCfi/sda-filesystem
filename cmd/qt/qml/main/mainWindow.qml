@@ -28,33 +28,19 @@ ApplicationWindow {
             Image {
 				source: "qrc:/qml/images/CSC_logo.svg"
 				fillMode: Image.PreserveAspectFit
-				Layout.preferredHeight: logoutButton.height
+				Layout.preferredHeight: 50
 				Layout.preferredWidth: paintedWidth
 				Layout.alignment: Qt.AlignLeft
 				Layout.margins: 5
 			}
 
-            ToolButton {
-				id: logoutButton
+            Text {
                 text: username
-				font.capitalization: Font.MixedCase
-				icon.source: "qrc:/qml/images/chevron-down.svg"
+				color: "white"
+				font.pointSize: 15
+				font.weight: Font.DemiBold
+				rightPadding: 10
 				Layout.alignment: Qt.AlignRight
-				LayoutMirroring.enabled: true
-
-				Material.foreground: "white"
-
-				onClicked: menu.open()
-
-				Menu {
-					id: menu
-					y: logoutButton.height
-
-					MenuItem {
-						text: "Logout"
-						onTriggered: mainWindow.logout()
-					}
-				}
             }
         }
     }
@@ -81,6 +67,13 @@ ApplicationWindow {
 			Layout.fillHeight: true
 			Layout.preferredWidth: 200
 
+			Component {
+				id: separator
+				Rectangle {
+					height: section != "main" ? 30 : 0
+				}
+			}
+
 			ListView {
 				id: sideBarView
 				anchors.verticalCenter: parent.verticalCenter
@@ -92,10 +85,17 @@ ApplicationWindow {
 					ListElement {
 						name: "Home"
 						image: "qrc:/qml/images/house-door.svg"
+						section: "main"
 					}
 					ListElement {
 						name: "Logs"
 						image: "qrc:/qml/images/layout-text-sidebar-reverse.svg"
+						section: "main"
+					}
+					ListElement {
+						name: "Logout"
+						image: "qrc:/qml/images/box-arrow-right.svg"
+						section: "end"
 					}
 				}
 
@@ -106,15 +106,23 @@ ApplicationWindow {
 				delegate: ItemDelegate {
 					text: name
 					icon.source: image
-					width: parent.width
+					width: sideBarView.width
 					highlighted: sideBarView.highlightedIndex === index
 
 					onClicked: {
-						if (sideBarView.currentIndex != index) {
-							sideBarView.currentIndex = index
+						if (section == "end") {
+							mainWindow.logout()
+						} else {
+							if (sideBarView.currentIndex != index) {
+								sideBarView.currentIndex = index
+							}
 						}
 					}
 				}
+
+				section.property: "section"
+				section.criteria: ViewSection.FullString
+				section.delegate: separator
 			}
 		}
 

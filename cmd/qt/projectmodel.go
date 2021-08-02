@@ -10,14 +10,14 @@ import (
 const (
 	ProjectName = int(core.Qt__UserRole) + 1<<iota
 	LoadedContainers
-	ContainerCount
+	AllContainers
 )
 
-// For some reason (bug?) the slot apiToProject() did not recognize []api.APIData as a list
-type APIDataList []api.APIData
+// For some reason (bug?) the slot apiToProject() did not recognize []api.Metadata as a list
+type metadataList []api.Metadata
 
 type ProjectModel struct {
-	core.QAbstractListModel
+	core.QAbstractTableModel
 
 	_ func() `constructor:"init"`
 
@@ -25,7 +25,7 @@ type ProjectModel struct {
 	_ []*Project               `property:"projects"`
 	_ map[string]int           `property:"nameToIndex"`
 
-	_ func(APIDataList) `slot:"apiToProject"`
+	_ func(metadataList) `slot:"apiToProject"`
 }
 
 type Project struct {
@@ -33,7 +33,7 @@ type Project struct {
 
 	_ string `property:"projectName"`
 	_ int    `property:"loadedContainers"`
-	_ int    `property:"containerCount"`
+	_ int    `property:"allContainers"`
 }
 
 func init() {
@@ -44,7 +44,7 @@ func (pm *ProjectModel) init() {
 	pm.SetRoles(map[int]*core.QByteArray{
 		ProjectName:      core.NewQByteArray2("projectName", -1),
 		LoadedContainers: core.NewQByteArray2("loadedContainers", -1),
-		ContainerCount:   core.NewQByteArray2("containerCount", -1),
+		AllContainers:    core.NewQByteArray2("allContainers", -1),
 	})
 
 	pm.ConnectData(pm.data)
@@ -77,9 +77,9 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 			return core.NewQVariant1(p.LoadedContainers())
 		}
 
-	case ContainerCount:
+	case AllContainers:
 		{
-			return core.NewQVariant1(p.ContainerCount())
+			return core.NewQVariant1(p.AllContainers())
 		}
 
 	default:
@@ -94,21 +94,21 @@ func (pm *ProjectModel) rowCount(parent *core.QModelIndex) int {
 }
 
 func (pm *ProjectModel) columnCount(parent *core.QModelIndex) int {
-	return 1
+	return 2
 }
 
 func (pm *ProjectModel) roleNames() map[int]*core.QByteArray {
 	return pm.Roles()
 }
 
-func (pm *ProjectModel) apiToProject(projectsAPI APIDataList) {
+func (pm *ProjectModel) apiToProject(projectsAPI metadataList) {
 	projects := make([]*Project, len(projectsAPI))
 
 	for i := range projectsAPI {
 		var pr = NewProject(nil)
 		pr.SetProjectName(projectsAPI[i].Name)
 		pr.SetLoadedContainers(0)
-		pr.SetContainerCount(-1)
+		pr.SetAllContainers(-1)
 		projects[i] = pr
 	}
 
@@ -119,14 +119,16 @@ func (pm *ProjectModel) waitForInfo(ch <-chan filesystem.LoadProjectInfo) {
 	for info := range ch {
 		row := pm.NameToIndex()[info.Project]
 		var pr = pm.Projects()[row]
-		if pr.ContainerCount() != -1 {
+		if pr.AllContainers() != -1 {
 			pr.SetLoadedContainers(pr.LoadedContainers() + info.Count)
-			var pIndex = pm.Index(row, 0, core.NewQModelIndex())
-			pm.DataChanged(pIndex, pIndex, []int{LoadedContainers})
+			pm.DataChanged(pm.Index(row, 1, core.NewQModelIndex()),
+				pm.Index(row, 1, core.NewQModelIndex()),
+				[]int{LoadedContainers})
 		} else {
-			pr.SetContainerCount(info.Count)
-			var pIndex = pm.Index(row, 0, core.NewQModelIndex())
-			pm.DataChanged(pIndex, pIndex, []int{ContainerCount})
+			pr.SetAllContainers(info.Count)
+			pm.DataChanged(pm.Index(row, 1, core.NewQModelIndex()),
+				pm.Index(row, 1, core.NewQModelIndex()),
+				[]int{AllContainers})
 		}
 	}
 }

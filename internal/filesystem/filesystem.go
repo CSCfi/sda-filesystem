@@ -68,7 +68,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	log.Infof("Receiving %d projects", len(projects))
 
 	var wg sync.WaitGroup
-	forChannel := make(map[string][]api.APIData)
+	forChannel := make(map[string][]api.Metadata)
 	numJobs := 0
 	mapLock := sync.RWMutex{}
 	//start := time.Now()

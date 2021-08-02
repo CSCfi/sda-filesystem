@@ -1,6 +1,5 @@
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
-//import QtQuick.Controls.Material 2.12
 import QtQuick 2.13
 import csc 1.0 as CSC
 
@@ -11,8 +10,6 @@ TextField {
     rightPadding: 8
     selectByMouse: true
     mouseSelectionMode: TextInput.SelectWords
-
-    //Material.accent: CSC.Style.primaryColor
 
     background: Rectangle {
         id: bg

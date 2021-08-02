@@ -102,22 +102,35 @@ Window {
 
 						if (usernameField.text != "" && passwordField.text != "") {
 							loginError = QmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
+
 							if (!loginError) {
 								var component = Qt.createComponent("mainWindow.qml")
-								homeWindow = component.createObject(loginWindow, {username: usernameField.text})
-								if (homeWindow == null) {
-									console.log("Error creating home window")
-									popup.errorTextContent = "Could not create home window. Our bad :/"
+								if (component.status != Component.Ready) {
+									if (component.status == Component.Error)
+										console.log("Error loading component:\n" + component.errorString());
+									
+									popup.errorTextContent = "Could not create window. Our bad :/"
 									popup.open()
 									return
 								}
+
+								homeWindow = component.createObject(loginWindow, {username: usernameField.text})
+								if (homeWindow == null) {
+									console.log("Error creating window object")
+									popup.errorTextContent = "Could not create window. Our bad :/"
+									popup.open()
+									return
+								}
+
 								loginWindow.hide()
 								homeWindow.show()
 								return
 							}
+
 							passwordField.selectAll()
 							passwordField.focus = true
 						}
+
 						popup.errorTextContent = loginError
 						if (popup.opened) {
 							popup.visible = false

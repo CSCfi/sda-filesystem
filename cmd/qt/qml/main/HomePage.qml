@@ -2,13 +2,14 @@ import QtQuick 2.13
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
+import Qt.labs.qmlmodels 1.0
 import csc 1.0 as CSC
 
 Page {
     id: page
     property int gridSpacing: 20
     property int buttonPadding: 20
-    implicitWidth: dialogColumn.implicitWidth + projectView.implicitWidth + 2 * gridSpacing  
+    implicitWidth: dialogColumn.implicitWidth + projectFrame.implicitWidth + 2 * gridSpacing  
 
     RowLayout {
         spacing: page.gridSpacing
@@ -17,10 +18,11 @@ Page {
 
         ColumnLayout {
             id: dialogColumn
-            Layout.fillHeight: true
+            spacing: page.gridSpacing
             Layout.fillWidth: true
-            Layout.preferredWidth: 1
+            Layout.preferredWidth: 1 // The two items in the above rowlayout are 1:1 (generally)
             Layout.maximumWidth: 400
+            Layout.alignment: Qt.AlignTop
 
             Frame {
                 id: acceptFrame
@@ -32,16 +34,16 @@ Page {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: page.gridSpacing
+                    //spacing: page.gridSpacing
 
                     Text {
                         text: "<h3>FUSE will be mounted at:</h3>"
+                        color: CSC.Style.grey
                     }
 
                     CSC.TextField {
                         id: mountField
                         text: QmlBridge.mountPoint
-                        Layout.alignment: Qt.AlignLeft
                         Layout.fillWidth: true
                     }
 
@@ -53,11 +55,12 @@ Page {
                         padding: page.buttonPadding
                         Layout.alignment: Qt.AlignRight
                         Layout.minimumWidth: implicitWidth
+                        Layout.topMargin: 15
 
                         onClicked: {
                             if (acceptButton.state == "") {
                                 QmlBridge.changeMountPoint(mountField.text)
-                                acceptButton.state = 'accepted'
+                                acceptButton.state = "accepted"
                             } else {
                                 acceptButton.state = ""
                             }
@@ -86,7 +89,6 @@ Page {
                     padding: page.buttonPadding
                     enabled: false
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
                     Layout.minimumWidth: implicitWidth
                     
                     onClicked: QmlBridge.openFuse()
@@ -98,7 +100,6 @@ Page {
                     padding: page.buttonPadding
                     enabled: false
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
                     Layout.minimumWidth: implicitWidth
 
                     Material.accent: "white"
@@ -144,40 +145,151 @@ Page {
                     ]			
                 }
             }
-
-            // Dummy for alignment
-            Rectangle {
-                Layout.fillHeight: true
-                color: "transparent"
-            }
         }
 
-        ListView {
-            id: projectView
-            interactive: false
+        Page {
+            id: projectFrame
             implicitWidth: dialogColumn.implicitWidth
+            rightPadding: 0
+            leftPadding: 0
             Layout.fillHeight: true
             Layout.fillWidth: true
             Layout.preferredWidth: 1
 
-            Material.accent: CSC.Style.altGreen
+            property real rowHeight: 50
+            property real viewPadding: 10
 
-            model: ProjectModel
-            delegate: RowLayout {
-                id: projectRow
-                anchors.right: parent.right
-                anchors.left: parent.left
+            background: Rectangle {
+                color: CSC.Style.primaryColor
+                radius: 10
+            }
 
-                property real value: (containerCount == -1) ? 0 : (containerCount == 0) ? 1 : loadedContainers / containerCount
-
+            header: Rectangle {
+                implicitHeight: projectFrame.rowHeight
+                color: "transparent"
                 Text {
-                    text: "<h4>" + projectName + "</h4>"
+                    text: "Projects"
+                    color: "white"
+                    verticalAlignment: Text.AlignBottom
+                    height: parent.height
+                    maximumLineCount: 1
+                    padding: 10
+                    fontSizeMode: Text.VerticalFit
+                    minimumPixelSize: 10
+                    font.pixelSize: projectFrame.rowHeight
                 }
-                ProgressBar {
-                    value: projectRow.value
+            }
+
+            footer: Rectangle {
+                implicitHeight: projectFrame.rowHeight
+                color: "transparent"
+            }
+
+            TextMetrics {
+                id: textMetrics
+                text: "100 %"
+            }
+
+            TableView {
+                id: projectView
+                clip: true
+                anchors.fill: parent
+
+                Material.accent: CSC.Style.altGreen
+
+                property bool ready: false
+                property real numColumnMinWidth: textMetrics.width + projectFrame.viewPadding
+                property real nameColumnMaxWidth
+
+                rowHeightProvider: function (row) { return projectFrame.rowHeight }
+                columnWidthProvider: function (column) { return column == 0 ? -1 : 0 } // Some shenanigans so that we can figure out nameColumnMaxWidth
+
+                model: ProjectModel
+                delegate: chooser
+
+                Component.onCompleted: {
+                    forceLayout()
+                    nameColumnMaxWidth = projectView.contentWidth
+                    columnWidthProvider = function (column) { 
+                        if (column == 0) {
+                            return Math.min(nameColumnMaxWidth, projectView.width - numColumnMinWidth)
+                        } else {
+                            return Math.max(numColumnMinWidth, projectView.width - nameColumnMaxWidth)
+                        }
+                   }
+                   ready = true
                 }
-                Text {
-                    text: Math.round(projectRow.value * 100) + "%"
+
+                onWidthChanged: {
+                    if (ready) { // <- Otherwise error
+                        forceLayout()
+                    }
+                }
+
+                ScrollBar.vertical: ScrollBar { interactive: false }
+            }
+
+            DelegateChooser {
+                id: chooser
+
+                DelegateChoice {
+                    column: 0
+                    delegate: Rectangle {
+                        implicitHeight: projectFrame.viewPadding
+                        implicitWidth: projectNameText.width
+                        color: row % 2 ? CSC.Style.blue : CSC.Style.darkBlue
+
+                        ScrollView {
+                            clip: true
+                            contentHeight: availableHeight
+                            anchors.fill: parent
+
+                            ScrollBar.horizontal.interactive: false
+                            
+                            Text {
+                                id: projectNameText
+                                text: "<h4>" + projectName + "</h4>"
+                                verticalAlignment: Text.AlignVCenter
+                                maximumLineCount: 1
+                                padding: projectFrame.viewPadding
+                                color: "white"
+                                height: parent.height
+                            }
+                        }
+                    }
+                }
+
+                DelegateChoice {
+                    column: 1
+                    delegate: Rectangle {
+                        implicitHeight: projectFrame.rowHeight
+                        color: row % 2 ? CSC.Style.blue : CSC.Style.darkBlue
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.rightMargin: projectFrame.viewPadding
+                            anchors.leftMargin: projectFrame.viewPadding
+                            property real value: (allContainers == -1) ? 0 : (allContainers == 0) ? 1 : loadedContainers / allContainers
+
+                            CSC.ProgressBar {
+                                id: progressbar
+                                value: parent.value
+                                Layout.fillWidth: true
+                            }
+
+                            Text {
+                                id: percentValue
+                                text: Math.round(parent.value * 100) + " %"
+                                maximumLineCount: 1
+                                color: "white"
+                                Layout.minimumWidth: textMetrics.width
+                            }
+
+                            onWidthChanged: {
+                                progressbar.visible = (width > 100)
+                            }
+                        }
+                    }
                 }
             }
         }
