@@ -95,6 +95,14 @@ func (qb *QmlBridge) loadFuse() {
 
 func (qb *QmlBridge) openFuse() {
 	var command string
+
+	dir, err := os.Stat(qb.MountPoint())
+	if err != nil {
+		log.Errorf("failed to open directory, error: %w", err)
+	}
+	if !dir.IsDir() {
+		log.Errorf("%q is not a directory", dir.Name())
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		command = "open"
