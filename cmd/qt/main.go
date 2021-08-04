@@ -94,7 +94,18 @@ func (qb *QmlBridge) loadFuse() {
 }
 
 func (qb *QmlBridge) openFuse() {
-	cmd := exec.Command("open", qb.MountPoint())
+	var command string
+	switch runtime.GOOS {
+	case "darwin":
+		command = "open"
+	case "linux":
+		command = "xdg-open"
+	case "windows":
+		command = "start"
+	default:
+		log.Error("unrecognized OS")
+	}
+	cmd := exec.Command(command, qb.MountPoint())
 	err := cmd.Run()
 	if err != nil {
 		log.Error(err)
