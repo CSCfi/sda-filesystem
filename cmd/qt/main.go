@@ -114,7 +114,7 @@ func (qb *QmlBridge) openFuse() {
 		log.Error("unrecognized OS")
 	}
 	cmd := exec.Command(command, qb.MountPoint())
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		log.Error(err)
 	}
