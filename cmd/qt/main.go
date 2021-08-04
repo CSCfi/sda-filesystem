@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"syscall"
 
 	"github.com/billziss-gh/cgofuse/fuse"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +32,7 @@ type QmlBridge struct {
 	_ func()                                 `slot:"loadFuse"`
 	_ func()                                 `slot:"openFuse"`
 	_ func(mount string)                     `slot:"changeMountPoint"`
+	_ func()                                 `slot:"shutdown"`
 	_ func(err error)                        `signal:"envError"`
 	_ func()                                 `signal:"fuseReady"`
 
@@ -45,6 +47,7 @@ func (qb *QmlBridge) init() {
 	qb.ConnectLoadFuse(qb.loadFuse)
 	qb.ConnectOpenFuse(qb.openFuse)
 	qb.ConnectChangeMountPoint(qb.changeMountPoint)
+	qb.ConnectShutdown(qb.shutdown)
 }
 
 func (qb *QmlBridge) sendLoginRequest(username, password string) string {
@@ -96,6 +99,12 @@ func (qb *QmlBridge) openFuse() {
 	if err != nil {
 		log.Error(err)
 	}
+}
+
+func (qb *QmlBridge) shutdown() {
+	log.Info("Shutting down SD-Connect FUSE")
+	// Sending interrupt signal to unmount fuse
+	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 }
 
 func (qb *QmlBridge) changeMountPoint(mount string) {

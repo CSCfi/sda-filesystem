@@ -9,10 +9,10 @@ ApplicationWindow {
 	id: mainWindow
     visible: true
     title: "SD-Connect FUSE"
-	width: 1000
+	width: 1000 // TODO
 	height: 600
 	minimumHeight: sideBarView.height + toolbar.height
-	minimumWidth: homePage.implicitWidth + sideBarView.width
+	minimumWidth: stack.implicitWidth + sideBarView.width
 
 	property string username
 	signal logout()
@@ -28,18 +28,17 @@ ApplicationWindow {
             Image {
 				source: "qrc:/qml/images/CSC_logo.svg"
 				fillMode: Image.PreserveAspectFit
-				Layout.preferredHeight: 50
 				Layout.preferredWidth: paintedWidth
-				Layout.alignment: Qt.AlignLeft
+				Layout.preferredHeight: 50
 				Layout.margins: 5
 			}
 
             Text {
                 text: username
 				color: "white"
+				rightPadding: 10
 				font.pointSize: 15
 				font.weight: Font.DemiBold
-				rightPadding: 10
 				Layout.alignment: Qt.AlignRight
             }
         }
@@ -56,6 +55,14 @@ ApplicationWindow {
 			popup.open()
 		}
 	}*/
+
+	Connections {
+		target: Qt.application
+
+		onAboutToQuit: {
+			QmlBridge.shutdown()
+		}
+	}
 
 	RowLayout {
 		spacing: 0
@@ -107,7 +114,7 @@ ApplicationWindow {
 					text: name
 					icon.source: image
 					width: sideBarView.width
-					highlighted: sideBarView.highlightedIndex === index
+					highlighted: sideBarView.highlightedIndex == index
 
 					onClicked: {
 						if (section == "end") {
@@ -126,19 +133,27 @@ ApplicationWindow {
 			}
 		}
 
-		StackLayout {
-			id: stack
-			currentIndex: sideBarView.currentIndex
+		Flickable {
 			Layout.fillWidth: true
 			Layout.fillHeight: true
+			
+			contentHeight: Math.max(parent.height, stack.children[stack.currentIndex].implicitHeight)
 
-			HomePage {
-				id: homePage
+			StackLayout {
+				id: stack
+				anchors.fill: parent
+				currentIndex: sideBarView.currentIndex
+				
+				HomePage {
+					id: homePage
+				}
+
+				LogPage {
+					id: logPage
+				}
 			}
 
-			LogPage {
-				id: logPage
-			}
+			ScrollBar.vertical: ScrollBar { }
 		}
 	}
 }

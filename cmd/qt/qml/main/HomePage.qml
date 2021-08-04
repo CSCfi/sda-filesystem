@@ -7,20 +7,22 @@ import csc 1.0 as CSC
 
 Page {
     id: page
-    property int gridSpacing: 20
-    property int buttonPadding: 20
-    implicitWidth: dialogColumn.implicitWidth + projectFrame.implicitWidth + 2 * gridSpacing  
+    padding: 20
 
-    RowLayout {
-        spacing: page.gridSpacing
+    property int buttonPadding: 15
+
+    GridLayout {
+        id: pageGrid
+        columns: 2
+        columnSpacing: page.padding
+        rowSpacing: page.padding
         anchors.fill: parent
-        anchors.margins: page.gridSpacing
 
         ColumnLayout {
             id: dialogColumn
-            spacing: page.gridSpacing
+            spacing: page.padding
             Layout.fillWidth: true
-            Layout.preferredWidth: 1 // The two items in the above rowlayout are 1:1 (generally)
+            Layout.fillHeight: true
             Layout.maximumWidth: 400
             Layout.alignment: Qt.AlignTop
 
@@ -34,7 +36,6 @@ Page {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    //spacing: page.gridSpacing
 
                     Text {
                         text: "<h3>FUSE will be mounted at:</h3>"
@@ -51,11 +52,14 @@ Page {
                         id: acceptButton
                         text: "Accept"
                         outlined: true
-                        enabled: true
+                        topInset: 0
+                        bottomInset: 0
                         padding: page.buttonPadding
                         Layout.alignment: Qt.AlignRight
                         Layout.minimumWidth: implicitWidth
                         Layout.topMargin: 15
+
+                        Component.onCompleted: Layout.preferredWidth = implicitWidth + 2 * page.buttonPadding
 
                         onClicked: {
                             if (acceptButton.state == "") {
@@ -79,7 +83,7 @@ Page {
             }
 
             RowLayout {
-                spacing: page.gridSpacing
+                spacing: page.padding
                 Layout.fillHeight: true
                 Layout.fillWidth: true
 
@@ -88,6 +92,8 @@ Page {
                     text: "Open FUSE"
                     padding: page.buttonPadding
                     enabled: false
+                    topInset: 0
+                    bottomInset: 0
                     Layout.fillWidth: true
                     Layout.minimumWidth: implicitWidth
                     
@@ -99,6 +105,8 @@ Page {
                     text: "Load FUSE"
                     padding: page.buttonPadding
                     enabled: false
+                    topInset: 0
+                    bottomInset: 0
                     Layout.fillWidth: true
                     Layout.minimumWidth: implicitWidth
 
@@ -154,7 +162,6 @@ Page {
             leftPadding: 0
             Layout.fillHeight: true
             Layout.fillWidth: true
-            Layout.preferredWidth: 1
 
             property real rowHeight: 50
             property real viewPadding: 10
@@ -164,41 +171,91 @@ Page {
                 radius: 10
             }
 
-            header: Rectangle {
-                implicitHeight: projectFrame.rowHeight
-                color: "transparent"
+            header: Item {
+                id: headerItem
+                implicitHeight: childrenRect.height
+
+                Rectangle {
+                    id: headerLine
+                    color: CSC.Style.lightGrey
+                    height: 5
+                    anchors.right: parent.right
+                    anchors.left: parent.left
+                    anchors.top: headerTitle.bottom
+                }
+
+                TextMetrics {
+                    id: textMetricsLoaded
+                    text: projectView.rows + "/" + projectView.rows + " loaded"
+                    font: headerLoaded.font
+                }
+
                 Text {
+                    id: headerTitle
                     text: "Projects"
                     color: "white"
-                    verticalAlignment: Text.AlignBottom
-                    height: parent.height
+                    height: projectFrame.rowHeight
                     maximumLineCount: 1
-                    padding: 10
-                    fontSizeMode: Text.VerticalFit
-                    minimumPixelSize: 10
-                    font.pixelSize: projectFrame.rowHeight
+                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: 0.6 * projectFrame.rowHeight
+                    leftPadding: projectFrame.viewPadding
                 }
+
+                Text {
+                    id: headerLoaded
+                    text: loaded + "/" + projectView.rows + " loaded"
+                    color: "white"
+                    width: parent.width
+                    maximumLineCount: 1
+                    font.pixelSize: 0.3 * projectFrame.rowHeight
+                    horizontalAlignment: Text.AlignRight
+                    rightPadding: projectFrame.viewPadding
+                    leftPadding: projectFrame.viewPadding
+                    anchors.baseline: headerTitle.baseline
+
+                    property int loaded: ProjectModel.loadedProjects
+                }
+
+                states: [
+                    State {
+                        name: "dense"
+                        when: headerItem.width < headerTitle.width + textMetricsLoaded.width + 3 * projectFrame.viewPadding
+                        PropertyChanges { target: headerLoaded; horizontalAlignment: Text.AlignLeft }
+                        AnchorChanges { target: headerLine; anchors.top: headerLoaded.bottom }
+                        AnchorChanges { target: headerLoaded; anchors.baseline: undefined; anchors.top: headerTitle.bottom }
+                    }
+                ]
             }
 
             footer: Rectangle {
-                implicitHeight: projectFrame.rowHeight
+                implicitHeight: projectFrame.rowHeight + footerLine.height
                 color: "transparent"
+
+                Rectangle {
+                    id: footerLine
+                    color: CSC.Style.lightGrey
+                    height: 5
+                    anchors.right: parent.right
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                }
             }
 
             TextMetrics {
-                id: textMetrics
+                id: textMetrics100
                 text: "100 %"
             }
 
             TableView {
                 id: projectView
                 clip: true
+                boundsBehavior: Flickable.StopAtBounds
                 anchors.fill: parent
 
                 Material.accent: CSC.Style.altGreen
 
                 property bool ready: false
-                property real numColumnMinWidth: textMetrics.width + projectFrame.viewPadding
+                property real numColumnMinWidth: textMetrics100.width + 2 * projectFrame.viewPadding
                 property real nameColumnMaxWidth
 
                 rowHeightProvider: function (row) { return projectFrame.rowHeight }
@@ -226,7 +283,7 @@ Page {
                     }
                 }
 
-                ScrollBar.vertical: ScrollBar { interactive: false }
+                ScrollBar.vertical: ScrollBar { }
             }
 
             DelegateChooser {
@@ -239,16 +296,20 @@ Page {
                         implicitWidth: projectNameText.width
                         color: row % 2 ? CSC.Style.blue : CSC.Style.darkBlue
 
-                        ScrollView {
+                        Flickable {
                             clip: true
-                            contentHeight: availableHeight
+                            contentWidth: projectNameText.width
+                            interactive: contentWidth > width
+                            boundsBehavior: Flickable.StopAtBounds
                             anchors.fill: parent
 
-                            ScrollBar.horizontal.interactive: false
+                            ScrollIndicator.horizontal: ScrollIndicator { }
                             
                             Text {
                                 id: projectNameText
-                                text: "<h4>" + projectName + "</h4>"
+                                text: projectName
+                                font.pointSize: 15
+                                font.weight: Font.Medium
                                 verticalAlignment: Text.AlignVCenter
                                 maximumLineCount: 1
                                 padding: projectFrame.viewPadding
@@ -282,7 +343,7 @@ Page {
                                 text: Math.round(parent.value * 100) + " %"
                                 maximumLineCount: 1
                                 color: "white"
-                                Layout.minimumWidth: textMetrics.width
+                                Layout.minimumWidth: textMetrics100.width
                             }
 
                             onWidthChanged: {
@@ -293,5 +354,20 @@ Page {
                 }
             }
         }
+
+        states: [
+            State {
+                name: "dense"
+                when: (dialogColumn.implicitWidth + page.padding) / pageGrid.width > 0.5
+                PropertyChanges { target: pageGrid; columns: 1; rows: 2 }
+                PropertyChanges { target: dialogColumn; Layout.maximumWidth: -1 }
+                PropertyChanges { target: projectView; interactive: false }
+                PropertyChanges { target: headerItem; state: "" }
+                PropertyChanges { 
+                    target: projectFrame
+                    Layout.minimumHeight: projectView.contentHeight + implicitHeaderHeight + implicitFooterHeight
+                }
+            }
+        ]
     }
 }

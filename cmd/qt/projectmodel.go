@@ -24,6 +24,7 @@ type ProjectModel struct {
 	_ map[int]*core.QByteArray `property:"roles"`
 	_ []*Project               `property:"projects"`
 	_ map[string]int           `property:"nameToIndex"`
+	_ int                      `property:"loadedProjects"`
 
 	_ func(metadataList) `slot:"apiToProject"`
 }
@@ -46,6 +47,7 @@ func (pm *ProjectModel) init() {
 		LoadedContainers: core.NewQByteArray2("loadedContainers", -1),
 		AllContainers:    core.NewQByteArray2("allContainers", -1),
 	})
+	pm.SetLoadedProjects(0)
 
 	pm.ConnectData(pm.data)
 	pm.ConnectRowCount(pm.rowCount)
@@ -124,11 +126,17 @@ func (pm *ProjectModel) waitForInfo(ch <-chan filesystem.LoadProjectInfo) {
 			pm.DataChanged(pm.Index(row, 1, core.NewQModelIndex()),
 				pm.Index(row, 1, core.NewQModelIndex()),
 				[]int{LoadedContainers})
+			if pr.LoadedContainers() == pr.AllContainers() {
+				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
+			}
 		} else {
 			pr.SetAllContainers(info.Count)
 			pm.DataChanged(pm.Index(row, 1, core.NewQModelIndex()),
 				pm.Index(row, 1, core.NewQModelIndex()),
 				[]int{AllContainers})
+			if pr.AllContainers() == 0 {
+				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
+			}
 		}
 	}
 }
