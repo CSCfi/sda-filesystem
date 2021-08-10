@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	"github.com/billziss-gh/cgofuse/fuse"
-	log "github.com/sirupsen/logrus"
 	"github.com/therecipe/qt/core"
 	"github.com/therecipe/qt/gui"
 	"github.com/therecipe/qt/qml"
@@ -19,6 +18,7 @@ import (
 
 	"sd-connect-fuse/internal/api"
 	"sd-connect-fuse/internal/filesystem"
+	"sd-connect-fuse/internal/logs"
 )
 
 var projectModel = NewProjectModel(nil)
@@ -38,10 +38,12 @@ type QmlBridge struct {
 
 	_ *fuse.FileSystemHost `property:"fileSystemHost"`
 	_ string               `property:"mountPoint"`
+	_ gui.QFont            `property:"fixedFont"`
 }
 
 func (qb *QmlBridge) init() {
 	qb.SetMountPoint(mountPoint())
+	qb.SetFixedFont(gui.QFontDatabase_SystemFont(gui.QFontDatabase__FixedFont))
 
 	qb.ConnectSendLoginRequest(qb.sendLoginRequest)
 	qb.ConnectLoadFuse(qb.loadFuse)
@@ -52,16 +54,17 @@ func (qb *QmlBridge) init() {
 
 func (qb *QmlBridge) sendLoginRequest(username, password string) string {
 	api.CreateToken(username, password)
-	text, err := api.InitializeClient()
+	err := api.InitializeClient()
 	if err != nil {
-		log.Error(err)
+		logs.Error(err)
+		text, _ := logs.Wrapper(err)
 		return text
 	}
 
-	log.Info("Retrieving projects in order to test login")
+	logs.Info("Retrieving projects in order to test login")
 	projects, err := api.GetProjects()
 	if err != nil {
-		log.Error(err)
+		logs.Error(err)
 
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
@@ -97,12 +100,12 @@ func (qb *QmlBridge) openFuse() {
 	cmd := exec.Command("open", qb.MountPoint())
 	err := cmd.Run()
 	if err != nil {
-		log.Error(err)
+		logs.Error(err)
 	}
 }
 
 func (qb *QmlBridge) shutdown() {
-	log.Info("Shutting down SD-Connect FUSE")
+	logs.Info("Shutting down SD-Connect FUSE")
 	// Sending interrupt signal to unmount fuse
 	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 }
@@ -112,29 +115,29 @@ func (qb *QmlBridge) changeMountPoint(mount string) {
 	if _, err := os.Stat(mount); os.IsNotExist(err) {
 		// In other OSs except Windows, the mount point must exist and be empty
 		if runtime.GOOS != "windows" {
-			log.Debugf("Mount point %s does not exist, so it will be created", mount)
+			logs.Debug("Mount point", mount, "does not exist, so it will be created")
 			if err = os.Mkdir(mount, 0777); err != nil {
-				log.Fatalf("Could not create directory %s", mount)
+				logs.Errorf("Could not create directory %s", mount)
 			}
 		}
 	} else {
 		// Mount directory must not already exist in Windows
 		if runtime.GOOS == "windows" {
-			log.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
+			logs.Errorf("Mount point %s already exists, remove the directory or use another mount point", mount)
 		}
 		// Check that the mount point is empty if it already exists
 		dir, err := os.Open(mount)
 		if err != nil {
-			log.Fatalf("Could not open mount point %s", mount)
+			logs.Errorf("Could not open mount point %s", mount)
 		}
 		defer dir.Close()
 		// Verify dir is empty
 		if _, err = dir.Readdir(1); err != io.EOF {
-			log.Fatalf("Mount point %s must be empty", mount)
+			logs.Errorf("Mount point %s must be empty", mount)
 		}
 	}
 
-	log.Debugf("Filesystem will be mounted at %s", mount)
+	logs.Debug("Filesystem will be mounted at", mount)
 	qb.SetMountPoint(mount)
 }
 
@@ -142,23 +145,10 @@ func (qb *QmlBridge) changeMountPoint(mount string) {
 func mountPoint() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal("Could not find user home directory", err)
+		//logs.Fatal("Could not find user home directory", err)
 	}
 	p := filepath.FromSlash(filepath.ToSlash(home) + "/Projects")
 	return p
-}
-
-func init() {
-	// Configure Log Text Formatter
-	log.SetFormatter(&log.TextFormatter{
-		DisableColors: false,
-		FullTimestamp: true,
-	})
-
-	// Output to stdout instead of the default stderr
-	log.SetOutput(os.Stdout)
-
-	log.SetLevel(log.InfoLevel)
 }
 
 func main() {
@@ -175,14 +165,21 @@ func main() {
 	var app = qml.NewQQmlApplicationEngine(nil)
 
 	var qmlBridge = NewQmlBridge(nil)
+	var logModel = NewLogModel(nil)
 	app.RootContext().SetContextProperty("QmlBridge", qmlBridge)
 	app.RootContext().SetContextProperty("ProjectModel", projectModel)
+	app.RootContext().SetContextProperty("LogModel", logModel)
 
 	app.AddImportPath("qrc:/qml/")
 	app.Load(core.NewQUrl3("qrc:/qml/main/login.qml", 0))
 
+	//fmt.Println(core.QThread_CurrentThread().Pointer())
+
+	logs.SetSignal(logModel.AddLog)
+
 	err := api.GetEnvs()
 	if err != nil {
+		logs.Error(err)
 		qmlBridge.EnvError(err)
 	}
 

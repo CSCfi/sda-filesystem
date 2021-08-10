@@ -15,7 +15,6 @@ ApplicationWindow {
 	minimumWidth: stack.implicitWidth + sideBarView.width
 
 	property string username
-	signal logout()
 
 	Material.primary: CSC.Style.primaryColor
 
@@ -118,7 +117,7 @@ ApplicationWindow {
 
 					onClicked: {
 						if (section == "end") {
-							mainWindow.logout()
+							QmlBridge.shutdown()
 						} else {
 							if (sideBarView.currentIndex != index) {
 								sideBarView.currentIndex = index

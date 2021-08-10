@@ -10,11 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sd-connect-fuse/internal/logs"
 	"strconv"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3}
@@ -74,8 +73,7 @@ func getEnv(name string, verifyURL bool) (string, error) {
 		// Verify that repository URL is valid
 		u, err := url.ParseRequestURI(env)
 		if err != nil {
-			log.Error(err)
-			return "", fmt.Errorf("Environment variable %s is an invalid URL", name)
+			return "", fmt.Errorf("Environment variable %s is an invalid URL: %w", name, err)
 		}
 		if u.Scheme != "https" {
 			return "", fmt.Errorf("Environment variable %s does not have scheme 'https'", name)
@@ -91,14 +89,13 @@ func CreateToken(username, password string) {
 }
 
 // InitializeClient initializes a global http client
-// The returned string is the message shown to the user in the gui when the accompanying error occurs
-func InitializeClient() (string, error) {
+func InitializeClient() error {
 	// Handle certificate if one is set
 	caCertPool := x509.NewCertPool()
 	if len(hi.certPath) > 0 {
 		caCert, err := ioutil.ReadFile(hi.certPath)
 		if err != nil {
-			return "Reading certificate file failed", err
+			return fmt.Errorf("Reading certificate file failed: %w", err)
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -126,17 +123,17 @@ func InitializeClient() (string, error) {
 	tr.DisableKeepAlives = true
 	_, err := hi.client.Head(hi.metadataURL)
 	if err != nil {
-		return "Cannot connect to metadata API. Certificate possibly missing or invalid, or url incorrect", err
+		return fmt.Errorf("Cannot connect to metadata API: %w", err)
 	}
 
 	_, err = hi.client.Head(hi.dataURL)
 	if err != nil {
-		return "Cannot connect to data API. Certificate possibly missing or invalid, or url incorrect", err
+		return fmt.Errorf("Cannot connect to data API: %w", err)
 	}
 	tr.DisableKeepAlives = false
 
-	log.Debug("Initializing http client successful")
-	return "", nil
+	logs.Debug("Initializing http client successful")
+	return nil
 }
 
 // makeRequest builds an authenticated HTTP client
@@ -170,7 +167,7 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 	// retry the request as specified by httpRetry variable
 	for count := 0; count == 0 || (err != nil && count < hi.httpRetry); {
 		response, err = hi.client.Do(request)
-		log.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
+		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
 		count++
 	}
 	if err != nil {
@@ -187,7 +184,8 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Request %s returned a response", request.URL)
+
+	logs.Debug("Request", request.URL, "returned a response")
 	return r, nil
 }
 
@@ -204,10 +202,10 @@ func GetProjects() ([]Metadata, error) {
 	// Parse the JSON response into a slice
 	var projects []Metadata
 	if err := json.Unmarshal(response, &projects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving projects: %w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response when retrieving projects: %w", err)
 	}
 
-	log.Info("Retrieved projects as per request")
+	logs.Info("Retrieved projects as per request")
 	return projects, nil
 }
 
@@ -219,16 +217,16 @@ func GetContainers(project string) ([]Metadata, error) {
 			"/project/"+
 			url.PathEscape(project)+"/containers", nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving container from project %s failed: %w", project, err)
+		return nil, fmt.Errorf("Retrieving containers for %s failed: %w", project, err)
 	}
 
 	// Parse the JSON response into a slice
 	var containers []Metadata
 	if err := json.Unmarshal(response, &containers); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving containers:\n%w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response when retrieving containers: %w", err)
 	}
 
-	log.Infof("Retrieved containers for project %s", project)
+	logs.Info("Retrieved containers for", project)
 	return containers, nil
 }
 
@@ -241,15 +239,15 @@ func GetObjects(project, container string) ([]Metadata, error) {
 			url.PathEscape(project)+"/container/"+
 			url.PathEscape(container)+"/objects", nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving objects from container %s failed: %w", container, err)
+		return nil, fmt.Errorf("Retrieving objects for %s failed: %w", container, err)
 	}
 
 	// Parse the JSON response into a struct
 	var objects []Metadata
 	if err := json.Unmarshal(response, &objects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response for retrieving objects:\n%w", err)
+		return nil, fmt.Errorf("Unable to unmarshal response when retrieving objects: %w", err)
 	}
-	log.Infof("Retrieved objects for %s", project+"/"+container)
+	logs.Infof("Retrieved objects for %s/%s", project, container)
 	return objects, nil
 }
 
@@ -269,8 +267,8 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	// Request data
 	response, err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", query, headers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 	}
-	log.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
+	logs.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
 	return response, nil
 }

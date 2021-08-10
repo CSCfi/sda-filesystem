@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/logs"
 )
 
 const sRDONLY = 00444
@@ -44,7 +45,7 @@ type LoadProjectInfo struct {
 
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
 func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
-	log.Info("Creating in-memory filesystem database")
+	logs.Info("Creating in-memory filesystem database")
 	timestamp := fuse.Now()
 	c := Connectfs{}
 	defer c.synchronize()()
@@ -52,7 +53,7 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	c.openmap = map[uint64]*node{}
 	c.root = newNode(0, c.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 	c.populateFilesystem(timestamp, send...)
-	log.Info("Filesystem database completed")
+	logs.Info("Filesystem database completed")
 	return &c
 }
 
@@ -60,12 +61,12 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
 	projects, err := api.GetProjects()
 	if err != nil {
-		log.Error(err)
+		logs.Error(err)
 	}
 	if len(projects) == 0 {
 		log.Fatal("No project permissions found")
 	}
-	log.Infof("Receiving %d projects", len(projects))
+	logs.Info("Receiving", len(projects), "projects")
 
 	var wg sync.WaitGroup
 	forChannel := make(map[string][]api.Metadata)
@@ -80,17 +81,17 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 		projectSafe := removeInvalidChars(projects[i].Name)
 
 		// Create a project directory
-		log.Debugf("Creating project %s", projectSafe)
+		logs.Debugf("Creating project %s", projectSafe)
 		fs.makeNode(projectSafe, fuse.S_IFDIR|sRDONLY, 0, projects[i].Bytes, timestamp)
 
 		go func(project string) {
 			defer wg.Done()
 
-			log.Debugf("Fetching containers for project %s", project)
+			logs.Debugf("Fetching containers for project %s", project)
 			containers, err := api.GetContainers(project)
 
 			if err != nil {
-				log.Error(err)
+				logs.Error(err)
 				return
 			}
 
@@ -108,7 +109,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 				containerPath := projectSafe + "/" + containerSafe
 
 				// Create a container directory
-				log.Debugf("Creating container %s", containerPath)
+				logs.Debugf("Creating container %s", containerPath)
 				p := filepath.FromSlash(containerPath)
 				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, c.Bytes, timestamp)
 			}
@@ -165,7 +166,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 
 		objects, err := api.GetObjects(project, container)
 		if err != nil {
-			log.Error(err)
+			logs.Error(err)
 			continue
 		}
 

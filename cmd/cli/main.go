@@ -30,15 +30,6 @@ func mountPoint() string {
 }
 
 func setLogger(inputLevel string) {
-	// Configure Log Text Formatter
-	log.SetFormatter(&log.TextFormatter{
-		DisableColors: false,
-		FullTimestamp: true,
-	})
-
-	// Output to stdout instead of the default stderr
-	log.SetOutput(os.Stdout)
-
 	// Only log given severity or above
 	var m = map[string]logrus.Level{
 		"debug": logrus.DebugLevel,
@@ -120,7 +111,6 @@ func main() {
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+dirName)
-		//options = append(options, "-o", "daemon_timeout="+strconv.Itoa(daemonTimeout))
 	}
 	host.Mount(mount, options)*/
 

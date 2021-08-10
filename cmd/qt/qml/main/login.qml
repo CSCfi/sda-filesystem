@@ -31,14 +31,7 @@ Window {
 			popup.open()
 		}
 	}
-
-	Connections {
-		target: homeWindow
-		onLogout: {
-			console.log("Logging out...")
-		}
-	}
-
+	
 	Item {
 		id: itemWrap
 		anchors.fill: parent
