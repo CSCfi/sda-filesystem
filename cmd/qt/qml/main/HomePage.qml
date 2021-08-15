@@ -3,24 +3,47 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import Qt.labs.qmlmodels 1.0
+import QtQuick.Dialogs 1.3
 import csc 1.0 as CSC
 
 Page {
     id: page
-    padding: 20
+    topPadding: paddings
+    rightPadding: paddings
+    leftPadding: paddings
 
+    property int paddings: 20
     property int buttonPadding: 15
+
+    CSC.Popup {
+        id: popup
+    }
+
+    FileDialog {
+        id: fileDialog
+        title: "Choose or create a folder"
+        folder: shortcuts.home
+        selectExisting: false // TODO: Check this out 
+        selectFolder: true
+        onAccepted: {
+            var mountError = QmlBridge.changeMountPoint(fileDialog.fileUrl)
+            if (mountError) {
+                popup.errorTextContent = mountError
+                popup.open()
+            }
+        }
+    }
 
     GridLayout {
         id: pageGrid
         columns: 2
-        columnSpacing: page.padding
-        rowSpacing: page.padding
+        columnSpacing: page.paddings
+        rowSpacing: page.paddings
         anchors.fill: parent
 
         ColumnLayout {
             id: dialogColumn
-            spacing: page.padding
+            spacing: page.paddings
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.maximumWidth: 400
@@ -45,45 +68,61 @@ Page {
                     CSC.TextField {
                         id: mountField
                         text: QmlBridge.mountPoint
+                        enabled: false
+                        color: CSC.Style.grey
                         Layout.fillWidth: true
                     }
 
-                    CSC.Button {
-                        id: acceptButton
-                        text: "Accept"
-                        outlined: true
-                        topInset: 0
-                        bottomInset: 0
-                        padding: page.buttonPadding
-                        Layout.alignment: Qt.AlignRight
-                        Layout.minimumWidth: implicitWidth
+                    RowLayout {
+                        spacing: 0
+                        Layout.fillWidth: true
                         Layout.topMargin: 15
 
-                        Component.onCompleted: Layout.preferredWidth = implicitWidth + 2 * page.buttonPadding
+                        CSC.Button {
+                            text: "Change"
+                            outlined: true
+                            topInset: 0
+                            bottomInset: 0
+                            padding: page.buttonPadding
+                            Layout.maximumWidth: implicitWidth + 2 * padding
+                            Layout.fillWidth: true
 
-                        onClicked: {
-                            if (acceptButton.state == "") {
-                                QmlBridge.changeMountPoint(mountField.text)
-                                acceptButton.state = "accepted"
-                            } else {
-                                acceptButton.state = ""
-                            }
+                            onClicked: fileDialog.visible = true
                         }
 
-                        states: [
-                            State {
-                                name: "accepted"
-                                PropertyChanges { target: acceptButton; text: "Change" }
-                                PropertyChanges { target: mountField; enabled: false }
-                                PropertyChanges { target: loadButton; enabled: true }
-                            }
-                        ]
+                        Rectangle {
+                            color: "transparent"
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: page.paddings
+                        }
+
+                        CSC.Button {
+                            id: acceptButton
+                            text: "Accept"
+                            outlined: true
+                            topInset: 0
+                            bottomInset: 0
+                            enabled: mountField.text != ""
+                            padding: page.buttonPadding
+                            Layout.maximumWidth: implicitWidth + 2 * padding
+                            Layout.fillWidth: true
+
+                            onClicked: state = "accepted"
+
+                            states: [
+                                State {
+                                    name: "accepted"; 
+                                    PropertyChanges { target: loadButton; enabled: true }
+                                    PropertyChanges { target: acceptFrame; enabled: false }
+                                }
+                            ]
+                        }
                     }
                 }
             }
 
             RowLayout {
-                spacing: page.padding
+                spacing: page.paddings
                 Layout.fillHeight: true
                 Layout.fillWidth: true
 
@@ -112,14 +151,6 @@ Page {
 
                     Material.accent: "white"
 
-                    BusyIndicator {
-                        id: busy
-                        running: false
-                        anchors.fill: parent
-                        anchors.centerIn: parent
-                        anchors.margins: 5
-                    }
-
                     Connections {
                         target: QmlBridge
                         onFuseReady: loadButton.state = "finished"
@@ -130,24 +161,19 @@ Page {
                         QmlBridge.loadFuse()
                     }
 
+                    Component.onCompleted: {
+                        Layout.minimumWidth = implicitWidth
+                        Layout.minimumHeight = implicitHeight
+                    }
+
                     states: [
                         State {
                             name: "loading"; 
-                            PropertyChanges { 
-                                target: loadButton
-                                text: ""
-                                disableBackgound: CSC.Style.primaryColor
-                                enabled: false 
-                                Layout.minimumWidth: openButton.implicitWidth
-                                Layout.minimumHeight: openButton.implicitHeight
-                            }
-                            PropertyChanges { target: acceptFrame; enabled: false }
-                            PropertyChanges { target: busy; running: true }
+                            PropertyChanges { target: loadButton; text: ""; loading: true; enabled: false }
                         },
                         State {
                             name: "finished"
                             PropertyChanges { target: openButton; enabled: true }
-                            PropertyChanges { target: acceptFrame; enabled: false }
                             PropertyChanges { target: loadButton; text: "Refresh FUSE"; enabled: false }
                         }
                     ]			
@@ -160,6 +186,7 @@ Page {
             implicitWidth: dialogColumn.implicitWidth
             rightPadding: 0
             leftPadding: 0
+            Layout.bottomMargin: page.paddings
             Layout.fillHeight: true
             Layout.fillWidth: true
 
@@ -358,7 +385,7 @@ Page {
         states: [
             State {
                 name: "dense"
-                when: (dialogColumn.implicitWidth + page.padding) / pageGrid.width > 0.5
+                when: (dialogColumn.implicitWidth + page.paddings) / pageGrid.width > 0.5
                 PropertyChanges { target: pageGrid; columns: 1; rows: 2 }
                 PropertyChanges { target: dialogColumn; Layout.maximumWidth: -1 }
                 PropertyChanges { target: projectView; interactive: false }

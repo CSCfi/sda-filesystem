@@ -26,6 +26,8 @@ type HTTPInfo struct {
 	metadataURL    string
 	dataURL        string
 	token          string
+	uToken         string
+	sTokens        map[string]SToken
 	client         *http.Client
 }
 
@@ -33,6 +35,17 @@ type HTTPInfo struct {
 type Metadata struct {
 	Bytes int64  `json:"bytes"`
 	Name  string `json:"name"`
+}
+
+// UToken is the unscoped token
+type UToken struct {
+	Token string `json:"token"`
+}
+
+// SToken is the scoped token
+type SToken struct {
+	Token     string `json:"token"`
+	ProjectID string `json:"projectID"`
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -83,6 +96,10 @@ func getEnv(name string, verifyURL bool) (string, error) {
 	return env, nil
 }
 
+func SetRequestTimeout(timeout int) {
+	hi.requestTimeout = timeout
+}
+
 // CreateToken creates the authorization token based on username + password
 func CreateToken(username, password string) {
 	hi.token = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
@@ -118,9 +135,6 @@ func InitializeClient() error {
 		Transport: tr,
 	}
 
-	// Temporarily disabling the keep-alive feature so that
-	// connections do not hog goroutines
-	tr.DisableKeepAlives = true
 	_, err := hi.client.Head(hi.metadataURL)
 	if err != nil {
 		return fmt.Errorf("Cannot connect to metadata API: %w", err)
@@ -130,15 +144,14 @@ func InitializeClient() error {
 	if err != nil {
 		return fmt.Errorf("Cannot connect to data API: %w", err)
 	}
-	tr.DisableKeepAlives = false
 
-	logs.Debug("Initializing http client successful")
+	logs.Debug("Initializing HTTP client successful")
 	return nil
 }
 
 // makeRequest builds an authenticated HTTP client
 // which sends HTTP requests and parses the responses
-func makeRequest(url string, query map[string]string, headers map[string]string) ([]byte, error) {
+func makeRequest(url string, token string, query map[string]string, headers map[string]string) ([]byte, error) {
 	var response *http.Response
 
 	// Build HTTP request
@@ -156,7 +169,11 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 
 	// Place mandatory headers
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Basic "+hi.token)
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	} else {
+		request.Header.Set("Authorization", "Basic "+hi.token)
+	}
 
 	// Place additional headers if any are available
 	for k, v := range headers {
@@ -185,16 +202,66 @@ func makeRequest(url string, query map[string]string, headers map[string]string)
 		return nil, err
 	}
 
-	logs.Debug("Request", request.URL, "returned a response")
+	logs.Debug("Request ", request.URL, " returned a response")
 	return r, nil
 }
 
+// GetUToken gets the unscoped token
+func GetUToken() error {
+	// Request token
+	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", nil, nil)
+	if err != nil {
+		return fmt.Errorf("Retrieving unscoped token failed: %w", err)
+	}
+
+	// Parse the JSON response into a struct
+	uToken := UToken{}
+	if err := json.Unmarshal(response, &uToken); err != nil {
+		return fmt.Errorf("Unable to unmarshal response when retrieving unscoped token: %w", err)
+	}
+
+	hi.uToken = uToken.Token
+	return nil
+}
+
+// GetSTokens gets the scoped tokens
+func GetSTokens(projects []Metadata) error {
+	hi.sTokens = make(map[string]SToken)
+
+	for i := range projects {
+		project := projects[i].Name
+
+		// Query params
+		query := map[string]string{"project": project}
+
+		// Request token
+		response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
+		if err != nil {
+			return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
+		}
+
+		// Parse the JSON response into a struct
+		sToken := SToken{}
+		if err := json.Unmarshal(response, &sToken); err != nil {
+			return fmt.Errorf("Unable to unmarshal response when retrieving scoped token: %w", err)
+		}
+
+		hi.sTokens[project] = sToken
+	}
+
+	return nil
+}
+
 // GetProjects gets all projects user has access to
-func GetProjects() ([]Metadata, error) {
+func GetProjects(getBytes bool) ([]Metadata, error) {
+	// Query params
+	var query map[string]string = nil
+	if !getBytes {
+		query = map[string]string{"bytes": "false"}
+	}
+
 	// Request projects
-	response, err := makeRequest(
-		strings.TrimSuffix(hi.metadataURL, "/")+
-			"/projects", nil, nil)
+	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, query, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving projects failed: %w", err)
 	}
@@ -211,11 +278,14 @@ func GetProjects() ([]Metadata, error) {
 
 // GetContainers gets conatiners inside the object
 func GetContainers(project string) ([]Metadata, error) {
-	// Request conteiners
+	// Additional headers
+	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
+
+	// Request containers
 	response, err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
-			url.PathEscape(project)+"/containers", nil, nil)
+			url.PathEscape(project)+"/containers", hi.sTokens[project].Token, nil, headers)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving containers for %s failed: %w", project, err)
 	}
@@ -226,18 +296,21 @@ func GetContainers(project string) ([]Metadata, error) {
 		return nil, fmt.Errorf("Unable to unmarshal response when retrieving containers: %w", err)
 	}
 
-	logs.Info("Retrieved containers for", project)
+	logs.Infof("Retrieved containers for %s", project)
 	return containers, nil
 }
 
 // GetObjects gets objects inside container
 func GetObjects(project, container string) ([]Metadata, error) {
+	// Additional headers
+	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
+
 	// Request objects
 	response, err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
 			url.PathEscape(project)+"/container/"+
-			url.PathEscape(container)+"/objects", nil, nil)
+			url.PathEscape(container)+"/objects", hi.sTokens[project].Token, nil, headers)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects for %s failed: %w", container, err)
 	}
@@ -254,6 +327,8 @@ func GetObjects(project, container string) ([]Metadata, error) {
 // DownloadData gets content of object from data API
 func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 3)
+	project := parts[0]
+
 	// Query params
 	query := map[string]string{
 		"project":   parts[0],
@@ -262,10 +337,11 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	}
 
 	// Additional headers
-	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)}
+	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
+		"X-Project-ID": hi.sTokens[project].ProjectID}
 
 	// Request data
-	response, err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", query, headers)
+	response, err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 	}

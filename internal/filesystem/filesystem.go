@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/billziss-gh/cgofuse/fuse"
-	log "github.com/sirupsen/logrus"
 
 	"sd-connect-fuse/internal/api"
 	"sd-connect-fuse/internal/logs"
@@ -59,14 +58,11 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 
 // populateDirectory creates the nodes (files and directories) of the filesystem
 func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
-	projects, err := api.GetProjects()
+	projects, err := api.GetProjects(true)
 	if err != nil {
 		logs.Error(err)
 	}
-	if len(projects) == 0 {
-		log.Fatal("No project permissions found")
-	}
-	logs.Info("Receiving", len(projects), "projects")
+	logs.Info("Receiving ", len(projects), " projects")
 
 	var wg sync.WaitGroup
 	forChannel := make(map[string][]api.Metadata)
@@ -249,9 +245,9 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 	name = ""
 	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
-			if len(c) > 255 {
+			/*if len(c) > 255 { TODO: check this
 				log.Fatalf("Name %s in path %s is too long", c, path)
-			}
+			}*/
 			prnt, name = node, c
 			if node == nil {
 				return

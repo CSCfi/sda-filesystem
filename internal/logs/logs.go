@@ -11,8 +11,24 @@ import (
 
 var signal func(string, string) = nil
 
+var levelMap = map[string]log.Level{
+	"debug": log.DebugLevel,
+	"info":  log.InfoLevel,
+	"error": log.ErrorLevel,
+}
+
 func SetSignal(fn func(string, string)) {
 	signal = fn
+}
+
+func SetLevel(level string) {
+	if logrusLevel, ok := levelMap[strings.ToLower(level)]; ok {
+		log.SetLevel(logrusLevel)
+		return
+	}
+
+	Infof("-loglevel=%s is not supported, possible values are {debug,info,error}, setting fallback loglevel to 'info'", level)
+	log.SetLevel(log.InfoLevel)
 }
 
 func Wrapper(err error) (string, error) {
@@ -23,19 +39,19 @@ func Wrapper(err error) (string, error) {
 	return err.Error(), nil
 }
 
-func structureError(err error) string {
+func StructureError(err error) string {
 	fullError := ""
 	for i := 0; err != nil; i++ {
 		var str string
 		str, err = Wrapper(err)
-		fullError += strings.Repeat("\t", i) + str + "\n"
+		fullError += str + "\n"
 	}
 	return fullError
 }
 
 func Error(err error) {
 	if signal != nil {
-		signal("ERRO", structureError(err))
+		signal("ERRO", StructureError(err))
 	} else {
 		log.Error(err)
 	}
@@ -44,7 +60,7 @@ func Error(err error) {
 func Errorf(format string, args ...interface{}) {
 	if signal != nil {
 		err := fmt.Errorf(format, args...)
-		signal("ERRO", structureError(err))
+		signal("ERRO", StructureError(err))
 	} else {
 		log.Errorf(format, args...)
 	}
@@ -88,6 +104,14 @@ func Debug(args ...interface{}) {
 
 func Debugf(format string, args ...interface{}) {
 	log.Debugf(format, args...)
+}
+
+func Fatal(args ...interface{}) {
+	log.Fatal(args...)
+}
+
+func Fatalf(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
 }
 
 func init() {

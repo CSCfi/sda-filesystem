@@ -43,18 +43,6 @@ ApplicationWindow {
         }
     }
 
-	CSC.Popup {
-		id: popup
-	}
-
-	/*Connections {
-		target: QmlBridge
-		onMountError: {
-			popup.errorTextContent = err
-			popup.open()
-		}
-	}*/
-
 	Connections {
 		target: Qt.application
 

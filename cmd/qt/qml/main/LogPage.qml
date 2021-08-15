@@ -8,6 +8,7 @@ Page {
     ListView {
         anchors.fill: parent
         boundsBehavior: Flickable.StopAtBounds
+        verticalLayoutDirection: ListView.BottomToTop
 
         model: LogModel
         delegate: Text { text: level + " " + timestamp + " " + message; font: QmlBridge.fixedFont }
