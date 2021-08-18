@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 
 	"github.com/billziss-gh/cgofuse/fuse"
-	log "github.com/sirupsen/logrus"
 
 	"sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/logs"
 )
 
 // Open opens a file.
@@ -47,10 +47,10 @@ func (fs *Connectfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc in
 // Read returns bytes from a file
 func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n int) {
 	defer fs.synchronize()()
-	log.Debugf("Read %s", path)
+	logs.Debugf("Read %s", path)
 	node := fs.getNode(path, fh)
 	if nil == node {
-		log.Errorf("Read %s, inode does't exist", path)
+		logs.Errorf("Read %s, inode does't exist", path)
 		return -fuse.ENOENT
 	}
 	path = filepath.ToSlash(path)
@@ -67,14 +67,14 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	// Download data from file
 	data, err := api.DownloadData(path, ofst, endofst)
 	if err != nil {
-		log.Error(err)
+		logs.Error(err)
 		return
 	}
 	n = copy(buff, data)
 
 	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
-	log.Debugf("File %s has been accessed/read", path)
+	logs.Debugf("File %s has been accessed/read", path)
 	return
 }
 

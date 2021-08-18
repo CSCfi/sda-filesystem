@@ -62,7 +62,7 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 		return core.NewQVariant()
 	}
 
-	if index.Row() >= len(pm.Projects()) {
+	if index.Row() < 0 || index.Row() >= len(pm.Projects()) {
 		return core.NewQVariant()
 	}
 
@@ -123,17 +123,15 @@ func (pm *ProjectModel) waitForInfo(ch <-chan filesystem.LoadProjectInfo) {
 		var pr = pm.Projects()[row]
 		if pr.AllContainers() != -1 {
 			pr.SetLoadedContainers(pr.LoadedContainers() + info.Count)
-			pm.DataChanged(pm.Index(row, 1, core.NewQModelIndex()),
-				pm.Index(row, 1, core.NewQModelIndex()),
-				[]int{LoadedContainers})
+			var index = pm.Index(row, 1, core.NewQModelIndex())
+			pm.DataChanged(index, index, []int{LoadedContainers})
 			if pr.LoadedContainers() == pr.AllContainers() {
 				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
 			}
 		} else {
 			pr.SetAllContainers(info.Count)
-			pm.DataChanged(pm.Index(row, 1, core.NewQModelIndex()),
-				pm.Index(row, 1, core.NewQModelIndex()),
-				[]int{AllContainers})
+			var index = pm.Index(row, 1, core.NewQModelIndex())
+			pm.DataChanged(index, index, []int{AllContainers})
 			if pr.AllContainers() == 0 {
 				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
 			}

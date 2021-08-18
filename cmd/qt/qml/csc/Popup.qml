@@ -8,21 +8,115 @@ Popup {
     id: popup
     x: 0
     y: parent.height - popup.height
-    height: Math.max(errorText.contentHeight, implicitBackgroundHeight)
+    height: contentColumn.implicitHeight
+    topPadding: background.border.width
+    bottomPadding: background.border.width
+    rightPadding: closePopup.width + background.border.width + 3
+    leftPadding: background.border.width
     modal: false
-    focus: false
-    padding: 3
+    focus: modal
+    rightMargin: margin
+    leftMargin: margin
     closePolicy: Popup.NoAutoClose
-    rightMargin: loginWindow.margins
-    leftMargin: loginWindow.margins
 
     property string errorTextContent: ""
+    property string errorTextClarify: ""
+    property int margin: 20
+        
+    ColumnLayout {
+        id: contentColumn
+        spacing: 0
+        anchors.right: parent.right
+        anchors.left: parent.left
+
+        RowLayout {
+            spacing: 0
+            Layout.fillWidth: true
+            Layout.topMargin: popup.margin
+            Layout.bottomMargin: popup.margin
+
+            // This is a button only so that the svg is easier to color
+            RoundButton {
+                id: errorIcon
+                padding: 0
+                icon.source: "qrc:/qml/images/x-circle-fill.svg"
+                icon.color: CSC.Style.red
+                icon.width: diameter
+                icon.height: diameter
+                enabled: false
+                Layout.preferredWidth: 3 * diameter
+                Layout.alignment: Qt.AlignVCenter
+
+                property real diameter: popup.margin
+
+                background: Rectangle {
+                    color: "transparent"
+                }
+            }
+
+            Text {
+                id: errorText
+                text: popup.errorTextContent
+                verticalAlignment: Text.AlignVCenter
+                wrapMode: Text.Wrap
+                font.weight: Font.Medium
+                Layout.fillWidth: true
+            }
+        }
+
+        Text {
+            text: "Error"
+            maximumLineCount: 1
+            visible: rectClarify.visible
+            Layout.leftMargin: errorIcon.width
+        }
+
+        Rectangle {
+            id: rectClarify
+            color: CSC.Style.lightGreyBlue
+            border.width: 1
+            border.color: "#707070"
+            visible: errorClarify.text != ""
+            Layout.preferredHeight: 70 
+            Layout.fillWidth: true
+            Layout.leftMargin: errorIcon.width
+            Layout.bottomMargin: popup.margin
+
+            ScrollView {
+                clip: true
+                anchors.fill: parent
+
+                Text {
+                    id: errorClarify
+                    text: popup.errorTextClarify
+                    font: QmlBridge.fixedFont
+                    padding: 5
+                }
+            }
+        }
+
+         // This is inside ColumnLayout beacuse Popup cannot have states
+        states: [
+            State {
+                name: "centered"
+                when: errorClarify.text != ""
+                PropertyChanges {
+                    target: popup
+                    modal: true
+                    parent: Overlay.overlay
+                    x: Math.round((parent.width - width) / 2)
+                    y: Math.round((parent.height - height) / 2)
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                }
+            }
+        ]
+    }
 
     background: Rectangle {
         border.width: 2
         border.color: CSC.Style.red
-        implicitWidth: loginWindow.width - 2 * loginWindow.margins
-        implicitHeight: 60
+        implicitWidth: popup.parent.width
+        implicitHeight: popup.height
         radius: 8
 
         RoundButton {
@@ -31,39 +125,10 @@ Popup {
             Material.foreground: CSC.Style.red
             Material.background: "transparent"
             anchors.right: parent.right
-            height: parent.implicitHeight * 0.5
+            height: 30
             width: height
             
             onClicked: popup.close()
-        }
-    }
-
-    contentItem: RowLayout {
-        spacing: 0
-
-        // This is a button only so that the svg is easier to color
-        Button {
-            property var diameter: popup.height * 0.25
-            icon.source: "qrc:/qml/images/x-circle-fill.svg"
-            icon.color: CSC.Style.red
-            icon.width: diameter
-            icon.height: diameter
-            enabled: false
-            Layout.preferredWidth: diameter + 2*loginWindow.margins
-
-            background: Rectangle {
-                color: "transparent"
-            }
-        }
-        
-        Text {
-            id: errorText
-            text: popup.errorTextContent
-            verticalAlignment: Text.AlignVCenter
-            wrapMode: Text.WordWrap
-            Layout.rightMargin: closePopup.width + 3
-            Layout.fillWidth: true
-            Layout.fillHeight: true
         }
     }
     
@@ -71,12 +136,12 @@ Popup {
         ParallelAnimation {
             NumberAnimation { 
                 property: "y"; 
-                from: loginWindow.height; 
-                to: loginWindow.height - popup.height; 
+                from: contentColumn.state == "" ? popup.parent.height : popup.y; 
+                to: contentColumn.state == "" ? popup.parent.height - popup.height : popup.y; 
                 duration: 500; 
                 easing.type: Easing.OutQuad 
             }
-            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 500; }
+            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: contentColumn.state == "" ? 500 : 100; }
         }
     }
 
@@ -84,12 +149,12 @@ Popup {
         ParallelAnimation {
             NumberAnimation { 
                 property: "y"; 
-                from: loginWindow.height - popup.height; 
-                to: loginWindow.height; 
+                from: contentColumn.state == "" ? popup.parent.height - popup.height : popup.y; 
+                to: contentColumn.state == "" ? popup.parent.height : popup.y; 
                 duration: 500; 
                 easing.type: Easing.InQuad 
             }
-            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 500; }
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: contentColumn.state == "" ? 500 : 100; }
         }
     }
 }

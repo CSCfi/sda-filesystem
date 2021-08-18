@@ -8,14 +8,13 @@ import csc 1.0 as CSC
 ApplicationWindow {
 	id: mainWindow
     visible: true
-    title: "SD-Connect FUSE"
-	width: 1000 // TODO
+    title: "SD-Connect Filesystem"
+	width: 1000
 	height: 600
 	minimumHeight: sideBarView.height + toolbar.height
-	minimumWidth: stack.implicitWidth + sideBarView.width
+	minimumWidth: homePage.implicitWidth + sideBarView.width
 
 	property string username
-	signal logout()
 
 	Material.primary: CSC.Style.primaryColor
 
@@ -44,22 +43,10 @@ ApplicationWindow {
         }
     }
 
-	CSC.Popup {
-		id: popup
-	}
-
-	/*Connections {
-		target: QmlBridge
-		onMountError: {
-			popup.errorTextContent = err
-			popup.open()
-		}
-	}*/
-
-
 	onClosing: QmlBridge.shutdown()
 
 	RowLayout {
+		id: body
 		spacing: 0
 		anchors.fill: parent
 
@@ -113,7 +100,7 @@ ApplicationWindow {
 
 					onClicked: {
 						if (section == "end") {
-							mainWindow.logout()
+							Qt.quit()
 						} else {
 							if (sideBarView.currentIndex != index) {
 								sideBarView.currentIndex = index
@@ -128,27 +115,29 @@ ApplicationWindow {
 			}
 		}
 
-		Flickable {
+		StackLayout {
+			id: stack
+			currentIndex: sideBarView.currentIndex
 			Layout.fillWidth: true
 			Layout.fillHeight: true
-			
-			contentHeight: Math.max(parent.height, stack.children[stack.currentIndex].implicitHeight)
 
-			StackLayout {
-				id: stack
-				anchors.fill: parent
-				currentIndex: sideBarView.currentIndex
-				
+			Flickable {
+				interactive: contentHeight > height
+				contentHeight: homePage.implicitHeight
+
+				ScrollBar.vertical: ScrollBar { }
+
 				HomePage {
 					id: homePage
-				}
-
-				LogPage {
-					id: logPage
+					topItem: body
+					height: stack.height
+					width: parent.width
 				}
 			}
 
-			ScrollBar.vertical: ScrollBar { }
+			LogPage {
+				id: logPage
+			}
 		}
 	}
 }

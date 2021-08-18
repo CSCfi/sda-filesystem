@@ -9,14 +9,16 @@ import csc 1.0 as CSC
 Window {
 	id: loginWindow
 	visible: true
-	title: "SD-Connect FUSE"
+	title: "SD-Connect Filesystem"
 	minimumWidth: 500
     minimumHeight: 400
 	maximumWidth: minimumWidth
     maximumHeight: minimumHeight
 
-	property int margins: 20
+	property real margins: 20
+	property var component
 	property ApplicationWindow homeWindow
+
 	Material.accent: CSC.Style.primaryColor
 
 	CSC.Popup {
@@ -28,17 +30,44 @@ Window {
 		onEnvError: {
 			itemWrap.enabled = false
 			popup.errorTextContent = err
+			popup.errorTextClarify = ""
+			popup.open()
+		}
+		onLoginResult: {			
+			if (!message) {
+				popup.errorTextContent = "Could not create main window"
+				popup.errorTextClarify = ""
+				
+				component = Qt.createComponent("mainWindow.qml")
+				if (component.status == Component.Ready) {
+					homeWindow = component.createObject(loginWindow, {username: usernameField.text})
+					if (homeWindow == null) {
+						console.log("Error creating main window")
+						popup.open()
+						return
+					}
+
+					loginButton.state = ""
+					loginWindow.hide()
+					homeWindow.show()
+				} else {
+					if (component.status == Component.Error) {
+						console.log("Error loading component: " + component.errorString());
+					}
+					popup.open()
+				}
+				return
+			}
+
+			popup.errorTextContent = message
+			popup.errorTextClarify = err
+			loginButton.state = ""
+			passwordField.selectAll()
+			passwordField.focus = true
 			popup.open()
 		}
 	}
-
-	Connections {
-		target: homeWindow
-		onLogout: {
-			console.log("Logging out...")
-		}
-	}
-
+	
 	Item {
 		id: itemWrap
 		anchors.fill: parent
@@ -96,42 +125,26 @@ Window {
 					Layout.fillWidth: true
 					
 					onClicked: login()
+
+					Component.onCompleted: Layout.minimumHeight = implicitHeight
+
+					states: [
+                        State {
+                            name: "loading"; 
+                            PropertyChanges { target: loginButton; text: ""; loading: true }
+                            PropertyChanges { target: itemWrap; enabled: false }
+                        }
+					]
 					
 					function login() {
-						var loginError = "Incorrect username or password"
-
 						if (usernameField.text != "" && passwordField.text != "") {
-							loginError = QmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
-
-							if (!loginError) {
-								var component = Qt.createComponent("mainWindow.qml")
-								if (component.status != Component.Ready) {
-									if (component.status == Component.Error)
-										console.log("Error loading component:\n" + component.errorString());
-									
-									popup.errorTextContent = "Could not create window. Our bad :/"
-									popup.open()
-									return
-								}
-
-								homeWindow = component.createObject(loginWindow, {username: usernameField.text})
-								if (homeWindow == null) {
-									console.log("Error creating window object")
-									popup.errorTextContent = "Could not create window. Our bad :/"
-									popup.open()
-									return
-								}
-
-								loginWindow.hide()
-								homeWindow.show()
-								return
-							}
-
-							passwordField.selectAll()
-							passwordField.focus = true
+							loginButton.state = "loading"
+							popup.close()
+							QmlBridge.sendLoginRequest(usernameField.text, passwordField.text)
+							return
 						}
 
-						popup.errorTextContent = loginError
+						popup.errorTextContent = "Incorrect username or password"
 						if (popup.opened) {
 							popup.visible = false
 						}
