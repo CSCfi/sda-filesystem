@@ -124,8 +124,27 @@ func (qb *QmlBridge) loadFuse() {
 }
 
 func (qb *QmlBridge) openFuse() {
-	cmd := exec.Command("open", qb.MountPoint())
-	err := cmd.Run()
+	var command string
+
+	dir, err := os.Stat(qb.MountPoint())
+	if err != nil {
+		log.Errorf("failed to open directory, error: %w", err)
+	}
+	if !dir.IsDir() {
+		log.Errorf("%q is not a directory", dir.Name())
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		command = "open"
+	case "linux":
+		command = "xdg-open"
+	case "windows":
+		command = "start"
+	default:
+		log.Error("unrecognized OS")
+	}
+	cmd := exec.Command(command, qb.MountPoint())
+	err = cmd.Run()
 	if err != nil {
 		logs.Error(err)
 	}

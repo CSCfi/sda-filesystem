@@ -43,13 +43,7 @@ ApplicationWindow {
         }
     }
 
-	Connections {
-		target: Qt.application
-
-		onAboutToQuit: {
-			QmlBridge.shutdown()
-		}
-	}
+	onClosing: QmlBridge.shutdown()
 
 	RowLayout {
 		id: body
