@@ -100,7 +100,7 @@ ApplicationWindow {
 
 					onClicked: {
 						if (section == "end") {
-							Qt.quit()
+							close()
 						} else {
 							if (sideBarView.currentIndex != index) {
 								sideBarView.currentIndex = index
