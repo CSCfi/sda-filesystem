@@ -118,7 +118,7 @@ func shutdown() <-chan bool {
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-s
-		logs.Info("Shutting down SD-Connect FUSE")
+		logs.Info("Shutting down SD-Connect Filesystem")
 		done <- true
 	}()
 	return done
@@ -135,7 +135,10 @@ func main() {
 
 	api.CreateToken(askForLogin())
 	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
-	api.InitializeClient()
+	err = api.InitializeClient()
+	if err != nil {
+		logs.Fatal(err)
+	}
 	//fmt.Println(runtime.NumGoroutine())
 	GetUSTokens()
 	connectfs := filesystem.CreateFileSystem()

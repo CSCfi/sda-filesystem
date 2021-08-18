@@ -13,4 +13,7 @@ QtObject {
     property color lightGreyBlue: "#F8F9FC"
     property color darkBlue: "#102E5C"
     property color blue: "#255992"
+    property color yellow: "#F8D758"
+    property color lightBlue: "#D2DCEB"
+    property color lineGray: "#707070"
 }

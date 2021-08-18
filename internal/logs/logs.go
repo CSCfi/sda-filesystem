@@ -46,12 +46,12 @@ func StructureError(err error) string {
 		str, err = Wrapper(err)
 		fullError += str + "\n"
 	}
-	return fullError
+	return fullError[:len(fullError)-1]
 }
 
 func Error(err error) {
 	if signal != nil {
-		signal("ERRO", StructureError(err))
+		signal("error", StructureError(err))
 	} else {
 		log.Error(err)
 	}
@@ -60,7 +60,7 @@ func Error(err error) {
 func Errorf(format string, args ...interface{}) {
 	if signal != nil {
 		err := fmt.Errorf(format, args...)
-		signal("ERRO", StructureError(err))
+		signal("error", StructureError(err))
 	} else {
 		log.Errorf(format, args...)
 	}
@@ -68,7 +68,7 @@ func Errorf(format string, args ...interface{}) {
 
 func Warning(args ...interface{}) {
 	if signal != nil {
-		signal("WARN", fmt.Sprint(args...))
+		signal("warning", fmt.Sprint(args...))
 	} else {
 		log.Warning(args...)
 	}
@@ -76,7 +76,7 @@ func Warning(args ...interface{}) {
 
 func Warningf(format string, args ...interface{}) {
 	if signal != nil {
-		signal("WARN", fmt.Sprintf(format, args...))
+		signal("warning", fmt.Sprintf(format, args...))
 	} else {
 		log.Warningf(format, args...)
 	}
@@ -84,7 +84,7 @@ func Warningf(format string, args ...interface{}) {
 
 func Info(args ...interface{}) {
 	if signal != nil {
-		signal("INFO", fmt.Sprint(args...))
+		signal("info", fmt.Sprint(args...))
 	} else {
 		log.Info(args...)
 	}
@@ -92,7 +92,7 @@ func Info(args ...interface{}) {
 
 func Infof(format string, args ...interface{}) {
 	if signal != nil {
-		signal("INFO", fmt.Sprintf(format, args...))
+		signal("info", fmt.Sprintf(format, args...))
 	} else {
 		log.Infof(format, args...)
 	}

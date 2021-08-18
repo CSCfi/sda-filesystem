@@ -100,6 +100,7 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 			return
 		}
 
+		logs.Info("Login successful")
 		qb.LoginResult("", "")
 	}()
 }
@@ -131,9 +132,12 @@ func (qb *QmlBridge) openFuse() {
 }
 
 func (qb *QmlBridge) shutdown() {
-	logs.Info("Shutting down SD-Connect FUSE")
+	logs.Info("Shutting down SD-Connect Filesystem")
 	// Sending interrupt signal to unmount fuse
-	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	if err != nil {
+		logs.Errorf("Unmounting folder failed: %w", err)
+	}
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
@@ -205,7 +209,7 @@ func init() {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	core.QCoreApplication_SetApplicationName("SD-Connect FUSE")
+	core.QCoreApplication_SetApplicationName("SD-Connect Filesystem") // ?
 	core.QCoreApplication_SetAttribute(core.Qt__AA_EnableHighDpiScaling, true)
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)

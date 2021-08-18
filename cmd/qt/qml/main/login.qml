@@ -9,13 +9,13 @@ import csc 1.0 as CSC
 Window {
 	id: loginWindow
 	visible: true
-	title: "SD-Connect FUSE"
+	title: "SD-Connect Filesystem"
 	minimumWidth: 500
     minimumHeight: 400
 	maximumWidth: minimumWidth
     maximumHeight: minimumHeight
 
-	property int margins: 20
+	property real margins: 20
 	property var component
 	property ApplicationWindow homeWindow
 

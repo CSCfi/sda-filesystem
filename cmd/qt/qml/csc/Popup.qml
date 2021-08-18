@@ -58,7 +58,7 @@ Popup {
                 id: errorText
                 text: popup.errorTextContent
                 verticalAlignment: Text.AlignVCenter
-                wrapMode: Text.WordWrap
+                wrapMode: Text.Wrap
                 font.weight: Font.Medium
                 Layout.fillWidth: true
             }

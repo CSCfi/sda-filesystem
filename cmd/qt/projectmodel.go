@@ -62,7 +62,7 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 		return core.NewQVariant()
 	}
 
-	if index.Row() >= len(pm.Projects()) {
+	if index.Row() < 0 || index.Row() >= len(pm.Projects()) {
 		return core.NewQVariant()
 	}
 
