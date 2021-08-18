@@ -128,10 +128,10 @@ func (qb *QmlBridge) openFuse() {
 
 	dir, err := os.Stat(qb.MountPoint())
 	if err != nil {
-		log.Errorf("failed to open directory, error: %w", err)
+		logs.Errorf("Failed to open directory, error: %w", err)
 	}
 	if !dir.IsDir() {
-		log.Errorf("%q is not a directory", dir.Name())
+		logs.Errorf("%q is not a directory", dir.Name())
 	}
 	switch runtime.GOOS {
 	case "darwin":
@@ -141,7 +141,8 @@ func (qb *QmlBridge) openFuse() {
 	case "windows":
 		command = "start"
 	default:
-		log.Error("unrecognized OS")
+		logs.Errorf("Unrecognized OS")
+		return
 	}
 	cmd := exec.Command(command, qb.MountPoint())
 	err = cmd.Run()
