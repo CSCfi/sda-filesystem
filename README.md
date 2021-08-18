@@ -4,6 +4,8 @@ This desktop software converses with the [sd-connect-metadata-api](https://gitla
 ## Dependencies
 See [cgofuse](https://github.com/billziss-gh/cgofuse#how-to-build) for dependencies on different operating systems.
 
+Install [Qt for Go](https://github.com/therecipe/qt/wiki/Installation). Regardless of the operating system, there are multiple ways of installing this package. For me installation worked when `GO111MODULE=on`. There seems to be [several ways](https://github.com/therecipe/qt/wiki/Available-Tools) of running a go module which uses qt. Below is the way I am currently running this program. Need to look into this further.
+
 ## Run
 Set environment variables `SD_CONNECT_METADATA_API`, `SD_CONNECT_DATA_API` and `SD_CONNECT_CERTS` before running program.
 
@@ -11,7 +13,10 @@ Set environment variables `SD_CONNECT_METADATA_API`, `SD_CONNECT_DATA_API` and `
 export SD_CONNECT_METADATA_API=https://connect-metadata-api-test.sd.csc.fi
 export SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
 export SD_CONNECT_CERTS=cert.pem
+```
 
-go run cmd/main.go
+```
+qtdeploy build desktop cmd/qt/main.go
+./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OS`
 ```
 

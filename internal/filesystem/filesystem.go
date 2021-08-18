@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/billziss-gh/cgofuse/fuse"
-	log "github.com/sirupsen/logrus"
 
 	"sd-connect-fuse/internal/api"
+	"sd-connect-fuse/internal/logs"
 )
 
 const sRDONLY = 00444
@@ -37,33 +37,35 @@ type containerInfo struct {
 	fs        *Connectfs
 }
 
+type LoadProjectInfo struct {
+	Project string
+	Count   int
+}
+
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
-func CreateFileSystem() *Connectfs {
-	log.Info("Creating in-memory filesystem database")
+func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
+	logs.Info("Creating in-memory filesystem database")
 	timestamp := fuse.Now()
 	c := Connectfs{}
 	defer c.synchronize()()
 	c.ino++
 	c.openmap = map[uint64]*node{}
 	c.root = newNode(0, c.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-	c.populateFilesystem(timestamp)
-	log.Info("Filesystem database completed")
+	c.populateFilesystem(timestamp, send...)
+	logs.Info("Filesystem database completed")
 	return &c
 }
 
 // populateDirectory creates the nodes (files and directories) of the filesystem
-func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
-	projects, err := api.GetProjects()
+func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
+	projects, err := api.GetProjects(true)
 	if err != nil {
-		log.Error(err)
+		logs.Error(err)
 	}
-	if len(projects) == 0 {
-		log.Fatal("No project permissions found")
-	}
-	log.Infof("Receiving %d projects", len(projects))
+	logs.Info("Receiving ", len(projects), " projects")
 
 	var wg sync.WaitGroup
-	forChannel := make(map[string][]api.Container)
+	forChannel := make(map[string][]api.Metadata)
 	numJobs := 0
 	mapLock := sync.RWMutex{}
 	//start := time.Now()
@@ -75,18 +77,22 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 		projectSafe := removeInvalidChars(projects[i].Name)
 
 		// Create a project directory
-		log.Debugf("Creating project %s", projectSafe)
+		logs.Debugf("Creating project %s", projectSafe)
 		fs.makeNode(projectSafe, fuse.S_IFDIR|sRDONLY, 0, projects[i].Bytes, timestamp)
 
 		go func(project string) {
 			defer wg.Done()
 
-			log.Debugf("Fetching containers for project %s", project)
+			logs.Debugf("Fetching containers for project %s", project)
 			containers, err := api.GetContainers(project)
 
 			if err != nil {
-				log.Error(err)
+				logs.Error(err)
 				return
+			}
+
+			if len(send) > 0 {
+				send[0] <- LoadProjectInfo{Project: project, Count: len(containers)}
 			}
 
 			mapLock.Lock()
@@ -99,7 +105,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 				containerPath := projectSafe + "/" + containerSafe
 
 				// Create a container directory
-				log.Debugf("Creating container %s", containerPath)
+				logs.Debugf("Creating container %s", containerPath)
 				p := filepath.FromSlash(containerPath)
 				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, c.Bytes, timestamp)
 			}
@@ -119,7 +125,11 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
-		go createObjects(w, jobs, &wg)
+		if len(send) > 0 {
+			go createObjects(w, jobs, &wg, send[0])
+		} else {
+			go createObjects(w, jobs, &wg)
+		}
 	}
 
 	for key, value := range forChannel {
@@ -130,11 +140,14 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec) {
 	close(jobs)
 
 	wg.Wait()
+	if len(send) > 0 {
+		close(send[0])
+	}
 	//elapsed = time.Since(start)
 	//fmt.Printf("Time: %s\n", elapsed)
 }
 
-func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
+func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
 	defer wg.Done()
 
 	for j := range jobs {
@@ -149,11 +162,12 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 
 		objects, err := api.GetObjects(project, container)
 		if err != nil {
-			log.Error(err)
+			logs.Error(err)
 			continue
 		}
 
 		level := 1
+		//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 
 		// Object names contain their path from container
 		// Create both subdirectories and the files
@@ -192,6 +206,10 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup) {
 
 			level++
 		}
+
+		if len(send) > 0 {
+			send[0] <- LoadProjectInfo{Project: project, Count: 1}
+		}
 	}
 }
 
@@ -227,9 +245,9 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 	name = ""
 	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
-			if len(c) > 255 {
+			/*if len(c) > 255 { TODO: check this
 				log.Fatalf("Name %s in path %s is too long", c, path)
-			}
+			}*/
 			prnt, name = node, c
 			if node == nil {
 				return
