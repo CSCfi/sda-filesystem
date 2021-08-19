@@ -68,7 +68,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	forChannel := make(map[string][]api.Metadata)
 	numJobs := 0
 	mapLock := sync.RWMutex{}
-	//start := time.Now()
 
 	for i := range projects {
 		wg.Add(1)
@@ -114,14 +113,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 
 	wg.Wait()
 
-	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
-	//elapsed := time.Since(start)
-	//fmt.Printf("Time: %s\n", elapsed)
-
 	jobs := make(chan containerInfo, numJobs)
-
-	//fmt.Println(numJobs)
-	//start = time.Now()
 
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
@@ -143,8 +135,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	if len(send) > 0 {
 		close(send[0])
 	}
-	//elapsed = time.Since(start)
-	//fmt.Printf("Time: %s\n", elapsed)
 }
 
 func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
@@ -167,7 +157,6 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 		}
 
 		level := 1
-		//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 
 		// Object names contain their path from container
 		// Create both subdirectories and the files
