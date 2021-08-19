@@ -231,7 +231,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	core.QCoreApplication_SetApplicationName("SD-Connect Filesystem") // ?
 	core.QCoreApplication_SetOrganizationName("CSC")
-	core.QCoreApplication_SetOrganizationDomain("fi")
+	core.QCoreApplication_SetOrganizationDomain("csc.fi")
 	core.QCoreApplication_SetApplicationVersion("1.0.0")
 	core.QCoreApplication_SetAttribute(core.Qt__AA_EnableHighDpiScaling, true)
 
