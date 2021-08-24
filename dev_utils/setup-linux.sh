@@ -28,11 +28,15 @@ go get github.com/therecipe/qt/internal/cmd/moc@v0.0.0-20200904063919-c0c124a577
 
 go install -v -tags=no_env github.com/therecipe/qt/cmd/...
 
-go mod vendor && rm -rf vendor/github.com/therecipe/env_linux_amd64_513
+# rebuild vendor
+go mod vendor
+[ -d "vendor/github.com/therecipe/env_linux_amd64_513" ] && rm -rf vendor/github.com/therecipe/env_linux_amd64_513
 
 git clone https://github.com/therecipe/env_linux_amd64_513.git vendor/github.com/therecipe/env_linux_amd64_513
 
 # actually do the setup so that a binary can be built
 "$(go env GOPATH)"/bin/qtsetup
 
-echo "===> Done. Now qtdeploy can be used."
+echo "Now qtdeploy can be used."
+echo "If the command is not found refresh your bahs/zsh shell, or start a new terminal."
+echo "===> Done. "
