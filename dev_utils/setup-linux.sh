@@ -32,4 +32,7 @@ go mod vendor && rm -rf vendor/github.com/therecipe/env_linux_amd64_513
 
 git clone https://github.com/therecipe/env_linux_amd64_513.git vendor/github.com/therecipe/env_linux_amd64_513
 
+# actually do the setup so that a binary can be built
 "$(go env GOPATH)"/bin/qtsetup
+
+echo "===> Done. Now qtdeploy can be used."
