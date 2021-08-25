@@ -135,7 +135,7 @@ Control {
                             text: "OK"
                             topInset: 0
                             bottomInset: 0
-                            enabled: mountField.text != ""
+                            enabled: mountText.text != ""
                             padding: page.buttonPadding
                             implicitWidth: state != "finished" ? changeButton.implicitWidth : implicitWidth
                             Layout.maximumWidth: implicitWidth + 2 * padding
