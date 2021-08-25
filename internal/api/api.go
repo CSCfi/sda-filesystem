@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sd-connect-fuse/internal/cache"
 	"sd-connect-fuse/internal/logs"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 )
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
+var downloadCache = cache.NewRistrettoCache()
 
 // HTTPInfo contains all necessary variables used during HTTP requests
 type HTTPInfo struct {
@@ -368,16 +370,27 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 		"container": parts[1],
 		"object":    parts[2],
 	}
+	// we make the cache key based on object path and requested bytes
+	cacheKey := parts[0] + "_" + parts[1] + "_" + parts[2] + "_" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)
+	response, found := downloadCache.Get(cacheKey)
 
-	// Additional headers
-	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
-		"X-Project-ID": hi.sTokens[project].ProjectID}
+	if !found {
+		// Additional headers
+		headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
+			"X-Project-ID": hi.sTokens[project].ProjectID}
 
-	// Request data
-	response, err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers)
-	if err != nil {
-		return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
+		// Request data
+		response, err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers)
+		if err != nil {
+			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
+		}
+		downloadCache.Set(cacheKey, string(response), time.Minute*60)
+		time.Sleep(10 * time.Millisecond)
+		logs.Debug("Stored in cache")
+		logs.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
+		return response, nil
 	}
-	logs.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
-	return response, nil
+
+	logs.Infof("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
+	return []byte(fmt.Sprintf("%v", response)), nil
 }
