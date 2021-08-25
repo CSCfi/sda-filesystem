@@ -66,9 +66,11 @@ func GetUSTokens() {
 		logs.Fatal("No project permissions found")
 	}
 
-	err = api.GetSTokens(projects)
-	if err != nil {
-		logs.Fatal(err)
+	for i := range projects {
+		err = api.GetSToken(projects[i])
+		if err != nil {
+			logs.Warning(err)
+		}
 	}
 }
 
@@ -134,15 +136,12 @@ func main() {
 	}
 
 	api.CreateToken(askForLogin())
-	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Fatal(err)
 	}
-	//fmt.Println(runtime.NumGoroutine())
 	GetUSTokens()
 	connectfs := filesystem.CreateFileSystem()
-	//fmt.Println(runtime.NumGoroutine())
 	host := fuse.NewFileSystemHost(connectfs)
 	options := []string{}
 	if runtime.GOOS == "darwin" {

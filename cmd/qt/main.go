@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -37,13 +39,11 @@ type QmlBridge struct {
 	_ func()                          `slot:"shutdown"`
 	_ func(message, err string)       `signal:"loginResult"`
 	_ func(err error)                 `signal:"envError"`
-	_ func(err error)                 `signal:"mountError"`
 	_ func()                          `signal:"fuseReady"`
 
 	_ *fuse.FileSystemHost `property:"fileSystemHost"`
 	_ string               `property:"mountPoint"`
 	_ gui.QFont            `property:"fixedFont"`
-	_ bool                 `property:"isWindows"`
 }
 
 func (qb *QmlBridge) init() {
@@ -77,7 +77,7 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 				return
 			}
 
-			qb.LoginResult("Login failed. Could not retrieve unscoped token", logs.StructureError(err))
+			qb.LoginResult("Login failed", logs.StructureError(err))
 			return
 		}
 
@@ -93,11 +93,11 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 		}
 		projectModel.ApiToProject(projects)
 
-		err = api.GetSTokens(projects)
-		if err != nil {
-			logs.Error(err)
-			qb.LoginResult("Failed to retrieve scoped tokens", logs.StructureError(err))
-			return
+		for i := range projects {
+			err = api.GetSToken(projects[i])
+			if err != nil {
+				logs.Warning(err)
+			}
 		}
 
 		logs.Info("Login successful")
@@ -126,12 +126,10 @@ func (qb *QmlBridge) loadFuse() {
 func (qb *QmlBridge) openFuse() {
 	var command string
 
-	dir, err := os.Stat(qb.MountPoint())
+	_, err := os.Stat(qb.MountPoint())
 	if err != nil {
-		logs.Errorf("Failed to open directory, error: %w", err)
-	}
-	if !dir.IsDir() {
-		logs.Errorf("%q is not a directory", dir.Name())
+		logs.Errorf("Failed to find directory: %w", err)
+		return
 	}
 	switch runtime.GOOS {
 	case "darwin":
@@ -147,7 +145,7 @@ func (qb *QmlBridge) openFuse() {
 	cmd := exec.Command(command, qb.MountPoint())
 	err = cmd.Run()
 	if err != nil {
-		logs.Error(err)
+		logs.Errorf("Could not open directory %s: %w", qb.MountPoint(), err)
 	}
 }
 
@@ -162,54 +160,49 @@ func (qb *QmlBridge) shutdown() {
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
 	mount := core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
+	logs.Debug("Trying to change mount point to ", mount)
 
-	//TODO: check permissions?
-	fmt.Println(unix.Access(mount, unix.W_OK), os.Getuid())
+	// Verify mount point directory
+	if dir, err := os.Stat(mount); os.IsNotExist(err) {
+		err = createDir(mount)
+		if err != nil {
+			logs.Error(err)
+			return err.Error()
+		}
+	} else {
+		if !dir.IsDir() {
+			str := fmt.Sprintf("%s is not a directory", dir.Name())
+			logs.Errorf(str)
+			return str
+		}
 
-	dir, err := os.Open(mount)
-	if err != nil {
-		logs.Errorf("Could not open mount point %s: %w", mount, err)
-		return "Could not open mount point " + mount + ". Check logs for further details."
+		// Mount directory must not already exist in Windows
+		if runtime.GOOS == "windows" { // ?
+			str := fmt.Sprintf("Mount point %s already exists, remove the directory or use another mount point", mount)
+			logs.Errorf(str)
+			return str
+		}
+
+		if unix.Access(mount, unix.W_OK) != nil { // What about windows?
+			str := fmt.Sprintf("You do not have permission to write to folder %s", mount)
+			logs.Errorf(str)
+			return str
+		}
+
+		// Check that the mount point is empty if it already exists
+		if ok, err := isEmpty(mount); err != nil {
+			logs.Error(err)
+			return err.Error()
+		} else if !ok {
+			str := fmt.Sprintf("Mount point %s must be empty", mount)
+			logs.Errorf(str)
+			return str
+		}
 	}
-	dir.Close()
 
 	logs.Debug("Filesystem will be mounted at ", mount)
 	qb.SetMountPoint(mount)
 	return ""
-
-	/*// Verify mount point directory
-	if _, err := os.Stat(mount); os.IsNotExist(err) {
-		// In other OSs except Windows, the mount point must exist and be empty
-		if runtime.GOOS != "windows" {
-			logs.Debugf("Mount point %s does not exist, so it will be created", mount)
-			if err = os.Mkdir(mount, 0777); err != nil {
-				str := fmt.Sprintf("Could not create directory %s: ", mount)
-				logs.Errorf("%s: %w", str, err)
-				return
-			}
-		}
-	} else {
-		// Mount directory must not already exist in Windows
-		if runtime.GOOS == "windows" {
-			logs.Errorf("Mount point %s already exists, remove the directory or use another mount point", mount)
-		}
-		// Check that the mount point is empty if it already exists
-		dir, err := os.Open(mount)
-		if err != nil {
-			logs.Errorf("Could not open mount point %s", mount)
-		}
-		defer dir.Close()
-		// Verify dir is empty
-		if _, err = dir.Readdir(1); err != io.EOF {
-			str := fmt.Sprintf("Mount point %s must be empty", mount)
-			if err == nil {
-				logs.Errorf("%s", str)
-			} else {
-				logs.Errorf("%s: %w", str, err)
-			}
-			return str
-		}
-	}*/
 }
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
@@ -220,16 +213,68 @@ func mountPoint() string {
 		return ""
 	}
 	p := filepath.FromSlash(filepath.ToSlash(home) + "/Projects")
-	return p
+
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		err = createDir(p)
+		if err != nil {
+			logs.Error(err)
+			return ""
+		}
+		return p
+	}
+
+	if ok, err := isEmpty(p); err != nil {
+		logs.Error(err)
+	} else if ok {
+		return p
+	}
+
+	return ""
+}
+
+func createDir(dir string) error {
+	// In other OSs except Windows, the mount point must exist and be empty
+	if runtime.GOOS != "windows" { // ?
+		logs.Debugf("Directory %s does not exist, so it will be created", dir)
+		if err := os.Mkdir(dir, 0755); err != nil {
+			return fmt.Errorf("Could not create directory %s: %w", dir, err)
+		}
+		logs.Debugf("Directory %s created", dir)
+	}
+	return nil
+}
+
+func isEmpty(mount string) (bool, error) {
+	dir, err := os.Open(mount)
+	if err != nil {
+		return false, fmt.Errorf("Could not open mount point %s: %w", mount, err)
+	}
+	defer dir.Close()
+	// Verify dir is empty
+	if _, err = dir.Readdir(1); err != io.EOF {
+		if err != nil {
+			return false, fmt.Errorf("Error occurred when reading from directory %s: %w", mount, err)
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 func init() {
+	debug := flag.Bool("debug", false, "print debug logs")
+	flag.Parse()
+	if *debug {
+		logs.SetLevel("debug")
+	} else {
+		logs.SetLevel("info")
+	}
 	logs.SetSignal(logModel.AddLog)
+	filesystem.SetSignal(projectModel.UpdateNoStorage)
 }
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	core.QCoreApplication_SetApplicationName("SD-Connect Filesystem") // ?
+	core.QCoreApplication_SetApplicationName("SD-Connect Filesystem")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")
 	core.QCoreApplication_SetApplicationVersion("1.0.0")

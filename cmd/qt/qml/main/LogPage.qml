@@ -143,7 +143,15 @@ Page {
                 contentItem: Label {
                     id: levelText
                     text: level
-                    color: (levelText.text.toLowerCase() != "warning") ? "white" : "black"
+                    color: {
+                        if (levelText.text == "INFO" || levelText.text == "ERROR" || levelText.text == "DEBUG") {
+                            return "white"
+                        } else if (levelText.text == "WARNING") {
+                            return "black"
+                        } else {
+                            return "transparent"
+                        }
+                    }
                     topPadding: 0
                     bottomPadding: 0
                     leftPadding: 5
@@ -154,8 +162,19 @@ Page {
                     anchors.centerIn: parent
 
                     background: Rectangle {
-                        color: (levelText.text.toLowerCase() == "info") ? CSC.Style.blue : 
-                               (levelText.text.toLowerCase() == "error" ? CSC.Style.red : CSC.Style.yellow)
+                        color: {
+                            if (levelText.text == "INFO") {
+                                return CSC.Style.blue
+                            } else if (levelText.text == "ERROR") {
+                                return CSC.Style.red
+                            } else if (levelText.text == "WARNING") {
+                                return CSC.Style.yellow
+                            } else if (levelText.text == "DEBUG") {
+                                return CSC.Style.altGreen
+                            } else {
+                                return "transparent"
+                            }
+                        }
                         radius: height / 2
                     }
                 }
@@ -204,8 +223,8 @@ Page {
     }
 
     // THIS IS IMPORTANT
-    // Uncommenting the comments in DelegateChoice for column 2 creates bkg-log-rect.png
-    // which can then be used as background for logs. Remember to recomment and move the new .png to /images
+    // Uncommenting the comments in messageLabel creates bkg-log-rect.pn which can then be used 
+    // as background for logs after recompiling. Remember to recomment and move the new .png to /images
     // I do it like this because this seamlessly (hopefully) fills in the background
     // regardless of row widths and row counts
     Component {

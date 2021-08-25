@@ -51,7 +51,7 @@ func StructureError(err error) string {
 
 func Error(err error) {
 	if signal != nil {
-		signal("error", StructureError(err))
+		signal("ERROR", StructureError(err))
 	} else {
 		log.Error(err)
 	}
@@ -60,23 +60,23 @@ func Error(err error) {
 func Errorf(format string, args ...interface{}) {
 	if signal != nil {
 		err := fmt.Errorf(format, args...)
-		signal("error", StructureError(err))
+		signal("ERROR", StructureError(err))
 	} else {
 		log.Errorf(format, args...)
 	}
 }
 
-func Warning(args ...interface{}) {
+func Warning(err error) {
 	if signal != nil {
-		signal("warning", fmt.Sprint(args...))
+		signal("WARNING", StructureError(err))
 	} else {
-		log.Warning(args...)
+		log.Warning(err)
 	}
 }
 
 func Warningf(format string, args ...interface{}) {
 	if signal != nil {
-		signal("warning", fmt.Sprintf(format, args...))
+		signal("WARNING", fmt.Sprintf(format, args...))
 	} else {
 		log.Warningf(format, args...)
 	}
@@ -84,7 +84,7 @@ func Warningf(format string, args ...interface{}) {
 
 func Info(args ...interface{}) {
 	if signal != nil {
-		signal("info", fmt.Sprint(args...))
+		signal("INFO", fmt.Sprint(args...))
 	} else {
 		log.Info(args...)
 	}
@@ -92,18 +92,30 @@ func Info(args ...interface{}) {
 
 func Infof(format string, args ...interface{}) {
 	if signal != nil {
-		signal("info", fmt.Sprintf(format, args...))
+		signal("INFO", fmt.Sprintf(format, args...))
 	} else {
 		log.Infof(format, args...)
 	}
 }
 
 func Debug(args ...interface{}) {
-	log.Debug(args...)
+	if signal != nil {
+		if log.GetLevel() == log.DebugLevel {
+			signal("DEBUG", fmt.Sprint(args...))
+		}
+	} else {
+		log.Debug(args...)
+	}
 }
 
 func Debugf(format string, args ...interface{}) {
-	log.Debugf(format, args...)
+	if signal != nil {
+		if log.GetLevel() == log.DebugLevel {
+			signal("DEBUG", fmt.Sprintf(format, args...))
+		}
+	} else {
+		log.Debugf(format, args...)
+	}
 }
 
 func Fatal(args ...interface{}) {
@@ -123,6 +135,4 @@ func init() {
 
 	// Output to stdout instead of the default stderr
 	log.SetOutput(os.Stdout)
-
-	log.SetLevel(log.InfoLevel)
 }

@@ -22,6 +22,8 @@ Popup {
     property string errorTextContent: ""
     property string errorTextClarify: ""
     property int margin: 20
+    property bool isError: true
+    property color mainColor: isError ? CSC.Style.red : CSC.Style.warningOrange
         
     ColumnLayout {
         id: contentColumn
@@ -39,8 +41,8 @@ Popup {
             RoundButton {
                 id: errorIcon
                 padding: 0
-                icon.source: "qrc:/qml/images/x-circle-fill.svg"
-                icon.color: CSC.Style.red
+                icon.source: isError ? "qrc:/qml/images/x-circle-fill.svg" : "qrc:/qml/images/exclamation-triangle-fill.svg"
+                icon.color: mainColor
                 icon.width: diameter
                 icon.height: diameter
                 enabled: false
@@ -75,8 +77,8 @@ Popup {
             id: rectClarify
             color: CSC.Style.lightGreyBlue
             border.width: 1
-            border.color: "#707070"
-            visible: errorClarify.text != ""
+            border.color: CSC.Style.lineGray
+            visible: isError && errorClarify.text != ""
             Layout.preferredHeight: 70 
             Layout.fillWidth: true
             Layout.leftMargin: errorIcon.width
@@ -114,7 +116,7 @@ Popup {
 
     background: Rectangle {
         border.width: 2
-        border.color: CSC.Style.red
+        border.color: mainColor
         implicitWidth: popup.parent.width
         implicitHeight: popup.height
         radius: 8
@@ -122,7 +124,7 @@ Popup {
         RoundButton {
             id: closePopup
             text: "\u2573"
-            Material.foreground: CSC.Style.red
+            Material.foreground: mainColor
             Material.background: "transparent"
             anchors.right: parent.right
             height: 30

@@ -14,6 +14,8 @@ import (
 const sRDONLY = 00444
 const numRoutines = 4
 
+var signalModel func(map[string]bool) = nil
+
 // Connectfs stores the filesystem structure
 type Connectfs struct {
 	fuse.FileSystemBase
@@ -42,6 +44,10 @@ type LoadProjectInfo struct {
 	Count   int
 }
 
+func SetSignal(fn func(map[string]bool)) {
+	signalModel = fn
+}
+
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
 func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	logs.Info("Creating in-memory filesystem database")
@@ -61,8 +67,31 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	projects, err := api.GetProjects(true)
 	if err != nil {
 		logs.Error(err)
+		return
 	}
-	logs.Info("Receiving ", len(projects), " projects")
+
+	if signalModel != nil {
+		// Inform LogModel which projects have storage enabled
+		projectsStr := make(map[string]bool)
+		for i := range projects {
+			projectsStr[projects[i].Name] = true
+		}
+		signalModel(projectsStr)
+	}
+
+	if len(projects) == 0 {
+		logs.Errorf("No project permissions found")
+		return
+	}
+
+	logs.Debug("Beginning filling in filesystem")
+
+	// Calculating root size
+	rootSize := int64(0)
+	for i := range projects {
+		rootSize += projects[i].Bytes
+	}
+	fs.root.stat.Size = rootSize
 
 	var wg sync.WaitGroup
 	forChannel := make(map[string][]api.Metadata)
@@ -112,7 +141,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	}
 
 	wg.Wait()
-
 	jobs := make(chan containerInfo, numJobs)
 
 	for w := 1; w <= numRoutines; w++ {
@@ -150,6 +178,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 		containerSafe := removeInvalidChars(container)
 		containerPath := projectSafe + "/" + containerSafe
 
+		logs.Debugf("Fetching objects for container %s", containerPath)
 		objects, err := api.GetObjects(project, container)
 		if err != nil {
 			logs.Error(err)
@@ -171,6 +200,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 				if len(parts) < level+1 {
 					objectPath := containerPath + "/" + removeInvalidChars(obj.Name, "/")
 					p := filepath.FromSlash(objectPath)
+					logs.Debugf("Creating object %s", objectPath)
 					fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
 					remove = append(remove, i)
 					continue

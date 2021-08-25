@@ -20,9 +20,9 @@ type LogModel struct {
 	core.QAbstractTableModel
 
 	_ func()               `constructor:"init"`
-	_ func(string, string) `slot:"addLog"`
-	_ func()               `slot:"removeDummy"`
-	_ func(url string)     `slot:"saveLogs"`
+	_ func(string, string) `signal:"addLog,auto"`
+	_ func()               `signal:"removeDummy,auto"`
+	_ func(string)         `signal:"saveLogs,auto"`
 
 	_ map[int]*core.QByteArray `property:"roles"`
 	_ []*Log                   `property:"logs"`
@@ -32,7 +32,7 @@ type LogModel struct {
 type Log struct {
 	core.QObject
 
-	_ string `property:"level"`
+	_ string `property:"level"` // Couldn't find a way to use Q_ENUM
 	_ string `property:"timestamp"`
 	_ string `property:"message"`
 }
@@ -52,9 +52,6 @@ func (lm *LogModel) init() {
 	lm.ConnectRowCount(lm.rowCount)
 	lm.ConnectColumnCount(lm.columnCount)
 	lm.ConnectRoleNames(lm.roleNames)
-	lm.ConnectAddLog(lm.addLog)
-	lm.ConnectRemoveDummy(lm.removeDummy)
-	lm.ConnectSaveLogs(lm.saveLogs)
 
 	lm.addDummy()
 }
@@ -141,7 +138,6 @@ func (lm *LogModel) addLog(level, message string) {
 func (lm *LogModel) saveLogs(url string) {
 	file := core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
 
-	len := len(lm.Logs())
 	f, err := os.Create(file)
 	if err != nil {
 		logs.Errorf("Could not create file %s: %w", file, err)
@@ -152,10 +148,10 @@ func (lm *LogModel) saveLogs(url string) {
 	writer := bufio.NewWriter(f)
 
 	for i := range lm.Logs() {
-		lg := lm.Logs()[len-i-1]
-		str := fmt.Sprintf(strings.ToUpper(lg.Level()) + "[" +
+		lg := lm.Logs()[i]
+		str := fmt.Sprintf(lg.Level()[:4] + "[" +
 			strings.ReplaceAll(lg.Timestamp(), " ", "T") + "] " +
-			strings.ReplaceAll(lg.Message(), "\n", " "))
+			strings.ReplaceAll(lg.Message(), "\n", ": "))
 
 		if _, err = writer.WriteString(str + "\n"); err != nil {
 			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)

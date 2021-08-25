@@ -18,6 +18,15 @@ Control {
         parent: Overlay.overlay
 
         Component.onCompleted: leftMargin = page.mapToItem(topItem, 0, 0).x + margin
+
+        Connections {
+            target: ProjectModel
+            onNoStorageWarning: {
+                popup.isError = false
+                popup.errorTextContent = count + " project(s) do not have storage enabled"
+                popup.open()
+            }
+        }
     }
 
     FileDialog {
@@ -342,6 +351,13 @@ Control {
                                 height: parent.height
                             }
                         }
+
+                        Rectangle {
+                            z: 2
+                            anchors.fill: parent
+                            color: noStorage ? CSC.Style.grey : "transparent"
+                            opacity: 0.4
+                        }
                     }
                 }
 
@@ -374,6 +390,13 @@ Control {
                             onWidthChanged: {
                                 progressbar.visible = (width > 100)
                             }
+                        }
+
+                        Rectangle {
+                            z: 2
+                            anchors.fill: parent
+                            color: noStorage ? CSC.Style.grey : "transparent"
+                            opacity: 0.4
                         }
                     }
                 }

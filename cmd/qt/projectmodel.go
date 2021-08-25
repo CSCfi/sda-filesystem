@@ -11,6 +11,7 @@ const (
 	ProjectName = int(core.Qt__UserRole) + 1<<iota
 	LoadedContainers
 	AllContainers
+	NoStorage
 )
 
 // For some reason (bug?) the slot apiToProject() did not recognize []api.Metadata as a list
@@ -26,7 +27,9 @@ type ProjectModel struct {
 	_ map[string]int           `property:"nameToIndex"`
 	_ int                      `property:"loadedProjects"`
 
-	_ func(metadataList) `slot:"apiToProject"`
+	_ func(metadataList)    `signal:"apiToProject,auto"`
+	_ func(map[string]bool) `signal:"updateNoStorage,auto"`
+	_ func(count int)       `signal:"noStorageWarning"`
 }
 
 type Project struct {
@@ -35,6 +38,7 @@ type Project struct {
 	_ string `property:"projectName"`
 	_ int    `property:"loadedContainers"`
 	_ int    `property:"allContainers"`
+	_ bool   `property:"noStorage"`
 }
 
 func init() {
@@ -46,6 +50,7 @@ func (pm *ProjectModel) init() {
 		ProjectName:      core.NewQByteArray2("projectName", -1),
 		LoadedContainers: core.NewQByteArray2("loadedContainers", -1),
 		AllContainers:    core.NewQByteArray2("allContainers", -1),
+		NoStorage:        core.NewQByteArray2("noStorage", -1),
 	})
 	pm.SetLoadedProjects(0)
 
@@ -53,7 +58,6 @@ func (pm *ProjectModel) init() {
 	pm.ConnectRowCount(pm.rowCount)
 	pm.ConnectColumnCount(pm.columnCount)
 	pm.ConnectRoleNames(pm.roleNames)
-	pm.ConnectApiToProject(pm.apiToProject)
 	pm.ConnectProjectsChanged(pm.projectsChanged)
 }
 
@@ -84,6 +88,11 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 			return core.NewQVariant1(p.AllContainers())
 		}
 
+	case NoStorage:
+		{
+			return core.NewQVariant1(p.IsNoStorage())
+		}
+
 	default:
 		{
 			return core.NewQVariant()
@@ -111,6 +120,7 @@ func (pm *ProjectModel) apiToProject(projectsAPI metadataList) {
 		pr.SetProjectName(projectsAPI[i].Name)
 		pr.SetLoadedContainers(0)
 		pr.SetAllContainers(-1)
+		pr.SetNoStorage(false)
 		projects[i] = pr
 	}
 
@@ -147,4 +157,21 @@ func (pm *ProjectModel) projectsChanged(projects []*Project) {
 	}
 
 	pm.SetNameToIndex(toIndex)
+}
+
+func (pm *ProjectModel) updateNoStorage(projectsWithStrorage map[string]bool) {
+	count := 0
+
+	for i := range pm.Projects() {
+		var pr = pm.Projects()[i]
+		if _, ok := projectsWithStrorage[pr.ProjectName()]; !ok {
+			pr.SetNoStorage(true)
+			pm.DataChanged(pm.Index(i, 0, core.NewQModelIndex()),
+				pm.Index(i, 1, core.NewQModelIndex()),
+				[]int{NoStorage})
+			count++
+		}
+	}
+
+	pm.NoStorageWarning(count)
 }

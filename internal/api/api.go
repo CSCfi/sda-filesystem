@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3}
+var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken)}
 
 // HTTPInfo ...
 type HTTPInfo struct {
@@ -42,7 +42,7 @@ type UToken struct {
 	Token string `json:"token"`
 }
 
-// SToken is the scoped token
+// SToken is a scoped token
 type SToken struct {
 	Token     string `json:"token"`
 	ProjectID string `json:"projectID"`
@@ -221,34 +221,29 @@ func GetUToken() error {
 	}
 
 	hi.uToken = uToken.Token
+	logs.Debug("Retrieved unscoped token")
 	return nil
 }
 
-// GetSTokens gets the scoped tokens
-func GetSTokens(projects []Metadata) error {
-	hi.sTokens = make(map[string]SToken)
+// GetSToken gets the scoped tokens for a project
+func GetSToken(project Metadata) error {
+	// Query params
+	query := map[string]string{"project": project.Name}
 
-	for i := range projects {
-		project := projects[i].Name
-
-		// Query params
-		query := map[string]string{"project": project}
-
-		// Request token
-		response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
-		if err != nil {
-			return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
-		}
-
-		// Parse the JSON response into a struct
-		sToken := SToken{}
-		if err := json.Unmarshal(response, &sToken); err != nil {
-			return fmt.Errorf("Unable to unmarshal response when retrieving scoped token: %w", err)
-		}
-
-		hi.sTokens[project] = sToken
+	// Request token
+	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
+	if err != nil {
+		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project.Name, err)
 	}
 
+	// Parse the JSON response into a struct
+	sToken := SToken{}
+	if err := json.Unmarshal(response, &sToken); err != nil {
+		return fmt.Errorf("Unable to unmarshal response when retrieving scoped token for %s: %w", project.Name, err)
+	}
+
+	hi.sTokens[project.Name] = sToken
+	logs.Debug("Retrieved scoped token for ", project.Name)
 	return nil
 }
 
@@ -272,7 +267,7 @@ func GetProjects(getBytes bool) ([]Metadata, error) {
 		return nil, fmt.Errorf("Unable to unmarshal response when retrieving projects: %w", err)
 	}
 
-	logs.Info("Retrieved projects as per request")
+	logs.Debugf("Retrieved %d projects", len(projects))
 	return projects, nil
 }
 
