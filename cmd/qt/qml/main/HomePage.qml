@@ -23,7 +23,7 @@ Control {
             target: ProjectModel
             onNoStorageWarning: {
                 popup.isError = false
-                popup.errorTextContent = count + " project(s) do not have storage enabled"
+                popup.errorTextContent = count + " project(s) with no storage enabled"
                 popup.open()
             }
         }

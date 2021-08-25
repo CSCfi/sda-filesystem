@@ -173,5 +173,7 @@ func (pm *ProjectModel) updateNoStorage(projectsWithStrorage map[string]bool) {
 		}
 	}
 
-	pm.NoStorageWarning(count)
+	if count > 0 {
+		pm.NoStorageWarning(count)
+	}
 }

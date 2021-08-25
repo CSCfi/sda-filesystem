@@ -32,11 +32,11 @@ type QmlBridge struct {
 	core.QObject
 
 	_ func()                          `constructor:"init"`
-	_ func(username, password string) `slot:"sendLoginRequest"`
-	_ func()                          `slot:"loadFuse"`
-	_ func()                          `slot:"openFuse"`
-	_ func(mount string) string       `slot:"changeMountPoint"`
-	_ func()                          `slot:"shutdown"`
+	_ func(username, password string) `slot:"sendLoginRequest,auto"`
+	_ func()                          `slot:"loadFuse,auto"`
+	_ func()                          `slot:"openFuse,auto"`
+	_ func(mount string) string       `slot:"changeMountPoint,auto"`
+	_ func()                          `slot:"shutdown,auto"`
 	_ func(message, err string)       `signal:"loginResult"`
 	_ func(err error)                 `signal:"envError"`
 	_ func()                          `signal:"fuseReady"`
@@ -49,12 +49,6 @@ type QmlBridge struct {
 func (qb *QmlBridge) init() {
 	qb.SetMountPoint(mountPoint())
 	qb.SetFixedFont(gui.QFontDatabase_SystemFont(gui.QFontDatabase__FixedFont))
-
-	qb.ConnectSendLoginRequest(qb.sendLoginRequest)
-	qb.ConnectLoadFuse(qb.loadFuse)
-	qb.ConnectOpenFuse(qb.openFuse)
-	qb.ConnectChangeMountPoint(qb.changeMountPoint)
-	qb.ConnectShutdown(qb.shutdown)
 }
 
 func (qb *QmlBridge) sendLoginRequest(username, password string) {
@@ -120,6 +114,7 @@ func (qb *QmlBridge) loadFuse() {
 
 		qb.FuseReady()
 		host.Mount(qb.MountPoint(), options)
+		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	}()
 }
 
@@ -152,10 +147,7 @@ func (qb *QmlBridge) openFuse() {
 func (qb *QmlBridge) shutdown() {
 	logs.Info("Shutting down SD-Connect Filesystem")
 	// Sending interrupt signal to unmount fuse
-	err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	if err != nil {
-		logs.Errorf("Unmounting folder failed: %w", err)
-	}
+	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
@@ -221,6 +213,10 @@ func mountPoint() string {
 			return ""
 		}
 		return p
+	}
+
+	if unix.Access(p, unix.W_OK) != nil {
+		return ""
 	}
 
 	if ok, err := isEmpty(p); err != nil {
