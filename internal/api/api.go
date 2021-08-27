@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken)}
+var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
 
 // HTTPInfo ...
 type HTTPInfo struct {
@@ -29,6 +29,7 @@ type HTTPInfo struct {
 	uToken         string
 	sTokens        map[string]SToken
 	client         *http.Client
+	loggedIn       bool
 }
 
 // Metadata stores data from either a call to a project, container or object
@@ -98,6 +99,10 @@ func getEnv(name string, verifyURL bool) (string, error) {
 
 func SetRequestTimeout(timeout int) {
 	hi.requestTimeout = timeout
+}
+
+func SetLoggedIn() {
+	hi.loggedIn = true
 }
 
 // CreateToken creates the authorization token based on username + password
@@ -192,6 +197,12 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	}
 	defer response.Body.Close()
 
+	if hi.loggedIn && response.StatusCode == 401 {
+		logs.Info("Tokens no longer valid. Fetching them again")
+		ReFetchTokens()
+		return makeRequest(url, token, query, headers)
+	}
+
 	if response.StatusCode != 200 && response.StatusCode != 206 {
 		return nil, &RequestError{response.StatusCode}
 	}
@@ -204,6 +215,31 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 
 	logs.Debug("Request ", request.URL, " returned a response")
 	return r, nil
+}
+
+func ReFetchTokens() {
+	err := GetUToken()
+	if err != nil {
+		logs.Warningf("HTTP requests will be slower: %w", err)
+		hi.uToken = ""
+		return
+	}
+
+	projects, err := GetProjects(false)
+	if err != nil {
+		logs.Warningf("HTTP requests will be slower: %w", err)
+		hi.sTokens = map[string]SToken{}
+	}
+
+	for i := range projects {
+		err = GetSToken(projects[i].Name)
+		if err != nil {
+			logs.Warning(err)
+			delete(hi.sTokens, projects[i].Name)
+		}
+	}
+
+	logs.Info("Refetched tokens")
 }
 
 // GetUToken gets the unscoped token
@@ -226,24 +262,24 @@ func GetUToken() error {
 }
 
 // GetSToken gets the scoped tokens for a project
-func GetSToken(project Metadata) error {
+func GetSToken(project string) error {
 	// Query params
-	query := map[string]string{"project": project.Name}
+	query := map[string]string{"project": project}
 
 	// Request token
 	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
 	if err != nil {
-		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project.Name, err)
+		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
 	}
 
 	// Parse the JSON response into a struct
 	sToken := SToken{}
 	if err := json.Unmarshal(response, &sToken); err != nil {
-		return fmt.Errorf("Unable to unmarshal response when retrieving scoped token for %s: %w", project.Name, err)
+		return fmt.Errorf("Unable to unmarshal response when retrieving scoped token for %s: %w", project, err)
 	}
 
-	hi.sTokens[project.Name] = sToken
-	logs.Debug("Retrieved scoped token for ", project.Name)
+	hi.sTokens[project] = sToken
+	logs.Debug("Retrieved scoped token for ", project)
 	return nil
 }
 

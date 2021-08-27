@@ -55,7 +55,7 @@ func askForLogin() (string, string) {
 func GetUSTokens() {
 	err := api.GetUToken()
 	if err != nil {
-		logs.Fatal(err)
+		logs.Warning(err)
 	}
 
 	projects, err := api.GetProjects(false)
@@ -67,7 +67,7 @@ func GetUSTokens() {
 	}
 
 	for i := range projects {
-		err = api.GetSToken(projects[i])
+		err = api.GetSToken(projects[i].Name)
 		if err != nil {
 			logs.Warning(err)
 		}

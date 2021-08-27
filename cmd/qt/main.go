@@ -10,6 +10,8 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/billziss-gh/cgofuse/fuse"
@@ -40,6 +42,7 @@ type QmlBridge struct {
 	_ func(message, err string)       `signal:"loginResult"`
 	_ func(err error)                 `signal:"envError"`
 	_ func()                          `signal:"fuseReady"`
+	_ func()                          `signal:"panic"`
 
 	_ *fuse.FileSystemHost `property:"fileSystemHost"`
 	_ string               `property:"mountPoint"`
@@ -49,6 +52,8 @@ type QmlBridge struct {
 func (qb *QmlBridge) init() {
 	qb.SetMountPoint(mountPoint())
 	qb.SetFixedFont(gui.QFontDatabase_SystemFont(gui.QFontDatabase__FixedFont))
+
+	filesystem.SetSignalBridge(qb.Panic)
 }
 
 func (qb *QmlBridge) sendLoginRequest(username, password string) {
@@ -57,7 +62,7 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 		err := api.InitializeClient()
 		if err != nil {
 			logs.Error(err)
-			qb.LoginResult("Initializing HTTP client failed", logs.StructureError(err))
+			qb.LoginResult("Initializing HTTP client failed", strings.Join(logs.StructureError(err), "\n"))
 			return
 		}
 
@@ -71,14 +76,14 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 				return
 			}
 
-			qb.LoginResult("Login failed", logs.StructureError(err))
+			qb.LoginResult("Login failed", strings.Join(logs.StructureError(err), "\n"))
 			return
 		}
 
 		projects, err := api.GetProjects(false)
 		if err != nil {
 			logs.Error(err)
-			qb.LoginResult("Failed to retrieve projects", logs.StructureError(err))
+			qb.LoginResult("Failed to retrieve projects", strings.Join(logs.StructureError(err), "\n"))
 			return
 		}
 		if len(projects) == 0 {
@@ -88,7 +93,7 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 		projectModel.ApiToProject(projects)
 
 		for i := range projects {
-			err = api.GetSToken(projects[i])
+			err = api.GetSToken(projects[i].Name)
 			if err != nil {
 				logs.Warning(err)
 			}
@@ -103,6 +108,15 @@ func (qb *QmlBridge) loadFuse() {
 	sendToModel := make(chan filesystem.LoadProjectInfo)
 	go projectModel.waitForInfo(sendToModel)
 	go func() {
+		defer func() {
+			// recover from panic if one occured.
+			if err := recover(); err != nil {
+				logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
+					fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+				// Send alert
+				qb.Panic()
+			}
+		}()
 		connectfs := filesystem.CreateFileSystem(sendToModel)
 		host := fuse.NewFileSystemHost(connectfs)
 		qb.SetFileSystemHost(host)
@@ -265,7 +279,7 @@ func init() {
 		logs.SetLevel("info")
 	}
 	logs.SetSignal(logModel.AddLog)
-	filesystem.SetSignal(projectModel.UpdateNoStorage)
+	filesystem.SetSignalModel(projectModel.UpdateNoStorage)
 }
 
 func main() {
@@ -288,6 +302,9 @@ func main() {
 	app.RootContext().SetContextProperty("QmlBridge", qmlBridge)
 	app.RootContext().SetContextProperty("ProjectModel", projectModel)
 	app.RootContext().SetContextProperty("LogModel", logModel)
+
+	var logLevel = NewLogLevel(nil)
+	app.RootContext().SetContextProperty("LogLevel", logLevel)
 
 	app.AddImportPath("qrc:/qml/")
 	app.Load(core.NewQUrl3("qrc:/qml/main/login.qml", 0))

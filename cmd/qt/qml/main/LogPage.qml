@@ -11,6 +11,7 @@ Page {
 
     property color bkgColor: CSC.Style.lightBlue
     property color lineColor: CSC.Style.tertiaryColor
+    property FileDialog dialog 
 
     header: ToolBar {
         Material.primary: page.bkgColor
@@ -63,7 +64,7 @@ Page {
             anchors.verticalCenter: parent.verticalCenter
             anchors.rightMargin: 5
 
-            onClicked: fileDialog.visible = true
+            onClicked: dialog.visible = true
 
             background: Rectangle {
                 border.width: 2
@@ -72,16 +73,6 @@ Page {
                 radius: 5
             }
         }
-    }
-
-    FileDialog {
-        id: fileDialog
-        title: "Choose file to which save logs"
-        folder: shortcuts.home
-        selectExisting: false
-        selectFolder: false
-        defaultSuffix: "log"
-        onAccepted: LogModel.saveLogs(fileDialog.fileUrl)
     }
 
     TableView {
@@ -142,14 +133,30 @@ Page {
 
                 contentItem: Label {
                     id: levelText
-                    text: level
+                    text: {
+                        switch (level) {
+                            case LogLevel.Error:
+                                return "ERROR"
+                            case LogLevel.Info:
+                                return "INFO"
+                            case LogLevel.Debug:
+                                return "DEBUG"
+                            case LogLevel.Warning:
+                                return "WARNING"
+                            default:
+                                return ""
+                        }
+                    }
                     color: {
-                        if (levelText.text == "INFO" || levelText.text == "ERROR" || levelText.text == "DEBUG") {
-                            return "white"
-                        } else if (levelText.text == "WARNING") {
-                            return "black"
-                        } else {
-                            return "transparent"
+                        switch (level) {
+                            case LogLevel.Error:
+                            case LogLevel.Info:
+                            case LogLevel.Debug:
+                                return "white"
+                            case LogLevel.Warning:
+                                return "black"
+                            default:
+                                return "transparent"
                         }
                     }
                     topPadding: 0
@@ -163,13 +170,13 @@ Page {
 
                     background: Rectangle {
                         color: {
-                            if (levelText.text == "INFO") {
+                            if (level == LogLevel.Info) {
                                 return CSC.Style.blue
-                            } else if (levelText.text == "ERROR") {
+                            } else if (level == LogLevel.Error) {
                                 return CSC.Style.red
-                            } else if (levelText.text == "WARNING") {
+                            } else if (level == LogLevel.Warning) {
                                 return CSC.Style.yellow
-                            } else if (levelText.text == "DEBUG") {
+                            } else if (level == LogLevel.Debug) {
                                 return CSC.Style.altGreen
                             } else {
                                 return "transparent"
@@ -201,7 +208,7 @@ Page {
             column: 2
             delegate: Label { 
                 id: messageLabel
-                text: message.split('\n')[0]
+                text: message[0]
                 verticalAlignment: Text.AlignVCenter
                 padding: 5
                 color: "black"
@@ -223,7 +230,7 @@ Page {
     }
 
     // THIS IS IMPORTANT
-    // Uncommenting the comments in messageLabel creates bkg-log-rect.pn which can then be used 
+    // Uncommenting the comments in messageLabel creates bkg-log-rect.png which can then be used 
     // as background for logs after recompiling. Remember to recomment and move the new .png to /images
     // I do it like this because this seamlessly (hopefully) fills in the background
     // regardless of row widths and row counts

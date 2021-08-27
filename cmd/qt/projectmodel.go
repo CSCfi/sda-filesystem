@@ -14,7 +14,7 @@ const (
 	NoStorage
 )
 
-// For some reason (bug?) the slot apiToProject() did not recognize []api.Metadata as a list
+// For some reason (bug?) the signal apiToProject() does not recognize []api.Metadata as a list
 type metadataList []api.Metadata
 
 type ProjectModel struct {

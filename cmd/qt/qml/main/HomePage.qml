@@ -8,24 +8,23 @@ import csc 1.0 as CSC
 
 Control {
     id: page
-    padding: 20
+    padding: CSC.Style.padding
 
     property Item topItem
-    property real buttonPadding: 15
 
     CSC.Popup {
         id: popup
         parent: Overlay.overlay
 
-        Component.onCompleted: leftMargin = page.mapToItem(topItem, 0, 0).x + margin
+        Component.onCompleted: leftMargin = page.mapToItem(topItem, 0, 0).x + CSC.Style.padding
+    }
 
-        Connections {
-            target: ProjectModel
-            onNoStorageWarning: {
-                popup.isError = false
-                popup.errorTextContent = count + " project(s) with no storage enabled"
-                popup.open()
-            }
+    Connections {
+        target: ProjectModel
+        onNoStorageWarning: {
+            popup.type = LogLevel.Error
+            popup.errorTextContent = count + " project(s) with no storage enabled"
+            popup.open()
         }
     }
 
@@ -39,6 +38,7 @@ Control {
             var mountError = QmlBridge.changeMountPoint(fileDialog.fileUrl)
             if (mountError) {
                 popup.errorTextContent = mountError
+                popup.type = LogLevel.Error
                 popup.open()
             }
         }
@@ -47,12 +47,12 @@ Control {
     contentItem: GridLayout {
         id: pageGrid
         columns: 2
-        columnSpacing: page.padding
-        rowSpacing: page.padding
+        columnSpacing: CSC.Style.padding
+        rowSpacing: CSC.Style.padding
 
         ColumnLayout {
             id: dialogColumn
-            spacing: page.padding
+            spacing: CSC.Style.padding
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.maximumWidth: 600
@@ -117,7 +117,6 @@ Control {
                             outlined: true
                             topInset: 0
                             bottomInset: 0
-                            padding: page.buttonPadding
                             Layout.maximumWidth: implicitWidth + 2 * padding
                             Layout.fillWidth: true
 
@@ -127,7 +126,7 @@ Control {
                         Rectangle {
                             color: "transparent"
                             Layout.fillWidth: true
-                            Layout.minimumWidth: page.padding
+                            Layout.minimumWidth: CSC.Style.padding
                         }
 
                         CSC.Button {
@@ -136,7 +135,6 @@ Control {
                             topInset: 0
                             bottomInset: 0
                             enabled: mountText.text != ""
-                            padding: page.buttonPadding
                             implicitWidth: state != "finished" ? changeButton.implicitWidth : implicitWidth
                             Layout.maximumWidth: implicitWidth + 2 * padding
                             Layout.minimumHeight: changeButton.implicitHeight
@@ -177,7 +175,6 @@ Control {
             CSC.Button {
                 id: openButton
                 text: "Open Folder"
-                padding: page.buttonPadding
                 enabled: false
                 outlined: true
                 topInset: 0
@@ -406,7 +403,7 @@ Control {
         states: [
             State {
                 name: "dense"
-                when: (dialogColumn.implicitWidth + page.padding) / pageGrid.width > 0.5
+                when: (dialogColumn.implicitWidth + CSC.Style.padding) / pageGrid.width > 0.5
                 PropertyChanges { target: pageGrid; columns: 1; rows: 2 }
                 PropertyChanges { target: dialogColumn; Layout.maximumWidth: -1 }
                 PropertyChanges { target: projectView; interactive: false }
