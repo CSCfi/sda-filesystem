@@ -13,7 +13,7 @@ ApplicationWindow {
 	width: 1000
 	height: 600
 	minimumHeight: sideBarView.height + toolbar.height
-	minimumWidth: homePage.implicitWidth + sideBarView.width
+	minimumWidth: homePage.minimumWidth + sideBarView.width
 
 	property string username
 

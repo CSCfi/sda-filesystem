@@ -71,16 +71,6 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 
 // populateDirectory creates the nodes (files and directories) of the filesystem
 func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
-	defer func() {
-		// recover from panic if one occured.
-		if err := recover(); err != nil && signalBridge != nil {
-			logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
-				fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
-			// Send alert
-			signalBridge()
-		}
-	}()
-
 	projects, err := api.GetProjects(true)
 	if err != nil {
 		logs.Error(err)
@@ -127,6 +117,15 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 
 		go func(project string) {
 			defer wg.Done()
+			defer func() {
+				// recover from panic if one occured.
+				if err := recover(); err != nil && signalBridge != nil {
+					logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
+						fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+					// Send alert
+					signalBridge()
+				}
+			}()
 
 			logs.Debugf("Fetching containers for project %s", project)
 			containers, err := api.GetContainers(project)

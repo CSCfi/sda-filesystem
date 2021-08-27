@@ -11,6 +11,7 @@ Control {
     padding: CSC.Style.padding
 
     property Item topItem
+    property real minimumWidth: dialogColumn.implicitWidth + 2 * padding
 
     CSC.Popup {
         id: popup
