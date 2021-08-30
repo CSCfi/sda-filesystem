@@ -20,15 +20,6 @@ Control {
         Component.onCompleted: leftMargin = page.mapToItem(null, 0, 0).x + CSC.Style.padding
     }
 
-    Connections {
-        target: ProjectModel
-        onNoStorageWarning: {
-            popup.type = LogLevel.Warning
-            popup.errorTextContent = count + " project(s) with no storage enabled"
-            popup.open()
-        }
-    }
-
     FileDialog {
         id: fileDialog
         title: "Choose or create a folder"
@@ -350,12 +341,6 @@ Control {
                             }
                         }
 
-                        Rectangle {
-                            z: 2
-                            anchors.fill: parent
-                            color: noStorage ? CSC.Style.grey : "transparent"
-                            opacity: 0.4
-                        }
                     }
                 }
 
@@ -390,12 +375,6 @@ Control {
                             }
                         }
 
-                        Rectangle {
-                            z: 2
-                            anchors.fill: parent
-                            color: noStorage ? CSC.Style.grey : "transparent"
-                            opacity: 0.4
-                        }
                     }
                 }
             }

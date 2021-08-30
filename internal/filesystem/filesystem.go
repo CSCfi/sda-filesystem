@@ -16,7 +16,6 @@ import (
 const sRDONLY = 00444
 const numRoutines = 4
 
-var signalModel func(map[string]bool) = nil
 var signalBridge func() = nil
 
 // Connectfs stores the filesystem structure
@@ -51,12 +50,6 @@ type LoadProjectInfo struct {
 	Count   int
 }
 
-// SetSignalModel initializes the signal which sends ProjectModel
-// information on which projects do not have storage enabled
-func SetSignalModel(fn func(map[string]bool)) {
-	signalModel = fn
-}
-
 // SetSignalBridge initializes the signal which informs QML that program has paniced
 func SetSignalBridge(fn func()) {
 	signalBridge = fn
@@ -83,16 +76,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	if err != nil {
 		logs.Error(err)
 		return
-	}
-
-	// If signalModel is not nil, the program is run with gui
-	if signalModel != nil {
-		// Inform LogModel which projects have storage enabled
-		projectsStr := make(map[string]bool)
-		for i := range projects {
-			projectsStr[projects[i].Name] = true
-		}
-		signalModel(projectsStr)
 	}
 
 	if len(projects) == 0 {

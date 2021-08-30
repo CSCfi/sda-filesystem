@@ -281,7 +281,6 @@ func init() {
 		logs.SetLevel("info")
 	}
 	logs.SetSignal(logModel.AddLog)
-	filesystem.SetSignalModel(projectModel.UpdateNoStorage)
 }
 
 func main() {

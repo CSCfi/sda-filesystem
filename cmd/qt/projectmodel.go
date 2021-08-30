@@ -11,7 +11,6 @@ const (
 	ProjectName = int(core.Qt__UserRole) + 1<<iota
 	LoadedContainers
 	AllContainers
-	NoStorage
 )
 
 // For some reason (bug?) the signal apiToProject() does not recognize []api.Metadata as a list
@@ -22,9 +21,7 @@ type ProjectModel struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(metadataList)    `signal:"apiToProject,auto"`
-	_ func(map[string]bool) `signal:"updateNoStorage,auto"`
-	_ func(count int)       `signal:"noStorageWarning"`
+	_ func(metadataList) `signal:"apiToProject,auto"`
 
 	_ int `property:"loadedProjects"`
 
@@ -37,7 +34,6 @@ type project struct {
 	projectName      string
 	loadedContainers int
 	allContainers    int
-	noStorage        bool
 }
 
 func (pm *ProjectModel) init() {
@@ -45,7 +41,6 @@ func (pm *ProjectModel) init() {
 		ProjectName:      core.NewQByteArray2("projectName", -1),
 		LoadedContainers: core.NewQByteArray2("loadedContainers", -1),
 		AllContainers:    core.NewQByteArray2("allContainers", -1),
-		NoStorage:        core.NewQByteArray2("noStorage", -1),
 	}
 	pm.SetLoadedProjects(0)
 
@@ -82,11 +77,6 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 			return core.NewQVariant1(p.allContainers)
 		}
 
-	case NoStorage:
-		{
-			return core.NewQVariant1(p.noStorage)
-		}
-
 	default:
 		{
 			return core.NewQVariant()
@@ -112,7 +102,7 @@ func (pm *ProjectModel) apiToProject(projectsAPI metadataList) {
 
 	for i := range projectsAPI {
 		pm.projects[i] = &project{projectName: projectsAPI[i].Name, loadedContainers: 0,
-			allContainers: -1, noStorage: false}
+			allContainers: -1}
 		pm.nameToIndex[projectsAPI[i].Name] = i
 	}
 }
@@ -136,24 +126,5 @@ func (pm *ProjectModel) waitForInfo(ch <-chan filesystem.LoadProjectInfo) {
 				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
 			}
 		}
-	}
-}
-
-func (pm *ProjectModel) updateNoStorage(projectsWithStrorage map[string]bool) {
-	count := 0
-
-	for i := range pm.projects {
-		var pr = pm.projects[i]
-		if _, ok := projectsWithStrorage[pr.projectName]; !ok {
-			pr.noStorage = true
-			pm.DataChanged(pm.Index(i, 0, core.NewQModelIndex()),
-				pm.Index(i, 1, core.NewQModelIndex()),
-				[]int{NoStorage})
-			count++
-		}
-	}
-
-	if count > 0 {
-		pm.NoStorageWarning(count)
 	}
 }
