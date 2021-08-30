@@ -80,7 +80,7 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 			return
 		}
 
-		projects, err := api.GetProjects(false)
+		projects, err := api.GetProjects()
 		if err != nil {
 			logs.Error(err)
 			qb.LoginResult("Failed to retrieve projects", strings.Join(logs.StructureError(err), "\n"))

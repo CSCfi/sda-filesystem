@@ -232,7 +232,7 @@ func FetchTokens() {
 		return
 	}
 
-	projects, err := GetProjects(false)
+	projects, err := GetProjects()
 	if err != nil {
 		logs.Warningf("HTTP requests may be slower: %s", err.Error())
 		hi.sTokens = map[string]SToken{}
@@ -291,15 +291,10 @@ func GetSToken(project string) error {
 }
 
 // GetProjects gets all projects user has access to
-func GetProjects(getBytes bool) ([]Metadata, error) {
-	// Query params
-	var query map[string]string = nil
-	if !getBytes {
-		query = map[string]string{"bytes": "false"}
-	}
+func GetProjects() ([]Metadata, error) {
 
 	// Request projects
-	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, query, nil)
+	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
 	}

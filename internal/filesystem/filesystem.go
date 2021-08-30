@@ -79,7 +79,7 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 
 // populateFilesystem creates the nodes (files and directories) of the filesystem
 func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
-	projects, err := api.GetProjects(true)
+	projects, err := api.GetProjects()
 	if err != nil {
 		logs.Error(err)
 		return
