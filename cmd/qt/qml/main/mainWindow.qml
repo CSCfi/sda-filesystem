@@ -197,6 +197,12 @@ ApplicationWindow {
 							}
 						}
 					}
+
+					MouseArea {
+						cursorShape: Qt.PointingHandCursor
+						acceptedButtons: Qt.NoButton
+						anchors.fill: parent
+					}
 				}
 
 				section.property: "section"
@@ -220,7 +226,6 @@ ApplicationWindow {
 
 				HomePage {
 					id: homePage
-					topItem: body
 					height: stack.height
 					width: parent.width
 				}

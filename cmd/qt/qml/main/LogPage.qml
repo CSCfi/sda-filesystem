@@ -11,69 +11,151 @@ Page {
 
     property color bkgColor: CSC.Style.lightBlue
     property color lineColor: CSC.Style.tertiaryColor
-    property FileDialog dialog 
+    property FileDialog dialog
 
     header: ToolBar {
-        Material.primary: page.bkgColor
+        padding: 4
+        clip: true
 
-        Rectangle {
-            height: 2
-            color: page.lineColor
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
+        background: Rectangle {
+            color: page.bkgColor
+
+            Rectangle {
+                height: 2
+                color: page.lineColor
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+            }
         }
 
-        Row {
-            anchors.fill: parent
+        contentItem: RowLayout {
+            id: headerRow
             spacing: tableView.columnSpacing
-            leftPadding: 3
-            bottomPadding: 3
 
-            Text {
-                id: levelTitle
-                text: "Level"
-                height: parent.height
-                width: tableView.firstColumn
-                font.pointSize: 25
-                verticalAlignment: Text.AlignBottom
+            Item {
+                id: levelItem
+                Layout.preferredWidth: tableView.firstColumn
+
+                Text {
+                    id: levelTitle
+                    text: "Level"
+                    font.pointSize: 20
+                    x: -tableView.contentX
+                }
+
+                /*Image {
+                    source: "qrc:/qml/images/caret-down-fill.svg"
+                    height: levelTitle.contentHeight / 2
+                    fillMode: Image.PreserveAspectFit
+                    anchors.left: levelTitle.right
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: levelTitle.verticalCenter
+
+                    RotationAnimator on rotation {
+                        id: rotanim1
+                        from: 0;
+                        to: 180;
+                        duration: 200
+                        running: false
+                    }
+
+                    RotationAnimator on rotation {
+                        id: rotanim2
+                        from: 180;
+                        to: 0;
+                        duration: 200
+                        running: false
+                    }
+                }*/
             }
 
-            Text {
-                text: "Date"
-                height: parent.height
-                width: tableView.secondColumn
-                font.pointSize: 25
-                verticalAlignment: Text.AlignBottom
+            Item {
+                Layout.preferredWidth: tableView.secondColumn
+
+                Text {
+                    text: "Date"
+                    font.pointSize: 20
+                    x: -tableView.contentX
+                }
             }
 
-            Text {
-                text: "Message"
-                height: parent.height
-                width: tableView.thirdColumn
-                font.pointSize: 25
-                verticalAlignment: Text.AlignBottom
+            Item {
+                Layout.preferredWidth: messageText.contentWidth
+
+                Text {
+                    id: messageText
+                    text: "Message"
+                    font.pointSize: 20
+                    x: -tableView.contentX
+                }
             }
-        }
 
-        ToolButton {
-            id: exportButton
-            text: "Export"
-            icon.source: "qrc:/qml/images/box-arrow-up.svg"
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.rightMargin: 5
+            Item {
+                implicitHeight: exportButton.implicitHeight
+                Layout.minimumWidth: headerRow.spacing + exportButton.implicitWidth
+                Layout.fillWidth: true
+                Layout.margins: 4
 
-            onClicked: dialog.visible = true
+                ToolButton {
+                    id: exportButton
+                    text: "Export"
+                    icon.source: "qrc:/qml/images/box-arrow-up.svg"
+                    anchors.right: parent.right
+                    anchors.rightMargin: (header.availableWidth >= headerRow.implicitWidth || tableView.contentX <= 0) ? 0 : 
+                        Math.min(tableView.contentX, headerRow.implicitWidth - header.availableWidth)
 
-            background: Rectangle {
-                border.width: 2
-                border.color: "black"
-                color: exportButton.hovered ? CSC.Style.lightGrey : "transparent"
-                radius: 5
+                    onClicked: dialog.visible = true
+
+                    background: Rectangle {
+                        border.width: 2
+                        border.color: "black"
+                        color: exportButton.hovered ? CSC.Style.lightGrey : "transparent"
+                        radius: 5
+                    }
+
+                    MouseArea {
+                        cursorShape: Qt.PointingHandCursor
+                        acceptedButtons: Qt.NoButton
+                        anchors.fill: parent
+                    }
+                }
             }
         }
     }
+
+    /*Popup {
+        id: levelMenu
+        topPadding: 0
+        bottomPadding: 0
+        margins: 0
+
+        onAboutToShow: rotanim1.start()
+        onAboutToHide: rotanim2.start()
+
+        contentItem: ColumnLayout {
+            spacing: 0
+            Material.accent: CSC.Style.primaryColor
+
+            CheckBox {
+                text: "Error"
+                checked: true
+            }
+            CheckBox {
+                text: "Warning"
+                checked: true
+            }
+            CheckBox {
+                text: "Info"
+                checked: true
+            }
+        }
+
+        background: Rectangle {
+            radius: 0
+        }
+    }*/
 
     TableView {
         id: tableView

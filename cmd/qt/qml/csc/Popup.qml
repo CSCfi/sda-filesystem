@@ -12,7 +12,7 @@ Popup {
     topPadding: background.border.width + CSC.Style.padding
     bottomPadding: background.border.width + CSC.Style.padding
     leftPadding: background.border.width
-    rightPadding: closePopup.width + background.border.width + 3
+    rightPadding: closePopup.width + background.border.width + 4
     leftMargin: CSC.Style.padding
     rightMargin: CSC.Style.padding
     modal: false
@@ -152,14 +152,27 @@ Popup {
         RoundButton {
             id: closePopup
             text: "\u2573"
-            Material.foreground: mainColor
-            Material.background: "transparent"
-            anchors.right: parent.right
-            height: 30
+            height: 25
             width: height
             visible: contentColumn.state == ""
+            topInset: 0
+            bottomInset: 0
+            rightInset: 0
+            leftInset: 0
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 4
+
+            Material.foreground: mainColor
+            Material.background: "transparent"
             
             onClicked: popup.close()
+
+            MouseArea {
+                cursorShape: Qt.PointingHandCursor
+                acceptedButtons: Qt.NoButton
+                anchors.fill: parent
+            }
         }
     }
     

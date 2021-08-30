@@ -199,8 +199,11 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 
 	if hi.loggedIn && response.StatusCode == 401 {
 		logs.Info("Tokens no longer valid. Fetching them again")
-		ReFetchTokens()
-		return makeRequest(url, token, query, headers)
+		FetchTokens()
+		hi.loggedIn = false
+		ret, err := makeRequest(url, token, query, headers)
+		hi.loggedIn = true
+		return ret, err
 	}
 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
@@ -217,17 +220,17 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	return r, nil
 }
 
-func ReFetchTokens() {
+func FetchTokens() {
 	err := GetUToken()
 	if err != nil {
-		logs.Warningf("HTTP requests will be slower: %w", err)
+		logs.Warningf("HTTP requests may be slower: %s", err.Error())
 		hi.uToken = ""
 		return
 	}
 
 	projects, err := GetProjects(false)
 	if err != nil {
-		logs.Warningf("HTTP requests will be slower: %w", err)
+		logs.Warningf("HTTP requests may be slower: %s", err.Error())
 		hi.sTokens = map[string]SToken{}
 	}
 
@@ -239,7 +242,7 @@ func ReFetchTokens() {
 		}
 	}
 
-	logs.Info("Refetched tokens")
+	logs.Info("Fetched tokens")
 }
 
 // GetUToken gets the unscoped token
@@ -294,7 +297,7 @@ func GetProjects(getBytes bool) ([]Metadata, error) {
 	// Request projects
 	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, query, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving projects failed: %w", err)
+		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
 	}
 
 	// Parse the JSON response into a slice
@@ -357,7 +360,7 @@ func GetObjects(project, container string) ([]Metadata, error) {
 
 // DownloadData gets content of object from data API
 func DownloadData(path string, start int64, end int64) ([]byte, error) {
-	parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 3)
+	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
 	// Query params

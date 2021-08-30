@@ -36,4 +36,11 @@ Button {
         anchors.centerIn: parent
         anchors.margins: 5
     }
+
+    MouseArea {
+        id: mouseArea
+        cursorShape: Qt.PointingHandCursor
+        acceptedButtons: Qt.NoButton
+        anchors.fill: parent
+    }
 }

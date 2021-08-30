@@ -33,7 +33,7 @@ Window {
 			popup.errorTextClarify = ""
 			popup.open()
 		}
-		onLoginResult: {						
+		onLoginResult: {
 			if (!message) {
 				popup.errorTextContent = "Could not create main window"
 				popup.errorTextClarify = ""

@@ -10,14 +10,13 @@ Control {
     id: page
     padding: CSC.Style.padding
 
-    property Item topItem
     property real minimumWidth: dialogColumn.implicitWidth + 2 * padding
 
     CSC.Popup {
         id: popup
         parent: Overlay.overlay
 
-        Component.onCompleted: leftMargin = page.mapToItem(topItem, 0, 0).x + CSC.Style.padding
+        Component.onCompleted: leftMargin = page.mapToItem(null, 0, 0).x + CSC.Style.padding
     }
 
     Connections {

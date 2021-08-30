@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/billziss-gh/cgofuse/fuse"
 
@@ -56,6 +57,11 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	if nil == node {
 		logs.Errorf("Read %s, inode does't exist", path)
 		return -fuse.ENOENT
+	}
+
+	path = strings.TrimPrefix(path, "/")
+	if origName, ok := fs.renamed[path]; ok {
+		path = origName
 	}
 	path = filepath.ToSlash(path)
 

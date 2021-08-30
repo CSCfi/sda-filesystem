@@ -70,7 +70,7 @@ func Warning(err error) {
 	if signal != nil {
 		signal(int(log.WarnLevel), StructureError(err))
 	} else {
-		log.Warning(err)
+		log.Warning(err.Error())
 	}
 }
 

@@ -100,6 +100,7 @@ func (qb *QmlBridge) sendLoginRequest(username, password string) {
 		}
 
 		logs.Info("Login successful")
+		api.SetLoggedIn()
 		qb.LoginResult("", "")
 	}()
 }

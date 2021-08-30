@@ -27,6 +27,7 @@ type Connectfs struct {
 	ino     uint64
 	root    *node
 	openmap map[uint64]*node
+	renamed map[string]string
 }
 
 type node struct {
@@ -63,6 +64,7 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	defer c.synchronize()()
 	c.ino++
 	c.openmap = map[uint64]*node{}
+	c.renamed = map[string]string{}
 	c.root = newNode(0, c.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 	c.populateFilesystem(timestamp, send...)
 	logs.Info("Filesystem database completed")
@@ -318,10 +320,12 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 	// A folder or a file with the same name already exists
 	if node != nil {
 		// Does prefixed name exist already?
+		i := 1
 		for {
-			i := 1
 			newName := fmt.Sprintf("FILE_%d_%s", i, name)
 			if _, ok := prnt.chld[newName]; !ok {
+				location := strings.TrimSuffix(path, name)
+				fs.renamed[location+newName] = path
 				// Change name of node (whichever is a file)
 				if !isDir {
 					prnt.chld[newName] = node
