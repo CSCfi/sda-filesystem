@@ -8,20 +8,33 @@ Popup {
     id: popup
     x: 0
     y: parent.height - popup.height
-    height: contentColumn.implicitHeight
-    topPadding: background.border.width
-    bottomPadding: background.border.width
-    rightPadding: closePopup.width + background.border.width + 3
+    height: contentColumn.implicitHeight + topPadding + bottomPadding
+    topPadding: background.border.width + CSC.Style.padding
+    bottomPadding: background.border.width + CSC.Style.padding
     leftPadding: background.border.width
+    rightPadding: closePopup.width + background.border.width + 4
+    leftMargin: CSC.Style.padding
+    rightMargin: CSC.Style.padding
     modal: false
     focus: modal
-    rightMargin: margin
-    leftMargin: margin
     closePolicy: Popup.NoAutoClose
 
     property string errorTextContent: ""
     property string errorTextClarify: ""
-    property int margin: 20
+    property int type: LogLevel.Error
+    property color mainColor: {
+        if (popup.type == LogLevel.Error) {
+            return CSC.Style.red
+        } else if (popup.type == LogLevel.Warning) {
+            return CSC.Style.warningOrange
+        } else if (popup.type == LogLevel.Info) {
+            return CSC.Style.primaryColor
+        } else {
+            return "transparent"
+        }
+    }
+
+    default property alias content: extraContent.data
         
     ColumnLayout {
         id: contentColumn
@@ -32,22 +45,28 @@ Popup {
         RowLayout {
             spacing: 0
             Layout.fillWidth: true
-            Layout.topMargin: popup.margin
-            Layout.bottomMargin: popup.margin
 
             // This is a button only so that the svg is easier to color
             RoundButton {
                 id: errorIcon
                 padding: 0
-                icon.source: "qrc:/qml/images/x-circle-fill.svg"
-                icon.color: CSC.Style.red
+                icon.source: {
+                    if (popup.type == LogLevel.Error) {
+                        return "qrc:/qml/images/x-circle-fill.svg"
+                    } else if (popup.type == LogLevel.Warning) {
+                        return "qrc:/qml/images/exclamation-triangle-fill.svg"
+                    } else if (popup.type == LogLevel.Info) {
+                        return "qrc:/qml/images/info-circle-fill.svg"
+                    }
+                }
+                icon.color: mainColor
                 icon.width: diameter
                 icon.height: diameter
                 enabled: false
                 Layout.preferredWidth: 3 * diameter
                 Layout.alignment: Qt.AlignVCenter
 
-                property real diameter: popup.margin
+                property real diameter: CSC.Style.padding
 
                 background: Rectangle {
                     color: "transparent"
@@ -59,7 +78,7 @@ Popup {
                 text: popup.errorTextContent
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
-                font.weight: Font.Medium
+                font.pointSize: 15
                 Layout.fillWidth: true
             }
         }
@@ -69,18 +88,18 @@ Popup {
             maximumLineCount: 1
             visible: rectClarify.visible
             Layout.leftMargin: errorIcon.width
+            Layout.topMargin: CSC.Style.padding
         }
 
         Rectangle {
             id: rectClarify
             color: CSC.Style.lightGreyBlue
             border.width: 1
-            border.color: "#707070"
+            border.color: CSC.Style.lineGray
             visible: errorClarify.text != ""
-            Layout.preferredHeight: 70 
+            Layout.preferredHeight: 80 
             Layout.fillWidth: true
             Layout.leftMargin: errorIcon.width
-            Layout.bottomMargin: popup.margin
 
             ScrollView {
                 clip: true
@@ -93,6 +112,13 @@ Popup {
                     padding: 5
                 }
             }
+        }
+
+        Item {
+            id: extraContent
+            Layout.leftMargin: errorIcon.width
+            Layout.preferredHeight: childrenRect.height
+            Layout.fillWidth: true
         }
 
          // This is inside ColumnLayout beacuse Popup cannot have states
@@ -112,9 +138,13 @@ Popup {
         ]
     }
 
+    function toCentered() {
+        contentColumn.state = "centered"
+    }
+
     background: Rectangle {
         border.width: 2
-        border.color: CSC.Style.red
+        border.color: mainColor
         implicitWidth: popup.parent.width
         implicitHeight: popup.height
         radius: 8
@@ -122,13 +152,27 @@ Popup {
         RoundButton {
             id: closePopup
             text: "\u2573"
-            Material.foreground: CSC.Style.red
-            Material.background: "transparent"
-            anchors.right: parent.right
-            height: 30
+            height: 25
             width: height
+            visible: contentColumn.state == ""
+            topInset: 0
+            bottomInset: 0
+            rightInset: 0
+            leftInset: 0
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 4
+
+            Material.foreground: mainColor
+            Material.background: "transparent"
             
             onClicked: popup.close()
+
+            MouseArea {
+                cursorShape: Qt.PointingHandCursor
+                acceptedButtons: Qt.NoButton
+                anchors.fill: parent
+            }
         }
     }
     

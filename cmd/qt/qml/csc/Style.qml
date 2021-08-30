@@ -16,4 +16,7 @@ QtObject {
     property color yellow: "#F8D758"
     property color lightBlue: "#D2DCEB"
     property color lineGray: "#707070"
+    property color warningOrange: "#EF7E4E"
+
+    property real padding: 20
 }

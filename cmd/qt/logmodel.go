@@ -7,6 +7,7 @@ import (
 	"sd-connect-fuse/internal/logs"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/therecipe/qt/core"
 )
 
@@ -16,45 +17,54 @@ const (
 	Message
 )
 
+type LogLevel struct {
+	core.QObject
+
+	_ func() `constructor:"init"`
+
+	_ int `property:"Error"`
+	_ int `property:"Warning"`
+	_ int `property:"Info"`
+	_ int `property:"Debug"`
+}
+
+func (ll *LogLevel) init() {
+	ll.SetError(int(logrus.ErrorLevel))
+	ll.SetWarning(int(logrus.WarnLevel))
+	ll.SetInfo(int(logrus.InfoLevel))
+	ll.SetDebug(int(logrus.DebugLevel))
+}
+
 type LogModel struct {
 	core.QAbstractTableModel
 
-	_ func()               `constructor:"init"`
-	_ func(string, string) `slot:"addLog"`
-	_ func()               `slot:"removeDummy"`
-	_ func(url string)     `slot:"saveLogs"`
+	_ func()              `constructor:"init"`
+	_ func(int, []string) `signal:"addLog,auto"`
+	_ func()              `signal:"removeDummy,auto"`
+	_ func(string)        `signal:"saveLogs,auto"`
 
-	_ map[int]*core.QByteArray `property:"roles"`
-	_ []*Log                   `property:"logs"`
-	_ bool                     `property:"dummyPresent"`
+	roles        map[int]*core.QByteArray
+	dummyPresent bool
+	logs         []logRow
 }
 
-type Log struct {
-	core.QObject
-
-	_ string `property:"level"`
-	_ string `property:"timestamp"`
-	_ string `property:"message"`
-}
-
-func init() {
-	Log_QRegisterMetaType()
+type logRow struct {
+	level     int
+	timestamp string
+	message   []string
 }
 
 func (lm *LogModel) init() {
-	lm.SetRoles(map[int]*core.QByteArray{
+	lm.roles = map[int]*core.QByteArray{
 		Level:     core.NewQByteArray2("level", -1),
 		Timestamp: core.NewQByteArray2("timestamp", -1),
 		Message:   core.NewQByteArray2("message", -1),
-	})
+	}
 
 	lm.ConnectData(lm.data)
 	lm.ConnectRowCount(lm.rowCount)
 	lm.ConnectColumnCount(lm.columnCount)
 	lm.ConnectRoleNames(lm.roleNames)
-	lm.ConnectAddLog(lm.addLog)
-	lm.ConnectRemoveDummy(lm.removeDummy)
-	lm.ConnectSaveLogs(lm.saveLogs)
 
 	lm.addDummy()
 }
@@ -64,26 +74,26 @@ func (lm *LogModel) data(index *core.QModelIndex, role int) *core.QVariant {
 		return core.NewQVariant()
 	}
 
-	if index.Row() < 0 || index.Row() >= len(lm.Logs()) {
+	if index.Row() < 0 || index.Row() >= len(lm.logs) {
 		return core.NewQVariant()
 	}
 
-	var l = lm.Logs()[len(lm.Logs())-index.Row()-1]
+	var l = lm.logs[len(lm.logs)-index.Row()-1]
 
 	switch role {
 	case Level:
 		{
-			return core.NewQVariant1(l.Level())
+			return core.NewQVariant1(l.level)
 		}
 
 	case Timestamp:
 		{
-			return core.NewQVariant1(l.Timestamp())
+			return core.NewQVariant1(l.timestamp)
 		}
 
 	case Message:
 		{
-			return core.NewQVariant1(l.Message())
+			return core.NewQVariant1(l.message)
 		}
 
 	default:
@@ -94,7 +104,7 @@ func (lm *LogModel) data(index *core.QModelIndex, role int) *core.QVariant {
 }
 
 func (lm *LogModel) rowCount(parent *core.QModelIndex) int {
-	return len(lm.Logs())
+	return len(lm.logs)
 }
 
 func (lm *LogModel) columnCount(parent *core.QModelIndex) int {
@@ -102,38 +112,37 @@ func (lm *LogModel) columnCount(parent *core.QModelIndex) int {
 }
 
 func (lm *LogModel) roleNames() map[int]*core.QByteArray {
-	return lm.Roles()
+	return lm.roles
 }
 
 func (lm *LogModel) addDummy() {
-	var lg = NewLog(nil)
-	lg.SetLevel("WARNING")
-	lg.SetTimestamp("0000-00-00 00:00:00")
-	lg.SetMessage("")
-	lm.SetLogs([]*Log{lg})
-	lm.SetDummyPresent(true)
+	if !lm.dummyPresent {
+		lm.logs = append(lm.logs, logRow{level: int(logrus.WarnLevel), timestamp: "0000-00-00 00:00:00", message: []string{}})
+		lm.dummyPresent = true
+	}
 }
 
 func (lm *LogModel) removeDummy() {
-	lm.BeginRemoveRows(core.NewQModelIndex(), len(lm.Logs())-1, len(lm.Logs())-1)
-	lm.SetLogs(lm.Logs()[:len(lm.Logs())-1])
-	lm.EndRemoveRows()
-	lm.SetDummyPresent(false)
+	if lm.dummyPresent {
+		length := len(lm.logs)
+		lm.BeginRemoveRows(core.NewQModelIndex(), length-1, length-1)
+		lm.logs = lm.logs[:length-1]
+		lm.EndRemoveRows()
+		lm.dummyPresent = false
+	}
 }
 
-func (lm *LogModel) addLog(level, message string) {
-	var lg = NewLog(nil)
-	lg.SetLevel(level)
-	lg.SetTimestamp(core.QDateTime_CurrentDateTime().ToString("yyyy-MM-dd hh:mm:ss"))
-	lg.SetMessage(message)
+func (lm *LogModel) addLog(level int, message []string) {
+	lg := logRow{level: int(level),
+		timestamp: core.QDateTime_CurrentDateTime().ToString("yyyy-MM-dd hh:mm:ss"), message: message}
+	length := len(lm.logs)
 
-	length := len(lm.Logs())
-	if lm.IsDummyPresent() {
+	if lm.dummyPresent {
 		lm.BeginInsertRows(core.NewQModelIndex(), length-1, length-1)
-		lm.SetLogs(append(lm.Logs()[:length-1], lg, lm.Logs()[length-1]))
+		lm.logs = append(lm.logs[:length-1], lg, lm.logs[length-1])
 	} else {
 		lm.BeginInsertRows(core.NewQModelIndex(), length, length)
-		lm.SetLogs(append(lm.Logs(), lg))
+		lm.logs = append(lm.logs, lg)
 	}
 	lm.EndInsertRows()
 }
@@ -141,7 +150,6 @@ func (lm *LogModel) addLog(level, message string) {
 func (lm *LogModel) saveLogs(url string) {
 	file := core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
 
-	len := len(lm.Logs())
 	f, err := os.Create(file)
 	if err != nil {
 		logs.Errorf("Could not create file %s: %w", file, err)
@@ -151,11 +159,11 @@ func (lm *LogModel) saveLogs(url string) {
 
 	writer := bufio.NewWriter(f)
 
-	for i := range lm.Logs() {
-		lg := lm.Logs()[len-i-1]
-		str := fmt.Sprintf(strings.ToUpper(lg.Level()) + "[" +
-			strings.ReplaceAll(lg.Timestamp(), " ", "T") + "] " +
-			strings.ReplaceAll(lg.Message(), "\n", " "))
+	for i := range lm.logs {
+		lg := lm.logs[i]
+		str := fmt.Sprintf(strings.ToUpper(logrus.Level(lg.level).String())[:4] + "[" +
+			strings.ReplaceAll(lg.timestamp, " ", "T") + "] " +
+			strings.Join(lg.message, ": "))
 
 		if _, err = writer.WriteString(str + "\n"); err != nil {
 			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)

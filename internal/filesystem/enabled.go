@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/billziss-gh/cgofuse/fuse"
 
@@ -12,24 +13,28 @@ import (
 // Open opens a file.
 func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 	defer fs.synchronize()()
+	logs.Debug("Opening file ", path)
 	return fs.openNode(path, false)
 }
 
 // Opendir opens a directory.
 func (fs *Connectfs) Opendir(path string) (errc int, fh uint64) {
 	defer fs.synchronize()()
+	logs.Debug("Opening directory ", path)
 	return fs.openNode(path, true)
 }
 
 // Release closes a file.
 func (fs *Connectfs) Release(path string, fh uint64) (errc int) {
 	defer fs.synchronize()()
+	logs.Debug("Closing file ", path)
 	return fs.closeNode(fh)
 }
 
 // Releasedir closes a directory.
 func (fs *Connectfs) Releasedir(path string, fh uint64) (errc int) {
 	defer fs.synchronize()()
+	logs.Debug("Closing directory ", path)
 	return fs.closeNode(fh)
 }
 
@@ -52,6 +57,12 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	if nil == node {
 		logs.Errorf("Read %s, inode does't exist", path)
 		return -fuse.ENOENT
+	}
+
+	// Check whether this file has had its name changed
+	path = strings.TrimPrefix(path, "/")
+	if origName, ok := fs.renamed[path]; ok {
+		path = origName
 	}
 	path = filepath.ToSlash(path)
 

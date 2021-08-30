@@ -15,7 +15,6 @@ Window {
 	maximumWidth: minimumWidth
     maximumHeight: minimumHeight
 
-	property real margins: 20
 	property var component
 	property ApplicationWindow homeWindow
 
@@ -29,11 +28,11 @@ Window {
 		target: QmlBridge
 		onEnvError: {
 			itemWrap.enabled = false
-			popup.errorTextContent = err
-			popup.errorTextClarify = ""
+			popup.errorTextContent = message
+			popup.errorTextClarify = err
 			popup.open()
 		}
-		onLoginResult: {			
+		onLoginResult: {
 			if (!message) {
 				popup.errorTextContent = "Could not create main window"
 				popup.errorTextClarify = ""
@@ -86,14 +85,14 @@ Window {
 				Image {
 					source: "qrc:/qml/images/CSC_logo.svg"
 					fillMode: Image.PreserveAspectFit
-					width: parent.width - loginWindow.margins
+					width: parent.width - CSC.Style.padding
 					anchors.centerIn: parent
 				}
 			}
 
 			ColumnLayout {
 				Layout.fillHeight: true
-				Layout.margins: loginWindow.margins
+				Layout.margins: CSC.Style.padding
 				spacing: 0
 
 				Label {
@@ -126,6 +125,7 @@ Window {
 					
 					onClicked: login()
 
+					// Prevents button from shrinking when loading
 					Component.onCompleted: Layout.minimumHeight = implicitHeight
 
 					states: [

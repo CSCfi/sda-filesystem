@@ -16,9 +16,9 @@ import (
 	"time"
 )
 
-var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3}
+var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
 
-// HTTPInfo ...
+// HTTPInfo contains all necessary variables used during HTTP requests
 type HTTPInfo struct {
 	requestTimeout int
 	httpRetry      int
@@ -29,6 +29,7 @@ type HTTPInfo struct {
 	uToken         string
 	sTokens        map[string]SToken
 	client         *http.Client
+	loggedIn       bool
 }
 
 // Metadata stores data from either a call to a project, container or object
@@ -42,7 +43,7 @@ type UToken struct {
 	Token string `json:"token"`
 }
 
-// SToken is the scoped token
+// SToken is a scoped token
 type SToken struct {
 	Token     string `json:"token"`
 	ProjectID string `json:"projectID"`
@@ -75,6 +76,7 @@ func GetEnvs() error {
 	return nil
 }
 
+// getEnv looks up environment variable 'name'
 func getEnv(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 
@@ -96,8 +98,14 @@ func getEnv(name string, verifyURL bool) (string, error) {
 	return env, nil
 }
 
+// SetRequestTimeout redefines hi.requestTimeout
 func SetRequestTimeout(timeout int) {
 	hi.requestTimeout = timeout
+}
+
+// SetLoggedIn sets hi.loggedIn as true
+func SetLoggedIn() {
+	hi.loggedIn = true
 }
 
 // CreateToken creates the authorization token based on username + password
@@ -181,7 +189,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	}
 
 	// Execute HTTP request
-	// retry the request as specified by httpRetry variable
+	// retry the request as specified by hi.httpRetry variable
 	for count := 0; count == 0 || (err != nil && count < hi.httpRetry); {
 		response, err = hi.client.Do(request)
 		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
@@ -191,6 +199,15 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 		return nil, err
 	}
 	defer response.Body.Close()
+
+	if hi.loggedIn && response.StatusCode == 401 {
+		logs.Info("Tokens no longer valid. Fetching them again")
+		FetchTokens()
+		hi.loggedIn = false // To prevent unlikely infinite loop
+		ret, err := makeRequest(url, token, query, headers)
+		hi.loggedIn = true
+		return ret, err
+	}
 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
 		return nil, &RequestError{response.StatusCode}
@@ -204,6 +221,32 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 
 	logs.Debug("Request ", request.URL, " returned a response")
 	return r, nil
+}
+
+// FetchTokens fetches the unscoped token and the scoped tokens
+func FetchTokens() {
+	err := GetUToken()
+	if err != nil {
+		logs.Warningf("HTTP requests may be slower: %s", err.Error())
+		hi.uToken = ""
+		return
+	}
+
+	projects, err := GetProjects()
+	if err != nil {
+		logs.Warningf("HTTP requests may be slower: %s", err.Error())
+		hi.sTokens = map[string]SToken{}
+	}
+
+	for i := range projects {
+		err = GetSToken(projects[i].Name)
+		if err != nil {
+			logs.Warning(err)
+			delete(hi.sTokens, projects[i].Name)
+		}
+	}
+
+	logs.Info("Fetched tokens")
 }
 
 // GetUToken gets the unscoped token
@@ -221,49 +264,39 @@ func GetUToken() error {
 	}
 
 	hi.uToken = uToken.Token
+	logs.Debug("Retrieved unscoped token")
 	return nil
 }
 
-// GetSTokens gets the scoped tokens
-func GetSTokens(projects []Metadata) error {
-	hi.sTokens = make(map[string]SToken)
+// GetSToken gets the scoped tokens for a project
+func GetSToken(project string) error {
+	// Query params
+	query := map[string]string{"project": project}
 
-	for i := range projects {
-		project := projects[i].Name
-
-		// Query params
-		query := map[string]string{"project": project}
-
-		// Request token
-		response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
-		if err != nil {
-			return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
-		}
-
-		// Parse the JSON response into a struct
-		sToken := SToken{}
-		if err := json.Unmarshal(response, &sToken); err != nil {
-			return fmt.Errorf("Unable to unmarshal response when retrieving scoped token: %w", err)
-		}
-
-		hi.sTokens[project] = sToken
+	// Request token
+	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
+	if err != nil {
+		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
 	}
 
+	// Parse the JSON response into a struct
+	sToken := SToken{}
+	if err := json.Unmarshal(response, &sToken); err != nil {
+		return fmt.Errorf("Unable to unmarshal response when retrieving scoped token for %s: %w", project, err)
+	}
+
+	hi.sTokens[project] = sToken
+	logs.Debug("Retrieved scoped token for ", project)
 	return nil
 }
 
 // GetProjects gets all projects user has access to
-func GetProjects(getBytes bool) ([]Metadata, error) {
-	// Query params
-	var query map[string]string = nil
-	if !getBytes {
-		query = map[string]string{"bytes": "false"}
-	}
+func GetProjects() ([]Metadata, error) {
 
 	// Request projects
-	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, query, nil)
+	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving projects failed: %w", err)
+		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
 	}
 
 	// Parse the JSON response into a slice
@@ -272,11 +305,11 @@ func GetProjects(getBytes bool) ([]Metadata, error) {
 		return nil, fmt.Errorf("Unable to unmarshal response when retrieving projects: %w", err)
 	}
 
-	logs.Info("Retrieved projects as per request")
+	logs.Debugf("Retrieved %d projects", len(projects))
 	return projects, nil
 }
 
-// GetContainers gets conatiners inside the object
+// GetContainers gets conatainers inside project
 func GetContainers(project string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
@@ -326,7 +359,7 @@ func GetObjects(project, container string) ([]Metadata, error) {
 
 // DownloadData gets content of object from data API
 func DownloadData(path string, start int64, end int64) ([]byte, error) {
-	parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 3)
+	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
 	// Query params

@@ -1,7 +1,9 @@
 package filesystem
 
 import (
+	"fmt"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -14,6 +16,8 @@ import (
 const sRDONLY = 00444
 const numRoutines = 4
 
+var signalBridge func() = nil
+
 // Connectfs stores the filesystem structure
 type Connectfs struct {
 	fuse.FileSystemBase
@@ -22,14 +26,17 @@ type Connectfs struct {
 	ino     uint64
 	root    *node
 	openmap map[uint64]*node
+	renamed map[string]string
 }
 
+// node represents one file or directory
 type node struct {
 	stat    fuse.Stat_t
 	chld    map[string]*node
 	opencnt int
 }
 
+// containerInfo is a packet of information sent through a channel to createObjects()
 type containerInfo struct {
 	project   string
 	container string
@@ -37,9 +44,15 @@ type containerInfo struct {
 	fs        *Connectfs
 }
 
+// LoadProjectInfo is used to carry information through a channel to projectmodel
 type LoadProjectInfo struct {
 	Project string
 	Count   int
+}
+
+// SetSignalBridge initializes the signal which informs QML that program has paniced
+func SetSignalBridge(fn func()) {
+	signalBridge = fn
 }
 
 // CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
@@ -50,19 +63,34 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	defer c.synchronize()()
 	c.ino++
 	c.openmap = map[uint64]*node{}
+	c.renamed = map[string]string{}
 	c.root = newNode(0, c.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
 	c.populateFilesystem(timestamp, send...)
 	logs.Info("Filesystem database completed")
 	return &c
 }
 
-// populateDirectory creates the nodes (files and directories) of the filesystem
+// populateFilesystem creates the nodes (files and directories) of the filesystem
 func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
-	projects, err := api.GetProjects(true)
+	projects, err := api.GetProjects()
 	if err != nil {
 		logs.Error(err)
+		return
 	}
-	logs.Info("Receiving ", len(projects), " projects")
+
+	if len(projects) == 0 {
+		logs.Errorf("No project permissions found")
+		return
+	}
+
+	logs.Debug("Beginning filling in filesystem")
+
+	// Calculating root size
+	rootSize := int64(0)
+	for i := range projects {
+		rootSize += projects[i].Bytes
+	}
+	fs.root.stat.Size = rootSize
 
 	var wg sync.WaitGroup
 	forChannel := make(map[string][]api.Metadata)
@@ -81,6 +109,15 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 
 		go func(project string) {
 			defer wg.Done()
+			defer func() {
+				// recover from panic if one occured.
+				if err := recover(); err != nil && signalBridge != nil {
+					logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
+						fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+					// Send alert
+					signalBridge()
+				}
+			}()
 
 			logs.Debugf("Fetching containers for project %s", project)
 			containers, err := api.GetContainers(project)
@@ -112,7 +149,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	}
 
 	wg.Wait()
-
 	jobs := make(chan containerInfo, numJobs)
 
 	for w := 1; w <= numRoutines; w++ {
@@ -139,6 +175,15 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 
 func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
 	defer wg.Done()
+	defer func() {
+		// recover from panic if one occured.
+		if err := recover(); err != nil && signalBridge != nil {
+			logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
+				fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+			// Send alert
+			signalBridge()
+		}
+	}()
 
 	for j := range jobs {
 		project := j.project
@@ -150,6 +195,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 		containerSafe := removeInvalidChars(container)
 		containerPath := projectSafe + "/" + containerSafe
 
+		logs.Debugf("Fetching objects for container %s", containerPath)
 		objects, err := api.GetObjects(project, container)
 		if err != nil {
 			logs.Error(err)
@@ -159,18 +205,21 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 		level := 1
 
 		// Object names contain their path from container
-		// Create both subdirectories and the files
+		// Creating both subdirectories and the files
 		for len(objects) > 0 {
 			// uniqueDirs contains the unique directory paths for this particular level
 			uniqueDirs := make(map[string]int64)
+			// remove contains the indexes that need to be removed from 'objects'
 			remove := make([]int, 0, len(objects))
 
 			for i, obj := range objects {
 				parts := strings.SplitN(obj.Name, "/", level+1)
 
+				// If true, create the final object file
 				if len(parts) < level+1 {
 					objectPath := containerPath + "/" + removeInvalidChars(obj.Name, "/")
 					p := filepath.FromSlash(objectPath)
+					logs.Debugf("Creating object %s", objectPath)
 					fs.makeNode(p, fuse.S_IFREG|sRDONLY, 0, obj.Bytes, timestamp)
 					remove = append(remove, i)
 					continue
@@ -188,6 +237,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 			}
 			objects = objects[:len(objects)-len(remove)]
 
+			// Create all unique subdirectories at this level
 			for key, value := range uniqueDirs {
 				p := filepath.FromSlash(containerPath + "/" + removeInvalidChars(key, "/"))
 				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, value, timestamp)
@@ -207,7 +257,6 @@ func split(path string) []string {
 	return strings.Split(path, "/")
 }
 
-// Characters '/' and ':' are not allowed in names of directories or files
 func removeInvalidChars(str string, ignore ...string) string {
 	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
 		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
@@ -229,19 +278,20 @@ func removeInvalidChars(str string, ignore ...string) string {
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
-func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *node) {
+func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *node, dir bool) {
 	prnt, node = fs.root, fs.root
 	name = ""
+	dir = true
 	for _, c := range split(filepath.ToSlash(path)) {
 		if c != "" {
-			/*if len(c) > 255 { TODO: check this
-				log.Fatalf("Name %s in path %s is too long", c, path)
-			}*/
 			prnt, name = node, c
 			if node == nil {
 				return
 			}
 			node = node.chld[c]
+			if node != nil {
+				dir = (fuse.S_IFDIR == node.stat.Mode&fuse.S_IFMT)
+			}
 		}
 	}
 	return
@@ -249,14 +299,36 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 
 // makeNode adds a node into the fuse
 func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, timestamp fuse.Timespec) int {
-	prnt, name, node := fs.lookupNode(path)
+	prnt, name, node, isDir := fs.lookupNode(path)
 	if prnt == nil {
 		// No such file or directory
 		return -fuse.ENOENT
 	}
-	if node != nil {
-		// File exists
+	if node != nil && (isDir == (fuse.S_IFDIR == mode&fuse.S_IFMT)) {
+		// File/directory exists
 		return -fuse.EEXIST
+	}
+
+	// A folder or a file with the same name already exists
+	if node != nil {
+		// Create a unique prefix for file
+		i := 1
+		for {
+			newName := fmt.Sprintf("FILE_%d_%s", i, name)
+			if _, ok := prnt.chld[newName]; !ok {
+				location := strings.TrimSuffix(path, name)
+				fs.renamed[location+newName] = path
+				// Change name of node (whichever is a file)
+				if !isDir {
+					prnt.chld[newName] = node
+				} else {
+					name = newName
+				}
+				logs.Warningf("File %s has its name changed to %s due to a folder with the same name", path, newName)
+				break
+			}
+			i++
+		}
 	}
 
 	fs.inoLock.Lock()
@@ -297,7 +369,7 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 }
 
 func (fs *Connectfs) openNode(path string, dir bool) (int, uint64) {
-	_, _, node := fs.lookupNode(path)
+	_, _, node, _ := fs.lookupNode(path)
 	if node == nil {
 		return -fuse.ENOENT, ^uint64(0)
 	}
@@ -325,7 +397,7 @@ func (fs *Connectfs) closeNode(fh uint64) int {
 
 func (fs *Connectfs) getNode(path string, fh uint64) *node {
 	if fh == ^uint64(0) {
-		_, _, node := fs.lookupNode(path)
+		_, _, node, _ := fs.lookupNode(path)
 		return node
 	}
 	return fs.openmap[fh]

@@ -11,77 +11,96 @@ Page {
 
     property color bkgColor: CSC.Style.lightBlue
     property color lineColor: CSC.Style.tertiaryColor
+    property FileDialog dialog
 
     header: ToolBar {
-        Material.primary: page.bkgColor
+        padding: 4
+        clip: true
 
-        Rectangle {
-            height: 2
-            color: page.lineColor
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
+        background: Rectangle {
+            color: page.bkgColor
+
+            Rectangle {
+                height: 2
+                color: page.lineColor
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+            }
         }
 
-        Row {
-            anchors.fill: parent
+        contentItem: RowLayout {
+            id: headerRow
             spacing: tableView.columnSpacing
-            leftPadding: 3
-            bottomPadding: 3
 
-            Text {
-                id: levelTitle
-                text: "Level"
-                height: parent.height
-                width: tableView.firstColumn
-                font.pointSize: 25
-                verticalAlignment: Text.AlignBottom
+            Item {
+                id: levelItem
+                Layout.preferredWidth: tableView.firstColumn
+                Layout.fillHeight: true
+                Text {
+                    id: levelTitle
+                    text: "Level"
+                    font.pointSize: 20
+                    x: -tableView.contentX
+                    anchors.bottom: parent.bottom
+                }
+
             }
 
-            Text {
-                text: "Date"
-                height: parent.height
-                width: tableView.secondColumn
-                font.pointSize: 25
-                verticalAlignment: Text.AlignBottom
+            Item {
+                Layout.preferredWidth: tableView.secondColumn
+                Layout.fillHeight: true
+                Text {
+                    text: "Date"
+                    font.pointSize: 20
+                    x: -tableView.contentX
+                    anchors.bottom: parent.bottom
+                }
             }
 
-            Text {
-                text: "Message"
-                height: parent.height
-                width: tableView.thirdColumn
-                font.pointSize: 25
-                verticalAlignment: Text.AlignBottom
+            Item {
+                Layout.preferredWidth: messageText.contentWidth
+                Layout.fillHeight: true
+                Text {
+                    id: messageText
+                    text: "Message"
+                    font.pointSize: 20
+                    x: -tableView.contentX
+                    anchors.bottom: parent.bottom
+                }
+            }
+
+            Item {
+                implicitHeight: exportButton.implicitHeight
+                Layout.minimumWidth: headerRow.spacing + exportButton.implicitWidth
+                Layout.fillWidth: true
+                Layout.margins: 4
+
+                ToolButton {
+                    id: exportButton
+                    text: "Export"
+                    icon.source: "qrc:/qml/images/box-arrow-up.svg"
+                    anchors.right: parent.right
+                    anchors.rightMargin: (header.availableWidth >= headerRow.implicitWidth || tableView.contentX <= 0) ? 0 : 
+                        Math.min(tableView.contentX, headerRow.implicitWidth - header.availableWidth)
+
+                    onClicked: dialog.visible = true
+
+                    background: Rectangle {
+                        border.width: 2
+                        border.color: "black"
+                        color: exportButton.hovered ? CSC.Style.lightGrey : "transparent"
+                        radius: 5
+                    }
+
+                    MouseArea {
+                        cursorShape: Qt.PointingHandCursor
+                        acceptedButtons: Qt.NoButton
+                        anchors.fill: parent
+                    }
+                }
             }
         }
-
-        ToolButton {
-            id: exportButton
-            text: "Export"
-            icon.source: "qrc:/qml/images/box-arrow-up.svg"
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.rightMargin: 5
-
-            onClicked: fileDialog.visible = true
-
-            background: Rectangle {
-                border.width: 2
-                border.color: "black"
-                color: exportButton.hovered ? CSC.Style.lightGrey : "transparent"
-                radius: 5
-            }
-        }
-    }
-
-    FileDialog {
-        id: fileDialog
-        title: "Choose file to which save logs"
-        folder: shortcuts.home
-        selectExisting: false
-        selectFolder: false
-        defaultSuffix: "log"
-        onAccepted: LogModel.saveLogs(fileDialog.fileUrl)
     }
 
     TableView {
@@ -109,6 +128,7 @@ Page {
         rowHeightProvider: function (column) { return rowHeight }
         columnWidthProvider: function (column) { return column == 0 ? firstColumn : column == 1 ? secondColumn : thirdColumn }
 
+        // Background image
         Image {
             source: "qrc:/qml/images/bkg-log-rect.png"
             fillMode: Image.TileVertically
@@ -142,8 +162,32 @@ Page {
 
                 contentItem: Label {
                     id: levelText
-                    text: level
-                    color: (levelText.text.toLowerCase() != "warning") ? "white" : "black"
+                    text: {
+                        switch (level) {
+                            case LogLevel.Error:
+                                return "ERROR"
+                            case LogLevel.Info:
+                                return "INFO"
+                            case LogLevel.Debug:
+                                return "DEBUG"
+                            case LogLevel.Warning:
+                                return "WARNING"
+                            default:
+                                return ""
+                        }
+                    }
+                    color: {
+                        switch (level) {
+                            case LogLevel.Error:
+                            case LogLevel.Info:
+                            case LogLevel.Debug:
+                                return "white"
+                            case LogLevel.Warning:
+                                return "black"
+                            default:
+                                return "transparent"
+                        }
+                    }
                     topPadding: 0
                     bottomPadding: 0
                     leftPadding: 5
@@ -154,8 +198,19 @@ Page {
                     anchors.centerIn: parent
 
                     background: Rectangle {
-                        color: (levelText.text.toLowerCase() == "info") ? CSC.Style.blue : 
-                               (levelText.text.toLowerCase() == "error" ? CSC.Style.red : CSC.Style.yellow)
+                        color: {
+                            if (level == LogLevel.Info) {
+                                return CSC.Style.blue
+                            } else if (level == LogLevel.Error) {
+                                return CSC.Style.red
+                            } else if (level == LogLevel.Warning) {
+                                return CSC.Style.yellow
+                            } else if (level == LogLevel.Debug) {
+                                return CSC.Style.altGreen
+                            } else {
+                                return "transparent"
+                            }
+                        }
                         radius: height / 2
                     }
                 }
@@ -182,7 +237,7 @@ Page {
             column: 2
             delegate: Label { 
                 id: messageLabel
-                text: message.split('\n')[0]
+                text: message[0]
                 verticalAlignment: Text.AlignVCenter
                 padding: 5
                 color: "black"
@@ -204,8 +259,8 @@ Page {
     }
 
     // THIS IS IMPORTANT
-    // Uncommenting the comments in DelegateChoice for column 2 creates bkg-log-rect.png
-    // which can then be used as background for logs. Remember to recomment and move the new .png to /images
+    // Uncommenting the comments in messageLabel creates bkg-log-rect.png which can then be used 
+    // as background for logs after recompiling. Remember to recomment and move the new .png to /images
     // I do it like this because this seamlessly (hopefully) fills in the background
     // regardless of row widths and row counts
     Component {

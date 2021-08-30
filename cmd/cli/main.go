@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/billziss-gh/cgofuse/fuse"
+	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
 
@@ -52,24 +54,42 @@ func askForLogin() (string, string) {
 	return username, string(password)
 }
 
-func GetUSTokens() {
-	err := api.GetUToken()
+func login() {
+	// Get the state of the terminal before running the password prompt
+	originalTerminalState, err := term.GetState(int(syscall.Stdin))
 	if err != nil {
+		logs.Fatalf("Failed to get terminal state: %s", err.Error())
+	}
+
+	// check for ctrl+c signal
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	go func() {
+		<-signalChan
+		term.Restore(int(syscall.Stdin), originalTerminalState)
+		os.Exit(1)
+	}()
+
+	for {
+		username, password := askForLogin()
+		api.CreateToken(username, password)
+		err = api.GetUToken()
+
+		if err == nil {
+			break
+		}
+
+		var re *api.RequestError
+		if errors.As(err, &re) && re.StatusCode == 401 {
+			logs.Errorf("Incorrect username or password")
+			continue
+		}
+
 		logs.Fatal(err)
 	}
 
-	projects, err := api.GetProjects(false)
-	if err != nil {
-		logs.Fatal(err)
-	}
-	if len(projects) == 0 {
-		logs.Fatal("No project permissions found")
-	}
-
-	err = api.GetSTokens(projects)
-	if err != nil {
-		logs.Fatal(err)
-	}
+	// stop watching signals
+	signal.Stop(signalChan)
 }
 
 func init() {
@@ -84,7 +104,7 @@ func init() {
 	logs.SetLevel(logLevel)
 
 	// Verify mount point directory
-	if _, err := os.Stat(mount); os.IsNotExist(err) {
+	if dir, err := os.Stat(mount); os.IsNotExist(err) {
 		// In other OSs except Windows, the mount point must exist and be empty
 		if runtime.GOOS != "windows" {
 			logs.Debugf("Mount point %s does not exist, so it will be created", mount)
@@ -93,18 +113,31 @@ func init() {
 			}
 		}
 	} else {
+		if !dir.IsDir() {
+			logs.Fatalf("%s is not a directory", mount)
+		}
+
 		// Mount directory must not already exist in Windows
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == "windows" { // ?
 			logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
 		}
+
+		if unix.Access(mount, unix.W_OK) != nil { // What about windows?
+			logs.Fatal("You do not have permission to write to folder ", mount)
+		}
+
 		// Check that the mount point is empty if it already exists
 		dir, err := os.Open(mount)
 		if err != nil {
 			logs.Fatalf("Could not open mount point %s", mount)
 		}
 		defer dir.Close()
+
 		// Verify dir is empty
 		if _, err = dir.Readdir(1); err != io.EOF {
+			if err != nil {
+				logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
+			}
 			logs.Fatalf("Mount point %s must be empty", mount)
 		}
 	}
@@ -115,7 +148,7 @@ func init() {
 func shutdown() <-chan bool {
 	done := make(chan bool)
 	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(s, os.Interrupt)
 	go func() {
 		<-s
 		logs.Info("Shutting down SD-Connect Filesystem")
@@ -126,23 +159,24 @@ func shutdown() <-chan bool {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	done := shutdown()
 
 	err := api.GetEnvs()
 	if err != nil {
 		logs.Fatal(err)
 	}
 
-	api.CreateToken(askForLogin())
-	//fmt.Println(runtime.NumGoroutine(), runtime.GOMAXPROCS(-1))
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Fatal(err)
 	}
-	//fmt.Println(runtime.NumGoroutine())
-	GetUSTokens()
+
+	login()
+	api.SetLoggedIn()
+
+	done := shutdown()
+	api.FetchTokens()
+
 	connectfs := filesystem.CreateFileSystem()
-	//fmt.Println(runtime.NumGoroutine())
 	host := fuse.NewFileSystemHost(connectfs)
 	options := []string{}
 	if runtime.GOOS == "darwin" {

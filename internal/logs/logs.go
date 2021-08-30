@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var signal func(string, string) = nil
+var signal func(int, []string) = nil
 
 var levelMap = map[string]log.Level{
 	"debug": log.DebugLevel,
@@ -17,7 +17,8 @@ var levelMap = map[string]log.Level{
 	"error": log.ErrorLevel,
 }
 
-func SetSignal(fn func(string, string)) {
+// SetSignal initializes 'signal', which sends logs to LogModel
+func SetSignal(fn func(int, []string)) {
 	signal = fn
 }
 
@@ -31,6 +32,7 @@ func SetLevel(level string) {
 	log.SetLevel(log.InfoLevel)
 }
 
+// Wrapper extracts the outermost error in err, which is returned along with the result of Unwrap
 func Wrapper(err error) (string, error) {
 	unwrapped := errors.Unwrap(err)
 	if unwrapped != nil {
@@ -39,19 +41,20 @@ func Wrapper(err error) (string, error) {
 	return err.Error(), nil
 }
 
-func StructureError(err error) string {
-	fullError := ""
+// StructureError divides err into a list of strings where each string represents one wrapped error
+func StructureError(err error) []string {
+	fullError := []string{}
 	for i := 0; err != nil; i++ {
 		var str string
 		str, err = Wrapper(err)
-		fullError += str + "\n"
+		fullError = append(fullError, str)
 	}
-	return fullError[:len(fullError)-1]
+	return fullError
 }
 
 func Error(err error) {
 	if signal != nil {
-		signal("error", StructureError(err))
+		signal(int(log.ErrorLevel), StructureError(err))
 	} else {
 		log.Error(err)
 	}
@@ -60,23 +63,23 @@ func Error(err error) {
 func Errorf(format string, args ...interface{}) {
 	if signal != nil {
 		err := fmt.Errorf(format, args...)
-		signal("error", StructureError(err))
+		signal(int(log.ErrorLevel), StructureError(err))
 	} else {
 		log.Errorf(format, args...)
 	}
 }
 
-func Warning(args ...interface{}) {
+func Warning(err error) {
 	if signal != nil {
-		signal("warning", fmt.Sprint(args...))
+		signal(int(log.WarnLevel), StructureError(err))
 	} else {
-		log.Warning(args...)
+		log.Warning(err.Error())
 	}
 }
 
 func Warningf(format string, args ...interface{}) {
 	if signal != nil {
-		signal("warning", fmt.Sprintf(format, args...))
+		signal(int(log.WarnLevel), []string{fmt.Sprintf(format, args...)})
 	} else {
 		log.Warningf(format, args...)
 	}
@@ -84,7 +87,7 @@ func Warningf(format string, args ...interface{}) {
 
 func Info(args ...interface{}) {
 	if signal != nil {
-		signal("info", fmt.Sprint(args...))
+		signal(int(log.InfoLevel), []string{fmt.Sprint(args...)})
 	} else {
 		log.Info(args...)
 	}
@@ -92,18 +95,30 @@ func Info(args ...interface{}) {
 
 func Infof(format string, args ...interface{}) {
 	if signal != nil {
-		signal("info", fmt.Sprintf(format, args...))
+		signal(int(log.InfoLevel), []string{fmt.Sprintf(format, args...)})
 	} else {
 		log.Infof(format, args...)
 	}
 }
 
 func Debug(args ...interface{}) {
-	log.Debug(args...)
+	if signal != nil {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			signal(int(log.DebugLevel), []string{fmt.Sprint(args...)})
+		}
+	} else {
+		log.Debug(args...)
+	}
 }
 
 func Debugf(format string, args ...interface{}) {
-	log.Debugf(format, args...)
+	if signal != nil {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			signal(int(log.DebugLevel), []string{fmt.Sprintf(format, args...)})
+		}
+	} else {
+		log.Debugf(format, args...)
+	}
 }
 
 func Fatal(args ...interface{}) {
@@ -123,6 +138,4 @@ func init() {
 
 	// Output to stdout instead of the default stderr
 	log.SetOutput(os.Stdout)
-
-	log.SetLevel(log.InfoLevel)
 }
