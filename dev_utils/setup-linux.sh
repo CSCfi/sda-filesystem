@@ -4,7 +4,7 @@
 GO_VERSION='go1.16.6'
 OS=$(uname -nsm)
 
-# Check terraform exists and it has a specific version
+# Check golang exists and it has a specific version
 if ! [ -x "$(command -v go)" ]; then
     echo 'golang is not installed, and it is a requirement.' >&2
     exit 1
