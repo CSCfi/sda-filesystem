@@ -59,6 +59,7 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 		return -fuse.ENOENT
 	}
 
+	// Check whether this file has had its name changed
 	path = strings.TrimPrefix(path, "/")
 	if origName, ok := fs.renamed[path]; ok {
 		path = origName

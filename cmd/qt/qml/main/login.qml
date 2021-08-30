@@ -17,7 +17,6 @@ Window {
 
 	property var component
 	property ApplicationWindow homeWindow
-	property QtObject obj: CSC.Style
 
 	Material.accent: CSC.Style.primaryColor
 
@@ -29,8 +28,8 @@ Window {
 		target: QmlBridge
 		onEnvError: {
 			itemWrap.enabled = false
-			popup.errorTextContent = err
-			popup.errorTextClarify = ""
+			popup.errorTextContent = message
+			popup.errorTextClarify = err
 			popup.open()
 		}
 		onLoginResult: {
@@ -126,6 +125,7 @@ Window {
 					
 					onClicked: login()
 
+					// Prevents button from shrinking when loading
 					Component.onCompleted: Layout.minimumHeight = implicitHeight
 
 					states: [

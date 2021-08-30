@@ -17,6 +17,7 @@ var levelMap = map[string]log.Level{
 	"error": log.ErrorLevel,
 }
 
+// SetSignal initializes 'signal', which sends logs to LogModel
 func SetSignal(fn func(int, []string)) {
 	signal = fn
 }
@@ -31,6 +32,7 @@ func SetLevel(level string) {
 	log.SetLevel(log.InfoLevel)
 }
 
+// Wrapper extracts the outermost error in err, which is returned along with the result of Unwrap
 func Wrapper(err error) (string, error) {
 	unwrapped := errors.Unwrap(err)
 	if unwrapped != nil {
@@ -39,6 +41,7 @@ func Wrapper(err error) (string, error) {
 	return err.Error(), nil
 }
 
+// StructureError divides err into a list of strings where each string represents one wrapped error
 func StructureError(err error) []string {
 	fullError := []string{}
 	for i := 0; err != nil; i++ {

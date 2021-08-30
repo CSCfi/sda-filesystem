@@ -44,6 +44,7 @@ ApplicationWindow {
         }
     }
 
+	// Ensures fuse unmounts when application shuts down
 	onClosing: QmlBridge.shutdown()
 
 	CSC.Popup {
@@ -51,13 +52,12 @@ ApplicationWindow {
 		errorTextContent: "How can this be! Filesystem failed to load correctly. Save logs to find out why this happened, and either quit the application or continue at your own peril..."
 		leftMargin: stack.x + CSC.Style.padding
 		parent: Overlay.overlay
-		type: LogLevel.Error
 
 		Connections {
             target: QmlBridge
             onPanic: {
 				popupPanic.toCentered()
-				popupPanic.closePolicy = Popup.NoAutoClose
+				popupPanic.closePolicy = Popup.NoAutoClose // User must choose ignore or quit
 				popupPanic.open()
 			}
         }
@@ -95,7 +95,6 @@ ApplicationWindow {
 					checkable: true
 
 					onClicked: {
-						decided: true
 						if (logCheck.checked) {
 							fileDialog.visible = true
 						} else {
@@ -110,7 +109,6 @@ ApplicationWindow {
 					checkable: true
 					
 					onClicked: {
-						decided: true
 						if (logCheck.checked) {
 							fileDialog.visible = true
 						} else {

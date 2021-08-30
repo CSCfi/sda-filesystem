@@ -30,12 +30,14 @@ type Connectfs struct {
 	renamed map[string]string
 }
 
+// node represents one file or directory
 type node struct {
 	stat    fuse.Stat_t
 	chld    map[string]*node
 	opencnt int
 }
 
+// containerInfo is a packet of information sent through a channel to createObjects()
 type containerInfo struct {
 	project   string
 	container string
@@ -43,15 +45,19 @@ type containerInfo struct {
 	fs        *Connectfs
 }
 
+// LoadProjectInfo is used to carry information through a channel to projectmodel
 type LoadProjectInfo struct {
 	Project string
 	Count   int
 }
 
+// SetSignalModel initializes the signal which sends ProjectModel
+// information on which projects do not have storage enabled
 func SetSignalModel(fn func(map[string]bool)) {
 	signalModel = fn
 }
 
+// SetSignalBridge initializes the signal which informs QML that program has paniced
 func SetSignalBridge(fn func()) {
 	signalBridge = fn
 }
@@ -71,7 +77,7 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	return &c
 }
 
-// populateDirectory creates the nodes (files and directories) of the filesystem
+// populateFilesystem creates the nodes (files and directories) of the filesystem
 func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- LoadProjectInfo) {
 	projects, err := api.GetProjects(true)
 	if err != nil {
@@ -79,6 +85,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 		return
 	}
 
+	// If signalModel is not nil, the program is run with gui
 	if signalModel != nil {
 		// Inform LogModel which projects have storage enabled
 		projectsStr := make(map[string]bool)
@@ -215,15 +222,17 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 		level := 1
 
 		// Object names contain their path from container
-		// Create both subdirectories and the files
+		// Creating both subdirectories and the files
 		for len(objects) > 0 {
 			// uniqueDirs contains the unique directory paths for this particular level
 			uniqueDirs := make(map[string]int64)
+			// remove contains the indexes that need to be removed from 'objects'
 			remove := make([]int, 0, len(objects))
 
 			for i, obj := range objects {
 				parts := strings.SplitN(obj.Name, "/", level+1)
 
+				// If true, create the final object file
 				if len(parts) < level+1 {
 					objectPath := containerPath + "/" + removeInvalidChars(obj.Name, "/")
 					p := filepath.FromSlash(objectPath)
@@ -245,6 +254,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 			}
 			objects = objects[:len(objects)-len(remove)]
 
+			// Create all unique subdirectories at this level
 			for key, value := range uniqueDirs {
 				p := filepath.FromSlash(containerPath + "/" + removeInvalidChars(key, "/"))
 				fs.makeNode(p, fuse.S_IFDIR|sRDONLY, 0, value, timestamp)
@@ -264,7 +274,6 @@ func split(path string) []string {
 	return strings.Split(path, "/")
 }
 
-// Characters '/' and ':' are not allowed in names of directories or files
 func removeInvalidChars(str string, ignore ...string) string {
 	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
 		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
@@ -313,13 +322,13 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 		return -fuse.ENOENT
 	}
 	if node != nil && (isDir == (fuse.S_IFDIR == mode&fuse.S_IFMT)) {
-		// File exists
+		// File/directory exists
 		return -fuse.EEXIST
 	}
 
 	// A folder or a file with the same name already exists
 	if node != nil {
-		// Does prefixed name exist already?
+		// Create a unique prefix for file
 		i := 1
 		for {
 			newName := fmt.Sprintf("FILE_%d_%s", i, name)

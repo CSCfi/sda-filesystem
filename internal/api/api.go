@@ -18,7 +18,7 @@ import (
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
 
-// HTTPInfo ...
+// HTTPInfo contains all necessary variables used during HTTP requests
 type HTTPInfo struct {
 	requestTimeout int
 	httpRetry      int
@@ -76,6 +76,7 @@ func GetEnvs() error {
 	return nil
 }
 
+// getEnv looks up environment variable 'name'
 func getEnv(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 
@@ -97,10 +98,12 @@ func getEnv(name string, verifyURL bool) (string, error) {
 	return env, nil
 }
 
+// SetRequestTimeout redefines hi.requestTimeout
 func SetRequestTimeout(timeout int) {
 	hi.requestTimeout = timeout
 }
 
+// SetLoggedIn sets hi.loggedIn as true
 func SetLoggedIn() {
 	hi.loggedIn = true
 }
@@ -186,7 +189,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	}
 
 	// Execute HTTP request
-	// retry the request as specified by httpRetry variable
+	// retry the request as specified by hi.httpRetry variable
 	for count := 0; count == 0 || (err != nil && count < hi.httpRetry); {
 		response, err = hi.client.Do(request)
 		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
@@ -200,7 +203,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	if hi.loggedIn && response.StatusCode == 401 {
 		logs.Info("Tokens no longer valid. Fetching them again")
 		FetchTokens()
-		hi.loggedIn = false
+		hi.loggedIn = false // To prevent unlikely infinite loop
 		ret, err := makeRequest(url, token, query, headers)
 		hi.loggedIn = true
 		return ret, err
@@ -220,6 +223,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	return r, nil
 }
 
+// FetchTokens fetches the unscoped token and the scoped tokens
 func FetchTokens() {
 	err := GetUToken()
 	if err != nil {
@@ -310,7 +314,7 @@ func GetProjects(getBytes bool) ([]Metadata, error) {
 	return projects, nil
 }
 
-// GetContainers gets conatiners inside the object
+// GetContainers gets conatainers inside project
 func GetContainers(project string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}

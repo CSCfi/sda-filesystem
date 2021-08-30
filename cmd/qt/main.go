@@ -40,7 +40,7 @@ type QmlBridge struct {
 	_ func(mount string) string       `slot:"changeMountPoint,auto"`
 	_ func()                          `slot:"shutdown,auto"`
 	_ func(message, err string)       `signal:"loginResult"`
-	_ func(err error)                 `signal:"envError"`
+	_ func(message, err string)       `signal:"envError"`
 	_ func()                          `signal:"fuseReady"`
 	_ func()                          `signal:"panic"`
 
@@ -129,6 +129,7 @@ func (qb *QmlBridge) loadFuse() {
 
 		qb.FuseReady()
 		host.Mount(qb.MountPoint(), options)
+		// In case program is terminated with a ctrl+c
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	}()
 }
@@ -315,7 +316,7 @@ func main() {
 	err := api.GetEnvs()
 	if err != nil {
 		logs.Error(err)
-		qmlBridge.EnvError(err)
+		qmlBridge.EnvError("Environment variables not valid", strings.Join(logs.StructureError(err), "\n"))
 	}
 
 	gui.QGuiApplication_Exec()

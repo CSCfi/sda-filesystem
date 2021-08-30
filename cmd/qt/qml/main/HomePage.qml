@@ -10,6 +10,7 @@ Control {
     id: page
     padding: CSC.Style.padding
 
+    // Needed for calculating window's minimumwidth
     property real minimumWidth: dialogColumn.implicitWidth + 2 * padding
 
     CSC.Popup {
@@ -22,7 +23,7 @@ Control {
     Connections {
         target: ProjectModel
         onNoStorageWarning: {
-            popup.type = LogLevel.Error
+            popup.type = LogLevel.Warning
             popup.errorTextContent = count + " project(s) with no storage enabled"
             popup.open()
         }

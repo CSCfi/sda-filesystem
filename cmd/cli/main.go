@@ -58,10 +58,10 @@ func login() {
 	// Get the state of the terminal before running the password prompt
 	originalTerminalState, err := term.GetState(int(syscall.Stdin))
 	if err != nil {
-		logs.Fatal("Failed to get terminal state: %w", err)
+		logs.Fatalf("Failed to get terminal state: %s", err.Error())
 	}
 
-	// check for ctrl-c signal
+	// check for ctrl+c signal
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	go func() {

@@ -125,6 +125,7 @@ Page {
         }
     }
 
+    // Filtering maybe?
     /*Popup {
         id: levelMenu
         topPadding: 0
@@ -182,6 +183,7 @@ Page {
         rowHeightProvider: function (column) { return rowHeight }
         columnWidthProvider: function (column) { return column == 0 ? firstColumn : column == 1 ? secondColumn : thirdColumn }
 
+        // Background image
         Image {
             source: "qrc:/qml/images/bkg-log-rect.png"
             fillMode: Image.TileVertically
