@@ -45,31 +45,6 @@ Page {
                     anchors.bottom: parent.bottom
                 }
 
-                /*Image {
-                    source: "qrc:/qml/images/caret-down-fill.svg"
-                    height: levelTitle.contentHeight / 2
-                    fillMode: Image.PreserveAspectFit
-                    anchors.left: levelTitle.right
-                    anchors.leftMargin: 4
-                    anchors.rightMargin: 4
-                    anchors.verticalCenter: levelTitle.verticalCenter
-
-                    RotationAnimator on rotation {
-                        id: rotanim1
-                        from: 0;
-                        to: 180;
-                        duration: 200
-                        running: false
-                    }
-
-                    RotationAnimator on rotation {
-                        id: rotanim2
-                        from: 180;
-                        to: 0;
-                        duration: 200
-                        running: false
-                    }
-                }*/
             }
 
             Item {
@@ -127,39 +102,6 @@ Page {
             }
         }
     }
-
-    // Filtering maybe?
-    /*Popup {
-        id: levelMenu
-        topPadding: 0
-        bottomPadding: 0
-        margins: 0
-
-        onAboutToShow: rotanim1.start()
-        onAboutToHide: rotanim2.start()
-
-        contentItem: ColumnLayout {
-            spacing: 0
-            Material.accent: CSC.Style.primaryColor
-
-            CheckBox {
-                text: "Error"
-                checked: true
-            }
-            CheckBox {
-                text: "Warning"
-                checked: true
-            }
-            CheckBox {
-                text: "Info"
-                checked: true
-            }
-        }
-
-        background: Rectangle {
-            radius: 0
-        }
-    }*/
 
     TableView {
         id: tableView
