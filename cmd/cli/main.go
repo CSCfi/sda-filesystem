@@ -97,7 +97,7 @@ func init() {
 	var timeout int
 	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&timeout, "http_timeout", 10, "Number of seconds to wait before timing out an HTTP request")
+	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 	flag.Parse()
 
 	api.SetRequestTimeout(timeout)
@@ -108,7 +108,7 @@ func init() {
 		// In other OSs except Windows, the mount point must exist and be empty
 		if runtime.GOOS != "windows" {
 			logs.Debugf("Mount point %s does not exist, so it will be created", mount)
-			if err = os.Mkdir(mount, 0777); err != nil {
+			if err = os.Mkdir(mount, 0755); err != nil {
 				logs.Fatalf("Could not create directory %s", mount)
 			}
 		}

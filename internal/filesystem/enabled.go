@@ -52,7 +52,7 @@ func (fs *Connectfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc in
 // Read returns bytes from a file
 func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n int) {
 	defer fs.synchronize()()
-	logs.Debugf("Read %s", path)
+	logs.Debugf("Reading %s", path)
 	node := fs.getNode(path, fh)
 	if nil == node {
 		logs.Errorf("Read %s, inode does't exist", path)
@@ -85,7 +85,6 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 
 	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
-	logs.Debugf("File %s has been accessed/read", path)
 	return
 }
 

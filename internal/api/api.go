@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+const chunkSize = 8 << (10*2 - 1) // 4 MiB chunksize
+
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
 var downloadCache = cache.NewRistrettoCache()
 
@@ -159,8 +161,7 @@ func InitializeClient() error {
 	return nil
 }
 
-// makeRequest builds an authenticated HTTP client
-// which sends HTTP requests and parses the responses
+// makeRequest sends HTTP requests and parses the responses
 func makeRequest(url string, token string, query map[string]string, headers map[string]string) ([]byte, error) {
 	var response *http.Response
 
@@ -370,13 +371,21 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 		"container": parts[1],
 		"object":    parts[2],
 	}
+
+	// chunk index of cache
+	chunk := start / chunkSize
+	// start coordinate of chunk
+	chStart := chunk * chunkSize
+	// end coordinate of chunk
+	chEnd := (chunk + 1) * chunkSize
+
 	// we make the cache key based on object path and requested bytes
-	cacheKey := parts[0] + "_" + parts[1] + "_" + parts[2] + "_" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)
+	cacheKey := parts[0] + "_" + parts[1] + "_" + parts[2] + "_" + strconv.FormatInt(chStart, 10)
 	response, found := downloadCache.Get(cacheKey)
 
 	if !found {
 		// Additional headers
-		headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
+		headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(chStart, 10) + "-" + strconv.FormatInt(chEnd-1, 10),
 			"X-Project-ID": hi.sTokens[project].ProjectID}
 
 		// Request data
@@ -384,12 +393,18 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
+
 		downloadCache.Set(cacheKey, string(response), time.Minute*60)
 		logs.Debug("Stored in cache")
-		logs.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
+
+		chEnd = chStart + int64(len(string(response)))
+		logs.Infof("Downloaded object %s from coordinates %d-%d", path, chStart, chEnd-1)
 		return response, nil
 	}
 
-	logs.Infof("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
-	return []byte(fmt.Sprintf("%v", response)), nil
+	offset := start - chStart
+	endofst := end - chStart
+
+	logs.Debugf("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
+	return []byte(fmt.Sprintf("%v", response))[offset:endofst], nil
 }
