@@ -385,7 +385,6 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
 		downloadCache.Set(cacheKey, string(response), time.Minute*60)
-		time.Sleep(10 * time.Millisecond)
 		logs.Debug("Stored in cache")
 		logs.Infof("Downloaded object %s from coordinates %d-%d", path, start, end-1)
 		return response, nil
