@@ -37,6 +37,7 @@ Page {
                 id: levelItem
                 Layout.preferredWidth: tableView.firstColumn
                 Layout.fillHeight: true
+
                 Text {
                     id: levelTitle
                     text: "Level"
@@ -44,12 +45,12 @@ Page {
                     x: -tableView.contentX
                     anchors.bottom: parent.bottom
                 }
-
             }
 
             Item {
                 Layout.preferredWidth: tableView.secondColumn
                 Layout.fillHeight: true
+
                 Text {
                     text: "Date"
                     font.pointSize: 20
@@ -61,6 +62,7 @@ Page {
             Item {
                 Layout.preferredWidth: messageText.contentWidth
                 Layout.fillHeight: true
+                
                 Text {
                     id: messageText
                     text: "Message"

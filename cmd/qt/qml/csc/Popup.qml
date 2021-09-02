@@ -151,21 +151,24 @@ Popup {
 
         RoundButton {
             id: closePopup
-            text: "\u2573"
+            padding: 0
+            icon.source: "qrc:/qml/images/x-lg.svg"
+            icon.color: mainColor
+            icon.width: width / 3
+            icon.height: height / 3
+            width: 25
             height: 25
-            width: height
-            visible: contentColumn.state == ""
             topInset: 0
             bottomInset: 0
             rightInset: 0
             leftInset: 0
+            visible: contentColumn.state == ""
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.margins: 4
 
-            Material.foreground: mainColor
             Material.background: "transparent"
-            
+
             onClicked: popup.close()
 
             MouseArea {
