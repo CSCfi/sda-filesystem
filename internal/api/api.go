@@ -405,6 +405,11 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	offset := start - chStart
 	endofst := end - chStart
 
+	ret := []byte(fmt.Sprintf("%v", response))
+	if endofst > int64(len(ret)) {
+		endofst = int64(len(ret))
+	}
+
 	logs.Debugf("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
-	return []byte(fmt.Sprintf("%v", response))[offset:endofst], nil
+	return ret[offset:endofst], nil
 }
