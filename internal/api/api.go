@@ -415,6 +415,7 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 		if endofst > int64(buf.Len()) {
 			endofst = int64(buf.Len())
 		}
+		//fmt.Println(ofst, endofst, string(buf.Bytes())[0:10])
 		return buf.Bytes()[ofst:endofst], nil
 	}
 
