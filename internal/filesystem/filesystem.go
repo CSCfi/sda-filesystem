@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -31,9 +32,10 @@ type Connectfs struct {
 
 // node represents one file or directory
 type node struct {
-	stat    fuse.Stat_t
-	chld    map[string]*node
-	opencnt int
+	stat            fuse.Stat_t
+	chld            map[string]*node
+	opencnt         int
+	checkDecryption bool
 }
 
 // containerInfo is a packet of information sent through a channel to createObjects()
@@ -215,6 +217,12 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 			for i, obj := range objects {
 				parts := strings.SplitN(obj.Name, "/", level+1)
 
+				// Prevent objects that are empty directories to be created as files
+				if level == 1 && strings.HasSuffix(obj.Name, "/") {
+					remove = append(remove, i)
+					continue
+				}
+
 				// If true, create the final object file
 				if len(parts) < level+1 {
 					objectPath := containerPath + "/" + removeInvalidChars(obj.Name, "/")
@@ -275,6 +283,29 @@ func removeInvalidChars(str string, ignore ...string) string {
 
 	r := strings.NewReplacer(forReplacer...)
 	return r.Replace(str)
+}
+
+// calculateDecryptedSize calculates the decrypted size of an encrypted file size
+func calculateDecryptedSize(size int64) int64 {
+	// Crypt4GH settings
+	var blockSize int64 = 65536
+	var macSize int64 = 28
+	var headerSize int64 = 124
+	cipherBlockSize := blockSize + macSize
+
+	// Calculate body size without header
+	bodySize := size - headerSize
+
+	// Calculate number of cipher blocks in body
+	// number of complete 64kiB datablocks
+	blocks := int64(math.Floor(float64(bodySize) / float64(cipherBlockSize)))
+	// the last block can be smaller than 64kiB
+	remainder := bodySize%cipherBlockSize - macSize
+
+	// Add the previous info back together
+	decryptedSize := blocks*blockSize + remainder
+
+	return decryptedSize
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
@@ -360,7 +391,8 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 			Flags:    0,
 		},
 		nil,
-		0}
+		0,
+		false}
 	// Initialize map of children if node is a directory
 	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
 		self.chld = map[string]*node{}
@@ -368,22 +400,22 @@ func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp f
 	return &self
 }
 
-func (fs *Connectfs) openNode(path string, dir bool) (int, uint64) {
+func (fs *Connectfs) openNode(path string, dir bool) (*node, int, uint64) {
 	_, _, node, _ := fs.lookupNode(path)
 	if node == nil {
-		return -fuse.ENOENT, ^uint64(0)
+		return nil, -fuse.ENOENT, ^uint64(0)
 	}
 	if !dir && fuse.S_IFDIR == node.stat.Mode&fuse.S_IFMT {
-		return -fuse.EISDIR, ^uint64(0)
+		return nil, -fuse.EISDIR, ^uint64(0)
 	}
 	if dir && fuse.S_IFDIR != node.stat.Mode&fuse.S_IFMT {
-		return -fuse.ENOTDIR, ^uint64(0)
+		return nil, -fuse.ENOTDIR, ^uint64(0)
 	}
 	node.opencnt++
 	if node.opencnt == 1 {
 		fs.openmap[node.stat.Ino] = node
 	}
-	return 0, node.stat.Ino
+	return node, 0, node.stat.Ino
 }
 
 func (fs *Connectfs) closeNode(fh uint64) int {

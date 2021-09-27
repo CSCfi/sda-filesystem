@@ -38,5 +38,5 @@ git clone https://github.com/therecipe/env_linux_amd64_513.git vendor/github.com
 "$(go env GOPATH)"/bin/qtsetup
 
 echo "Now qtdeploy can be used."
-echo "If the command is not found refresh your bahs/zsh shell, or start a new terminal."
+echo "If the command is not found refresh your bash/zsh shell, or start a new terminal."
 echo "===> Done. "

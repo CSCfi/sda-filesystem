@@ -182,7 +182,13 @@ func main() {
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+path.Base(mount))
+		options = append(options, "-o", "attr_timeout=0")
+		//options = append(options, "-o", "iosize="+??)
+	} else if runtime.GOOS == "linux" {
+		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
+		//options = append(options, "-o", "max_pages=256")
 	}
+
 	host.Mount(mount, options)
 
 	<-done

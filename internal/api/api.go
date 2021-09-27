@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -162,13 +164,13 @@ func InitializeClient() error {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-func makeRequest(url string, token string, query map[string]string, headers map[string]string) ([]byte, error) {
+func makeRequest(url string, token string, query map[string]string, headers map[string]string, ret interface{}) (err error) {
 	var response *http.Response
 
 	// Build HTTP request
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Place query params if they are set
@@ -199,7 +201,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 		count++
 	}
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer response.Body.Close()
 
@@ -207,23 +209,32 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 		logs.Info("Tokens no longer valid. Fetching them again")
 		FetchTokens()
 		hi.loggedIn = false // To prevent unlikely infinite loop
-		ret, err := makeRequest(url, token, query, headers)
+		err = makeRequest(url, token, query, headers, ret)
 		hi.loggedIn = true
-		return ret, err
+		return
 	}
 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
-		return nil, &RequestError{response.StatusCode}
+		return &RequestError{response.StatusCode}
 	}
 
 	// Parse request
-	r, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
+	switch v := ret.(type) {
+	case *bool:
+		*v = (response.Header.Get("X-Decrypted") == "True")
+		io.Copy(io.Discard, response.Body)
+	case *bytes.Buffer:
+		if _, err = io.Copy(v, response.Body); err != nil {
+			return fmt.Errorf("Copying response failed: %w", err)
+		}
+	default:
+		if err = json.NewDecoder(response.Body).Decode(v); err != nil {
+			return fmt.Errorf("Unable to decode response: %w", err)
+		}
 	}
 
 	logs.Debug("Request ", request.URL, " returned a response")
-	return r, nil
+	return nil
 }
 
 // FetchTokens fetches the unscoped token and the scoped tokens
@@ -255,15 +266,10 @@ func FetchTokens() {
 // GetUToken gets the unscoped token
 func GetUToken() error {
 	// Request token
-	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", nil, nil)
+	uToken := UToken{}
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", nil, nil, &uToken)
 	if err != nil {
 		return fmt.Errorf("Retrieving unscoped token failed: %w", err)
-	}
-
-	// Parse the JSON response into a struct
-	uToken := UToken{}
-	if err := json.Unmarshal(response, &uToken); err != nil {
-		return fmt.Errorf("Unable to unmarshal response when retrieving unscoped token: %w", err)
 	}
 
 	hi.uToken = uToken.Token
@@ -277,15 +283,10 @@ func GetSToken(project string) error {
 	query := map[string]string{"project": project}
 
 	// Request token
-	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil)
+	sToken := SToken{}
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil, &sToken)
 	if err != nil {
 		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
-	}
-
-	// Parse the JSON response into a struct
-	sToken := SToken{}
-	if err := json.Unmarshal(response, &sToken); err != nil {
-		return fmt.Errorf("Unable to unmarshal response when retrieving scoped token for %s: %w", project, err)
 	}
 
 	hi.sTokens[project] = sToken
@@ -295,17 +296,11 @@ func GetSToken(project string) error {
 
 // GetProjects gets all projects user has access to
 func GetProjects() ([]Metadata, error) {
-
 	// Request projects
-	response, err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil)
+	var projects []Metadata
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil, &projects)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
-	}
-
-	// Parse the JSON response into a slice
-	var projects []Metadata
-	if err := json.Unmarshal(response, &projects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response when retrieving projects: %w", err)
 	}
 
 	logs.Debugf("Retrieved %d projects", len(projects))
@@ -318,18 +313,13 @@ func GetContainers(project string) ([]Metadata, error) {
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
 
 	// Request containers
-	response, err := makeRequest(
+	var containers []Metadata
+	err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
-			url.PathEscape(project)+"/containers", hi.sTokens[project].Token, nil, headers)
+			url.PathEscape(project)+"/containers", hi.sTokens[project].Token, nil, headers, &containers)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving containers for %s failed: %w", project, err)
-	}
-
-	// Parse the JSON response into a slice
-	var containers []Metadata
-	if err := json.Unmarshal(response, &containers); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response when retrieving containers: %w", err)
 	}
 
 	logs.Infof("Retrieved containers for %s", project)
@@ -342,22 +332,42 @@ func GetObjects(project, container string) ([]Metadata, error) {
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
 
 	// Request objects
-	response, err := makeRequest(
+	var objects []Metadata
+	err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
 			url.PathEscape(project)+"/container/"+
-			url.PathEscape(container)+"/objects", hi.sTokens[project].Token, nil, headers)
+			url.PathEscape(container)+"/objects", hi.sTokens[project].Token, nil, headers, &objects)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects for %s failed: %w", container, err)
 	}
 
-	// Parse the JSON response into a struct
-	var objects []Metadata
-	if err := json.Unmarshal(response, &objects); err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal response when retrieving objects: %w", err)
-	}
 	logs.Infof("Retrieved objects for %s/%s", project, container)
 	return objects, nil
+}
+
+// IsDecrypted determines whether object in path is automatically decrypted by the API
+func IsDecrypted(path string) (bool, error) {
+	parts := strings.SplitN(path, "/", 3)
+	project := parts[0]
+
+	// Query params
+	query := map[string]string{
+		"project":   parts[0],
+		"container": parts[1],
+		"object":    parts[2],
+	}
+
+	// Additional headers
+	headers := map[string]string{"Range": "bytes=0-0", "X-Project-ID": hi.sTokens[project].ProjectID}
+
+	var decrypted bool
+	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, &decrypted)
+	if err != nil {
+		return false, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
+	}
+
+	return decrypted, nil
 }
 
 // DownloadData gets content of object from data API
@@ -379,6 +389,9 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	// end coordinate of chunk
 	chEnd := (chunk + 1) * chunkSize
 
+	ofst := start - chStart
+	endofst := end - chStart
+
 	// we make the cache key based on object path and requested bytes
 	cacheKey := parts[0] + "_" + parts[1] + "_" + parts[2] + "_" + strconv.FormatInt(chStart, 10)
 	response, found := downloadCache.Get(cacheKey)
@@ -389,21 +402,21 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 			"X-Project-ID": hi.sTokens[project].ProjectID}
 
 		// Request data
-		response, err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers)
+		buf := bytes.NewBuffer(make([]byte, 0, chunkSize))
+		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, buf)
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
 
-		downloadCache.Set(cacheKey, string(response), time.Minute*60)
-		logs.Debug("Stored in cache")
+		downloadCache.Set(cacheKey, string(buf.Bytes()), time.Minute*60)
+		chEnd = chStart + int64(buf.Len())
+		logs.Debug("Object %s stored in cache, with coordinates %d-%d", path, chStart, chEnd-1)
 
-		chEnd = chStart + int64(len(string(response)))
-		logs.Infof("Downloaded object %s from coordinates %d-%d", path, chStart, chEnd-1)
-		return response, nil
+		if endofst > int64(buf.Len()) {
+			endofst = int64(buf.Len())
+		}
+		return buf.Bytes()[ofst:endofst], nil
 	}
-
-	offset := start - chStart
-	endofst := end - chStart
 
 	ret := []byte(fmt.Sprintf("%v", response))
 	if endofst > int64(len(ret)) {
@@ -411,5 +424,5 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	}
 
 	logs.Debugf("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
-	return ret[offset:endofst], nil
+	return ret[ofst:endofst], nil
 }

@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -14,14 +15,35 @@ import (
 func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening file ", path)
-	return fs.openNode(path, false)
+
+	node, errc, fh := fs.openNode(path, false)
+
+	if !node.checkDecryption {
+		if node.stat.Size >= 152 {
+			path = strings.TrimPrefix(path, "/")
+			if decrypted, err := api.IsDecrypted(path); err != nil {
+				logs.Error(fmt.Errorf("Encryption status of object %s could not be determined: %w", path, err))
+				return -fuse.EAGAIN, ^uint64(0)
+			} else if decrypted {
+				logs.Infof("Object %s is automatically decrypted", path)
+				node.stat.Size = calculateDecryptedSize(node.stat.Size)
+				node.stat.Ctim = fuse.Now()
+			} else {
+				logs.Debugf("Object %s is not decrypted", path)
+			}
+		}
+		node.checkDecryption = true
+	}
+
+	return
 }
 
 // Opendir opens a directory.
 func (fs *Connectfs) Opendir(path string) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening directory ", path)
-	return fs.openNode(path, true)
+	_, errc, fh = fs.openNode(path, true)
+	return
 }
 
 // Release closes a file.
@@ -50,7 +72,7 @@ func (fs *Connectfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc in
 }
 
 // Read returns bytes from a file
-func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n int) {
+func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	defer fs.synchronize()()
 	logs.Debugf("Reading %s", path)
 	node := fs.getNode(path, fh)
@@ -79,13 +101,13 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	data, err := api.DownloadData(path, ofst, endofst)
 	if err != nil {
 		logs.Error(err)
-		return
+		return -fuse.EIO
 	}
-	n = copy(buff, data)
+	n := copy(buff, data)
 
 	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
-	return
+	return n
 }
 
 // Readdir reads the contents of a directory.
