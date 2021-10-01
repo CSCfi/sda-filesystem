@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -19,7 +18,7 @@ import (
 	"time"
 )
 
-const chunkSize = 8 << (10*2 - 1) // 4 MiB chunksize
+const chunkSize = 1 << 22 // 4 MiB chunksize
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
 var downloadCache = cache.NewRistrettoCache()
@@ -134,16 +133,17 @@ func InitializeClient() error {
 	}
 
 	// Set up HTTP client
-	timeout := time.Duration(hi.requestTimeout) * time.Second
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-
-	tr.MaxConnsPerHost = 100
-	tr.MaxIdleConnsPerHost = 100
-	//tr.MaxIdleConns
-
-	tr.TLSClientConfig = &tls.Config{
-		RootCAs: caCertPool,
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: 100,
+		MaxConnsPerHost:     100,
+		TLSClientConfig: &tls.Config{
+			RootCAs: caCertPool,
+		},
+		ForceAttemptHTTP2: true, // Is this needed?
 	}
+
+	timeout := time.Duration(hi.requestTimeout) * time.Second
+
 	hi.client = &http.Client{
 		Timeout:   timeout,
 		Transport: tr,
@@ -223,8 +223,8 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 	case *bool:
 		*v = (response.Header.Get("X-Decrypted") == "True")
 		io.Copy(io.Discard, response.Body)
-	case *bytes.Buffer:
-		if _, err = io.Copy(v, response.Body); err != nil {
+	case []byte:
+		if _, err := io.ReadFull(response.Body, v); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)
 		}
 	default:
@@ -371,7 +371,7 @@ func IsDecrypted(path string) (bool, error) {
 }
 
 // DownloadData gets content of object from data API
-func DownloadData(path string, start int64, end int64) ([]byte, error) {
+func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, error) {
 	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
@@ -389,6 +389,10 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 	// end coordinate of chunk
 	chEnd := (chunk + 1) * chunkSize
 
+	if chEnd > maxEnd {
+		chEnd = maxEnd
+	}
+
 	ofst := start - chStart
 	endofst := end - chStart
 
@@ -402,28 +406,25 @@ func DownloadData(path string, start int64, end int64) ([]byte, error) {
 			"X-Project-ID": hi.sTokens[project].ProjectID}
 
 		// Request data
-		buf := bytes.NewBuffer(make([]byte, 0, chunkSize))
+		buf := make([]byte, chEnd-chStart)
 		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, buf)
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
 
-		downloadCache.Set(cacheKey, string(buf.Bytes()), time.Minute*60)
-		chEnd = chStart + int64(buf.Len())
+		downloadCache.Set(cacheKey, buf, time.Minute*60)
 		logs.Debug("Object %s stored in cache, with coordinates %d-%d", path, chStart, chEnd-1)
 
-		if endofst > int64(buf.Len()) {
-			endofst = int64(buf.Len())
+		if endofst > int64(len(buf)) {
+			endofst = int64(len(buf))
 		}
-		//fmt.Println(ofst, endofst, string(buf.Bytes())[0:10])
-		return buf.Bytes()[ofst:endofst], nil
+		return buf[ofst:endofst], nil
 	}
 
-	ret := []byte(fmt.Sprintf("%v", response))
+	ret := response.([]byte)
 	if endofst > int64(len(ret)) {
 		endofst = int64(len(ret))
 	}
-
 	logs.Debugf("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
 	return ret[ofst:endofst], nil
 }

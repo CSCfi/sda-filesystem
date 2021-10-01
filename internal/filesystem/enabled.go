@@ -98,7 +98,7 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	}
 
 	// Download data from file
-	data, err := api.DownloadData(path, ofst, endofst)
+	data, err := api.DownloadData(path, ofst, endofst, node.stat.Size)
 	if err != nil {
 		logs.Error(err)
 		return -fuse.EIO
