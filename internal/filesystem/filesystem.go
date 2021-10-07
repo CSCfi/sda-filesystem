@@ -293,6 +293,11 @@ func calculateDecryptedSize(size int64) int64 {
 	var headerSize int64 = 124
 	cipherBlockSize := blockSize + macSize
 
+	// Crypt4GH files have a minimum possible size of 152 bytes
+	if size < headerSize+macSize {
+		return -1
+	}
+
 	// Calculate body size without header
 	bodySize := size - headerSize
 

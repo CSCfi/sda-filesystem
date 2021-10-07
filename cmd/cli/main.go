@@ -167,8 +167,6 @@ func shutdown() <-chan bool {
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	err := api.GetEnvs()
 	if err != nil {
 		logs.Fatal(err)
@@ -192,11 +190,11 @@ func main() {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+path.Base(mount))
 		options = append(options, "-o", "attr_timeout=0")
-		//options = append(options, "-o", "iosize="+??)
+		options = append(options, "-o", "iosize=262144") // Value not optimized
 	} else if runtime.GOOS == "linux" {
 		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
-		//options = append(options, "-o", "max_pages=256")
-	}
+		options = append(options, "-o", "auto_unmount")
+	} // Still needs windows options
 
 	host.Mount(mount, options)
 

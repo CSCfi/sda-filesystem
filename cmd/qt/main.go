@@ -126,11 +126,11 @@ func (qb *QmlBridge) loadFuse() {
 			options = append(options, "-o", "defer_permissions")
 			options = append(options, "-o", "volname="+path.Base(qb.MountPoint()))
 			options = append(options, "-o", "attr_timeout=0")
-			//options = append(options, "-o", "iosize="+??)
+			options = append(options, "-o", "iosize=262144") // Value not optimized
 		} else if runtime.GOOS == "linux" {
 			options = append(options, "-o", "attr_timeout=0")
-			//options = append(options, "-o", "max_pages=256")
-		}
+			options = append(options, "-o", "auto_unmount")
+		} // Still needs windows options
 
 		qb.FuseReady()
 		host.Mount(qb.MountPoint(), options)
@@ -289,7 +289,6 @@ func init() {
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	core.QCoreApplication_SetApplicationName("SD-Connect Filesystem")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")

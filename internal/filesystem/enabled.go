@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -19,17 +20,31 @@ func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 	node, errc, fh := fs.openNode(path, false)
 
 	if !node.checkDecryption {
-		if node.stat.Size >= 152 {
-			path = strings.TrimPrefix(path, "/")
-			if decrypted, err := api.IsDecrypted(path); err != nil {
-				logs.Error(fmt.Errorf("Encryption status of object %s could not be determined: %w", path, err))
-				return -fuse.EAGAIN, ^uint64(0)
-			} else if decrypted {
-				logs.Infof("Object %s is automatically decrypted", path)
-				node.stat.Size = calculateDecryptedSize(node.stat.Size)
+		// In case file has been renamed
+		origPath := path
+		path = strings.TrimPrefix(path, string(os.PathSeparator))
+		if origName, ok := fs.renamed[path]; ok {
+			path = origName
+		}
+
+		decrypted, segSize, err := api.GetSpecialHeaders(path)
+		if err != nil {
+			logs.Error(fmt.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", origPath, err))
+			return -fuse.EAGAIN, ^uint64(0)
+		}
+		if segSize != -1 {
+			logs.Infof("Object %s is a segmented object with size %d", origPath, segSize)
+			node.stat.Size = segSize
+			node.stat.Ctim = fuse.Now()
+		}
+		if decrypted {
+			dSize := calculateDecryptedSize(node.stat.Size)
+			if dSize != -1 {
+				logs.Infof("Object %s is automatically decrypted", origPath)
+				node.stat.Size = dSize
 				node.stat.Ctim = fuse.Now()
 			} else {
-				logs.Debugf("Object %s is not decrypted", path)
+				logs.Warningf("API returned header X-Decrypted even though size of object %s is too small", origPath)
 			}
 		}
 		node.checkDecryption = true
@@ -82,11 +97,16 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	}
 
 	// Check whether this file has had its name changed
-	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimPrefix(path, string(os.PathSeparator))
 	if origName, ok := fs.renamed[path]; ok {
 		path = origName
 	}
 	path = filepath.ToSlash(path)
+
+	// For some reason libfuse may give a offset that is equal to node size
+	if ofst >= node.stat.Size {
+		return 0
+	}
 
 	// Get file end coordinate
 	endofst := ofst + int64(len(buff))

@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const chunkSize = 1 << 22 // 4 MiB chunksize
+const chunkSize = 1 << 25
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
 var downloadCache = cache.NewRistrettoCache()
@@ -52,6 +52,11 @@ type UToken struct {
 type SToken struct {
 	Token     string `json:"token"`
 	ProjectID string `json:"projectID"`
+}
+
+type specialHeaders struct {
+	decrypted           bool
+	segmentedObjectSize int64
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -133,14 +138,15 @@ func InitializeClient() error {
 	}
 
 	// Set up HTTP client
-	tr := &http.Transport{
-		MaxIdleConnsPerHost: 100,
-		MaxConnsPerHost:     100,
-		TLSClientConfig: &tls.Config{
-			RootCAs: caCertPool,
-		},
-		ForceAttemptHTTP2: true, // Is this needed?
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.MaxConnsPerHost = 100
+	tr.MaxIdleConnsPerHost = 100
+	tr.TLSClientConfig = &tls.Config{
+		RootCAs:                  caCertPool,
+		PreferServerCipherSuites: true,
 	}
+	tr.ForceAttemptHTTP2 = true
+	tr.DisableKeepAlives = false
 
 	timeout := time.Duration(hi.requestTimeout) * time.Second
 
@@ -164,13 +170,13 @@ func InitializeClient() error {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-func makeRequest(url string, token string, query map[string]string, headers map[string]string, ret interface{}) (err error) {
+func makeRequest(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error {
 	var response *http.Response
 
 	// Build HTTP request
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return
+		return err
 	}
 
 	// Place query params if they are set
@@ -201,7 +207,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 		count++
 	}
 	if err != nil {
-		return
+		return err
 	}
 	defer response.Body.Close()
 
@@ -211,7 +217,7 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 		hi.loggedIn = false // To prevent unlikely infinite loop
 		err = makeRequest(url, token, query, headers, ret)
 		hi.loggedIn = true
-		return
+		return err
 	}
 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
@@ -220,11 +226,19 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 
 	// Parse request
 	switch v := ret.(type) {
-	case *bool:
-		*v = (response.Header.Get("X-Decrypted") == "True")
+	case *specialHeaders:
+		(*v).decrypted = (response.Header.Get("X-Decrypted") == "True")
+		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
+			if (*v).segmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
+				logs.Warning(fmt.Errorf("Could not convert header X-Segmented-Object-Size to integer: %w", err))
+				(*v).segmentedObjectSize = -1
+			}
+		} else {
+			(*v).segmentedObjectSize = -1
+		}
 		io.Copy(io.Discard, response.Body)
 	case []byte:
-		if _, err := io.ReadFull(response.Body, v); err != nil {
+		if _, err = io.ReadFull(response.Body, v); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)
 		}
 	default:
@@ -346,8 +360,8 @@ func GetObjects(project, container string) ([]Metadata, error) {
 	return objects, nil
 }
 
-// IsDecrypted determines whether object in path is automatically decrypted by the API
-func IsDecrypted(path string) (bool, error) {
+// GetSpecialHeaders returns information on headers that can only be retirived from data api
+func GetSpecialHeaders(path string) (bool, int64, error) {
 	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
@@ -359,15 +373,15 @@ func IsDecrypted(path string) (bool, error) {
 	}
 
 	// Additional headers
-	headers := map[string]string{"Range": "bytes=0-0", "X-Project-ID": hi.sTokens[project].ProjectID}
+	headers := map[string]string{"Range": "bytes=0-1", "X-Project-ID": hi.sTokens[project].ProjectID}
 
-	var decrypted bool
-	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, &decrypted)
+	var ret specialHeaders
+	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, &ret)
 	if err != nil {
-		return false, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
+		return false, -1, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 	}
 
-	return decrypted, nil
+	return ret.decrypted, ret.segmentedObjectSize, nil
 }
 
 // DownloadData gets content of object from data API
