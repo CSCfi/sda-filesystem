@@ -1,6 +1,8 @@
 package filesystem
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -14,14 +16,49 @@ import (
 func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening file ", path)
-	return fs.openNode(path, false)
+
+	node, errc, fh := fs.openNode(path, false)
+
+	if !node.checkDecryption {
+		// In case file has been renamed
+		origPath := path
+		path = strings.TrimPrefix(path, string(os.PathSeparator))
+		if origName, ok := fs.renamed[path]; ok {
+			path = origName
+		}
+
+		decrypted, segSize, err := api.GetSpecialHeaders(path)
+		if err != nil {
+			logs.Error(fmt.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", origPath, err))
+			return -fuse.EAGAIN, ^uint64(0)
+		}
+		if segSize != -1 {
+			logs.Infof("Object %s is a segmented object with size %d", origPath, segSize)
+			node.stat.Size = segSize
+			node.stat.Ctim = fuse.Now()
+		}
+		if decrypted {
+			dSize := calculateDecryptedSize(node.stat.Size)
+			if dSize != -1 {
+				logs.Infof("Object %s is automatically decrypted", origPath)
+				node.stat.Size = dSize
+				node.stat.Ctim = fuse.Now()
+			} else {
+				logs.Warningf("API returned header X-Decrypted even though size of object %s is too small", origPath)
+			}
+		}
+		node.checkDecryption = true
+	}
+
+	return
 }
 
 // Opendir opens a directory.
 func (fs *Connectfs) Opendir(path string) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening directory ", path)
-	return fs.openNode(path, true)
+	_, errc, fh = fs.openNode(path, true)
+	return
 }
 
 // Release closes a file.
@@ -50,7 +87,7 @@ func (fs *Connectfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc in
 }
 
 // Read returns bytes from a file
-func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n int) {
+func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	defer fs.synchronize()()
 	logs.Debugf("Reading %s", path)
 	node := fs.getNode(path, fh)
@@ -60,11 +97,16 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	}
 
 	// Check whether this file has had its name changed
-	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimPrefix(path, string(os.PathSeparator))
 	if origName, ok := fs.renamed[path]; ok {
 		path = origName
 	}
 	path = filepath.ToSlash(path)
+
+	// For some reason libfuse may give a offset that is equal to node size
+	if ofst >= node.stat.Size {
+		return 0
+	}
 
 	// Get file end coordinate
 	endofst := ofst + int64(len(buff))
@@ -76,16 +118,16 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) (n in
 	}
 
 	// Download data from file
-	data, err := api.DownloadData(path, ofst, endofst)
+	data, err := api.DownloadData(path, ofst, endofst, node.stat.Size)
 	if err != nil {
 		logs.Error(err)
-		return
+		return -fuse.EIO
 	}
-	n = copy(buff, data)
+	n := copy(buff, data)
 
 	// Update file accession timestamp
 	node.stat.Atim = fuse.Now()
-	return
+	return n
 }
 
 // Readdir reads the contents of a directory.

@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path"
@@ -98,10 +100,17 @@ func init() {
 	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
 	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
+	profiling := flag.Bool("profiling", false, "Code profiling on")
 	flag.Parse()
 
 	api.SetRequestTimeout(timeout)
 	logs.SetLevel(logLevel)
+
+	if *profiling {
+		go func() {
+			http.ListenAndServe(":8080", nil)
+		}()
+	}
 
 	// Verify mount point directory
 	if dir, err := os.Stat(mount); os.IsNotExist(err) {
@@ -158,8 +167,6 @@ func shutdown() <-chan bool {
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	err := api.GetEnvs()
 	if err != nil {
 		logs.Fatal(err)
@@ -182,7 +189,13 @@ func main() {
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+path.Base(mount))
-	}
+		options = append(options, "-o", "attr_timeout=0")
+		options = append(options, "-o", "iosize=262144") // Value not optimized
+	} else if runtime.GOOS == "linux" {
+		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
+		options = append(options, "-o", "auto_unmount")
+	} // Still needs windows options
+
 	host.Mount(mount, options)
 
 	<-done

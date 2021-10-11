@@ -22,6 +22,7 @@ func SetSignal(fn func(int, []string)) {
 	signal = fn
 }
 
+// SetLevel sets the logging level
 func SetLevel(level string) {
 	if logrusLevel, ok := levelMap[strings.ToLower(level)]; ok {
 		log.SetLevel(logrusLevel)
