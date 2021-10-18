@@ -1,5 +1,6 @@
-[Back to Documentation](README.md)
 # API
+
+The API reflects data in the [SD-Connect](https://research.csc.fi/-/sd-connect) services.
 
 ## Data API
 
