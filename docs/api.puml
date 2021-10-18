@@ -1,0 +1,76 @@
+@startuml SD Connect API
+
+participant FUSE as f
+participant "SD Connect API" as a
+participant OpenStack as o
+autonumber 1
+
+==TOKEN==
+
+group GET /token (unscoped)
+    f -> a : get unscoped token\n(Authorization: Basic {base64(username:password)})
+    a -> o : OpenStack Identity V3 authentication\n(username, password)
+    o --> a : unscoped token (8h)
+    a --> f : unscoped token (8h)
+    end
+
+group GET /token?project=name (scoped token)
+    f -> a : get scoped token\n(Authorization: Basic {base64(username:password)})
+    a -> o : OpenStack Identity V3 authentication\n(username, password)
+    o --> a : projectID, scoped token (8h)
+    a --> f : projectID, scoped token (8h)
+    end
+
+==PROJECTS==
+
+group GET /projects
+    f -> a : get projects\n(Authorization: Basic {base64(username:password)}\nor\nAuthorization: Bearer <unscoped token>
+    group If using Basic auth
+        a -> o : OpenStack Identity V3 authentication\n(username, password)
+        o --> a : unscoped token
+        end
+    a -> o : get projects\n(unscoped token)
+    o --> a : projects
+    a --> f : projects
+    end
+
+==CONTAINERS==
+
+group GET /project/{projectName}/containers
+    f -> a : get containers\n(Authorization: Basic {base64(username:password)}\nor\nAuthorization: Bearer <unscoped token>\nX-Project-ID: <project ID>)
+    group If using Basic auth
+        a -> o : OpenStack Identity V3 authentication\n(username, password)
+        o --> a : scoped token
+        end
+    a -> o : get containers\n(scoped token)
+    o --> a : containers
+    a --> f : containers
+    end
+
+==OBJECTS==
+
+group GET/project/{projectName}/container/{containerName}/objects
+    f -> a : get objects\n(Authorization: Basic {base64(username:password)}\nor\nAuthorization: Bearer <unscoped token>\nX-Project-ID: <project ID>)
+    group If using Basic auth
+        a -> o : OpenStack Identity V3 authentication\n(username, password)
+        o --> a : scoped token
+        end
+    a -> o : get objects\n(scoped token)
+    o --> a : objects
+    a --> f : objects
+    end
+
+==DATA==
+
+group GET/project/{projectName}/container/{containerName}/object/{objectName}
+    f -> a : get object bytes\n(Authorization: Basic username+password\nor\nAuthorization: Bearer <unscoped token>\nX-Project-ID: <project ID>)
+    group If using Basic auth
+        a -> o : OpenStack Identity V3 authentication\n(username, password)
+        o --> a : scoped token
+        end
+    a -> o : get object\n(scoped token)
+    o --> a : object bytes
+    a --> f : object bytes
+    end
+
+@enduml
