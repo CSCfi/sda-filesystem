@@ -13,7 +13,8 @@ For test environment use:
 export FS_SD_CONNECT_METADATA_API=https://connect-metadata-api-test.sd.csc.fi
 export FS_SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
 
-# Connection requires a certificate
+# Connection requires a certificate only if using untrusted (e.g. self-signed) certificates
+# if signed by a trusted CA, this is not needed
 # FS_SD_CONNECT_CERTS should be the file that contains the necessary certificates
 export FS_SD_CONNECT_CERTS=cert.pem	#FS_SD_CONNECT_CERTS should be the file that contains the necessary certificates
 ```
