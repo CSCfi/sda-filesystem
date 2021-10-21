@@ -8,13 +8,41 @@ jobs:
   build:
     name: Check code
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.16']
     steps:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Install GUI dependencies
+        if: steps.cache-vendor.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
+          bash ./dev_utils/setup-linux.sh
+
+      - name: Cache vendor
+        id: cache-vendor
+        uses: actions/cache@v2
+        with:
+          path: vendor
+          key: ${{ runner.os }}-vendor
+  
+      - name: build desktop
+        run: |
+          qtdeploy build desktop cmd/qt/main.go
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v2.5.2
         with:
           version: v1.42
-          args: -E gosec,goconst,nestif,bodyclose,rowserrcheck
+          args: -E gosec,goconst,nestif,bodyclose,rowserrcheck --skip-files cmd/qt/moc.go  --timeout=10m
+          skip-pkg-cache: true
+          skip-go-installation: true
