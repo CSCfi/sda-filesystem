@@ -23,7 +23,7 @@ go get github.com/therecipe/qt/cmd/...
 export GO111MODULE=on
 
 # dependencies not easily installed
-go get github.com/therecipe/qt/internal/binding/files/docs/5.12.0
+go get github.com/therecipe/qt/internal/binding/files/docs/5.13.0
 go get github.com/therecipe/qt/internal/cmd/moc@v0.0.0-20200904063919-c0c124a5770d
 
 go install -v -tags=no_env github.com/therecipe/qt/cmd/...
