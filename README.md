@@ -5,17 +5,17 @@ This desktop software makes use of the [SD-Connect Proxy API](docs/API.md) to bu
 
 ### Requirements
 
-Set environment variables `SD_CONNECT_METADATA_API`, `SD_CONNECT_DATA_API` and `SD_CONNECT_CERTS` before running program.
+Set environment variables `FS_SD_CONNECT_METADATA_API`, `FS_SD_CONNECT_DATA_API` and `FS_SD_CONNECT_CERTS` before running program.
 
 For test environment use:
 
 ```
-export SD_CONNECT_METADATA_API=https://connect-metadata-api-test.sd.csc.fi
-export SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
+export FS_SD_CONNECT_METADATA_API=https://connect-metadata-api-test.sd.csc.fi
+export FS_SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
 
 # Connection requires a certificate
 # SD_CONNECT_CERTS should be the file that contains the necessary certificates
-export SD_CONNECT_CERTS=cert.pem	
+export FS_SD_CONNECT_CERTS=cert.pem	#FS_SD_CONNECT_CERTS should be the file that contains the necessary certificates
 ```
 
 ## Graphical User Interface
