@@ -9,7 +9,7 @@ import csc 1.0 as CSC
 Window {
 	id: loginWindow
 	visible: true
-	title: "SD-Connect Filesystem"
+	title: "SDA Filesystem"
 	minimumWidth: 500
     minimumHeight: 400
 	maximumWidth: minimumWidth

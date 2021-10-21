@@ -13,9 +13,9 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sd-connect-fuse/internal/api"
-	"sd-connect-fuse/internal/filesystem"
-	"sd-connect-fuse/internal/logs"
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/filesystem"
+	"sda-filesystem/internal/logs"
 	"syscall"
 
 	"github.com/billziss-gh/cgofuse/fuse"
@@ -160,7 +160,7 @@ func shutdown() <-chan bool {
 	signal.Notify(s, os.Interrupt)
 	go func() {
 		<-s
-		logs.Info("Shutting down SD-Connect Filesystem")
+		logs.Info("Shutting down SDA Filesystem")
 		done <- true
 	}()
 	return done
