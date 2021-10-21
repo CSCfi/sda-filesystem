@@ -21,9 +21,9 @@ import (
 	"github.com/therecipe/qt/quickcontrols2"
 	"golang.org/x/sys/unix"
 
-	"sd-connect-fuse/internal/api"
-	"sd-connect-fuse/internal/filesystem"
-	"sd-connect-fuse/internal/logs"
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/filesystem"
+	"sda-filesystem/internal/logs"
 )
 
 var projectModel = NewProjectModel(nil)
@@ -174,7 +174,7 @@ func (qb *QmlBridge) openFuse() {
 }
 
 func (qb *QmlBridge) shutdown() {
-	logs.Info("Shutting down SD-Connect Filesystem")
+	logs.Info("Shutting down SDA Filesystem")
 	// Sending interrupt signal to unmount fuse
 	_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 }
@@ -297,7 +297,7 @@ func init() {
 }
 
 func main() {
-	core.QCoreApplication_SetApplicationName("SD-Connect Filesystem")
+	core.QCoreApplication_SetApplicationName("SDA Filesystem")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")
 	core.QCoreApplication_SetApplicationVersion("1.0.0")

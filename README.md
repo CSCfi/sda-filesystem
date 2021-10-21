@@ -38,7 +38,7 @@ On linux install required packages and vendor dependencies
 Note: for some vendor modules there might be warnings such as:
 ```
 INFO[0427] installing full qt/bluetooth                 
-go install: no install location for directory /home/<user>/sd-connect-fuse-master/vendor/github.com/therecipe/qt/bluetooth outside GOPATH
+go install: no install location for directory /home/<user>/sda-filesystem/vendor/github.com/therecipe/qt/bluetooth outside GOPATH
 	For more details see: 'go help gopath'
 ```
 These are ok, and are caused as of go 1.14+ 

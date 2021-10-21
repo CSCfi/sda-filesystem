@@ -8,8 +8,8 @@ import (
 
 	"github.com/billziss-gh/cgofuse/fuse"
 
-	"sd-connect-fuse/internal/api"
-	"sd-connect-fuse/internal/logs"
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/logs"
 )
 
 // Open opens a file.

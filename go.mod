@@ -1,4 +1,4 @@
-module sd-connect-fuse
+module sda-filesystem
 
 go 1.16
 
