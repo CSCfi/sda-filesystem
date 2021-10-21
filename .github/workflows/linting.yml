@@ -21,11 +21,14 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      - name: Install GUI dependencies
-        if: steps.cache-vendor.outputs.cache-hit != 'true'
+      - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
+
+      - name: Install GUI dependencies
+        if: steps.cache-vendor.outputs.cache-hit != 'true'
+        run: |
           bash ./dev_utils/setup-linux.sh
 
       - name: Cache vendor
@@ -33,9 +36,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: vendor
-          key: ${{ runner.os }}-vendor
+          key: ${{ runner.os }}-lint-vendor
   
-      - name: build desktop
+      - name: Build desktop
         run: |
           qtdeploy build desktop cmd/qt/main.go
 

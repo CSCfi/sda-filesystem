@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+
+jobs:
+  create_release:
+    name: Create release
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.create_release.outputs.id }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set output tag name
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref }}
+          body: |
+            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem GUI (Graphical User Interface).
+            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem CLI (Command Line Interface).
+            Download artifacts in zip archives below.
+  
+  build_cli_release:
+    name: Upload CLI Release Asset
+    needs: create_release
+    strategy:
+      max-parallel: 4
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: go-fuse
+            os_suffix: linux-amd64
+            asset_name: go-fuse
+          - os: macos-latest
+            artifact_name: go-fuse
+            os_suffix: macos-amd64
+            asset_name: go-fuse
+        golang-version: [1.16]
+    
+    runs-on: ${{ matrix.os }}
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Golang ${{ matrix.golang-version }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.golang-version }}
+      - name: Install macOS dependencies
+        if: matrix.os == 'macOS-latest'
+        run: |
+          brew install --cask osxfuse
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
+      - name: Build CLI artifact
+        run: |
+          go build -o ./go-fuse ./cmd/cli/main.go
+      - name: Archive CLI Asset
+        run: |
+          zip --junk-paths ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip ${{ matrix.artifact_name }}
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: ${{ github.ref }}
+          files: ./${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
+          fail_on_unmatched_files: true
+
+  build_gui_release:
+    name: Upload GUI Release Asset
+    needs: create_release
+    strategy:
+      max-parallel: 4
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            os_folder: linux
+            os_suffix: linux-amd64
+            asset_name: go-fuse
+          - os: macos-latest
+            os_folder: darwin
+            os_suffix: macos-amd64
+            asset_name: go-fuse
+        golang-version: [1.16]
+    
+    runs-on: ${{ matrix.os }}
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Golang ${{ matrix.golang-version }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.golang-version }}
+      - name: Install macOS dependencies
+        if: matrix.os == 'macOS-latest'
+        run: |
+          brew install --cask osxfuse
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
+      - name: Install GUI dependencies
+        if: (steps.cache-vendor.outputs.cache-hit != 'true'  && matrix.os == 'ubuntu-latest')
+        run: |
+          bash ./dev_utils/setup-linux.sh
+
+      - name: Install GUI dependencies
+        if: (steps.cache-vendor.outputs.cache-hit != 'true' && matrix.os == 'macOS-latest')
+        run: |
+          export GO111MODULE=off
+          go get github.com/therecipe/qt/cmd/... 
+          export GO111MODULE=on
+
+          go get github.com/therecipe/qt/internal/binding/files/docs/5.13.0
+          go get github.com/therecipe/qt/internal/cmd/moc@v0.0.0-20200904063919-c0c124a5770d
+
+          go install -v -tags=no_env github.com/therecipe/qt/cmd/...
+          go mod vendor
+          git clone https://github.com/therecipe/env_darwin_amd64_513.git vendor/github.com/therecipe/env_darwin_amd64_513
+          
+          $(go env GOPATH)/bin/qtsetup
+
+      - name: Cache vendor
+        id: cache-vendor
+        uses: actions/cache@v2
+        with:
+          path: vendor
+          key: ${{ runner.os }}-${{ matrix.os_suffix }}-vendor
+      - name: Build GUI artifact
+        run: |
+           qtdeploy build desktop cmd/qt/main.go
+      - name: Archive GUI Asset Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd cmd/qt/deploy/linux
+          mv qt_project sda-fuse
+          zip -r ${{ matrix.asset_name }}.zip .
+      - name: Archive GUI Asset macOS
+        if: matrix.os == 'macOS-latest'
+        run: |
+          cd cmd/qt/deploy/darwin
+          mv qt_project.app/Contents/MacOS/qt_project qt_project.app/Contents/MacOS/sda-fuse
+          zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: test
+          files: ./cmd/qt/deploy/${{ matrix.os_folder }}/${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
+          fail_on_unmatched_files: true
