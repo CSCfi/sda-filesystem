@@ -77,15 +77,15 @@ func init() {
 // GetEnvs looks up the necessary environment variables
 func GetEnvs() error {
 	var err error
-	hi.certPath, err = getEnv("SD_CONNECT_CERTS", false)
+	hi.certPath, err = getEnv("FS_SD_CONNECT_CERTS", false)
 	if err != nil {
 		return err
 	}
-	hi.metadataURL, err = getEnv("SD_CONNECT_METADATA_API", true)
+	hi.metadataURL, err = getEnv("FS_SD_CONNECT_METADATA_API", true)
 	if err != nil {
 		return err
 	}
-	hi.dataURL, err = getEnv("SD_CONNECT_DATA_API", true)
+	hi.dataURL, err = getEnv("FS_SD_CONNECT_DATA_API", true)
 	if err != nil {
 		return err
 	}
