@@ -30,9 +30,10 @@ Give your branch a short descriptive name (like the names between the `<>` below
 
 ### Coding conventions
 
-We do optimize for readability, and it would be awesome if you go through the code and see what conventions we've used so far.
+We do optimize for readability, and it would be awesome if you go through the code and see what conventions we've used so far. 
 
 As a general convention we like to keep things simple, so when possible avoid importing any big libraries.
+For linting we make use of [golangci-lint](https://github.com/golangci/golangci-lint), and each push is checked against it.
 
 Thanks,
 CSC Developers

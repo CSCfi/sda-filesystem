@@ -1,8 +1,8 @@
 package main
 
 import (
-	"sd-connect-fuse/internal/api"
-	"sd-connect-fuse/internal/filesystem"
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/filesystem"
 
 	"github.com/therecipe/qt/core"
 )
