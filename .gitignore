@@ -3,7 +3,7 @@
 *.pem
 moc*
 rcc*
-sd-connect-fuse
+sda-filesystem
 .go-version
 vendor/*
 deploy/*

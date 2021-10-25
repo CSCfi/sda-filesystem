@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"sd-connect-fuse/internal/logs"
+	"sda-filesystem/internal/logs"
 	"strings"
 
 	"github.com/sirupsen/logrus"
