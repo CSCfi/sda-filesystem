@@ -9,7 +9,7 @@ import csc 1.0 as CSC
 ApplicationWindow {
 	id: mainWindow
     visible: true
-    title: "SD-Connect Filesystem"
+    title: "SDA Filesystem"
 	width: 1000
 	height: 600
 	minimumHeight: sideBarView.height + toolbar.height
