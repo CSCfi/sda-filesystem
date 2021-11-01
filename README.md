@@ -26,8 +26,7 @@ Go version 1.16
 
 cgofuse and its [dependencies on different operating systems](https://github.com/billziss-gh/cgofuse#how-to-build).
 
-Install [Qt for Go](https://github.com/therecipe/qt/wiki/Installation). Regardless of the operating system, there are [multiple ways](https://github.com/therecipe/qt/wiki/Available-Tools) of installing this package. Required that `GO111MODULE=on`.
-
+Install [Qt for Go](https://github.com/therecipe/qt). Regardless of the operating system, there are multiple ways of installing this package. Required that `GO111MODULE=on`.
 
 ### Setup
 
@@ -43,16 +42,15 @@ go install: no install location for directory /home/<user>/sda-filesystem/vendor
 	For more details see: 'go help gopath'
 ```
 These are ok, and are caused as of go 1.14+ 
-```
-go command now verifies that the main module's vendor/modules.txt file is consistent with its go.mod file.
-```
 
 ### Run
 
 ```
 qtdeploy build desktop cmd/qt/main.go
-./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OS`
+./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OSs
 ```
+
+If you wish to create a build for linux regardless of the OS you are currently on, you may use the provided dockerfile. Remember to name the image `therecipe/qt:linux`
 
 ### Deploy
 
