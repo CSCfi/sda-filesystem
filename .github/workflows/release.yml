@@ -40,11 +40,11 @@ jobs:
           - os: ubuntu-latest
             artifact_name: go-fuse
             os_suffix: linux-amd64
-            asset_name: go-fuse
+            asset_name: go-fuse-cli
           - os: macos-latest
             artifact_name: go-fuse
             os_suffix: macos-amd64
-            asset_name: go-fuse
+            asset_name: go-fuse-cli
         golang-version: [1.16]
     
     runs-on: ${{ matrix.os }}
@@ -90,11 +90,11 @@ jobs:
           - os: ubuntu-latest
             os_folder: linux
             os_suffix: linux-amd64
-            asset_name: go-fuse
+            asset_name: go-fuse-gui
           - os: macos-latest
             os_folder: darwin
             os_suffix: macos-amd64
-            asset_name: go-fuse
+            asset_name: go-fuse-gui
         golang-version: [1.16]
     
     runs-on: ${{ matrix.os }}
@@ -115,12 +115,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
-      - name: Install GUI dependencies
+      - name: Install Linux GUI dependencies
         if: (steps.cache-vendor.outputs.cache-hit != 'true'  && matrix.os == 'ubuntu-latest')
         run: |
           bash ./dev_utils/setup-linux.sh
 
-      - name: Install GUI dependencies
+      - name: Install macOS GUI dependencies
         if: (steps.cache-vendor.outputs.cache-hit != 'true' && matrix.os == 'macOS-latest')
         run: |
           export GO111MODULE=off
