@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path"
@@ -100,17 +98,10 @@ func init() {
 	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
 	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
-	profiling := flag.Bool("profiling", false, "Code profiling on")
 	flag.Parse()
 
 	api.SetRequestTimeout(timeout)
 	logs.SetLevel(logLevel)
-
-	if *profiling {
-		go func() {
-			http.ListenAndServe(":8080", nil)
-		}()
-	}
 
 	// Verify mount point directory
 	if dir, err := os.Stat(mount); os.IsNotExist(err) {
@@ -172,6 +163,10 @@ func main() {
 		logs.Fatal(err)
 	}
 
+	err = api.InitializeCache()
+	if err != nil {
+		logs.Fatal(err)
+	}
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Fatal(err)

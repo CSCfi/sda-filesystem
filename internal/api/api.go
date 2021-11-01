@@ -21,7 +21,9 @@ import (
 const chunkSize = 1 << 25
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
-var downloadCache = cache.NewRistrettoCache()
+var downloadCache *cache.Ristretto = nil
+
+var makeRequest func(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error
 
 // HTTPInfo contains all necessary variables used during HTTP requests
 type HTTPInfo struct {
@@ -66,6 +68,10 @@ type RequestError struct {
 
 func (re *RequestError) Error() string {
 	return fmt.Sprintf("API responded with status %d", re.StatusCode)
+}
+
+func init() {
+	makeRequest = makeRequestPlaceholder
 }
 
 // GetEnvs looks up the necessary environment variables
@@ -123,6 +129,16 @@ func CreateToken(username, password string) {
 	hi.token = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
 }
 
+// InitializeCache creates a cache for downloaded data
+func InitializeCache() error {
+	var err error
+	downloadCache, err = cache.NewRistrettoCache()
+	if err != nil {
+		return fmt.Errorf("Could not create cache: %w", err)
+	}
+	return nil
+}
+
 // InitializeClient initializes a global http client
 func InitializeClient() error {
 	// Handle certificate if one is set
@@ -142,8 +158,7 @@ func InitializeClient() error {
 	tr.MaxConnsPerHost = 100
 	tr.MaxIdleConnsPerHost = 100
 	tr.TLSClientConfig = &tls.Config{
-		RootCAs:                  caCertPool,
-		PreferServerCipherSuites: true,
+		RootCAs: caCertPool,
 	}
 	tr.ForceAttemptHTTP2 = true
 	tr.DisableKeepAlives = false
@@ -170,7 +185,7 @@ func InitializeClient() error {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-func makeRequest(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error {
+func makeRequestPlaceholder(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error {
 	var response *http.Response
 
 	// Build HTTP request
@@ -230,13 +245,15 @@ func makeRequest(url string, token string, query map[string]string, headers map[
 		(*v).decrypted = (response.Header.Get("X-Decrypted") == "True")
 		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
 			if (*v).segmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
-				logs.Warning(fmt.Errorf("Could not convert header X-Segmented-Object-Size to integer: %w", err))
+				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %s", err.Error())
 				(*v).segmentedObjectSize = -1
 			}
 		} else {
 			(*v).segmentedObjectSize = -1
 		}
-		io.Copy(io.Discard, response.Body)
+		if _, err = io.Copy(io.Discard, response.Body); err != nil {
+			logs.Warningf("Discarding response body failed when reading headers: %s", err.Error())
+		}
 	case []byte:
 		if _, err = io.ReadFull(response.Body, v); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)
@@ -427,7 +444,7 @@ func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, er
 		}
 
 		downloadCache.Set(cacheKey, buf, time.Minute*60)
-		logs.Debug("Object %s stored in cache, with coordinates %d-%d", path, chStart, chEnd-1)
+		logs.Debugf("Object %s stored in cache, with coordinates %d-%d", path, chStart, chEnd-1)
 
 		if endofst > int64(len(buf)) {
 			endofst = int64(len(buf))
