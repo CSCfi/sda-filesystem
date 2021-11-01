@@ -171,15 +171,17 @@ func InitializeClient() error {
 		Transport: tr,
 	}
 
-	_, err := hi.client.Head(hi.metadataURL)
+	response, err := hi.client.Head(hi.metadataURL)
 	if err != nil {
 		return fmt.Errorf("Cannot connect to metadata API: %w", err)
 	}
+	response.Body.Close()
 
-	_, err = hi.client.Head(hi.dataURL)
+	response, err = hi.client.Head(hi.dataURL)
 	if err != nil {
 		return fmt.Errorf("Cannot connect to data API: %w", err)
 	}
+	response.Body.Close()
 
 	logs.Debug("Initializing HTTP client successful")
 	return nil
@@ -217,13 +219,18 @@ func makeRequestPlaceholder(url string, token string, query map[string]string, h
 
 	// Execute HTTP request
 	// retry the request as specified by hi.httpRetry variable
-	for count := 0; count == 0 || (err != nil && count < hi.httpRetry); {
+	count := 0
+	for {
 		response, err = hi.client.Do(request)
 		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
 		count++
-	}
-	if err != nil {
-		return err
+
+		if err != nil && count > hi.httpRetry {
+			return err
+		}
+		if err == nil {
+			break
+		}
 	}
 	defer response.Body.Close()
 

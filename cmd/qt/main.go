@@ -29,6 +29,8 @@ import (
 var projectModel = NewProjectModel(nil)
 var logModel = NewLogModel(nil)
 
+const windows = "windows"
+
 // QmlBridge is the link between QML and Go
 type QmlBridge struct {
 	core.QObject
@@ -160,7 +162,7 @@ func (qb *QmlBridge) openFuse() {
 		command = "open"
 	case "linux":
 		command = "xdg-open"
-	case "windows":
+	case windows:
 		command = "start"
 	default:
 		logs.Errorf("Unrecognized OS")
@@ -198,7 +200,7 @@ func (qb *QmlBridge) changeMountPoint(url string) string {
 		}
 
 		// Mount directory must not already exist in Windows
-		if runtime.GOOS == "windows" { // ?
+		if runtime.GOOS == windows { // ?
 			str := fmt.Sprintf("Mount point %s already exists, remove the directory or use another mount point", mount)
 			logs.Errorf(str)
 			return str
@@ -259,7 +261,7 @@ func mountPoint() string {
 
 func createDir(dir string) error {
 	// In other OSs except Windows, the mount point must exist and be empty
-	if runtime.GOOS != "windows" { // ?
+	if runtime.GOOS != windows { // ?
 		logs.Debugf("Directory %s does not exist, so it will be created", dir)
 		if err := os.Mkdir(dir, 0755); err != nil {
 			return fmt.Errorf("Could not create directory %s: %w", dir, err)
