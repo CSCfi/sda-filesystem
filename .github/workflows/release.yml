@@ -23,7 +23,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref }}
-          name: Release ${{ github.ref }}
+          name: Release ${{ steps.vars.outputs.tag }}
           body: |
             Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem GUI (Graphical User Interface).
             Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem CLI (Command Line Interface).
@@ -76,7 +76,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ github.ref }}
           files: ./${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
           fail_on_unmatched_files: true
 
@@ -163,6 +162,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: test
           files: ./cmd/qt/deploy/${{ matrix.os_folder }}/${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
           fail_on_unmatched_files: true
