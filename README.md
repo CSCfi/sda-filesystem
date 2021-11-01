@@ -1,6 +1,6 @@
 # SDA-Filesystem
 
-This desktop software makes use of the [SD-Connect Proxy API](docs/API.md) to build a FUSE (Filesystem in Userspace) layer.
+This desktop software makes use of the [SD-Connect Proxy API](docs/API.md) to build a FUSE (Filesystem in Userspace) layer. Software currently supports Linux and macOS.
 
 
 ### Requirements
