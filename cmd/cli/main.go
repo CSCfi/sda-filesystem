@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/signal"
 	"path"
@@ -117,6 +118,36 @@ func login(lr loginReader) {
 	signal.Stop(signalChan)
 }
 
+func isMountPointValid(info fs.FileInfo) {
+	if !info.IsDir() {
+		logs.Fatalf("%s is not a directory", mount)
+	}
+
+	// Mount directory must not already exist in Windows
+	if runtime.GOOS == "windows" { // ?
+		logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
+	}
+
+	if unix.Access(mount, unix.W_OK) != nil { // What about windows?
+		logs.Fatal("You do not have permission to write to folder ", mount)
+	}
+
+	// Check that the mount point is empty if it already exists
+	dir, err := os.Open(mount)
+	if err != nil {
+		logs.Fatalf("Could not open mount point %s", mount)
+	}
+	defer dir.Close()
+
+	// Verify dir is empty
+	if _, err = dir.Readdir(1); err != io.EOF {
+		if err != nil {
+			logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
+		}
+		logs.Fatalf("Mount point %s must be empty", mount)
+	}
+}
+
 func checkMountPoint() {
 	// Verify mount point exists
 	if dir, err := os.Stat(mount); os.IsNotExist(err) {
@@ -128,33 +159,7 @@ func checkMountPoint() {
 			}
 		}
 	} else {
-		if !dir.IsDir() {
-			logs.Fatalf("%s is not a directory", mount)
-		}
-
-		// Mount directory must not already exist in Windows
-		if runtime.GOOS == "windows" { // ?
-			logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
-		}
-
-		if unix.Access(mount, unix.W_OK) != nil { // What about windows?
-			logs.Fatal("You do not have permission to write to folder ", mount)
-		}
-
-		// Check that the mount point is empty if it already exists
-		dir, err := os.Open(mount)
-		if err != nil {
-			logs.Fatalf("Could not open mount point %s", mount)
-		}
-		defer dir.Close()
-
-		// Verify dir is empty
-		if _, err = dir.Readdir(1); err != io.EOF {
-			if err != nil {
-				logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
-			}
-			logs.Fatalf("Mount point %s must be empty", mount)
-		}
+		isMountPointValid(dir)
 	}
 
 	logs.Debugf("Filesystem will be mounted at %s", mount)
