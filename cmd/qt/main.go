@@ -59,7 +59,15 @@ func (qb *QmlBridge) init() {
 func (qb *QmlBridge) sendLoginRequest(username, password string) {
 	go func() {
 		api.CreateToken(username, password)
-		err := api.InitializeClient()
+		err := api.InitializeCache()
+		if err != nil {
+			logs.Error(err)
+			outer, inner := logs.Wrapper(err)
+			qb.LoginResult(outer, strings.Join(logs.StructureError(inner), "\n"))
+			return
+		}
+
+		err = api.InitializeClient()
 		if err != nil {
 			logs.Error(err)
 			qb.LoginResult("Initializing HTTP client failed", strings.Join(logs.StructureError(err), "\n"))
@@ -135,7 +143,7 @@ func (qb *QmlBridge) loadFuse() {
 		qb.FuseReady()
 		host.Mount(qb.MountPoint(), options)
 		// In case program is terminated with a ctrl+c
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	}()
 }
 
@@ -168,7 +176,7 @@ func (qb *QmlBridge) openFuse() {
 func (qb *QmlBridge) shutdown() {
 	logs.Info("Shutting down SD-Connect Filesystem")
 	// Sending interrupt signal to unmount fuse
-	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {

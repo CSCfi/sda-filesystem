@@ -19,7 +19,7 @@ func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 
 	node, errc, fh := fs.openNode(path, false)
 
-	if !node.checkDecryption {
+	if node != nil && !node.checkDecryption {
 		// In case file has been renamed
 		origPath := path
 		path = strings.TrimPrefix(path, string(os.PathSeparator))
@@ -103,17 +103,12 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	}
 	path = filepath.ToSlash(path)
 
-	// For some reason libfuse may give a offset that is equal to node size
-	if ofst >= node.stat.Size {
-		return 0
-	}
-
 	// Get file end coordinate
 	endofst := ofst + int64(len(buff))
 	if endofst > node.stat.Size {
 		endofst = node.stat.Size
 	}
-	if endofst < ofst {
+	if endofst <= ofst {
 		return 0
 	}
 
