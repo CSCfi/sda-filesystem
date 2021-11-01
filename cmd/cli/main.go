@@ -66,7 +66,9 @@ func login() {
 	signal.Notify(signalChan, os.Interrupt)
 	go func() {
 		<-signalChan
-		term.Restore(int(syscall.Stdin), originalTerminalState)
+		if err = term.Restore(int(syscall.Stdin), originalTerminalState); err != nil {
+			logs.Warningf("Could not restore terminal to original state: %s", err.Error())
+		}
 		os.Exit(1)
 	}()
 
