@@ -6,8 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
-	_ "net/http/pprof"
+	"io/fs"
 	"os"
 	"os/signal"
 	"path"
@@ -68,7 +67,9 @@ func login() {
 	signal.Notify(signalChan, os.Interrupt)
 	go func() {
 		<-signalChan
-		term.Restore(int(syscall.Stdin), originalTerminalState)
+		if err = term.Restore(int(syscall.Stdin), originalTerminalState); err != nil {
+			logs.Warningf("Could not restore terminal to original state: %s", err.Error())
+		}
 		os.Exit(1)
 	}()
 
@@ -94,25 +95,38 @@ func login() {
 	signal.Stop(signalChan)
 }
 
-func init() {
-	var logLevel string
-	var timeout int
-	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
-	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
-	profiling := flag.Bool("profiling", false, "Code profiling on")
-	flag.Parse()
-
-	api.SetRequestTimeout(timeout)
-	logs.SetLevel(logLevel)
-
-	if *profiling {
-		go func() {
-			http.ListenAndServe(":8080", nil)
-		}()
+func isMountPointValid(info fs.FileInfo) {
+	if !info.IsDir() {
+		logs.Fatalf("%s is not a directory", mount)
 	}
 
-	// Verify mount point directory
+	// ¿Mount directory must not already exist in Windows?
+	if runtime.GOOS == "windows" {
+		logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
+	}
+
+	if unix.Access(mount, unix.W_OK) != nil { // What about windows?
+		logs.Fatal("You do not have permission to write to folder ", mount)
+	}
+
+	// Check that the mount point is empty if it already exists
+	dir, err := os.Open(mount)
+	if err != nil {
+		logs.Fatalf("Could not open mount point %s", mount)
+	}
+	defer dir.Close()
+
+	// Verify dir is empty
+	if _, err = dir.Readdir(1); err != io.EOF {
+		if err != nil {
+			logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
+		}
+		logs.Fatalf("Mount point %s must be empty", mount)
+	}
+}
+
+func checkMountPoint() {
+	// Verify mount point exists
 	if dir, err := os.Stat(mount); os.IsNotExist(err) {
 		// In other OSs except Windows, the mount point must exist and be empty
 		if runtime.GOOS != "windows" {
@@ -122,36 +136,23 @@ func init() {
 			}
 		}
 	} else {
-		if !dir.IsDir() {
-			logs.Fatalf("%s is not a directory", mount)
-		}
-
-		// Mount directory must not already exist in Windows
-		if runtime.GOOS == "windows" { // ?
-			logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
-		}
-
-		if unix.Access(mount, unix.W_OK) != nil { // What about windows?
-			logs.Fatal("You do not have permission to write to folder ", mount)
-		}
-
-		// Check that the mount point is empty if it already exists
-		dir, err := os.Open(mount)
-		if err != nil {
-			logs.Fatalf("Could not open mount point %s", mount)
-		}
-		defer dir.Close()
-
-		// Verify dir is empty
-		if _, err = dir.Readdir(1); err != io.EOF {
-			if err != nil {
-				logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
-			}
-			logs.Fatalf("Mount point %s must be empty", mount)
-		}
+		isMountPointValid(dir)
 	}
 
 	logs.Debugf("Filesystem will be mounted at %s", mount)
+}
+
+func init() {
+	var logLevel string
+	var timeout int
+	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
+	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
+	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
+	flag.Parse()
+
+	api.SetRequestTimeout(timeout)
+	logs.SetLevel(logLevel)
+	checkMountPoint()
 }
 
 func shutdown() <-chan bool {
@@ -172,6 +173,10 @@ func main() {
 		logs.Fatal(err)
 	}
 
+	err = api.InitializeCache()
+	if err != nil {
+		logs.Fatal(err)
+	}
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Fatal(err)
