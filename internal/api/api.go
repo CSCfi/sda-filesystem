@@ -158,7 +158,8 @@ func InitializeClient() error {
 	tr.MaxConnsPerHost = 100
 	tr.MaxIdleConnsPerHost = 100
 	tr.TLSClientConfig = &tls.Config{
-		RootCAs: caCertPool,
+		RootCAs:    caCertPool,
+		MinVersion: tls.VersionTLS12,
 	}
 	tr.ForceAttemptHTTP2 = true
 	tr.DisableKeepAlives = false
