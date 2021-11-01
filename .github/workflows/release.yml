@@ -150,7 +150,7 @@ jobs:
         run: |
           cd cmd/qt/deploy/linux
           mv qt_project sda-fuse
-          zip -r ${{ matrix.asset_name }}.zip .
+          zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
       - name: Archive GUI Asset macOS
         if: matrix.os == 'macOS-latest'
         run: |
