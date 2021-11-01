@@ -125,7 +125,7 @@ func SetLoggedIn() {
 }
 
 // CreateToken creates the authorization token based on username + password
-func CreateToken(username, password string) {
+var CreateToken = func(username, password string) {
 	hi.token = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
 }
 
@@ -296,7 +296,7 @@ func FetchTokens() {
 }
 
 // GetUToken gets the unscoped token
-func GetUToken() error {
+var GetUToken = func() error {
 	// Request token
 	uToken := UToken{}
 	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", nil, nil, &uToken)
@@ -327,7 +327,7 @@ func GetSToken(project string) error {
 }
 
 // GetProjects gets all projects user has access to
-func GetProjects() ([]Metadata, error) {
+var GetProjects = func() ([]Metadata, error) {
 	// Request projects
 	var projects []Metadata
 	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil, &projects)
@@ -340,7 +340,7 @@ func GetProjects() ([]Metadata, error) {
 }
 
 // GetContainers gets conatainers inside project
-func GetContainers(project string) ([]Metadata, error) {
+var GetContainers = func(project string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
 
@@ -359,7 +359,7 @@ func GetContainers(project string) ([]Metadata, error) {
 }
 
 // GetObjects gets objects inside container
-func GetObjects(project, container string) ([]Metadata, error) {
+var GetObjects = func(project, container string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
 
@@ -379,7 +379,7 @@ func GetObjects(project, container string) ([]Metadata, error) {
 }
 
 // GetSpecialHeaders returns information on headers that can only be retirived from data api
-func GetSpecialHeaders(path string) (bool, int64, error) {
+var GetSpecialHeaders = func(path string) (bool, int64, error) {
 	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
