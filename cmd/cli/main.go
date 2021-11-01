@@ -22,20 +22,43 @@ import (
 )
 
 var mount string
+var getHomeDir = os.UserHomeDir
+
+type loginReader interface {
+	readPassword() (string, error)
+	getStream() io.Reader
+	getState() (*term.State, error)
+}
+
+type stdinReader struct {
+}
+
+func (r stdinReader) readPassword() (string, error) {
+	pwd, err := term.ReadPassword(syscall.Stdin)
+	return string(pwd), err
+}
+
+func (r stdinReader) getStream() io.Reader {
+	return os.Stdin
+}
+
+func (r stdinReader) getState() (*term.State, error) {
+	return term.GetState(int(syscall.Stdin))
+}
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
-	home, err := os.UserHomeDir()
+	home, err := getHomeDir()
 	if err != nil {
-		logs.Fatal("Could not find user home directory", err)
+		logs.Fatalf("Could not find user home directory: %s", err.Error())
 	}
 	p := filepath.FromSlash(filepath.ToSlash(home) + "/Projects")
 	return p
 }
 
-func askForLogin() (string, string) {
+var askForLogin = func(lr loginReader) (string, string) {
 	fmt.Print("Enter username: ")
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(lr.getStream())
 	var username string
 	if scanner.Scan() {
 		username = scanner.Text()
@@ -45,18 +68,18 @@ func askForLogin() (string, string) {
 	}
 
 	fmt.Print("Enter password: ")
-	password, err := term.ReadPassword(syscall.Stdin)
+	password, err := lr.readPassword()
 	fmt.Println()
 	if err != nil {
 		logs.Fatal(err)
 	}
 
-	return username, string(password)
+	return username, password
 }
 
-func login() {
+func login(lr loginReader) {
 	// Get the state of the terminal before running the password prompt
-	originalTerminalState, err := term.GetState(int(syscall.Stdin))
+	originalTerminalState, err := lr.getState()
 	if err != nil {
 		logs.Fatalf("Failed to get terminal state: %s", err.Error())
 	}
@@ -73,7 +96,7 @@ func login() {
 	}()
 
 	for {
-		username, password := askForLogin()
+		username, password := askForLogin(lr)
 		api.CreateToken(username, password)
 		err = api.GetUToken()
 
@@ -94,18 +117,8 @@ func login() {
 	signal.Stop(signalChan)
 }
 
-func init() {
-	var logLevel string
-	var timeout int
-	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
-	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
-	flag.Parse()
-
-	api.SetRequestTimeout(timeout)
-	logs.SetLevel(logLevel)
-
-	// Verify mount point directory
+func checkMountPoint() {
+	// Verify mount point exists
 	if dir, err := os.Stat(mount); os.IsNotExist(err) {
 		// In other OSs except Windows, the mount point must exist and be empty
 		if runtime.GOOS != "windows" {
@@ -147,6 +160,19 @@ func init() {
 	logs.Debugf("Filesystem will be mounted at %s", mount)
 }
 
+func init() {
+	var logLevel string
+	var timeout int
+	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
+	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
+	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
+	flag.Parse()
+
+	api.SetRequestTimeout(timeout)
+	logs.SetLevel(logLevel)
+	checkMountPoint()
+}
+
 func shutdown() <-chan bool {
 	done := make(chan bool)
 	s := make(chan os.Signal, 1)
@@ -174,7 +200,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	login()
+	login(stdinReader{})
 	api.SetLoggedIn()
 
 	done := shutdown()

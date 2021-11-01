@@ -175,7 +175,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	}
 }
 
-func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
+var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
 	defer wg.Done()
 	defer func() {
 		// recover from panic if one occured.
@@ -265,7 +265,7 @@ func split(path string) []string {
 	return strings.Split(path, "/")
 }
 
-func removeInvalidChars(str string, ignore ...string) string {
+var removeInvalidChars = func(str string, ignore ...string) string {
 	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
 		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
 		"<", ".", ">", ".", "'", ".", "\"", "."}
@@ -286,7 +286,7 @@ func removeInvalidChars(str string, ignore ...string) string {
 }
 
 // calculateDecryptedSize calculates the decrypted size of an encrypted file size
-func calculateDecryptedSize(size int64) int64 {
+var calculateDecryptedSize = func(size int64) int64 {
 	// Crypt4GH settings
 	var blockSize int64 = 65536
 	var macSize int64 = 28
@@ -317,7 +317,7 @@ func calculateDecryptedSize(size int64) int64 {
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
-func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *node, dir bool) {
+var lookupNode = func(fs *Connectfs, path string) (prnt *node, name string, node *node, dir bool) {
 	prnt, node = fs.root, fs.root
 	name = ""
 	dir = true
@@ -336,9 +336,35 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 	return
 }
 
+// newNode initializes a node struct
+var newNode = func(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
+	self := node{
+		fuse.Stat_t{
+			Dev:      dev,
+			Ino:      ino,
+			Mode:     mode,
+			Nlink:    1,
+			Uid:      uid,
+			Gid:      gid,
+			Atim:     tmsp,
+			Mtim:     tmsp,
+			Ctim:     tmsp,
+			Birthtim: tmsp,
+			Flags:    0,
+		},
+		nil,
+		0,
+		false}
+	// Initialize map of children if node is a directory
+	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
+		self.chld = map[string]*node{}
+	}
+	return &self
+}
+
 // makeNode adds a node into the fuse
 func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, timestamp fuse.Timespec) int {
-	prnt, name, node, isDir := fs.lookupNode(path)
+	prnt, name, node, isDir := lookupNode(fs, path)
 	if prnt == nil {
 		// No such file or directory
 		return -fuse.ENOENT
@@ -382,34 +408,8 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 	return 0
 }
 
-// newNode initializes a node struct
-func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
-	self := node{
-		fuse.Stat_t{
-			Dev:      dev,
-			Ino:      ino,
-			Mode:     mode,
-			Nlink:    1,
-			Uid:      uid,
-			Gid:      gid,
-			Atim:     tmsp,
-			Mtim:     tmsp,
-			Ctim:     tmsp,
-			Birthtim: tmsp,
-			Flags:    0,
-		},
-		nil,
-		0,
-		false}
-	// Initialize map of children if node is a directory
-	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
-		self.chld = map[string]*node{}
-	}
-	return &self
-}
-
 func (fs *Connectfs) openNode(path string, dir bool) (*node, int, uint64) {
-	_, _, node, _ := fs.lookupNode(path)
+	_, _, node, _ := lookupNode(fs, path)
 	if node == nil {
 		return nil, -fuse.ENOENT, ^uint64(0)
 	}
@@ -437,7 +437,7 @@ func (fs *Connectfs) closeNode(fh uint64) int {
 
 func (fs *Connectfs) getNode(path string, fh uint64) *node {
 	if fh == ^uint64(0) {
-		_, _, node, _ := fs.lookupNode(path)
+		_, _, node, _ := lookupNode(fs, path)
 		return node
 	}
 	return fs.openmap[fh]
