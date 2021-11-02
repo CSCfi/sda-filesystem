@@ -13,6 +13,16 @@ var onceCache sync.Once
 const RistrettoCacheTTL = 60 * time.Minute
 
 type Ristretto struct {
+	CacheInterface
+}
+
+type CacheInterface interface {
+	Get(string) (interface{}, bool)
+	Set(string, interface{}, time.Duration) bool
+	Del(string)
+}
+
+type storage struct {
 	cache *ristretto.Cache
 }
 
@@ -26,31 +36,29 @@ func NewRistrettoCache() (*Ristretto, error) {
 			MaxCost:     2 << 30, // Maximum cost of cache (2GB).
 			BufferItems: 64,      // Number of keys per Get buffer.
 		})
-		cache = &Ristretto{
-			cache: ristrettoCache,
+
+		if err == nil {
+			cache = &Ristretto{&storage{ristrettoCache}}
 		}
 	})
 
-	if err != nil {
-		return nil, err
-	}
-	return cache, nil
+	return cache, err
 }
 
 // Get returns item with key "key" from cache and a boolean representing whether the item was found or not
-func (r *Ristretto) Get(key string) (interface{}, bool) {
-	return r.cache.Get(key)
+func (s *storage) Get(key string) (interface{}, bool) {
+	return s.cache.Get(key)
 }
 
 // Set sets data to cache with specific ttl. If ttl == -1, default cache ttl value will be used.
-func (r *Ristretto) Set(key string, value interface{}, ttl time.Duration) bool {
+func (s *storage) Set(key string, value interface{}, ttl time.Duration) bool {
 	if ttl == -1 {
 		ttl = RistrettoCacheTTL
 	}
-	return r.cache.SetWithTTL(key, value, 1, ttl)
+	return s.cache.SetWithTTL(key, value, 1, ttl)
 }
 
 // Del deletes item with key "key" from cache
-func (r *Ristretto) Del(key string) {
-	r.cache.Del(key)
+func (s *storage) Del(key string) {
+	s.cache.Del(key)
 }

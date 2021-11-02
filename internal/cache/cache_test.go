@@ -13,6 +13,10 @@ func TestSetAndGet(t *testing.T) {
 		t.Fatalf("Creating cache failed: %s", err.Error())
 	}
 
+	if c == nil {
+		t.Fatal("Cache is nil")
+	}
+
 	key := "bob"
 	content := "¿why is a raven like a writing desk?"
 
@@ -37,6 +41,10 @@ func TestSetAndGet_Expire(t *testing.T) {
 		t.Fatalf("Creating cache failed: %s", err.Error())
 	}
 
+	if c == nil {
+		t.Fatal("Cache is nil")
+	}
+
 	key := "muumi"
 	content := "To infinity and beyond"
 
@@ -56,6 +64,10 @@ func TestDel(t *testing.T) {
 	c, err := NewRistrettoCache()
 	if err != nil {
 		t.Fatalf("Creating cache failed: %s", err.Error())
+	}
+
+	if c == nil {
+		t.Fatal("Cache is nil")
 	}
 
 	c.Set("key", "I am information", -1)
