@@ -30,13 +30,6 @@ jobs:
         if: steps.cache-vendor.outputs.cache-hit != 'true'
         run: |
           bash ./dev_utils/setup-linux.sh
-
-      - name: Cache vendor
-        id: cache-vendor
-        uses: actions/cache@v2
-        with:
-          path: vendor
-          key: ${{ runner.os }}-lint-vendor
   
       - name: Build desktop
         run: |
