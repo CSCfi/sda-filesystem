@@ -379,35 +379,43 @@ func TestLookupNode(t *testing.T) {
 		testname := tt.testname
 		t.Run(testname, func(t *testing.T) {
 			prnt, name, node, isDir := lookupNode(fs, tt.path)
-			if prnt != nil {
-				if tt.prntMatch != prnt {
-					t.Errorf("%s test failed for path %q. Parent node incorrect, expected address %p, got %p", testname, tt.path, tt.prntMatch, prnt)
-				} else if node == nil && tt.nodeMatch == nil && name != path.Base(tt.path) {
-					t.Errorf("%s test failed for path %q. Name incorrect, expected %s, got %s", testname, tt.path, path.Base(tt.path), name)
-				} else if node == nil && tt.nodeMatch != nil {
-					t.Errorf("%s test failed for path %q. Node incorrect, got nil", testname, tt.path)
-				} else if node != nil {
-					if node != tt.nodeMatch {
-						t.Errorf("%s test failed for path %q. Node incorrect, expected address %p, got %p", testname, tt.path, tt.nodeMatch, node)
-					} else if name != path.Base(tt.path) {
-						t.Errorf("%s test failed for path %q. Name incorrect, expected %s, got %s", testname, tt.path, path.Base(tt.path), name)
-					} else if tt.dir == isDir && tt.clash {
-						if tt.dir {
-							t.Errorf("%s test failed for path %q. LookupNode found a matching directory, not a matching file", testname, tt.path)
-						} else {
-							t.Errorf("%s test failed for path %q. LookupNode found a matching file, not a matching directory", testname, tt.path)
-						}
-					} else if tt.dir != isDir && !tt.clash {
-						if tt.dir {
-							t.Errorf("%s test failed for path %q. LookupNode found a matching file, not a matching directory", testname, tt.path)
-						} else {
-							t.Errorf("%s test failed for path %q. LookupNode found a matching directory, not a matching file", testname, tt.path)
-						}
-					}
-				}
-			} else {
+
+			if prnt == nil {
 				if tt.prntMatch != nil {
 					t.Errorf("%s test failed, parent node was nil", testname)
+				}
+				return
+			}
+
+			if tt.prntMatch != prnt {
+				t.Errorf("%s test failed for path %q. Parent node incorrect, expected address %p, got %p", testname, tt.path, tt.prntMatch, prnt)
+				return
+			}
+
+			if node == nil {
+				if tt.nodeMatch == nil && name != path.Base(tt.path) {
+					t.Errorf("%s test failed for path %q. Name incorrect, expected %s, got %s", testname, tt.path, path.Base(tt.path), name)
+				} else if tt.nodeMatch != nil {
+					t.Errorf("%s test failed for path %q. Node incorrect, got nil", testname, tt.path)
+				}
+				return
+			}
+
+			if node != tt.nodeMatch {
+				t.Errorf("%s test failed for path %q. Node incorrect, expected address %p, got %p", testname, tt.path, tt.nodeMatch, node)
+			} else if name != path.Base(tt.path) {
+				t.Errorf("%s test failed for path %q. Name incorrect, expected %s, got %s", testname, tt.path, path.Base(tt.path), name)
+			} else if tt.dir == isDir && tt.clash {
+				if tt.dir {
+					t.Errorf("%s test failed for path %q. LookupNode found a matching directory, not a matching file", testname, tt.path)
+				} else {
+					t.Errorf("%s test failed for path %q. LookupNode found a matching file, not a matching directory", testname, tt.path)
+				}
+			} else if tt.dir != isDir && !tt.clash {
+				if tt.dir {
+					t.Errorf("%s test failed for path %q. LookupNode found a matching file, not a matching directory", testname, tt.path)
+				} else {
+					t.Errorf("%s test failed for path %q. LookupNode found a matching directory, not a matching file", testname, tt.path)
 				}
 			}
 		})
@@ -436,13 +444,13 @@ func TestMakeNode(t *testing.T) {
 		},
 		{
 			func(fs *Connectfs, path string) (*node, string, *node, bool) {
-				return nil, "test", &node{}, true
+				return nil, "test2", &node{}, true
 			},
 			-fuse.ENOENT,
 			23,
 			false,
 			"",
-			"folder/test",
+			"folder/test2",
 			"INVALID_PATH_2",
 		},
 		{
@@ -556,7 +564,10 @@ func TestMakeNode(t *testing.T) {
 
 			if tt.expectedOutput != ret {
 				t.Errorf("Incorrect return value, expected %d, got %d", tt.expectedOutput, ret)
-			} else if ret == 0 {
+				return
+			}
+
+			if ret == 0 {
 				nodes := strings.Split(tt.path, "/")
 				follow := origFS.root
 				for i := range nodes[:len(nodes)-1] {
@@ -582,20 +593,18 @@ func TestMakeNode(t *testing.T) {
 						follow.chld[tt.rename].stat.Size = follow.chld[nodes[len(nodes)-1]].stat.Size
 						follow.chld[nodes[len(nodes)-1]].stat.Size = tt.size
 					}
-				}
 
-				if ok, err := isSameFuse(origFS.root.chld, fs.root.chld, ""); !ok {
-					t.Errorf("FUSE did not change correctly: %s", err.Error())
-				} else {
-					if tt.rename != "" {
-						nodes[len(nodes)-1] = tt.rename
-						allRenamed[strings.Join(nodes, "/")] = tt.path
-
-						if !reflect.DeepEqual(allRenamed, fs.renamed) {
-							t.Errorf("List of renamed nodes incorrect. Expected %v, got %v", allRenamed, fs.renamed)
-						}
-					}
+					nodes[len(nodes)-1] = tt.rename
+					allRenamed[strings.Join(nodes, "/")] = tt.path
 				}
+			}
+
+			if ok, err := isSameFuse(origFS.root.chld, fs.root.chld, ""); !ok {
+				t.Errorf("FUSE did not change correctly: %s", err.Error())
+			}
+
+			if !reflect.DeepEqual(allRenamed, fs.renamed) {
+				t.Errorf("List of renamed nodes incorrect. Expected %v, got %v", allRenamed, fs.renamed)
 			}
 		})
 	}

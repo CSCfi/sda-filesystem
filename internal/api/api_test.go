@@ -165,16 +165,18 @@ func TestMakeResquest(t *testing.T) {
 			func(rw http.ResponseWriter, req *http.Request) {
 				rw.Header().Set("X-Decrypted", "True")
 				rw.Header().Set("X-Segmented-Object-Size", "345")
-				rw.WriteHeader(http.StatusOK)
-				rw.Write([]byte("stuff"))
+				if _, err := rw.Write([]byte("stuff")); err != nil {
+					rw.WriteHeader(http.StatusNotFound)
+				}
 			},
 			specialHeaders{true, 345},
 		},
 		{
 			"OK_DATA", func() {},
 			func(rw http.ResponseWriter, req *http.Request) {
-				rw.WriteHeader(http.StatusOK)
-				rw.Write([]byte("This is a message from the past"))
+				if _, err := rw.Write([]byte("This is a message from the past")); err != nil {
+					rw.WriteHeader(http.StatusNotFound)
+				}
 			},
 			[]byte("This is a message from the past"),
 		},
@@ -185,8 +187,9 @@ func TestMakeResquest(t *testing.T) {
 				if err != nil {
 					rw.WriteHeader(http.StatusNotFound)
 				} else {
-					rw.WriteHeader(http.StatusOK)
-					rw.Write(body)
+					if _, err := rw.Write(body); err != nil {
+						rw.WriteHeader(http.StatusNotFound)
+					}
 				}
 			},
 			[]Metadata{{34, "project1"}, {67, "project2"}, {8, "project3"}},
@@ -196,8 +199,9 @@ func TestMakeResquest(t *testing.T) {
 			func() { hi.uToken = "new_token" },
 			func(rw http.ResponseWriter, req *http.Request) {
 				if req.Header.Get("Authorization") == "Bearer new_token" {
-					rw.WriteHeader(http.StatusOK)
-					rw.Write([]byte("Today is sunny"))
+					if _, err := rw.Write([]byte("Today is sunny")); err != nil {
+						rw.WriteHeader(http.StatusNotFound)
+					}
 				} else {
 					http.Error(rw, "Wrong token", 401)
 				}
@@ -208,8 +212,9 @@ func TestMakeResquest(t *testing.T) {
 			"OK_FAIL_ONCE", func() {},
 			func(rw http.ResponseWriter, req *http.Request) {
 				if handleCount > 0 {
-					rw.WriteHeader(http.StatusOK)
-					rw.Write([]byte("Hello, I am a robot"))
+					if _, err := rw.Write([]byte("Hello, I am a robot")); err != nil {
+						rw.WriteHeader(http.StatusNotFound)
+					}
 				} else {
 					handleCount++
 					http.Redirect(rw, req, "https://google.com", http.StatusSeeOther)
@@ -807,8 +812,7 @@ func TestDownloadData(t *testing.T) {
 		downloadCache = origDownloadCache
 	}()
 
-	mockc := &mockCache{data: make([]byte, 0, 100)}
-	downloadCache = &cache.Ristretto{mockc}
+	downloadCache = &cache.Ristretto{&mockCache{}}
 
 	for _, tt := range tests {
 		testname := tt.testname
