@@ -21,9 +21,9 @@ import (
 const chunkSize = 1 << 25
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
-var downloadCache *cache.Ristretto = nil
+var downloadCache *cache.Ristretto
 
-var makeRequest func(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error
+var makeRequest func(string, func() string, map[string]string, map[string]string, interface{}) error
 
 // HTTPInfo contains all necessary variables used during HTTP requests
 type HTTPInfo struct {
@@ -188,8 +188,9 @@ func InitializeClient() error {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-func makeRequestPlaceholder(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error {
+func makeRequestPlaceholder(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
 	var response *http.Response
+	token := tokenFunc()
 
 	// Build HTTP request
 	request, err := http.NewRequest("GET", url, nil)
@@ -238,7 +239,7 @@ func makeRequestPlaceholder(url string, token string, query map[string]string, h
 		logs.Info("Tokens no longer valid. Fetching them again")
 		FetchTokens()
 		hi.loggedIn = false // To prevent unlikely infinite loop
-		err = makeRequest(url, token, query, headers, ret)
+		err = makeRequest(url, tokenFunc, query, headers, ret)
 		hi.loggedIn = true
 		return err
 	}
@@ -277,7 +278,7 @@ func makeRequestPlaceholder(url string, token string, query map[string]string, h
 }
 
 // FetchTokens fetches the unscoped token and the scoped tokens
-func FetchTokens() {
+var FetchTokens = func() {
 	err := GetUToken()
 	if err != nil {
 		logs.Warningf("HTTP requests may be slower: %s", err.Error())
@@ -306,7 +307,7 @@ func FetchTokens() {
 var GetUToken = func() error {
 	// Request token
 	uToken := UToken{}
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", nil, nil, &uToken)
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", func() string { return "" }, nil, nil, &uToken)
 	if err != nil {
 		return fmt.Errorf("Retrieving unscoped token failed: %w", err)
 	}
@@ -317,13 +318,13 @@ var GetUToken = func() error {
 }
 
 // GetSToken gets the scoped tokens for a project
-func GetSToken(project string) error {
+var GetSToken = func(project string) error {
 	// Query params
 	query := map[string]string{"project": project}
 
 	// Request token
 	sToken := SToken{}
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil, &sToken)
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", func() string { return "" }, query, nil, &sToken)
 	if err != nil {
 		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
 	}
@@ -337,7 +338,8 @@ func GetSToken(project string) error {
 var GetProjects = func() ([]Metadata, error) {
 	// Request projects
 	var projects []Metadata
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil, &projects)
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects",
+		func() string { return hi.uToken }, nil, nil, &projects)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
 	}
@@ -356,7 +358,7 @@ var GetContainers = func(project string) ([]Metadata, error) {
 	err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
-			url.PathEscape(project)+"/containers", hi.sTokens[project].Token, nil, headers, &containers)
+			url.PathEscape(project)+"/containers", func() string { return hi.sTokens[project].Token }, nil, headers, &containers)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving containers for %s failed: %w", project, err)
 	}
@@ -376,7 +378,7 @@ var GetObjects = func(project, container string) ([]Metadata, error) {
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
 			url.PathEscape(project)+"/container/"+
-			url.PathEscape(container)+"/objects", hi.sTokens[project].Token, nil, headers, &objects)
+			url.PathEscape(container)+"/objects", func() string { return hi.sTokens[project].Token }, nil, headers, &objects)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects for %s failed: %w", container, err)
 	}
@@ -401,7 +403,8 @@ var GetSpecialHeaders = func(path string) (bool, int64, error) {
 	headers := map[string]string{"Range": "bytes=0-1", "X-Project-ID": hi.sTokens[project].ProjectID}
 
 	var ret specialHeaders
-	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, &ret)
+	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
+		func() string { return hi.sTokens[project].Token }, query, headers, &ret)
 	if err != nil {
 		return false, -1, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 	}
@@ -446,7 +449,8 @@ func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, er
 
 		// Request data
 		buf := make([]byte, chEnd-chStart)
-		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, buf)
+		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
+			func() string { return hi.sTokens[project].Token }, query, headers, buf)
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}

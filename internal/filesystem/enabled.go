@@ -26,6 +26,7 @@ func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 		if origName, ok := fs.renamed[path]; ok {
 			path = origName
 		}
+		path = filepath.ToSlash(path)
 
 		decrypted, segSize, err := api.GetSpecialHeaders(path)
 		if err != nil {
