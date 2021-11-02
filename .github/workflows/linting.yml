@@ -40,7 +40,7 @@ jobs:
   
       - name: Build desktop
         run: |
-          qtdeploy build desktop cmd/qt/main.go
+          qtdeploy build desktop cmd/qt/
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v2.5.2
