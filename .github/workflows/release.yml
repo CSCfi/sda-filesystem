@@ -1,5 +1,4 @@
 name: Release
-
 on:
   push:
     tags:
@@ -116,12 +115,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
       - name: Install Linux GUI dependencies
-        if: (steps.cache-vendor.outputs.cache-hit != 'true'  && matrix.os == 'ubuntu-latest')
+        if: (matrix.os == 'ubuntu-latest')
         run: |
           bash ./dev_utils/setup-linux.sh
 
       - name: Install macOS GUI dependencies
-        if: (steps.cache-vendor.outputs.cache-hit != 'true' && matrix.os == 'macOS-latest')
+        if: (matrix.os == 'macOS-latest')
         run: |
           export GO111MODULE=off
           go get github.com/therecipe/qt/cmd/... 
@@ -136,12 +135,6 @@ jobs:
           
           $(go env GOPATH)/bin/qtsetup
 
-      - name: Cache vendor
-        id: cache-vendor
-        uses: actions/cache@v2
-        with:
-          path: vendor
-          key: ${{ runner.os }}-${{ matrix.os_suffix }}-vendor
       - name: Build GUI artifact
         run: |
            qtdeploy build desktop cmd/qt/main.go
