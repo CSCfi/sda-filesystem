@@ -9,7 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// signal sends a new log to the LogModel
 var signal func(int, []string) = nil
 
 var levelMap = map[string]log.Level{
@@ -19,7 +18,7 @@ var levelMap = map[string]log.Level{
 	"error":   log.ErrorLevel,
 }
 
-// SetSignal initializes 'signal', which sends logs to LogModel
+// SetSignal initializes signal', which sends logs to LogModel
 func SetSignal(fn func(int, []string)) {
 	signal = fn
 }

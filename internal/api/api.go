@@ -71,6 +71,7 @@ func (re *RequestError) Error() string {
 }
 
 func init() {
+	// This is done because unit test mocking and because makeReqest is recursive
 	makeRequest = makeRequestPlaceholder
 }
 
@@ -92,7 +93,7 @@ func GetEnvs() error {
 	return nil
 }
 
-// getEnv looks up environment variable 'name'
+// getEnv looks up environment variable given in variable 'name'
 func getEnv(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 
@@ -226,7 +227,7 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
 		count++
 
-		if err != nil && count > hi.httpRetry {
+		if err != nil && count >= hi.httpRetry {
 			return err
 		}
 		if err == nil {
@@ -406,7 +407,7 @@ var GetSpecialHeaders = func(path string) (bool, int64, error) {
 	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
 		func() string { return hi.sTokens[project].Token }, query, headers, &ret)
 	if err != nil {
-		return false, -1, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
+		return false, -1, fmt.Errorf("Retrieving headers failed for %s: %w", path, err)
 	}
 
 	return ret.decrypted, ret.segmentedObjectSize, nil

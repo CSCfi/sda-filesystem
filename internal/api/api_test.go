@@ -69,11 +69,11 @@ func TestGetEnvs(t *testing.T) {
 
 			if err != nil {
 				if tt.ok {
-					t.Errorf("%s test failed, returned unexpected err: %q", testname, err.Error())
+					t.Errorf("Unexpected err: %s", err.Error())
 				}
 			} else {
 				if !tt.ok {
-					t.Errorf("%s test failed, should have returned error", testname)
+					t.Error("Test should have returned error")
 				}
 			}
 		})
@@ -112,16 +112,14 @@ func TestGetEnv(t *testing.T) {
 				os.Unsetenv(tt.envName)
 			}
 
-			if err != nil {
-				if tt.ok {
-					t.Errorf("%s test failed, returned unexpected err: %q", testname, err.Error())
-				}
-			} else {
-				if !tt.ok {
-					t.Errorf("%s test failed, should have returned error", testname)
+			if tt.ok {
+				if err != nil {
+					t.Errorf("Returned unexpected err: %s", err.Error())
 				} else if value != tt.envValue {
-					t.Errorf("%s test failed, got %s, expected %s", testname, value, tt.envValue)
+					t.Errorf("Environment variable has incorrect value. Got %q, expected %q", value, tt.envValue)
 				}
+			} else if err == nil {
+				t.Error("Test should have returned error")
 			}
 		})
 	}
@@ -145,14 +143,14 @@ func TestCreateToken(t *testing.T) {
 			hi.token = ""
 			CreateToken(tt.username, tt.password)
 			if hi.token != tt.token {
-				t.Errorf("%s test failed, username %q and password %q should have returned token %q, got %q", testname, tt.username, tt.password, tt.token, hi.token)
+				t.Errorf("Username %q and password %q should have returned token %q, got %q", tt.username, tt.password, tt.token, hi.token)
 			}
 		})
 	}
 }
 
-func TestMakeResquest(t *testing.T) {
-	handleCount := 0 // Bit of a hack, but didn't figure out how to do this otherwise
+func TestMakeRequest(t *testing.T) {
+	handleCount := 0 // Bit of a hack, didn't figure out how to do this otherwise
 
 	var tests = []struct {
 		testname        string
@@ -195,7 +193,7 @@ func TestMakeResquest(t *testing.T) {
 			[]Metadata{{34, "project1"}, {67, "project2"}, {8, "project3"}},
 		},
 		{
-			"OK_TOKEN_EXPIRE",
+			"OK_TOKEN_EXPIRED",
 			func() { hi.uToken = "new_token" },
 			func(rw http.ResponseWriter, req *http.Request) {
 				if req.Header.Get("Authorization") == "Bearer new_token" {
@@ -241,7 +239,7 @@ func TestMakeResquest(t *testing.T) {
 	origFetchTokens := FetchTokens
 	origClient := hi.client
 	origUToken := hi.uToken
-	origHTTPLogin := hi.loggedIn
+	origLoggedIn := hi.loggedIn
 
 	hi.loggedIn = true
 
@@ -249,7 +247,7 @@ func TestMakeResquest(t *testing.T) {
 		FetchTokens = origFetchTokens
 		hi.client = origClient
 		hi.uToken = origUToken
-		hi.loggedIn = origHTTPLogin
+		hi.loggedIn = origLoggedIn
 	}()
 
 	for _, tt := range tests {
@@ -260,6 +258,7 @@ func TestMakeResquest(t *testing.T) {
 			hi.client = server.Client()
 			hi.uToken = ""
 
+			// Causes client.Do() to fail when redirecting
 			hi.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 				return errors.New("Redirecting failed (as expected)")
 			}
@@ -401,7 +400,7 @@ func TestFetchTokens(t *testing.T) {
 			if hi.uToken != tt.uToken {
 				t.Errorf("uToken incorrect. Expected %q, got %q", tt.uToken, hi.uToken)
 			} else if !reflect.DeepEqual(hi.sTokens, tt.sTokens) {
-				t.Errorf("sTokens incorrect. Expected %q, got %q", tt.sTokens, hi.sTokens)
+				t.Errorf("sTokens incorrect.\nExpected %q\nGot %q", tt.sTokens, hi.sTokens)
 			}
 		})
 	}
@@ -451,6 +450,11 @@ func TestGetUToken(t *testing.T) {
 	origMakeRequest := makeRequest
 	origUToken := hi.uToken
 
+	defer func() {
+		makeRequest = origMakeRequest
+		hi.uToken = origUToken
+	}()
+
 	for _, tt := range tests {
 		testname := tt.testname
 		t.Run(testname, func(t *testing.T) {
@@ -459,20 +463,18 @@ func TestGetUToken(t *testing.T) {
 
 			err := GetUToken()
 
-			if tt.expectedToken == "" && err == nil {
-				t.Errorf("Expected non-nil error, got nil")
-			} else if tt.expectedToken != "" {
-				if err != nil {
-					t.Errorf("Expected nil error, got %q", err.Error())
-				} else if hi.uToken == "" {
-					t.Errorf("Unscoped token is empty, expected %q", tt.expectedToken)
-				} else if tt.expectedToken != hi.uToken {
-					t.Errorf("Unscoped token is incorrect, expected %q, got %q", tt.expectedToken, hi.uToken)
+			if tt.expectedToken == "" {
+				if err == nil {
+					t.Errorf("Expected non-nil error, got nil")
 				}
+				return
 			}
 
-			makeRequest = origMakeRequest
-			hi.uToken = origUToken
+			if err != nil {
+				t.Errorf("Unexpected error: %s", err.Error())
+			} else if tt.expectedToken != hi.uToken {
+				t.Errorf("Unscoped token is incorrect. Expected %q, got %q", tt.expectedToken, hi.uToken)
+			}
 		})
 	}
 }
@@ -522,6 +524,11 @@ func TestGetSToken(t *testing.T) {
 	origMakeRequest := makeRequest
 	origSTokens := hi.sTokens
 
+	defer func() {
+		makeRequest = origMakeRequest
+		hi.sTokens = origSTokens
+	}()
+
 	for _, tt := range tests {
 		testname := tt.testname
 		t.Run(testname, func(t *testing.T) {
@@ -530,22 +537,22 @@ func TestGetSToken(t *testing.T) {
 
 			err := GetSToken(tt.project)
 
-			if tt.expectedToken == "" && err == nil {
-				t.Errorf("Expected non-nil error, got nil")
-			} else if tt.expectedToken != "" {
-				if err != nil {
-					t.Errorf("Expected nil error, got %q", err.Error())
-				} else if _, ok := hi.sTokens[tt.project]; !ok {
-					t.Errorf("Scoped token for %q is not defined", tt.project)
-				} else if tt.expectedToken != hi.sTokens[tt.project].Token {
-					t.Errorf("Scoped token is incorrect, expected %q, got %q", tt.expectedToken, hi.uToken)
-				} else if tt.expectedID != hi.sTokens[tt.project].ProjectID {
-					t.Errorf("Project ID for scoped token is incorrect, expected %q, got %q", tt.expectedID, hi.sTokens[tt.project].ProjectID)
+			if tt.expectedToken == "" {
+				if err == nil {
+					t.Errorf("Expected non-nil error, got nil")
 				}
+				return
 			}
 
-			makeRequest = origMakeRequest
-			hi.sTokens = origSTokens
+			if err != nil {
+				t.Errorf("Unexpected error: %s", err.Error())
+			} else if _, ok := hi.sTokens[tt.project]; !ok {
+				t.Errorf("Scoped token for %q is not defined", tt.project)
+			} else if tt.expectedToken != hi.sTokens[tt.project].Token {
+				t.Errorf("Scoped token is incorrect. Expected %q, got %q", tt.expectedToken, hi.sTokens[tt.project].Token)
+			} else if tt.expectedID != hi.sTokens[tt.project].ProjectID {
+				t.Errorf("Project ID is incorrect. Expected %q, got %q", tt.expectedID, hi.sTokens[tt.project].ProjectID)
+			}
 		})
 	}
 }
@@ -592,6 +599,7 @@ func TestGetProjects(t *testing.T) {
 	}
 
 	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
 		testname := tt.testname
@@ -600,17 +608,18 @@ func TestGetProjects(t *testing.T) {
 
 			projects, err := GetProjects()
 
-			if tt.expectedMetaData == nil && err == nil {
-				t.Errorf("Expected non-nil error, got nil")
-			} else if tt.expectedMetaData != nil {
-				if err != nil {
-					t.Errorf("Expected nil error, got %q", err.Error())
-				} else if !reflect.DeepEqual(tt.expectedMetaData, projects) {
-					t.Errorf("Projects incorrect, expected %v, got %v", tt.expectedMetaData, projects)
+			if tt.expectedMetaData == nil {
+				if err == nil {
+					t.Errorf("Expected non-nil error, got nil")
 				}
+				return
 			}
 
-			makeRequest = origMakeRequest
+			if err != nil {
+				t.Errorf("Unexpected error: %s", err.Error())
+			} else if !reflect.DeepEqual(tt.expectedMetaData, projects) {
+				t.Errorf("Projects incorrect. Expected %v, got %v", tt.expectedMetaData, projects)
+			}
 		})
 	}
 }
@@ -657,6 +666,7 @@ func TestGetContainers(t *testing.T) {
 	}
 
 	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
 		testname := tt.testname
@@ -665,17 +675,18 @@ func TestGetContainers(t *testing.T) {
 
 			containers, err := GetContainers(tt.project)
 
-			if tt.expectedMetaData == nil && err == nil {
-				t.Errorf("Expected non-nil error, got nil")
-			} else if tt.expectedMetaData != nil {
-				if err != nil {
-					t.Errorf("Expected nil error, got %q", err.Error())
-				} else if !reflect.DeepEqual(tt.expectedMetaData, containers) {
-					t.Errorf("Containers incorrect, expected %v, got %v", tt.expectedMetaData, containers)
+			if tt.expectedMetaData == nil {
+				if err == nil {
+					t.Errorf("Expected non-nil error, got nil")
 				}
+				return
 			}
 
-			makeRequest = origMakeRequest
+			if err != nil {
+				t.Errorf("Unexpected error: %s", err.Error())
+			} else if !reflect.DeepEqual(tt.expectedMetaData, containers) {
+				t.Errorf("Containers incorrect. Expected %v, got %v", tt.expectedMetaData, containers)
+			}
 		})
 	}
 }
@@ -722,6 +733,7 @@ func TestGetObjects(t *testing.T) {
 	}
 
 	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
 		testname := tt.testname
@@ -730,17 +742,18 @@ func TestGetObjects(t *testing.T) {
 
 			objects, err := GetObjects(tt.project, tt.container)
 
-			if tt.expectedMetaData == nil && err == nil {
-				t.Errorf("Expected non-nil error, got nil")
-			} else if tt.expectedMetaData != nil {
-				if err != nil {
-					t.Errorf("Expected nil error, got %q", err.Error())
-				} else if !reflect.DeepEqual(tt.expectedMetaData, objects) {
-					t.Errorf("Objects incorrect, expected %v, got %v", tt.expectedMetaData, objects)
+			if tt.expectedMetaData == nil {
+				if err == nil {
+					t.Errorf("Expected non-nil error, got nil")
 				}
+				return
 			}
 
-			makeRequest = origMakeRequest
+			if err != nil {
+				t.Errorf("Unexpected error: %s", err.Error())
+			} else if !reflect.DeepEqual(tt.expectedMetaData, objects) {
+				t.Errorf("Objects incorrect. Expected %v, got %v", tt.expectedMetaData, objects)
+			}
 		})
 	}
 }
@@ -791,7 +804,7 @@ func TestDownloadData(t *testing.T) {
 			},
 			nil, []byte{'e', 'm', 'z', 'q', 'f', 'd', 'r'},
 			chunkSize + 1, chunkSize + 8, chunkSize + 17,
-			"monday_tuesday_wednesay_1", "monday/tuesday/wednesay", "OK_2",
+			"", "monday/tuesday/wednesay", "OK_2",
 		},
 		// Makerequest returns an error
 		{
@@ -812,7 +825,7 @@ func TestDownloadData(t *testing.T) {
 		downloadCache = origDownloadCache
 	}()
 
-	downloadCache = &cache.Ristretto{&mockCache{}}
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
 
 	for _, tt := range tests {
 		testname := tt.testname

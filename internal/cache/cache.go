@@ -12,16 +12,19 @@ var onceCache sync.Once
 
 const RistrettoCacheTTL = 60 * time.Minute
 
+// Ristretto is the final data type used when dealing with cache
 type Ristretto struct {
-	CacheInterface
+	Cacheable
 }
 
-type CacheInterface interface {
+// Cacheable includes all the functions a struct must implement in order for it to be embedded in Ristretto
+type Cacheable interface {
 	Get(string) (interface{}, bool)
 	Set(string, interface{}, time.Duration) bool
 	Del(string)
 }
 
+// Because otherwise we cannot mock cache for tests
 type storage struct {
 	cache *ristretto.Cache
 }
@@ -38,19 +41,19 @@ func NewRistrettoCache() (*Ristretto, error) {
 		})
 
 		if err == nil {
-			cache = &Ristretto{&storage{ristrettoCache}}
+			cache = &Ristretto{Cacheable: &storage{ristrettoCache}}
 		}
 	})
 
 	return cache, err
 }
 
-// Get returns item with key "key" from cache and a boolean representing whether the item was found or not
+// Get returns item behind key "key" and a boolean representing whether the item was found or not
 func (s *storage) Get(key string) (interface{}, bool) {
 	return s.cache.Get(key)
 }
 
-// Set sets data to cache with specific ttl. If ttl == -1, default cache ttl value will be used.
+// Set stores data to cache with specific key and ttl. If ttl == -1, RistrettoCacheTTL will be used.
 func (s *storage) Set(key string, value interface{}, ttl time.Duration) bool {
 	if ttl == -1 {
 		ttl = RistrettoCacheTTL

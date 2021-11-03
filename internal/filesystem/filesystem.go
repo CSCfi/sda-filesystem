@@ -57,7 +57,7 @@ func SetSignalBridge(fn func()) {
 	signalBridge = fn
 }
 
-// CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
+// CreateFileSystem initializes the in-memory filesystem database and mounts the root folder
 func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	logs.Info("Creating in-memory filesystem database")
 	timestamp := fuse.Now()
@@ -79,7 +79,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 		logs.Error(err)
 		return
 	}
-
 	if len(projects) == 0 {
 		logs.Errorf("No project permissions found")
 		return
@@ -217,7 +216,7 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 			for i, obj := range objects {
 				parts := strings.SplitN(obj.Name, "/", level+1)
 
-				// Prevent objects that are empty directories to be created as files
+				// Prevent the creation of objects that are actually empty directories
 				if level == 1 && strings.HasSuffix(obj.Name, "/") {
 					remove = append(remove, i)
 					continue
@@ -286,7 +285,7 @@ var removeInvalidChars = func(str string, ignore ...string) string {
 }
 
 // calculateDecryptedSize calculates the decrypted size of an encrypted file size
-var calculateDecryptedSize = func(size int64) int64 {
+func calculateDecryptedSize(size int64) int64 {
 	// Crypt4GH settings
 	var blockSize int64 = 65536
 	var macSize int64 = 28
@@ -374,7 +373,7 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 		return -fuse.EEXIST
 	}
 
-	// A folder or a file with the same name already exists
+	// A folder or a file with a different mode but the same name already exists
 	if node != nil {
 		// Create a unique prefix for file
 		i := 1

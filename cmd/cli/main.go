@@ -132,7 +132,6 @@ func isMountPointValid(info fs.FileInfo) {
 		logs.Fatal("You do not have permission to write to folder ", mount)
 	}
 
-	// Check that the mount point is empty if it already exists
 	dir, err := os.Open(mount)
 	if err != nil {
 		logs.Fatalf("Could not open mount point %s", mount)

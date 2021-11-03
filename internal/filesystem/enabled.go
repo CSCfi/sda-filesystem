@@ -80,7 +80,7 @@ func (fs *Connectfs) Releasedir(path string, fh uint64) (errc int) {
 func (fs *Connectfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc int) {
 	defer fs.synchronize()()
 	node := fs.getNode(path, fh)
-	if nil == node {
+	if node == nil {
 		return -fuse.ENOENT
 	}
 	*stat = node.stat
@@ -92,7 +92,7 @@ func (fs *Connectfs) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	defer fs.synchronize()()
 	logs.Debugf("Reading %s", path)
 	node := fs.getNode(path, fh)
-	if nil == node {
+	if node == nil {
 		logs.Errorf("Read %s, inode does't exist", path)
 		return -fuse.ENOENT
 	}

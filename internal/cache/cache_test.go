@@ -7,12 +7,31 @@ import (
 
 var wait = 10 * time.Millisecond
 
-func TestSetAndGet(t *testing.T) {
+func TestNewRistrettoCache(t *testing.T) {
 	c, err := NewRistrettoCache()
 	if err != nil {
 		t.Fatalf("Creating cache failed: %s", err.Error())
 	}
 
+	if c == nil {
+		t.Fatal("Cache is nil")
+	}
+
+	c2, err2 := NewRistrettoCache()
+	if err2 != nil {
+		t.Fatalf("Second call failed: %s", err.Error())
+	}
+
+	if c2 != c {
+		t.Fatalf("Second call returned a different cache. Expected address %p, got %p", c, c2)
+	}
+}
+
+func TestSetAndGet(t *testing.T) {
+	c, err := NewRistrettoCache()
+	if err != nil {
+		t.Fatalf("Creating cache failed: %s", err.Error())
+	}
 	if c == nil {
 		t.Fatal("Cache is nil")
 	}
@@ -30,17 +49,18 @@ func TestSetAndGet(t *testing.T) {
 	if !ok {
 		t.Fatal("Could not find value from cache")
 	}
-	if val.(string) != content {
-		t.Fatalf("Cache returned incorrect value. Expected %q, got %q", content, val.(string))
+	if str, ok := val.(string); !ok {
+		t.Fatalf("Stored value is not a string")
+	} else if str != content {
+		t.Fatalf("Cache returned incorrect value. Expected %q, got %q", content, str)
 	}
 }
 
-func TestSetAndGet_Expire(t *testing.T) {
+func TestSetAndGet_Expired(t *testing.T) {
 	c, err := NewRistrettoCache()
 	if err != nil {
 		t.Fatalf("Creating cache failed: %s", err.Error())
 	}
-
 	if c == nil {
 		t.Fatal("Cache is nil")
 	}
@@ -65,7 +85,6 @@ func TestDel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Creating cache failed: %s", err.Error())
 	}
-
 	if c == nil {
 		t.Fatal("Cache is nil")
 	}
@@ -74,11 +93,9 @@ func TestDel(t *testing.T) {
 	c.Del("key")
 
 	time.Sleep(wait)
-	val, ok := c.Get("key")
+	_, ok := c.Get("key")
 
 	if ok {
 		t.Errorf("Item was not deleted from cache")
-	} else if val != nil {
-		t.Errorf("Cache returned non-nil value for item which should have been deleted")
 	}
 }

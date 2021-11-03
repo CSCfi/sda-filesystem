@@ -12,24 +12,19 @@ import (
 	"golang.org/x/term"
 )
 
+// testReader implements loginReader
 type testReader struct {
 	pwd    string
 	err    error
 	stream io.Reader
 }
 
-// testStream is an io.Reader which is given to bufio.NewScanner()
+// testStream is an io.Reader given to testReader
 type testStream struct {
 	data string
 	done bool
 	err  error
 }
-
-// So that `go test` does not complain about flags
-var _ = func() bool {
-	testing.Init()
-	return true
-}()
 
 func (s *testStream) Read(p []byte) (int, error) {
 	if s.err != nil {
@@ -64,6 +59,12 @@ func (r testReader) getState() (*term.State, error) {
 func newTestReader(username string, password string, sErr error, rErr error) *testReader {
 	return &testReader{stream: &testStream{data: username, done: false, err: sErr}, pwd: password, err: rErr}
 }
+
+// So that `go test` does not complain about flags
+var _ = func() bool {
+	testing.Init()
+	return true
+}()
 
 func TestMain(m *testing.M) {
 	logrus.SetOutput(ioutil.Discard)
@@ -119,6 +120,7 @@ func TestAskForLogin(t *testing.T) {
 	fatal := false
 	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
 
+	// Ignore prints to stdout
 	null, _ := os.Open(os.DevNull)
 	sout := os.Stdout
 	os.Stdout = null
@@ -137,10 +139,10 @@ func TestAskForLogin(t *testing.T) {
 		t.Fatal("Function called Exit()")
 	}
 	if str1 != username {
-		t.Fatalf("Username incorrect. Expected %q, got %q", username, str1)
+		t.Errorf("Username incorrect. Expected %q, got %q", username, str1)
 	}
 	if str2 != password {
-		t.Fatalf("Password incorrect. Expected %q, got %q", password, str2)
+		t.Errorf("Password incorrect. Expected %q, got %q", password, str2)
 	}
 }
 
@@ -148,6 +150,7 @@ func TestAskForLogin_Username_Fatal(t *testing.T) {
 	fatal := false
 	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
 
+	// Ignore prints to stdout
 	null, _ := os.Open(os.DevNull)
 	sout := os.Stdout
 	os.Stdout = null
@@ -168,16 +171,14 @@ func TestAskForLogin_Password_Fatal(t *testing.T) {
 	fatal := false
 	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
 
+	// Ignore prints to stdout
 	null, _ := os.Open(os.DevNull)
 	sout := os.Stdout
 	os.Stdout = null
 
 	defer func() { logrus.StandardLogger().ExitFunc = nil }()
 
-	username := "Groot"
-	password := "567ghk789"
-
-	r := newTestReader(username, password, nil, errors.New("Cannot read password"))
+	r := newTestReader("Groot", "567ghk789", nil, errors.New("Cannot read password"))
 	_, _ = askForLogin(r)
 	os.Stdout = sout
 	null.Close()
@@ -225,10 +226,10 @@ func TestLogin(t *testing.T) {
 		t.Fatal("Function called Exit()")
 	}
 	if str1 != username {
-		t.Fatalf("Incorrect username. Expected %q, got %q", username, str1)
+		t.Errorf("Incorrect username. Expected %q, got %q", username, str1)
 	}
 	if str2 != password {
-		t.Fatalf("Incorrect password. Expected %q, got %q", password, str2)
+		t.Errorf("Incorrect password. Expected %q, got %q", password, str2)
 	}
 }
 
@@ -310,10 +311,10 @@ func TestLogin_Auth_401(t *testing.T) {
 		t.Fatal("Function called Exit()")
 	}
 	if str1 != usernames[1] {
-		t.Fatalf("Username incorrect. Expected %q, got %q", usernames[1], str1)
+		t.Errorf("Username incorrect. Expected %q, got %q", usernames[1], str1)
 	}
 	if str2 != passwords[1] {
-		t.Fatalf("Passwords incorrect. Expected %q, got %q", passwords[1], str2)
+		t.Errorf("Passwords incorrect. Expected %q, got %q", passwords[1], str2)
 	}
 }
 
@@ -377,10 +378,6 @@ func TestCheckMountPoint(t *testing.T) {
 			fatal := false
 			logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
 
-			defer func() {
-				logrus.StandardLogger().ExitFunc = nil
-			}()
-
 			mount = node
 			checkMountPoint()
 
@@ -391,13 +388,14 @@ func TestCheckMountPoint(t *testing.T) {
 			} else {
 				if tt.mode == -1 {
 					if _, err := os.Stat(node); os.IsNotExist(err) {
-						t.Errorf("Directory does not exist")
+						t.Errorf("Directory was not created")
 					}
 				} else if !fatal {
 					t.Error("Function should have called Exit()")
 				}
 			}
 
+			logrus.StandardLogger().ExitFunc = nil
 			os.RemoveAll(node)
 		})
 	}

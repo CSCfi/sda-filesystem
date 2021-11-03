@@ -74,6 +74,6 @@ func TestStructureError(t *testing.T) {
 	}
 
 	if errs2 := StructureError(fullError); !reflect.DeepEqual(errs, errs2) {
-		t.Errorf("StructureError test failed. Got %+q, expected %+q", errs2, errs)
+		t.Errorf("StructureError test failed.\nGot %q\nExpected %q", errs2, errs)
 	}
 }
