@@ -23,20 +23,43 @@ import (
 )
 
 var mount string
+var getHomeDir = os.UserHomeDir
+
+type loginReader interface {
+	readPassword() (string, error)
+	getStream() io.Reader
+	getState() (*term.State, error)
+}
+
+type stdinReader struct {
+}
+
+func (r stdinReader) readPassword() (string, error) {
+	pwd, err := term.ReadPassword(syscall.Stdin)
+	return string(pwd), err
+}
+
+func (r stdinReader) getStream() io.Reader {
+	return os.Stdin
+}
+
+func (r stdinReader) getState() (*term.State, error) {
+	return term.GetState(int(syscall.Stdin))
+}
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
-	home, err := os.UserHomeDir()
+	home, err := getHomeDir()
 	if err != nil {
-		logs.Fatal("Could not find user home directory", err)
+		logs.Fatalf("Could not find user home directory: %s", err.Error())
 	}
 	p := filepath.FromSlash(filepath.ToSlash(home) + "/Projects")
 	return p
 }
 
-func askForLogin() (string, string) {
+var askForLogin = func(lr loginReader) (string, string) {
 	fmt.Print("Enter username: ")
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(lr.getStream())
 	var username string
 	if scanner.Scan() {
 		username = scanner.Text()
@@ -46,18 +69,18 @@ func askForLogin() (string, string) {
 	}
 
 	fmt.Print("Enter password: ")
-	password, err := term.ReadPassword(syscall.Stdin)
+	password, err := lr.readPassword()
 	fmt.Println()
 	if err != nil {
 		logs.Fatal(err)
 	}
 
-	return username, string(password)
+	return username, password
 }
 
-func login() {
+func login(lr loginReader) {
 	// Get the state of the terminal before running the password prompt
-	originalTerminalState, err := term.GetState(int(syscall.Stdin))
+	originalTerminalState, err := lr.getState()
 	if err != nil {
 		logs.Fatalf("Failed to get terminal state: %s", err.Error())
 	}
@@ -74,7 +97,7 @@ func login() {
 	}()
 
 	for {
-		username, password := askForLogin()
+		username, password := askForLogin(lr)
 		api.CreateToken(username, password)
 		err = api.GetUToken()
 
@@ -100,8 +123,8 @@ func isMountPointValid(info fs.FileInfo) {
 		logs.Fatalf("%s is not a directory", mount)
 	}
 
-	// ¿Mount directory must not already exist in Windows?
-	if runtime.GOOS == "windows" {
+	// Mount directory must not already exist in Windows
+	if runtime.GOOS == "windows" { // ?
 		logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
 	}
 
@@ -109,7 +132,6 @@ func isMountPointValid(info fs.FileInfo) {
 		logs.Fatal("You do not have permission to write to folder ", mount)
 	}
 
-	// Check that the mount point is empty if it already exists
 	dir, err := os.Open(mount)
 	if err != nil {
 		logs.Fatalf("Could not open mount point %s", mount)
@@ -182,7 +204,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	login()
+	login(stdinReader{})
 	api.SetLoggedIn()
 
 	done := shutdown()

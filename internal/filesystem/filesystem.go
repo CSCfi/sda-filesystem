@@ -57,7 +57,7 @@ func SetSignalBridge(fn func()) {
 	signalBridge = fn
 }
 
-// CreateFileSystem initialises the in-memory filesystem database and mounts the root folder
+// CreateFileSystem initializes the in-memory filesystem database and mounts the root folder
 func CreateFileSystem(send ...chan<- LoadProjectInfo) *Connectfs {
 	logs.Info("Creating in-memory filesystem database")
 	timestamp := fuse.Now()
@@ -79,7 +79,6 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 		logs.Error(err)
 		return
 	}
-
 	if len(projects) == 0 {
 		logs.Errorf("No project permissions found")
 		return
@@ -175,7 +174,7 @@ func (fs *Connectfs) populateFilesystem(timestamp fuse.Timespec, send ...chan<- 
 	}
 }
 
-func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
+var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
 	defer wg.Done()
 	defer func() {
 		// recover from panic if one occured.
@@ -217,7 +216,7 @@ func createObjects(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send .
 			for i, obj := range objects {
 				parts := strings.SplitN(obj.Name, "/", level+1)
 
-				// Prevent objects that are empty directories to be created as files
+				// Prevent the creation of objects that are actually empty directories
 				if level == 1 && strings.HasSuffix(obj.Name, "/") {
 					remove = append(remove, i)
 					continue
@@ -265,7 +264,7 @@ func split(path string) []string {
 	return strings.Split(path, "/")
 }
 
-func removeInvalidChars(str string, ignore ...string) string {
+var removeInvalidChars = func(str string, ignore ...string) string {
 	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
 		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
 		"<", ".", ">", ".", "'", ".", "\"", "."}
@@ -317,7 +316,7 @@ func calculateDecryptedSize(size int64) int64 {
 }
 
 // lookupNode finds the names and inodes of self and parents all the way to root directory
-func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *node, dir bool) {
+var lookupNode = func(fs *Connectfs, path string) (prnt *node, name string, node *node, dir bool) {
 	prnt, node = fs.root, fs.root
 	name = ""
 	dir = true
@@ -336,9 +335,35 @@ func (fs *Connectfs) lookupNode(path string) (prnt *node, name string, node *nod
 	return
 }
 
+// newNode initializes a node struct
+var newNode = func(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
+	self := node{
+		fuse.Stat_t{
+			Dev:      dev,
+			Ino:      ino,
+			Mode:     mode,
+			Nlink:    1,
+			Uid:      uid,
+			Gid:      gid,
+			Atim:     tmsp,
+			Mtim:     tmsp,
+			Ctim:     tmsp,
+			Birthtim: tmsp,
+			Flags:    0,
+		},
+		nil,
+		0,
+		false}
+	// Initialize map of children if node is a directory
+	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
+		self.chld = map[string]*node{}
+	}
+	return &self
+}
+
 // makeNode adds a node into the fuse
 func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, timestamp fuse.Timespec) int {
-	prnt, name, node, isDir := fs.lookupNode(path)
+	prnt, name, node, isDir := lookupNode(fs, path)
 	if prnt == nil {
 		// No such file or directory
 		return -fuse.ENOENT
@@ -348,7 +373,7 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 		return -fuse.EEXIST
 	}
 
-	// A folder or a file with the same name already exists
+	// A folder or a file with a different mode but the same name already exists
 	if node != nil {
 		// Create a unique prefix for file
 		i := 1
@@ -382,34 +407,8 @@ func (fs *Connectfs) makeNode(path string, mode uint32, dev uint64, size int64, 
 	return 0
 }
 
-// newNode initializes a node struct
-func newNode(dev uint64, ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
-	self := node{
-		fuse.Stat_t{
-			Dev:      dev,
-			Ino:      ino,
-			Mode:     mode,
-			Nlink:    1,
-			Uid:      uid,
-			Gid:      gid,
-			Atim:     tmsp,
-			Mtim:     tmsp,
-			Ctim:     tmsp,
-			Birthtim: tmsp,
-			Flags:    0,
-		},
-		nil,
-		0,
-		false}
-	// Initialize map of children if node is a directory
-	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
-		self.chld = map[string]*node{}
-	}
-	return &self
-}
-
 func (fs *Connectfs) openNode(path string, dir bool) (*node, int, uint64) {
-	_, _, node, _ := fs.lookupNode(path)
+	_, _, node, _ := lookupNode(fs, path)
 	if node == nil {
 		return nil, -fuse.ENOENT, ^uint64(0)
 	}
@@ -437,7 +436,7 @@ func (fs *Connectfs) closeNode(fh uint64) int {
 
 func (fs *Connectfs) getNode(path string, fh uint64) *node {
 	if fh == ^uint64(0) {
-		_, _, node, _ := fs.lookupNode(path)
+		_, _, node, _ := lookupNode(fs, path)
 		return node
 	}
 	return fs.openmap[fh]

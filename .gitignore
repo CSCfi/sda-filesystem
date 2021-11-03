@@ -1,6 +1,7 @@
 *.code-workspace
 .DS_Store
 *.pem
+*.out
 moc*
 rcc*
 sda-filesystem

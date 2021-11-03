@@ -21,9 +21,9 @@ import (
 const chunkSize = 1 << 25
 
 var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
-var downloadCache *cache.Ristretto = nil
+var downloadCache *cache.Ristretto
 
-var makeRequest func(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error
+var makeRequest func(string, func() string, map[string]string, map[string]string, interface{}) error
 
 // HTTPInfo contains all necessary variables used during HTTP requests
 type HTTPInfo struct {
@@ -71,6 +71,7 @@ func (re *RequestError) Error() string {
 }
 
 func init() {
+	// This is done because unit test mocking and because makeReqest is recursive
 	makeRequest = makeRequestPlaceholder
 }
 
@@ -92,7 +93,7 @@ func GetEnvs() error {
 	return nil
 }
 
-// getEnv looks up environment variable 'name'
+// getEnv looks up environment variable given in variable 'name'
 func getEnv(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 
@@ -125,7 +126,7 @@ func SetLoggedIn() {
 }
 
 // CreateToken creates the authorization token based on username + password
-func CreateToken(username, password string) {
+var CreateToken = func(username, password string) {
 	hi.token = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
 }
 
@@ -188,8 +189,9 @@ func InitializeClient() error {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-func makeRequestPlaceholder(url string, token string, query map[string]string, headers map[string]string, ret interface{}) error {
+func makeRequestPlaceholder(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
 	var response *http.Response
+	token := tokenFunc()
 
 	// Build HTTP request
 	request, err := http.NewRequest("GET", url, nil)
@@ -225,7 +227,7 @@ func makeRequestPlaceholder(url string, token string, query map[string]string, h
 		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
 		count++
 
-		if err != nil && count > hi.httpRetry {
+		if err != nil && count >= hi.httpRetry {
 			return err
 		}
 		if err == nil {
@@ -238,7 +240,7 @@ func makeRequestPlaceholder(url string, token string, query map[string]string, h
 		logs.Info("Tokens no longer valid. Fetching them again")
 		FetchTokens()
 		hi.loggedIn = false // To prevent unlikely infinite loop
-		err = makeRequest(url, token, query, headers, ret)
+		err = makeRequest(url, tokenFunc, query, headers, ret)
 		hi.loggedIn = true
 		return err
 	}
@@ -277,7 +279,7 @@ func makeRequestPlaceholder(url string, token string, query map[string]string, h
 }
 
 // FetchTokens fetches the unscoped token and the scoped tokens
-func FetchTokens() {
+var FetchTokens = func() {
 	err := GetUToken()
 	if err != nil {
 		logs.Warningf("HTTP requests may be slower: %s", err.Error())
@@ -303,10 +305,10 @@ func FetchTokens() {
 }
 
 // GetUToken gets the unscoped token
-func GetUToken() error {
+var GetUToken = func() error {
 	// Request token
 	uToken := UToken{}
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", nil, nil, &uToken)
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", func() string { return "" }, nil, nil, &uToken)
 	if err != nil {
 		return fmt.Errorf("Retrieving unscoped token failed: %w", err)
 	}
@@ -317,13 +319,13 @@ func GetUToken() error {
 }
 
 // GetSToken gets the scoped tokens for a project
-func GetSToken(project string) error {
+var GetSToken = func(project string) error {
 	// Query params
 	query := map[string]string{"project": project}
 
 	// Request token
 	sToken := SToken{}
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", "", query, nil, &sToken)
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", func() string { return "" }, query, nil, &sToken)
 	if err != nil {
 		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
 	}
@@ -334,10 +336,11 @@ func GetSToken(project string) error {
 }
 
 // GetProjects gets all projects user has access to
-func GetProjects() ([]Metadata, error) {
+var GetProjects = func() ([]Metadata, error) {
 	// Request projects
 	var projects []Metadata
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects", hi.uToken, nil, nil, &projects)
+	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects",
+		func() string { return hi.uToken }, nil, nil, &projects)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
 	}
@@ -347,7 +350,7 @@ func GetProjects() ([]Metadata, error) {
 }
 
 // GetContainers gets conatainers inside project
-func GetContainers(project string) ([]Metadata, error) {
+var GetContainers = func(project string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
 
@@ -356,7 +359,7 @@ func GetContainers(project string) ([]Metadata, error) {
 	err := makeRequest(
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
-			url.PathEscape(project)+"/containers", hi.sTokens[project].Token, nil, headers, &containers)
+			url.PathEscape(project)+"/containers", func() string { return hi.sTokens[project].Token }, nil, headers, &containers)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving containers for %s failed: %w", project, err)
 	}
@@ -366,7 +369,7 @@ func GetContainers(project string) ([]Metadata, error) {
 }
 
 // GetObjects gets objects inside container
-func GetObjects(project, container string) ([]Metadata, error) {
+var GetObjects = func(project, container string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
 
@@ -376,7 +379,7 @@ func GetObjects(project, container string) ([]Metadata, error) {
 		strings.TrimSuffix(hi.metadataURL, "/")+
 			"/project/"+
 			url.PathEscape(project)+"/container/"+
-			url.PathEscape(container)+"/objects", hi.sTokens[project].Token, nil, headers, &objects)
+			url.PathEscape(container)+"/objects", func() string { return hi.sTokens[project].Token }, nil, headers, &objects)
 	if err != nil {
 		return nil, fmt.Errorf("Retrieving objects for %s failed: %w", container, err)
 	}
@@ -386,7 +389,7 @@ func GetObjects(project, container string) ([]Metadata, error) {
 }
 
 // GetSpecialHeaders returns information on headers that can only be retirived from data api
-func GetSpecialHeaders(path string) (bool, int64, error) {
+var GetSpecialHeaders = func(path string) (bool, int64, error) {
 	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
@@ -401,9 +404,10 @@ func GetSpecialHeaders(path string) (bool, int64, error) {
 	headers := map[string]string{"Range": "bytes=0-1", "X-Project-ID": hi.sTokens[project].ProjectID}
 
 	var ret specialHeaders
-	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, &ret)
+	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
+		func() string { return hi.sTokens[project].Token }, query, headers, &ret)
 	if err != nil {
-		return false, -1, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
+		return false, -1, fmt.Errorf("Retrieving headers failed for %s: %w", path, err)
 	}
 
 	return ret.decrypted, ret.segmentedObjectSize, nil
@@ -446,7 +450,8 @@ func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, er
 
 		// Request data
 		buf := make([]byte, chEnd-chStart)
-		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data", hi.sTokens[project].Token, query, headers, buf)
+		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
+			func() string { return hi.sTokens[project].Token }, query, headers, buf)
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}

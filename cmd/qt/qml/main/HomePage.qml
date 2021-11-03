@@ -24,7 +24,7 @@ Control {
         id: fileDialog
         title: "Choose or create a folder"
         folder: shortcuts.home
-        selectExisting: false // TODO: Check this out 
+        selectExisting: false
         selectFolder: true
         onAccepted: {
             var mountError = QmlBridge.changeMountPoint(fileDialog.fileUrl)
@@ -383,7 +383,7 @@ Control {
         states: [
             State {
                 name: "dense"
-                when: (dialogColumn.implicitWidth + CSC.Style.padding) / pageGrid.width > 0.5
+                when: (dialogColumn.implicitWidth + CSC.Style.padding) > 0.5 * pageGrid.width
                 PropertyChanges { target: pageGrid; columns: 1; rows: 2 }
                 PropertyChanges { target: dialogColumn; Layout.maximumWidth: -1 }
                 PropertyChanges { target: projectView; interactive: false }

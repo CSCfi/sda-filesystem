@@ -19,7 +19,7 @@ var levelMap = map[string]log.Level{
 	"error":   log.ErrorLevel,
 }
 
-// SetSignal initializes 'signal', which sends logs to LogModel
+// SetSignal initializes signal', which sends logs to LogModel
 func SetSignal(fn func(int, []string)) {
 	signal = fn
 }
