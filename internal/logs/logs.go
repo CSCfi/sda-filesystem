@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// signal sends a new log to the LogModel
 var signal func(int, []string) = nil
 
 var levelMap = map[string]log.Level{
