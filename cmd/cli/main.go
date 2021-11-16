@@ -22,33 +22,39 @@ import (
 )
 
 var mount string
-var getHomeDir = os.UserHomeDir
 
 type loginReader interface {
 	readPassword() (string, error)
 	getStream() io.Reader
-	getState() (*term.State, error)
+	getState() error
+	restoreState() error
 }
 
 type stdinReader struct {
+	originalState *term.State
 }
 
-func (r stdinReader) readPassword() (string, error) {
+func (r *stdinReader) readPassword() (string, error) {
 	pwd, err := term.ReadPassword(syscall.Stdin)
 	return string(pwd), err
 }
 
-func (r stdinReader) getStream() io.Reader {
+func (r *stdinReader) getStream() io.Reader {
 	return os.Stdin
 }
 
-func (r stdinReader) getState() (*term.State, error) {
-	return term.GetState(int(syscall.Stdin))
+func (r *stdinReader) getState() (err error) {
+	r.originalState, err = term.GetState(int(syscall.Stdin))
+	return
+}
+
+func (r *stdinReader) restoreState() error {
+	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
 // mountPoint constructs a path to the user's home directory for mounting FUSE
 func mountPoint() string {
-	home, err := getHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		logs.Fatalf("Could not find user home directory: %s", err.Error())
 	}
@@ -79,7 +85,7 @@ var askForLogin = func(lr loginReader) (string, string) {
 
 func login(lr loginReader) {
 	// Get the state of the terminal before running the password prompt
-	originalTerminalState, err := lr.getState()
+	err := lr.getState()
 	if err != nil {
 		logs.Fatalf("Failed to get terminal state: %s", err.Error())
 	}
@@ -89,7 +95,7 @@ func login(lr loginReader) {
 	signal.Notify(signalChan, os.Interrupt)
 	go func() {
 		<-signalChan
-		if err = term.Restore(int(syscall.Stdin), originalTerminalState); err != nil {
+		if err = lr.restoreState(); err != nil {
 			logs.Warningf("Could not restore terminal to original state: %s", err.Error())
 		}
 		os.Exit(1)
@@ -191,7 +197,6 @@ func main() {
 	if err != nil {
 		logs.Fatal(err)
 	}
-
 	err = api.InitializeCache()
 	if err != nil {
 		logs.Fatal(err)
@@ -201,7 +206,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	login(stdinReader{})
+	login(&stdinReader{})
 	api.SetLoggedIn()
 
 	done := shutdown()
@@ -221,6 +226,5 @@ func main() {
 	} // Still needs windows options
 
 	host.Mount(mount, options)
-
 	<-done
 }
