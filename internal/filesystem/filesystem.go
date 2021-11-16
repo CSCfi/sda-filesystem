@@ -285,20 +285,19 @@ var removeInvalidChars = func(str string, ignore ...string) string {
 }
 
 // calculateDecryptedSize calculates the decrypted size of an encrypted file size
-func calculateDecryptedSize(size int64) int64 {
+func calculateDecryptedSize(fileSize, headerSize int64) int64 {
 	// Crypt4GH settings
 	var blockSize int64 = 65536
 	var macSize int64 = 28
-	var headerSize int64 = 124
 	cipherBlockSize := blockSize + macSize
 
 	// Crypt4GH files have a minimum possible size of 152 bytes
-	if size < headerSize+macSize {
+	if fileSize < headerSize+macSize {
 		return -1
 	}
 
 	// Calculate body size without header
-	bodySize := size - headerSize
+	bodySize := fileSize - headerSize
 
 	// Calculate number of cipher blocks in body
 	// number of complete 64kiB datablocks

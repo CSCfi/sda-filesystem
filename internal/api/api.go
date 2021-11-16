@@ -56,9 +56,10 @@ type SToken struct {
 	ProjectID string `json:"projectID"`
 }
 
-type specialHeaders struct {
-	decrypted           bool
-	segmentedObjectSize int64
+type SpecialHeaders struct {
+	Decrypted           bool
+	SegmentedObjectSize int64
+	HeaderSize          int64
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -254,16 +255,30 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 
 	// Parse request
 	switch v := ret.(type) {
-	case *specialHeaders:
-		(*v).decrypted = (response.Header.Get("X-Decrypted") == "True")
+	case *SpecialHeaders:
+		(*v).Decrypted = (response.Header.Get("X-Decrypted") == "True")
+
+		if (*v).Decrypted {
+			if headerSize := response.Header.Get("X-Header-Size"); headerSize != "" {
+				if (*v).HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
+					logs.Warningf("Could not convert header X-Header-Size to integer: %s", err.Error())
+					(*v).HeaderSize = 124
+				}
+			} else {
+				logs.Warningf("Could not find header X-Header-Size in response")
+				(*v).HeaderSize = 124
+			}
+		}
+
 		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
-			if (*v).segmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
+			if (*v).SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
 				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %s", err.Error())
-				(*v).segmentedObjectSize = -1
+				(*v).SegmentedObjectSize = -1
 			}
 		} else {
-			(*v).segmentedObjectSize = -1
+			(*v).SegmentedObjectSize = -1
 		}
+
 		if _, err = io.Copy(io.Discard, response.Body); err != nil {
 			logs.Warningf("Discarding response body failed when reading headers: %s", err.Error())
 		}
@@ -392,7 +407,7 @@ var GetObjects = func(project, container string) ([]Metadata, error) {
 }
 
 // GetSpecialHeaders returns information on headers that can only be retirived from data api
-var GetSpecialHeaders = func(path string) (bool, int64, error) {
+var GetSpecialHeaders = func(path string) (SpecialHeaders, error) {
 	parts := strings.SplitN(path, "/", 3)
 	project := parts[0]
 
@@ -406,14 +421,14 @@ var GetSpecialHeaders = func(path string) (bool, int64, error) {
 	// Additional headers
 	headers := map[string]string{"Range": "bytes=0-1", "X-Project-ID": hi.sTokens[project].ProjectID}
 
-	var ret specialHeaders
+	var ret SpecialHeaders
 	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
 		func() string { return hi.sTokens[project].Token }, query, headers, &ret)
 	if err != nil {
-		return false, -1, fmt.Errorf("Retrieving headers failed for %s: %w", path, err)
+		return ret, fmt.Errorf("Retrieving headers failed for %s: %w", path, err)
 	}
 
-	return ret.decrypted, ret.segmentedObjectSize, nil
+	return ret, nil
 }
 
 // DownloadData gets content of object from data API

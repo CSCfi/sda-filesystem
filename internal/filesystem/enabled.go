@@ -28,18 +28,18 @@ func (fs *Connectfs) Open(path string, flags int) (errc int, fh uint64) {
 		}
 		path = filepath.ToSlash(path)
 
-		decrypted, segSize, err := api.GetSpecialHeaders(path)
+		headers, err := api.GetSpecialHeaders(path)
 		if err != nil {
 			logs.Error(fmt.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", origPath, err))
 			return -fuse.EAGAIN, ^uint64(0)
 		}
-		if segSize != -1 {
-			logs.Infof("Object %s is a segmented object with size %d", origPath, segSize)
-			node.stat.Size = segSize
+		if headers.SegmentedObjectSize != -1 {
+			logs.Infof("Object %s is a segmented object with size %d", origPath, headers.SegmentedObjectSize)
+			node.stat.Size = headers.SegmentedObjectSize
 			node.stat.Ctim = fuse.Now()
 		}
-		if decrypted {
-			dSize := calculateDecryptedSize(node.stat.Size)
+		if headers.Decrypted {
+			dSize := calculateDecryptedSize(node.stat.Size, headers.HeaderSize)
 			if dSize != -1 {
 				logs.Infof("Object %s is automatically decrypted", origPath)
 				node.stat.Size = dSize

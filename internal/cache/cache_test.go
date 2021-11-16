@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var wait = 10 * time.Millisecond
+const wait = 10 * time.Millisecond
 
 func TestNewRistrettoCache(t *testing.T) {
 	c, err := NewRistrettoCache()
