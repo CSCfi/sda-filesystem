@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/term"
 )
 
 // testReader implements loginReader
@@ -49,11 +48,12 @@ func (r testReader) getStream() io.Reader {
 	return r.stream
 }
 
-func (r testReader) getState() (*term.State, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-	return nil, nil
+func (r testReader) getState() error {
+	return r.err
+}
+
+func (r testReader) restoreState() error {
+	return nil
 }
 
 func newTestReader(username string, password string, sErr error, rErr error) *testReader {
@@ -77,14 +77,12 @@ func TestMounPoint(t *testing.T) {
 
 	dir := "/spirited/away"
 
-	origHomeDir := getHomeDir
-	getHomeDir = func() (string, error) {
-		return dir, nil
-	}
+	origHomeDir := os.Getenv("HOME")
+	os.Setenv("HOME", dir)
 
 	defer func() {
 		logrus.StandardLogger().ExitFunc = nil
-		getHomeDir = origHomeDir
+		os.Setenv("HOME", origHomeDir)
 	}()
 
 	ret := mountPoint()
@@ -100,14 +98,12 @@ func TestMounPoint_Error(t *testing.T) {
 	fatal := false
 	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
 
-	origHomeDir := getHomeDir
-	getHomeDir = func() (string, error) {
-		return "", errors.New("Error occurred")
-	}
+	origHomeDir := os.Getenv("HOME")
+	os.Unsetenv("HOME")
 
 	defer func() {
 		logrus.StandardLogger().ExitFunc = nil
-		getHomeDir = origHomeDir
+		os.Setenv("HOME", origHomeDir)
 	}()
 
 	_ = mountPoint()
