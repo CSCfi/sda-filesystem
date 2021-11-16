@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/signal"
 	"path"
@@ -118,7 +117,20 @@ func login(lr loginReader) {
 	signal.Stop(signalChan)
 }
 
-func isMountPointValid(info fs.FileInfo) {
+func checkMountPoint() {
+	// Verify mount point exists
+	info, err := os.Stat(mount)
+	if os.IsNotExist(err) {
+		// In other OSs except Windows, the mount point must exist and be empty
+		if runtime.GOOS != "windows" {
+			logs.Debugf("Mount point %s does not exist, so it will be created", mount)
+			if err = os.Mkdir(mount, 0755); err != nil {
+				logs.Fatalf("Could not create directory %s", mount)
+			}
+		}
+		return
+	}
+
 	if !info.IsDir() {
 		logs.Fatalf("%s is not a directory", mount)
 	}
@@ -144,21 +156,6 @@ func isMountPointValid(info fs.FileInfo) {
 			logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
 		}
 		logs.Fatalf("Mount point %s must be empty", mount)
-	}
-}
-
-func checkMountPoint() {
-	// Verify mount point exists
-	if dir, err := os.Stat(mount); os.IsNotExist(err) {
-		// In other OSs except Windows, the mount point must exist and be empty
-		if runtime.GOOS != "windows" {
-			logs.Debugf("Mount point %s does not exist, so it will be created", mount)
-			if err = os.Mkdir(mount, 0755); err != nil {
-				logs.Fatalf("Could not create directory %s", mount)
-			}
-		}
-	} else {
-		isMountPointValid(dir)
 	}
 
 	logs.Debugf("Filesystem will be mounted at %s", mount)

@@ -162,12 +162,13 @@ func TestMakeRequest(t *testing.T) {
 			"OK_HEADERS", func() {},
 			func(rw http.ResponseWriter, req *http.Request) {
 				rw.Header().Set("X-Decrypted", "True")
+				rw.Header().Set("X-Header-Size", "67")
 				rw.Header().Set("X-Segmented-Object-Size", "345")
 				if _, err := rw.Write([]byte("stuff")); err != nil {
 					rw.WriteHeader(http.StatusNotFound)
 				}
 			},
-			specialHeaders{true, 345},
+			SpecialHeaders{Decrypted: true, HeaderSize: 67, SegmentedObjectSize: 345},
 		},
 		{
 			"OK_DATA", func() {},
@@ -193,7 +194,16 @@ func TestMakeRequest(t *testing.T) {
 			[]Metadata{{34, "project1"}, {67, "project2"}, {8, "project3"}},
 		},
 		{
-			"OK_TOKEN_EXPIRED",
+			"HEADERS_MISSING", func() {},
+			func(rw http.ResponseWriter, req *http.Request) {
+				if _, err := rw.Write([]byte("stuff")); err != nil {
+					rw.WriteHeader(http.StatusNotFound)
+				}
+			},
+			SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: -1},
+		},
+		{
+			"TOKEN_EXPIRED",
 			func() { hi.uToken = "new_token" },
 			func(rw http.ResponseWriter, req *http.Request) {
 				if req.Header.Get("Authorization") == "Bearer new_token" {
@@ -207,7 +217,7 @@ func TestMakeRequest(t *testing.T) {
 			[]byte("Today is sunny"),
 		},
 		{
-			"OK_FAIL_ONCE", func() {},
+			"FAIL_ONCE", func() {},
 			func(rw http.ResponseWriter, req *http.Request) {
 				if handleCount > 0 {
 					if _, err := rw.Write([]byte("Hello, I am a robot")); err != nil {
@@ -221,14 +231,14 @@ func TestMakeRequest(t *testing.T) {
 			[]byte("Hello, I am a robot"),
 		},
 		{
-			"OK_FAIL_ALL", func() {},
+			"FAIL_ALL", func() {},
 			func(rw http.ResponseWriter, req *http.Request) {
 				http.Redirect(rw, req, "https://google.com", http.StatusSeeOther)
 			},
 			nil,
 		},
 		{
-			"OK_400", func() {},
+			"FAIL_400", func() {},
 			func(rw http.ResponseWriter, req *http.Request) {
 				http.Error(rw, "Bad request", 400)
 			},
@@ -266,8 +276,8 @@ func TestMakeRequest(t *testing.T) {
 			var err error
 			var ret interface{}
 			switch v := tt.expectedBody.(type) {
-			case specialHeaders:
-				var headers specialHeaders
+			case SpecialHeaders:
+				var headers SpecialHeaders
 				err = makeRequest(server.URL, func() string { return hi.uToken }, nil, nil, &headers)
 				ret = headers
 			case []byte:
