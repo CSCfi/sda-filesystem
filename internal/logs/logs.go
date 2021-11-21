@@ -31,7 +31,7 @@ func SetLevel(level string) {
 		return
 	}
 
-	Infof("-loglevel=%s is not supported, possible values are {debug,info,warning,error}, setting fallback loglevel to 'info'", level)
+	Warningf("-loglevel=%s is not supported, possible values are {debug,info,warning,error}, setting fallback loglevel to 'info'", level)
 	log.SetLevel(log.InfoLevel)
 }
 
@@ -84,7 +84,7 @@ func Warning(err error) {
 }
 
 // Warningf logs a message at level "Warning" either on the standard logger or in the GUI
-func Warningf(format string, args ...interface{}) {
+var Warningf = func(format string, args ...interface{}) {
 	if signal != nil {
 		signal(int(log.WarnLevel), []string{fmt.Sprintf(format, args...)})
 	} else {
@@ -102,7 +102,7 @@ func Info(args ...interface{}) {
 }
 
 // Infof logs a message at level "Info" either on the standard logger or in the GUI
-var Infof = func(format string, args ...interface{}) {
+func Infof(format string, args ...interface{}) {
 	if signal != nil {
 		signal(int(log.InfoLevel), []string{fmt.Sprintf(format, args...)})
 	} else {

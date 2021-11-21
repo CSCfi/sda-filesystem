@@ -23,8 +23,8 @@ func TestSetLevel(t *testing.T) {
 	}
 
 	origInfof := Infof
-	Infof = func(format string, args ...interface{}) {}
-	defer func() { Infof = origInfof }()
+	Warningf = func(format string, args ...interface{}) {}
+	defer func() { Warningf = origInfof }()
 
 	for _, tt := range tests {
 		testname := strings.ToUpper(tt.input)
