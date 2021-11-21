@@ -14,6 +14,7 @@ import (
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
+	"strings"
 	"syscall"
 
 	"github.com/billziss-gh/cgofuse/fuse"
@@ -83,7 +84,7 @@ var askForLogin = func(lr loginReader) (string, string) {
 	return username, password
 }
 
-func login(lr loginReader) {
+func login(lr loginReader, rep string) {
 	// Get the state of the terminal before running the password prompt
 	err := lr.getState()
 	if err != nil {
@@ -101,10 +102,11 @@ func login(lr loginReader) {
 		os.Exit(1)
 	}()
 
+	fmt.Printf("Log in to %s\n", rep)
+
 	for {
 		username, password := askForLogin(lr)
-		api.CreateToken(username, password)
-		err = api.GetUToken()
+		err = api.ValidateLogin(rep, username, password)
 
 		if err == nil {
 			break
@@ -116,11 +118,23 @@ func login(lr loginReader) {
 			continue
 		}
 
-		logs.Fatal(err)
+		logs.Fatalf("Failed to log in: %s", err.Error())
 	}
 
 	// stop watching signals
 	signal.Stop(signalChan)
+}
+
+func validateToken(rep string) {
+	if err := api.ValidateLogin(rep); err != nil {
+		var re *api.RequestError
+		if errors.As(err, &re) && re.StatusCode == 401 {
+			logs.Errorf("You do not have permission to access %s. Dropping repository", rep)
+		} else {
+			logs.Errorf("Something went wrong when validating %s token: %s", rep, err.Error())
+		}
+		api.RemoveRepository(rep)
+	}
 }
 
 func checkMountPoint() {
@@ -165,15 +179,35 @@ func checkMountPoint() {
 	}
 
 	logs.Debugf("Filesystem will be mounted at %s", mount)
+	mount = filepath.ToSlash(mount)
 }
 
 func init() {
-	var logLevel string
+	var logLevel, rep string
 	var timeout int
-	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
-	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
+	repOptions := api.GetAllPossibleRepositories()
+	flag.StringVar(&rep, "enable", "all",
+		fmt.Sprintf("Choose which repositories you wish include in the filesystem. Possible values: {%s,all}",
+			strings.Join(repOptions, ",")))
+	flag.StringVar(&mount, "mount", mountPoint(), "Path to filesystem mount point")
+	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 	flag.Parse()
+
+	found := false
+	for _, op := range repOptions {
+		if strings.ToLower(rep) == strings.ToLower(op) || strings.ToLower(rep) == "all" {
+			found = true
+			api.AddRepository(op)
+		}
+	}
+
+	if !found {
+		logs.Warningf("Flag -enable=%s not supported, switching to default -enable=all", rep)
+		for _, op := range repOptions {
+			api.AddRepository(op)
+		}
+	}
 
 	api.SetRequestTimeout(timeout)
 	logs.SetLevel(logLevel)
@@ -206,14 +240,26 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	login(&stdinReader{})
-	api.SetLoggedIn()
+	// Log in to repositories
+	for _, rep := range api.GetEnabledRepositories() {
+		if rep == api.SDConnect {
+			login(&stdinReader{}, rep)
+		} else if rep == api.SDSubmit {
+			validateToken(rep)
+		} else {
+			logs.Warningf("No login method designated for %s", rep)
+		}
+	}
+
+	if len(api.GetEnabledRepositories()) == 0 {
+		logs.Fatal("No repositories found. Filesystem not created")
+	}
 
 	done := shutdown()
-	api.FetchTokens()
 
-	connectfs := filesystem.CreateFileSystem()
-	host := fuse.NewFileSystemHost(connectfs)
+	fs := filesystem.CreateFileSystem()
+	host := fuse.NewFileSystemHost(fs)
+
 	options := []string{}
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
@@ -226,5 +272,6 @@ func main() {
 	} // Still needs windows options
 
 	host.Mount(mount, options)
+
 	<-done
 }

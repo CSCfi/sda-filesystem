@@ -30,7 +30,7 @@ type storage struct {
 }
 
 // NewRistrettoCache initializes a cache
-func NewRistrettoCache() (*Ristretto, error) {
+var NewRistrettoCache = func() (*Ristretto, error) {
 	var err error
 	onceCache.Do(func() {
 		var ristrettoCache *ristretto.Cache
