@@ -64,7 +64,7 @@ func (re *RequestError) Error() string {
 
 // GetAllPossibleRepositories returns the names of every possible repository.
 // Every repository needs to add itself to the possibleRepositories map in an init function
-func GetAllPossibleRepositories() []string {
+var GetAllPossibleRepositories = func() []string {
 	var names []string
 	for key := range possibleRepositories {
 		names = append(names, key)
@@ -82,17 +82,17 @@ func GetEnabledRepositories() []string {
 }
 
 // AddRepository adds a repository to hi.fuseInfos
-func AddRepository(r string) {
+var AddRepository = func(r string) {
 	hi.fuseInfos[r] = possibleRepositories[r]
 }
 
 // RemoveRepository removes a repository from hi.fuseInfos
-func RemoveRepository(r string) {
+var RemoveRepository = func(r string) {
 	delete(hi.fuseInfos, r)
 }
 
 // SetRequestTimeout redefines hi.requestTimeout
-func SetRequestTimeout(timeout int) {
+var SetRequestTimeout = func(timeout int) {
 	hi.requestTimeout = timeout
 }
 
@@ -130,7 +130,7 @@ func validURL(env string) error {
 }
 
 // ValidateLogin checks if user is able to log in with given input
-func ValidateLogin(rep string, auth ...string) error {
+var ValidateLogin = func(rep string, auth ...string) error {
 	return hi.fuseInfos[rep].validateLogin(auth...)
 }
 

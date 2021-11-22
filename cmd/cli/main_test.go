@@ -2,23 +2,28 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 )
 
-// testReader implements loginReader
+// testReader implements loginReader and contains password
 type testReader struct {
 	pwd    string
 	err    error
 	stream io.Reader
 }
 
-// testStream is an io.Reader given to testReader
+// testStream is an io.Reader given to testReader and contains username
 type testStream struct {
 	data string
 	done bool
@@ -60,339 +65,367 @@ func newTestReader(username string, password string, sErr error, rErr error) *te
 	return &testReader{stream: &testStream{data: username, done: false, err: sErr}, pwd: password, err: rErr}
 }
 
-// So that `go test` does not complain about flags
-var _ = func() bool {
-	testing.Init()
-	return true
-}()
-
 func TestMain(m *testing.M) {
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
 }
 
-func TestMounPoint(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	dir := "/spirited/away"
-
-	origHomeDir := os.Getenv("HOME")
-	os.Setenv("HOME", dir)
-
-	defer func() {
-		logrus.StandardLogger().ExitFunc = nil
-		os.Setenv("HOME", origHomeDir)
-	}()
-
-	ret := mountPoint()
-	if fatal {
-		t.Fatal("Function called Exit()")
-	}
-	if ret != dir+"/Projects" {
-		t.Fatalf("Incorrect mount point. Expected %q, got %q", dir+"/Projects", ret)
-	}
-}
-
-func TestMounPoint_Error(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	origHomeDir := os.Getenv("HOME")
-	os.Unsetenv("HOME")
-
-	defer func() {
-		logrus.StandardLogger().ExitFunc = nil
-		os.Setenv("HOME", origHomeDir)
-	}()
-
-	_ = mountPoint()
-	if !fatal {
-		t.Fatal("Function should have called Exit()")
-	}
-}
-
 func TestAskForLogin(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	// Ignore prints to stdout
-	null, _ := os.Open(os.DevNull)
-	sout := os.Stdout
-	os.Stdout = null
-
-	defer func() { logrus.StandardLogger().ExitFunc = nil }()
-
-	username := "Jones"
-	password := "567ghk789"
-
-	r := newTestReader(username, password, nil, nil)
-	str1, str2 := askForLogin(r)
-	os.Stdout = sout
-	null.Close()
-
-	if fatal {
-		t.Fatal("Function called Exit()")
-	}
-	if str1 != username {
-		t.Errorf("Username incorrect. Expected %q, got %q", username, str1)
-	}
-	if str2 != password {
-		t.Errorf("Password incorrect. Expected %q, got %q", password, str2)
-	}
-}
-
-func TestAskForLogin_Username_Fatal(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	// Ignore prints to stdout
-	null, _ := os.Open(os.DevNull)
-	sout := os.Stdout
-	os.Stdout = null
-
-	defer func() { logrus.StandardLogger().ExitFunc = nil }()
-
-	r := newTestReader("Jim", "xtykr6ofcyul", errors.New("Cannot read from scanner"), nil)
-	_, _ = askForLogin(r)
-	os.Stdout = sout
-	null.Close()
-
-	if !fatal {
-		t.Fatal("Function should have called Exit()")
-	}
-}
-
-func TestAskForLogin_Password_Fatal(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	// Ignore prints to stdout
-	null, _ := os.Open(os.DevNull)
-	sout := os.Stdout
-	os.Stdout = null
-
-	defer func() { logrus.StandardLogger().ExitFunc = nil }()
-
-	r := newTestReader("Groot", "567ghk789", nil, errors.New("Cannot read password"))
-	_, _ = askForLogin(r)
-	os.Stdout = sout
-	null.Close()
-
-	if !fatal {
-		t.Fatal("Function should've called Exit()")
-	}
-}
-
-func TestLogin(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	origAskForLogin := askForLogin
-	origCreateToken := api.CreateToken
-	origGetUToken := api.GetUToken
-
-	defer func() {
-		askForLogin = origAskForLogin
-		api.CreateToken = origCreateToken
-		api.GetUToken = origGetUToken
-		logrus.StandardLogger().ExitFunc = nil
-	}()
-
-	username := "dumbledore"
-	password := "345fgj78"
-
-	var str1, str2 string
-
-	askForLogin = func(lr loginReader) (string, string) {
-		return username, password
-	}
-	api.CreateToken = func(username, password string) {
-		str1 = username
-		str2 = password
-	}
-	api.GetUToken = func() error {
-		return nil
-	}
-
-	r := newTestReader(username, password, nil, nil)
-	login(r)
-
-	if fatal {
-		t.Fatal("Function called Exit()")
-	}
-	if str1 != username {
-		t.Errorf("Incorrect username. Expected %q, got %q", username, str1)
-	}
-	if str2 != password {
-		t.Errorf("Incorrect password. Expected %q, got %q", password, str2)
-	}
-}
-
-func TestLogin_State_Fatal(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	origAskForLogin := askForLogin
-	origCreateToken := api.CreateToken
-	origGetUToken := api.GetUToken
-
-	defer func() {
-		askForLogin = origAskForLogin
-		api.CreateToken = origCreateToken
-		api.GetUToken = origGetUToken
-		logrus.StandardLogger().ExitFunc = nil
-	}()
-
-	username := "dumbledore"
-	password := "345fgj78"
-
-	askForLogin = func(lr loginReader) (string, string) {
-		return username, password
-	}
-	api.CreateToken = func(username, password string) {
-	}
-	api.GetUToken = func() error {
-		return nil
-	}
-
-	r := newTestReader(username, password, nil, errors.New("Error occurred"))
-	login(r)
-
-	if !fatal {
-		t.Fatal("Function should have called Exit()")
-	}
-}
-
-func TestLogin_Auth_401(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
-	origAskForLogin := askForLogin
-	origCreateToken := api.CreateToken
-	origGetUToken := api.GetUToken
-
-	defer func() {
-		askForLogin = origAskForLogin
-		api.CreateToken = origCreateToken
-		api.GetUToken = origGetUToken
-		logrus.StandardLogger().ExitFunc = nil
-	}()
-
-	usernames := []string{"Smith", "Doris"}
-	passwords := []string{"hwd82bkwe", "pwd"}
-	count := 0
-
-	var str1, str2 string
-
-	askForLogin = func(lr loginReader) (string, string) {
-		return usernames[count], passwords[count]
-	}
-	api.CreateToken = func(username, password string) {
-		str1 = usernames[count]
-		str2 = passwords[count]
-	}
-	api.GetUToken = func() error {
-		if count == 0 {
-			count++
-			return &api.RequestError{StatusCode: 401}
-		}
-		return nil
-	}
-
-	r := newTestReader("", "", nil, nil)
-	login(r)
-
-	if fatal {
-		t.Fatal("Function called Exit()")
-	}
-	if str1 != usernames[1] {
-		t.Errorf("Username incorrect. Expected %q, got %q", usernames[1], str1)
-	}
-	if str2 != passwords[1] {
-		t.Errorf("Passwords incorrect. Expected %q, got %q", passwords[1], str2)
-	}
-}
-
-// This may have to be modified for windows
-func TestCheckMountPoint(t *testing.T) {
 	var tests = []struct {
-		testname, name string
-		dir            bool
-		mode           int
+		testname, username, password string
+		streamError, readerError     error
 	}{
 		{
-			"OK", "dir", true, 0755,
+			"OK", "Jones", "567ghk789", nil, nil,
 		},
 		{
-			"NOT_EXIST", "dir", true, -1,
+			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", errors.New("Scanner error"), nil,
 		},
 		{
-			"NOT_DIR", "file", false, 0755,
-		},
-		{
-			"NO_READ_PERM", "folder", true, 0333,
-		},
-		{
-			"NO_WRITE_PERM", "folder", true, 0555,
-		},
-		{
-			"NOT_EMPTY", "dir", true, 0,
+			"FAIL_READER", "Groot", "567ghk789", nil, errors.New("Reader error"),
 		},
 	}
 
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			var node string
-			var err error
-			if tt.dir {
-				node, err = ioutil.TempDir("", tt.name)
+		t.Run(tt.testname, func(t *testing.T) {
+			// Ignore prints to stdout
+			null, _ := os.Open(os.DevNull)
+			sout := os.Stdout
+			os.Stdout = null
 
-				if tt.mode == 0 {
-					_, err := ioutil.TempFile(node, "file")
-					if err != nil {
-						t.Fatalf("Failed to create file %q", node+"/file")
-					}
-				} else {
-					err = os.Chmod(node, os.FileMode(tt.mode))
+			r := newTestReader(tt.username, tt.password, tt.streamError, tt.readerError)
+			str1, str2, err := askForLogin(r)
+
+			os.Stdout = sout
+			null.Close()
+
+			if tt.testname != "OK" {
+				if err == nil {
+					t.Error("Function should have returned non-nil error")
 				}
-			} else {
-				var file *os.File
-				file, err = ioutil.TempFile("", tt.name)
-				node = file.Name()
+			} else if err != nil {
+				t.Errorf("Function returned error: %s", err.Error())
+			} else if str1 != tt.username {
+				t.Errorf("Username incorrect. Expected %q, got %q", tt.username, str1)
+			} else if str2 != tt.password {
+				t.Errorf("Password incorrect. Expected %q, got %q", tt.password, str2)
 			}
+		})
+	}
+}
 
-			if err != nil {
-				t.Fatalf("Creation of file/folder caused an error: %s", err.Error())
+func TestLogin(t *testing.T) {
+	var count int
+	var tests = []struct {
+		testname          string
+		readerError       error
+		mockAskForLogin   func(loginReader) (string, string, error)
+		mockValidateLogin func(string, ...string) error
+	}{
+		{
+			"OK", nil,
+			func(lr loginReader) (string, string, error) {
+				if count > 0 {
+					return "", "", fmt.Errorf("Function did not approve login during first loop")
+				}
+				count++
+				return "dumbledore", "345fgj78", nil
+			},
+			func(rep string, auth ...string) error {
+				username, password := "dumbledore", "345fgj78"
+				if auth[0] != username {
+					return fmt.Errorf("Incorrect username. Expected %q, got %q", username, auth[0])
+				}
+				if auth[1] != password {
+					return fmt.Errorf("Incorrect password. Expected %q, got %q", password, auth[1])
+				}
+				return nil
+			},
+		},
+		{
+			"OK_401_ONCE", nil,
+			func(lr loginReader) (string, string, error) {
+				usernames, passwords := []string{"Smith", "Doris"}, []string{"hwd82bkwe", "pwd"}
+				if count > 1 {
+					return "", "", fmt.Errorf("Function in infinite loop")
+				}
+				count++
+				return usernames[count-1], passwords[count-1], nil
+			},
+			func(rep string, auth ...string) error {
+				if auth[0] == "Doris" && auth[1] == "pwd" {
+					return nil
+				}
+				return &api.RequestError{StatusCode: 401}
+			},
+		},
+		{
+			"FAIL_STATE", errors.New("Error occurred"),
+			func(lr loginReader) (string, string, error) {
+				return "", "", fmt.Errorf("Function should not have called askForLogin()")
+			},
+			func(rep string, auth ...string) error {
+				return fmt.Errorf("Function should not have called api.ValidateLogin()")
+			},
+		},
+		{
+			"FAIL_ASK", nil,
+			func(lr loginReader) (string, string, error) {
+				return "", "", fmt.Errorf("Error asking input")
+			},
+			func(rep string, auth ...string) error {
+				return nil
+			},
+		},
+	}
+
+	origAskForLogin := askForLogin
+	origValidateLogin := api.ValidateLogin
+
+	defer func() {
+		askForLogin = origAskForLogin
+		api.ValidateLogin = origValidateLogin
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			count = 0
+			askForLogin = tt.mockAskForLogin
+			api.ValidateLogin = tt.mockValidateLogin
+
+			// Ignore prints to stdout
+			null, _ := os.Open(os.DevNull)
+			sout := os.Stdout
+			os.Stdout = null
+
+			r := newTestReader("", "", nil, tt.readerError)
+			err := login(r, api.SDConnect)
+
+			os.Stdout = sout
+			null.Close()
+
+			if strings.HasPrefix(tt.testname, "OK") {
+				if err != nil {
+					t.Errorf("Function returned error: %s", err.Error())
+				}
+			} else if err == nil {
+				t.Error("Function should have returned non-nil error")
 			}
+		})
+	}
+}
 
-			if tt.mode == -1 {
-				os.RemoveAll(node)
-			}
+func TestLogin_Validation_Fail(t *testing.T) {
+	origAskForLogin := askForLogin
+	origValidateLogin := api.ValidateLogin
 
-			fatal := false
-			logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
+	defer func() {
+		askForLogin = origAskForLogin
+		api.ValidateLogin = origValidateLogin
+	}()
 
-			mount = node
-			checkMountPoint()
+	count := 0
+	askForLogin = func(lr loginReader) (string, string, error) {
+		if count > 0 {
+			return "", "", fmt.Errorf("Function in infinite loop")
+		}
+		count++
+		return "Anna", "cgt6d8c", nil
+	}
+	api.ValidateLogin = func(rep string, auth ...string) error {
+		return &api.RequestError{StatusCode: 500}
+	}
+
+	// Ignore prints to stdout
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	os.Stdout = null
+
+	r := newTestReader("", "", nil, nil)
+	err := login(r, api.SDConnect)
+
+	os.Stdout = sout
+	null.Close()
+
+	if err == nil {
+		t.Fatal("Function should have returned non-nil error")
+	}
+
+	// To get the innermost error
+	for errors.Unwrap(err) != nil {
+		err = errors.Unwrap(err)
+	}
+
+	var re *api.RequestError
+	if !(errors.As(err, &re) && re.StatusCode == 500) {
+		t.Fatalf("Function did not return RequestError with status code 500\nGot: %s", err.Error())
+	}
+}
+
+func TestValidateToken(t *testing.T) {
+	var removed bool
+	var tests = []struct {
+		testname, repository string
+		mockValidatLogin     func(string, ...string) error
+		mockRemoveRepository func(string)
+	}{
+		{
+			"OK", "database",
+			func(rep string, auth ...string) error {
+				return nil
+			},
+			func(r string) {
+			},
+		},
+		{
+			"FAIL_401", "sd-connect",
+			func(rep string, auth ...string) error {
+				return &api.RequestError{StatusCode: 401}
+			},
+			func(r string) {
+				removed = true
+			},
+		},
+		{
+			"FAIL_500", "sd-submit",
+			func(rep string, auth ...string) error {
+				return &api.RequestError{StatusCode: 500}
+			},
+			func(r string) {
+				removed = true
+			},
+		},
+	}
+
+	origValidateLogin := api.ValidateLogin
+	origRemoveRepository := api.RemoveRepository
+
+	defer func() {
+		api.ValidateLogin = origValidateLogin
+		api.RemoveRepository = origRemoveRepository
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			removed = false
+			api.ValidateLogin = tt.mockValidatLogin
+			api.RemoveRepository = tt.mockRemoveRepository
+
+			err := validateToken(tt.repository)
 
 			if tt.testname == "OK" {
-				if fatal {
-					t.Error("Function called Exit()")
+				if err != nil {
+					t.Errorf("Function returned error: %s", err.Error())
+				} else if removed {
+					t.Errorf("Function removed repository %s", tt.repository)
 				}
+			} else if err == nil {
+				t.Error("Function should have returned non-nil error")
+			} else if !removed {
+				t.Errorf("Function should have removed repository %s", tt.repository)
+			}
+		})
+	}
+}
+
+func TestProcessFlags(t *testing.T) {
+	allRepositories := []string{"Rep1", "Rep2", "Rep3"}
+	var tests = []struct {
+		testname, repository, mount, logLevel string
+		finalReps                             []string
+		timeout                               int
+		mockCheckMountPoint                   func(string) error
+	}{
+		{
+			"OK_1", "Rep2", "/hello", "debug",
+			[]string{"Rep2"}, 45, nil,
+		},
+		{
+			"OK_2", "all", "/goodbye", "warning",
+			allRepositories, 87, nil,
+		},
+		{
+			"OK_3", "wrong_repository", "/hi/hello", "error",
+			allRepositories, 2, nil,
+		},
+		{
+			"FAIL", "Rep3", "/bad/directory", "info",
+			[]string{"Rep3"}, 29,
+			func(mount string) error {
+				return fmt.Errorf("Error occurred")
+			},
+		},
+	}
+
+	origGetAllPossibleRepositories := api.GetAllPossibleRepositories
+	origAddRepository := api.AddRepository
+	origCheckMountPoint := mountpoint.CheckMountPoint
+	origSetRequestTimeout := api.SetRequestTimeout
+	origSetLevel := logs.SetLevel
+
+	defer func() {
+		api.GetAllPossibleRepositories = origGetAllPossibleRepositories
+		api.AddRepository = origAddRepository
+		mountpoint.CheckMountPoint = origCheckMountPoint
+		api.SetRequestTimeout = origSetRequestTimeout
+		logs.SetLevel = origSetLevel
+	}()
+
+	var reps []string
+	var testTimeout int
+	var testLevel, testMount string
+
+	api.GetAllPossibleRepositories = func() []string {
+		return allRepositories
+	}
+	api.AddRepository = func(r string) {
+		reps = append(reps, r)
+	}
+	mockCheckMountPoint := func(mount string) error {
+		testMount = mount
+		return nil
+	}
+	api.SetRequestTimeout = func(timeout int) {
+		testTimeout = timeout
+	}
+	logs.SetLevel = func(level string) {
+		testLevel = level
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			mountPoint = tt.mount
+			repository = tt.repository
+			logLevel = tt.logLevel
+			requestTimeout = tt.timeout
+
+			reps = []string{}
+			testTimeout = 0
+			testLevel, testMount = "", ""
+
+			if tt.mockCheckMountPoint != nil {
+				mountpoint.CheckMountPoint = tt.mockCheckMountPoint
 			} else {
-				if tt.mode == -1 {
-					if _, err := os.Stat(node); os.IsNotExist(err) {
-						t.Errorf("Directory was not created")
-					}
-				} else if !fatal {
-					t.Error("Function should have called Exit()")
-				}
+				mountpoint.CheckMountPoint = mockCheckMountPoint
 			}
 
-			logrus.StandardLogger().ExitFunc = nil
-			os.RemoveAll(node)
+			err := processFlags()
+
+			if tt.testname == "FAIL" {
+				if err == nil {
+					t.Error("Function should have returned error")
+				}
+			} else if err != nil {
+				t.Errorf("Function returned non-nil error: %s", err.Error())
+			} else if tt.timeout != testTimeout {
+				t.Errorf("SetRequestTimeout() received timeout %d, expected %d", testTimeout, tt.timeout)
+			} else if tt.logLevel != testLevel {
+				t.Errorf("SetLevel() received log level %s, expected %s", testLevel, tt.logLevel)
+			} else if tt.mount != testMount {
+				t.Errorf("CheckMountPoint() received mount point %q, expected %q", testMount, tt.mount)
+			} else if !reflect.DeepEqual(reps, tt.finalReps) {
+				t.Errorf("Function did not add repositories correctly.\nExpected %v\nGot%v", tt.finalReps, reps)
+			}
 		})
 	}
 }

@@ -3,7 +3,6 @@ package logs
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -25,7 +24,7 @@ func SetSignal(fn func(int, []string)) {
 }
 
 // SetLevel sets the logging level
-func SetLevel(level string) {
+var SetLevel = func(level string) {
 	if logrusLevel, ok := levelMap[strings.ToLower(level)]; ok {
 		log.SetLevel(logrusLevel)
 		return
@@ -148,7 +147,4 @@ func init() {
 		DisableColors: false,
 		FullTimestamp: true,
 	})
-
-	// Output to stdout instead of the default stderr
-	log.SetOutput(os.Stdout)
 }
