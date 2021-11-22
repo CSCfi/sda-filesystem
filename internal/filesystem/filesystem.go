@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -100,6 +101,24 @@ func CreateFileSystem(send ...chan<- LoadProjectInfo) *Fuse {
 
 	logs.Info("Filesystem database completed")
 	return &fs
+}
+
+// MountFilesystem mounts filesystem 'fs' to directory 'mount'
+func MountFilesystem(fs *Fuse, mount string) {
+	host := fuse.NewFileSystemHost(fs)
+
+	options := []string{}
+	if runtime.GOOS == "darwin" {
+		options = append(options, "-o", "defer_permissions")
+		options = append(options, "-o", "volname="+path.Base(mount))
+		options = append(options, "-o", "attr_timeout=0")
+		options = append(options, "-o", "iosize=262144") // Value not optimized
+	} else if runtime.GOOS == "linux" {
+		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
+		options = append(options, "-o", "auto_unmount")
+	} // Still needs windows options
+
+	host.Mount(mount, options)
 }
 
 // populateFilesystem creates the nodes (files and directories) of the filesystem
