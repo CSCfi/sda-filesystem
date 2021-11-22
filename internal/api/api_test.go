@@ -1,28 +1,163 @@
 package api
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"reflect"
-	"sda-filesystem/internal/cache"
+	"sort"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
+type mockCache struct {
+	data []byte
+	key  string
+}
+
+func (c *mockCache) Get(key string) (interface{}, bool) {
+	if c.key == key && c.data != nil {
+		return c.data, true
+	}
+	return nil, false
+}
+
+func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
+	c.key = key
+	c.data = value.([]byte)
+	return true
+}
+
+func (c *mockCache) Del(key string) {
+}
+
 func TestMain(m *testing.M) {
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
 }
 
+func TestRequestError(t *testing.T) {
+	codes := []int{200, 206, 404, 500}
+	for i := range codes {
+		re := RequestError{codes[i]}
+		message := fmt.Sprintf("API responded with status %d", codes[i])
+		reMessage := re.Error()
+		if reMessage != message {
+			t.Fatalf("RequestError has incorrect error message. Expectedd %q, got %q", message, reMessage)
+		}
+	}
+}
+
+func TestGetAllPossibleRepositories(t *testing.T) {
+	origPossibleRepositories := possibleRepositories
+	defer func() { possibleRepositories = origPossibleRepositories }()
+
+	possibleRepositories = make(map[string]fuseInfo)
+	possibleRepositories["Pouta"] = nil
+	possibleRepositories["Pilvi"] = nil
+	possibleRepositories["Aurinko"] = nil
+
+	origReps := []string{"Aurinko", "Pilvi", "Pouta"}
+	reps := GetAllPossibleRepositories()
+	sort.Strings(reps)
+	if !reflect.DeepEqual(origReps, reps) {
+		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", origReps, reps)
+	}
+}
+
+func TestGetEnabledRepositories(t *testing.T) {
+	origFuseInfos := hi.fuseInfos
+	defer func() { hi.fuseInfos = origFuseInfos }()
+
+	hi.fuseInfos = make(map[string]fuseInfo)
+	hi.fuseInfos["Monday"] = nil
+	hi.fuseInfos["Tuesday"] = nil
+	hi.fuseInfos["Wednesday"] = nil
+
+	origReps := []string{"Monday", "Tuesday", "Wednesday"}
+	reps := GetEnabledRepositories()
+	sort.Strings(reps)
+	if !reflect.DeepEqual(origReps, reps) {
+		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", origReps, reps)
+	}
+}
+
+func TestAddRepository(t *testing.T) {
+	origPossibleRepositories := possibleRepositories
+	origFuseInfos := hi.fuseInfos
+
+	defer func() {
+		possibleRepositories = origPossibleRepositories
+		hi.fuseInfos = origFuseInfos
+	}()
+
+	hi.fuseInfos = make(map[string]fuseInfo)
+	for i := 1; i < 10; i++ {
+		possibleRepositories["Rep"+strconv.Itoa(i)] = &sdSubmitInfo{}
+	}
+
+	reps := []string{"Rep6", "Rep3", "Rep1"}
+	for i := range reps {
+		AddRepository(reps[i])
+	}
+
+	for _, rep := range reps {
+		if info, ok := hi.fuseInfos[rep]; !ok {
+			t.Errorf("Function did not add repository %s", rep)
+		} else if info != possibleRepositories[rep] {
+			t.Errorf("Added repository %s has incorrect value. Expected address %p, got %p", rep, info, possibleRepositories[rep])
+		}
+	}
+
+	if len(hi.fuseInfos) != 3 {
+		t.Errorf("Extra repositories added to map: %v", hi.fuseInfos)
+	}
+}
+
+func TestRemoveRepository(t *testing.T) {
+	origFuseInfos := hi.fuseInfos
+	defer func() { hi.fuseInfos = origFuseInfos }()
+
+	hi.fuseInfos = make(map[string]fuseInfo)
+	for i := 1; i < 10; i++ {
+		hi.fuseInfos["Rep"+strconv.Itoa(i)] = &sdSubmitInfo{}
+	}
+
+	reps := []string{"Rep2", "Rep9", "Rep5"}
+	for i := range reps {
+		RemoveRepository(reps[i])
+	}
+
+	for _, rep := range reps {
+		if _, ok := hi.fuseInfos[rep]; ok {
+			t.Errorf("Function did not remove repository %s", rep)
+		}
+	}
+
+	if len(hi.fuseInfos) != 6 {
+		t.Errorf("Too many repositories removed from map: %v", hi.fuseInfos)
+	}
+}
+
+func TestRequestTimeout(t *testing.T) {
+	timeouts := []int{34, 6, 1200, 84}
+
+	for i := range timeouts {
+		SetRequestTimeout(timeouts[i])
+		if hi.requestTimeout != timeouts[i] {
+			t.Fatalf("Incorrect request timeout. Expected %d, got %d", timeouts[i], hi.requestTimeout)
+		}
+	}
+}
+
 func TestGetEnvs(t *testing.T) {
+
+}
+
+/*func TestGetEnvs(t *testing.T) {
 	var tests = []struct {
 		testName  string
 		envValues [3]string
@@ -125,27 +260,97 @@ func TestGetEnv(t *testing.T) {
 	}
 }
 
-func TestCreateToken(t *testing.T) {
-	var tests = []struct {
-		username, password, token string
-	}{
-		{"user", "pass", "dXNlcjpwYXNz"},
-		{"kalmari", "23t&io00_e", "a2FsbWFyaToyM3QmaW8wMF9l"},
-		{"qwerty123", "mnbvc456", "cXdlcnR5MTIzOm1uYnZjNDU2"},
+func TestInitializeCache(t *testing.T) {
+	origNewRistretto := cache.NewRistrettoCache
+	defer func() { cache.NewRistrettoCache = origNewRistretto }()
+
+	newCache := &cache.Ristretto{Cacheable: &mockCache{}}
+	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
+		return newCache, nil
 	}
 
-	origToken := hi.token
-	defer func() { hi.token = origToken }()
+	err := InitializeCache()
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
+	}
+	if downloadCache != newCache {
+		t.Fatalf("downloadCache does not point to new cache")
+	}
+}
 
-	for i, tt := range tests {
-		testname := fmt.Sprintf("TOKEN_%d", i)
-		t.Run(testname, func(t *testing.T) {
-			hi.token = ""
-			CreateToken(tt.username, tt.password)
-			if hi.token != tt.token {
-				t.Errorf("Username %q and password %q should have returned token %q, got %q", tt.username, tt.password, tt.token, hi.token)
-			}
-		})
+func TestInitializeCache_Error(t *testing.T) {
+	origNewRistretto := cache.NewRistrettoCache
+	defer func() { cache.NewRistrettoCache = origNewRistretto }()
+
+	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
+		return nil, errors.New("Creating cache failed")
+	}
+
+	err := InitializeCache()
+	if err == nil {
+		t.Fatalf("Function should have returned non-nil error")
+	}
+}
+
+func TestInitializeClient(t *testing.T) {
+	origTestUrls := testUrls
+	origCertPath := hi.certPath
+
+	defer func() {
+		testUrls = origTestUrls
+		hi.certPath = origCertPath
+	}()
+
+	testUrls = func() error { return nil }
+
+	file, err := ioutil.TempFile("", "cert")
+	if err != nil {
+		t.Fatalf("Failed to create file %q", file.Name())
+	}
+
+	err = InitializeClient()
+
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
+	}
+	//if hi.client.
+}
+
+func TestInitializeClient_Empty_Certs(t *testing.T) {
+	origTestUrls := testUrls
+	origCertPath := hi.certPath
+
+	defer func() {
+		testUrls = origTestUrls
+		hi.certPath = origCertPath
+	}()
+
+	testUrls = func() error { return nil }
+	hi.certPath = ""
+
+	err := InitializeClient()
+
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
+	}
+}
+
+func TestInitializeClient_Certs_Not_Found(t *testing.T) {
+	origTestUrls := testUrls
+	origCertPath := hi.certPath
+
+	defer func() {
+		testUrls = origTestUrls
+		hi.certPath = origCertPath
+	}()
+
+	testUrls = func() error { return nil }
+	hi.certPath = ""
+
+	err := InitializeClient()
+
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
 	}
 }
 
@@ -204,7 +409,7 @@ func TestMakeRequest(t *testing.T) {
 		},
 		{
 			"TOKEN_EXPIRED",
-			func() { hi.uToken = "new_token" },
+			func() { hi.ci.uToken = "new_token" },
 			func(rw http.ResponseWriter, req *http.Request) {
 				if req.Header.Get("Authorization") == "Bearer new_token" {
 					if _, err := rw.Write([]byte("Today is sunny")); err != nil {
@@ -248,7 +453,7 @@ func TestMakeRequest(t *testing.T) {
 
 	origFetchTokens := FetchTokens
 	origClient := hi.client
-	origUToken := hi.uToken
+	origUToken := hi.ci.uToken
 	origLoggedIn := hi.loggedIn
 
 	hi.loggedIn = true
@@ -256,7 +461,7 @@ func TestMakeRequest(t *testing.T) {
 	defer func() {
 		FetchTokens = origFetchTokens
 		hi.client = origClient
-		hi.uToken = origUToken
+		hi.ci.uToken = origUToken
 		hi.loggedIn = origLoggedIn
 	}()
 
@@ -266,7 +471,7 @@ func TestMakeRequest(t *testing.T) {
 			FetchTokens = tt.mockFetchTokens
 			server := httptest.NewServer(http.HandlerFunc(tt.mockHandlerFunc))
 			hi.client = server.Client()
-			hi.uToken = ""
+			hi.ci.uToken = ""
 
 			// Causes client.Do() to fail when redirecting
 			hi.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -278,15 +483,15 @@ func TestMakeRequest(t *testing.T) {
 			switch v := tt.expectedBody.(type) {
 			case SpecialHeaders:
 				var headers SpecialHeaders
-				err = makeRequest(server.URL, func() string { return hi.uToken }, nil, nil, &headers)
+				err = makeRequest(server.URL, func() string { return hi.ci.uToken }, nil, nil, &headers)
 				ret = headers
 			case []byte:
 				buf := make([]byte, len(v))
-				err = makeRequest(server.URL, func() string { return hi.uToken }, nil, nil, buf)
+				err = makeRequest(server.URL, func() string { return hi.ci.uToken }, nil, nil, buf)
 				ret = buf
 			default:
 				var objects []Metadata
-				err = makeRequest(server.URL, func() string { return hi.uToken }, nil, nil, &objects)
+				err = makeRequest(server.URL, func() string { return hi.ci.uToken }, nil, nil, &objects)
 				ret = objects
 			}
 
@@ -303,490 +508,6 @@ func TestMakeRequest(t *testing.T) {
 			server.Close()
 		})
 	}
-}
-
-func TestFetchTokens(t *testing.T) {
-	var tests = []struct {
-		mockGetUToken    func() error
-		mockGetProjects  func() ([]Metadata, error)
-		mockGetSToken    func(project string) error
-		sTokens          map[string]SToken
-		uToken, testname string
-	}{
-		{
-			func() error {
-				hi.uToken = "uToken"
-				return nil
-			},
-			func() ([]Metadata, error) {
-				return []Metadata{{Name: "project1", Bytes: 234}, {Name: "project2", Bytes: 52}, {Name: "project3", Bytes: 90}}, nil
-			},
-			func(project string) error {
-				hi.sTokens[project] = SToken{project + "_token", "435" + project}
-				return nil
-			},
-			map[string]SToken{"project1": {"project1_token", "435project1"},
-				"project2": {"project2_token", "435project2"},
-				"project3": {"project3_token", "435project3"}},
-			"uToken", "OK",
-		},
-		{
-			func() error {
-				hi.uToken = "uToken"
-				return errors.New("Error occurred")
-			},
-			func() ([]Metadata, error) {
-				return []Metadata{{Name: "project1", Bytes: 234}, {Name: "project2", Bytes: 52}, {Name: "project3", Bytes: 90}}, nil
-			},
-			func(project string) error {
-				hi.sTokens[project] = SToken{project + "_token", "435" + project}
-				return nil
-			},
-			map[string]SToken{},
-			"", "UTOKEN_ERROR",
-		},
-		{
-			func() error {
-				hi.uToken = "new_token"
-				return nil
-			},
-			func() ([]Metadata, error) {
-				return nil, errors.New("Error")
-			},
-			func(project string) error {
-				hi.sTokens[project] = SToken{project + "_secret", "890" + project}
-				return nil
-			},
-			map[string]SToken{},
-			"new_token", "PROJECTS_ERROR",
-		},
-		{
-			func() error {
-				hi.uToken = "another_token"
-				return nil
-			},
-			func() ([]Metadata, error) {
-				return []Metadata{{Name: "pr1", Bytes: 43}, {Name: "pr2", Bytes: 51}, {Name: "pr3", Bytes: 900}}, nil
-			},
-			func(project string) error {
-				if project == "pr2" {
-					hi.sTokens[project] = SToken{project + "_secret", "890" + project}
-					return errors.New("New error")
-				}
-				hi.sTokens[project] = SToken{"secret_token", "cactus"}
-				return nil
-			},
-			map[string]SToken{"pr1": {"secret_token", "cactus"}, "pr3": {"secret_token", "cactus"}},
-			"another_token", "STOKEN_ERROR",
-		},
-	}
-
-	origGetUToken := GetUToken
-	origGetProjects := GetProjects
-	origGetSToken := GetSToken
-	origUToken := hi.uToken
-	origSTokens := hi.sTokens
-
-	defer func() {
-		GetUToken = origGetUToken
-		GetProjects = origGetProjects
-		GetSToken = origGetSToken
-		hi.uToken = origUToken
-		hi.sTokens = origSTokens
-	}()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			GetUToken = tt.mockGetUToken
-			GetProjects = tt.mockGetProjects
-			GetSToken = tt.mockGetSToken
-
-			hi.uToken = ""
-			hi.sTokens = map[string]SToken{}
-
-			FetchTokens()
-
-			if hi.uToken != tt.uToken {
-				t.Errorf("uToken incorrect. Expected %q, got %q", tt.uToken, hi.uToken)
-			} else if !reflect.DeepEqual(hi.sTokens, tt.sTokens) {
-				t.Errorf("sTokens incorrect.\nExpected %q\nGot %q", tt.sTokens, hi.sTokens)
-			}
-		})
-	}
-}
-
-func TestGetUToken(t *testing.T) {
-	var tests = []struct {
-		testname        string
-		mockMakeRequest func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedToken   string
-	}{
-		{
-			"FAIL",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting token")
-			},
-			"",
-		},
-		{
-			"OK_1",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *UToken:
-					*v = UToken{"myveryowntoken"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *UToken", reflect.TypeOf(v))
-				}
-			},
-			"myveryowntoken",
-		},
-		{
-			"OK_2",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *UToken:
-					*v = UToken{"9765rty5678"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *UToken", reflect.TypeOf(v))
-				}
-			},
-			"9765rty5678",
-		},
-	}
-
-	origMakeRequest := makeRequest
-	origUToken := hi.uToken
-
-	defer func() {
-		makeRequest = origMakeRequest
-		hi.uToken = origUToken
-	}()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-			hi.uToken = ""
-
-			err := GetUToken()
-
-			if tt.expectedToken == "" {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if tt.expectedToken != hi.uToken {
-				t.Errorf("Unscoped token is incorrect. Expected %q, got %q", tt.expectedToken, hi.uToken)
-			}
-		})
-	}
-}
-
-func TestGetSToken(t *testing.T) {
-	var tests = []struct {
-		testname, project string
-		mockMakeRequest   func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedToken     string
-		expectedID        string
-	}{
-		{
-			"FAIL", "",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting token")
-			},
-			"", "",
-		},
-		{
-			"OK_1", "project007",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *SToken:
-					*v = SToken{"myveryowntoken", "jbowegxf72nfbof"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
-				}
-			},
-			"myveryowntoken", "jbowegxf72nfbof",
-		},
-		{
-			"OK_2", "projectID",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *SToken:
-					*v = SToken{"9765rty5678", "ug8392nzdipqz9210z"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
-				}
-			},
-			"9765rty5678", "ug8392nzdipqz9210z",
-		},
-	}
-
-	origMakeRequest := makeRequest
-	origSTokens := hi.sTokens
-
-	defer func() {
-		makeRequest = origMakeRequest
-		hi.sTokens = origSTokens
-	}()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-			hi.sTokens = make(map[string]SToken)
-
-			err := GetSToken(tt.project)
-
-			if tt.expectedToken == "" {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if _, ok := hi.sTokens[tt.project]; !ok {
-				t.Errorf("Scoped token for %q is not defined", tt.project)
-			} else if tt.expectedToken != hi.sTokens[tt.project].Token {
-				t.Errorf("Scoped token is incorrect. Expected %q, got %q", tt.expectedToken, hi.sTokens[tt.project].Token)
-			} else if tt.expectedID != hi.sTokens[tt.project].ProjectID {
-				t.Errorf("Project ID is incorrect. Expected %q, got %q", tt.expectedID, hi.sTokens[tt.project].ProjectID)
-			}
-		})
-	}
-}
-
-func TestGetProjects(t *testing.T) {
-	var tests = []struct {
-		testname         string
-		mockMakeRequest  func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedMetaData []Metadata
-	}{
-		{
-			"FAIL",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting projects")
-			},
-			nil,
-		},
-		{
-			"EMPTY",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{},
-		},
-		{
-			"OK",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{{234, "Jack"}, {2, "yur586bl"}, {7489, "rtu6u__78bgi"}}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{{234, "Jack"}, {2, "yur586bl"}, {7489, "rtu6u__78bgi"}},
-		},
-	}
-
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-
-			projects, err := GetProjects()
-
-			if tt.expectedMetaData == nil {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedMetaData, projects) {
-				t.Errorf("Projects incorrect. Expected %v, got %v", tt.expectedMetaData, projects)
-			}
-		})
-	}
-}
-
-func TestGetContainers(t *testing.T) {
-	var tests = []struct {
-		testname, project string
-		mockMakeRequest   func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedMetaData  []Metadata
-	}{
-		{
-			"FAIL", "",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting containers")
-			},
-			nil,
-		},
-		{
-			"EMPTY", "projectID",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{},
-		},
-		{
-			"OK", "project345",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{{2341, "tukcdfku6"}, {45, "hf678cof7uib68or6"}, {6767, "rtu6u__78bgi"}, {1, "9ob89bio"}}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{{2341, "tukcdfku6"}, {45, "hf678cof7uib68or6"}, {6767, "rtu6u__78bgi"}, {1, "9ob89bio"}},
-		},
-	}
-
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-
-			containers, err := GetContainers(tt.project)
-
-			if tt.expectedMetaData == nil {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedMetaData, containers) {
-				t.Errorf("Containers incorrect. Expected %v, got %v", tt.expectedMetaData, containers)
-			}
-		})
-	}
-}
-
-func TestGetObjects(t *testing.T) {
-	var tests = []struct {
-		testname, project, container string
-		mockMakeRequest              func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedMetaData             []Metadata
-	}{
-		{
-			"FAIL", "", "",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting containers")
-			},
-			nil,
-		},
-		{
-			"EMPTY", "projectID", "container349",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{},
-		},
-		{
-			"OK", "project345", "containerID",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{{56, "tukcdfku6"}, {5, "hf678cof7uib68or6"}, {47685, "rtu6u__78bgi"}, {10, "9ob89bio"}}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{{56, "tukcdfku6"}, {5, "hf678cof7uib68or6"}, {47685, "rtu6u__78bgi"}, {10, "9ob89bio"}},
-		},
-	}
-
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-
-			objects, err := GetObjects(tt.project, tt.container)
-
-			if tt.expectedMetaData == nil {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedMetaData, objects) {
-				t.Errorf("Objects incorrect. Expected %v, got %v", tt.expectedMetaData, objects)
-			}
-		})
-	}
-}
-
-type mockCache struct {
-	data []byte
-	key  string
-}
-
-func (c *mockCache) Get(key string) (interface{}, bool) {
-	if c.key == key && c.data != nil {
-		return c.data, true
-	}
-	return nil, false
-}
-
-func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
-	c.key = key
-	c.data = value.([]byte)
-	return true
-}
-
-func (c *mockCache) Del(key string) {
 }
 
 func TestDownloadData(t *testing.T) {
@@ -857,3 +578,4 @@ func TestDownloadData(t *testing.T) {
 		})
 	}
 }
+*/

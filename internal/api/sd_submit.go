@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"sda-filesystem/internal/logs"
@@ -17,6 +18,7 @@ type sdSubmitInfo struct {
 	token    string
 	urls     []string
 	fileIDs  map[string]string
+	datasets map[int][]Metadata // keys are url indexes (only the ones user can access)
 }
 
 type file struct {
@@ -32,7 +34,7 @@ type file struct {
 }
 
 func init() {
-	possibleRepositories[SDSubmit] = &sdSubmitInfo{fileIDs: make(map[string]string)}
+	possibleRepositories[SDSubmit] = &sdSubmitInfo{fileIDs: make(map[string]string), datasets: make(map[int][]Metadata)}
 }
 
 func (s *sdSubmitInfo) getEnvs() error {
@@ -58,9 +60,28 @@ func (s *sdSubmitInfo) getEnvs() error {
 	return nil
 }
 
-func (s *sdSubmitInfo) validateLogin(auth ...string) (err error) {
-	_, err = s.getSecondLevel("0")
-	return
+func (s *sdSubmitInfo) validateLogin(auth ...string) error {
+	count := 0
+
+	for i := range s.urls {
+		datasets, err := s.getSecondLevel(strconv.Itoa(i))
+		if err != nil {
+			var re *RequestError
+			if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
+				logs.Warningf("You do not have permission to access API %s", s.urls[i])
+			} else {
+				logs.Warningf("Something went wrong when validating token for API %s: %w", s.urls[i], err)
+			}
+			count++
+		} else {
+			s.datasets[i] = datasets
+		}
+	}
+
+	if count == len(s.urls) {
+		return fmt.Errorf("Cannot receive responses from any of the %s APIs", SDSubmit)
+	}
+	return nil
 }
 
 func (s *sdSubmitInfo) getCertificatePath() string {
@@ -84,31 +105,36 @@ func (s *sdSubmitInfo) isHidden() bool {
 	return true
 }
 
-func (s *sdSubmitInfo) idxToURL(str string) (string, error) {
+func (s *sdSubmitInfo) strToIdx(str string) (int, error) {
 	idx, err := strconv.Atoi(str)
 	if err != nil {
-		return "", fmt.Errorf("%q should be an integer: %w", str, err)
+		return -1, fmt.Errorf("%q should be an integer: %w", str, err)
 	}
-	return s.urls[idx], nil
+	return idx, nil
 }
 
 func (s *sdSubmitInfo) getFirstLevel() ([]Metadata, error) {
 	var metadata []Metadata
-	for i := range s.urls {
-		metadata = append(metadata, Metadata{Name: strconv.Itoa(i), Bytes: -1})
+	for idx := range s.datasets {
+		metadata = append(metadata, Metadata{Name: strconv.Itoa(idx), Bytes: -1})
 	}
 	return metadata, nil
 }
 
 func (s *sdSubmitInfo) getSecondLevel(urlIdx string) ([]Metadata, error) {
-	url, err := s.idxToURL(urlIdx)
+	idx, err := s.strToIdx(urlIdx)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
 	}
 
+	// So that datasets are called only once (datasets needed for fuse, login, gui)
+	if data, ok := s.datasets[idx]; ok {
+		return data, nil
+	}
+
 	// Request datasets
 	var datasets []string
-	err = makeRequest(strings.TrimSuffix(url, "/")+
+	err = makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
 		"/metadata/datasets", s.token, SDSubmit, nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
@@ -116,22 +142,27 @@ func (s *sdSubmitInfo) getSecondLevel(urlIdx string) ([]Metadata, error) {
 
 	var metadata []Metadata
 	for i := range datasets {
-		metadata = append(metadata, Metadata{Name: datasets[i], Bytes: -1})
+		md := Metadata{Name: datasets[i], Bytes: -1}
+		if u, err := url.ParseRequestURI(datasets[i]); err == nil {
+			md.Name = strings.TrimLeft(strings.TrimPrefix(datasets[i], u.Scheme), ":/")
+			md.OrigName = datasets[i]
+		}
+		metadata = append(metadata, md)
 	}
 
-	logs.Debugf("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, url)
+	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, s.urls[idx])
 	return metadata, nil
 }
 
 func (s *sdSubmitInfo) getThirdLevel(urlIdx, dataset string) ([]Metadata, error) {
-	u, err := s.idxToURL(urlIdx)
+	idx, err := s.strToIdx(urlIdx)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", SDSubmit+"/"+dataset, err)
 	}
 
 	// Request files
 	var files []file
-	err = makeRequest(strings.TrimSuffix(u, "/")+
+	err = makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
 		"/metadata/datasets/"+
 		url.PathEscape(dataset)+"/files", s.token, SDSubmit, nil, nil, &files)
 	if err != nil {
@@ -141,9 +172,15 @@ func (s *sdSubmitInfo) getThirdLevel(urlIdx, dataset string) ([]Metadata, error)
 	var metadata []Metadata
 	for i := range files {
 		if files[i].FileStatus == "READY" {
-			displayName := files[i].DisplayFileName //strings.TrimSuffix(files[i].DisplayFileName, ".c4gh")
-			metadata = append(metadata, Metadata{Name: displayName, Bytes: files[i].DecryptedFileSize})
-			s.fileIDs[dataset+"_"+displayName] = url.PathEscape(files[i].FileID)
+			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
+
+			if strings.HasSuffix(files[i].DisplayFileName, ".c4gh") {
+				md.Name = strings.TrimSuffix(files[i].DisplayFileName, ".c4gh")
+				md.OrigName = files[i].DisplayFileName
+			}
+
+			metadata = append(metadata, md)
+			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
 		}
 	}
 
@@ -156,7 +193,7 @@ func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interf
 }
 
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end int64) error {
-	url, err := s.idxToURL(nodes[0])
+	idx, err := s.strToIdx(nodes[0])
 	if err != nil {
 		return err
 	}
@@ -170,5 +207,6 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end in
 	finalPath := nodes[1] + "_" + nodes[2]
 
 	// Request data
-	return makeRequest(strings.TrimSuffix(url, "/")+"/files/"+s.fileIDs[finalPath], s.token, SDSubmit, query, nil, buffer)
+	return makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
+		"/files/"+s.fileIDs[finalPath], s.token, SDSubmit, query, nil, buffer)
 }

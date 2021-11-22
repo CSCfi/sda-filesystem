@@ -262,67 +262,72 @@ func TestLogin_Validation_Fail(t *testing.T) {
 	}
 }
 
-func TestValidateToken(t *testing.T) {
-	var removed bool
+func TestLoginToAll(t *testing.T) {
 	var tests = []struct {
-		testname, repository string
-		mockValidatLogin     func(string, ...string) error
-		mockRemoveRepository func(string)
+		testname          string
+		removedReps       []string
+		mockLogin         func(loginReader, string) error
+		mockValidateLogin func(string, ...string) error
 	}{
 		{
-			"OK", "database",
+			"OK", []string{},
+			func(lr loginReader, rep string) error {
+				return nil
+			},
 			func(rep string, auth ...string) error {
 				return nil
 			},
-			func(r string) {
+		},
+		{
+			"FAIL_CONNECT", []string{api.SDConnect},
+			func(lr loginReader, rep string) error {
+				return fmt.Errorf("Error occurred")
+			},
+			func(rep string, auth ...string) error {
+				return nil
 			},
 		},
 		{
-			"FAIL_401", "sd-connect",
+			"FAIL_SUBMIT", []string{api.SDSubmit},
+			func(lr loginReader, rep string) error {
+				return nil
+			},
 			func(rep string, auth ...string) error {
-				return &api.RequestError{StatusCode: 401}
-			},
-			func(r string) {
-				removed = true
-			},
-		},
-		{
-			"FAIL_500", "sd-submit",
-			func(rep string, auth ...string) error {
-				return &api.RequestError{StatusCode: 500}
-			},
-			func(r string) {
-				removed = true
+				return fmt.Errorf("Error occurred")
 			},
 		},
 	}
 
+	origGetEnabledRepositories := api.GetEnabledRepositories
+	origLogin := login
 	origValidateLogin := api.ValidateLogin
 	origRemoveRepository := api.RemoveRepository
 
 	defer func() {
+		api.GetEnabledRepositories = origGetEnabledRepositories
+		login = origLogin
 		api.ValidateLogin = origValidateLogin
 		api.RemoveRepository = origRemoveRepository
 	}()
 
+	var removed []string
+	api.RemoveRepository = func(r string) {
+		removed = append(removed, r)
+	}
+	api.GetEnabledRepositories = func() []string {
+		return []string{api.SDConnect, api.SDSubmit, "dummy"}
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			removed = false
-			api.ValidateLogin = tt.mockValidatLogin
-			api.RemoveRepository = tt.mockRemoveRepository
+			login = tt.mockLogin
+			api.ValidateLogin = tt.mockValidateLogin
+			removed = []string{}
 
-			err := validateToken(tt.repository)
+			loginToAll()
 
-			if tt.testname == "OK" {
-				if err != nil {
-					t.Errorf("Function returned error: %s", err.Error())
-				} else if removed {
-					t.Errorf("Function removed repository %s", tt.repository)
-				}
-			} else if err == nil {
-				t.Error("Function should have returned non-nil error")
-			} else if !removed {
-				t.Errorf("Function should have removed repository %s", tt.repository)
+			if !reflect.DeepEqual(tt.removedReps, removed) {
+				t.Errorf("Incorrect repositories removed. Expected %v, got %v", tt.removedReps, removed)
 			}
 		})
 	}
@@ -330,6 +335,7 @@ func TestValidateToken(t *testing.T) {
 
 func TestProcessFlags(t *testing.T) {
 	allRepositories := []string{"Rep1", "Rep2", "Rep3"}
+
 	var tests = []struct {
 		testname, repository, mount, logLevel string
 		finalReps                             []string
