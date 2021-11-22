@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
@@ -29,7 +28,7 @@ type loginReader interface {
 	restoreState() error
 }
 
-// stdinReader reads username ans password from stdin
+// stdinReader reads username and password from stdin and implements loginReader
 type stdinReader struct {
 	originalState *term.State
 }
@@ -73,7 +72,8 @@ var askForLogin = func(lr loginReader) (string, string, error) {
 	return username, password, nil
 }
 
-func login(lr loginReader, rep string) error {
+// login logs user into repository 'rep' by asking for a username and password
+var login = func(lr loginReader, rep string) error {
 	// Get the state of the terminal before running the password prompt
 	err := lr.getState()
 	if err != nil {
@@ -86,7 +86,7 @@ func login(lr loginReader, rep string) error {
 	go func() {
 		<-signalChan
 		if err = lr.restoreState(); err != nil {
-			logs.Warningf("Could not restore terminal to original state: %s", err.Error())
+			logs.Warningf("Could not restore terminal to original state: %w", err)
 		}
 		os.Exit(1)
 	}()
@@ -118,18 +118,23 @@ func login(lr loginReader, rep string) error {
 	return nil
 }
 
-func validateToken(rep string) error {
-	if err := api.ValidateLogin(rep); err != nil {
-		var re *api.RequestError
-		if errors.As(err, &re) && re.StatusCode == 401 {
-			err = fmt.Errorf("You do not have permission to access %s, dropping repository", rep)
+// loginToAll goes through all enabled repositories and logs into each of them
+func loginToAll() {
+	for _, rep := range api.GetEnabledRepositories() {
+		var err error
+		if rep == api.SDConnect {
+			err = login(&stdinReader{}, rep)
+		} else if rep == api.SDSubmit {
+			err = api.ValidateLogin(rep)
 		} else {
-			err = fmt.Errorf("Something went wrong when validating %s token: %w", rep, err)
+			logs.Warningf("No login method designated for %s", rep)
+			continue
 		}
-		api.RemoveRepository(rep)
-		return err
+		if err != nil {
+			api.RemoveRepository(rep)
+			logs.Errorf("Dropping repository %s: %w", rep, err)
+		}
 	}
-	return nil
 }
 
 func processFlags() error {
@@ -137,7 +142,7 @@ func processFlags() error {
 
 	found := false
 	for _, op := range repOptions {
-		if strings.ToLower(repository) == strings.ToLower(op) || strings.ToLower(repository) == "all" {
+		if strings.EqualFold(repository, op) || strings.EqualFold(repository, "all") {
 			found = true
 			api.AddRepository(op)
 		}
@@ -156,7 +161,6 @@ func processFlags() error {
 
 	api.SetRequestTimeout(requestTimeout)
 	logs.SetLevel(logLevel)
-	mountPoint = filepath.ToSlash(mountPoint)
 	return nil
 }
 
@@ -201,20 +205,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	// Log in to repositories
-	for _, rep := range api.GetEnabledRepositories() {
-		if rep == api.SDConnect {
-			err = login(&stdinReader{}, rep)
-		} else if rep == api.SDSubmit {
-			err = validateToken(rep)
-		} else {
-			logs.Warningf("No login method designated for %s", rep)
-			continue
-		}
-		if err != nil {
-			logs.Fatal(err)
-		}
-	}
+	loginToAll()
 
 	if len(api.GetEnabledRepositories()) == 0 {
 		logs.Fatal("No repositories found. Filesystem not created")

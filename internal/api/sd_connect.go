@@ -24,6 +24,7 @@ type sdConnectInfo struct {
 	token       string
 	uToken      string
 	sTokens     map[string]sToken
+	projects    []Metadata
 }
 
 // uToken is the unscoped token
@@ -46,7 +47,7 @@ type SpecialHeaders struct {
 }
 
 func init() {
-	possibleRepositories[SDConnect] = &sdConnectInfo{sTokens: make(map[string]sToken), loggedIn: false}
+	possibleRepositories[SDConnect] = &sdConnectInfo{sTokens: make(map[string]sToken), loggedIn: false, projects: nil}
 }
 
 func (c *sdConnectInfo) getEnvs() error {
@@ -77,14 +78,9 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 		return err
 	}
 
-	// So that fetchTokens() has all the projects.
-	projects, err := c.getFirstLevel()
+	c.projects, err = c.getFirstLevel()
 	if err != nil {
 		return err
-	}
-
-	for i := range projects {
-		c.sTokens[projects[i].Name] = sToken{}
 	}
 
 	c.loggedIn = true
@@ -97,17 +93,17 @@ func (c *sdConnectInfo) fetchTokens() {
 	if !c.loggedIn {
 		err := c.getUToken()
 		if err != nil {
-			logs.Warningf("HTTP requests may be slower: %s", err.Error())
+			logs.Warningf("HTTP requests may be slower: %w", err)
 			c.uToken = ""
 			return
 		}
 	}
 
-	for project := range c.sTokens {
-		err := c.getSToken(project)
+	c.sTokens = make(map[string]sToken)
+	for i := range c.projects {
+		err := c.getSToken(c.projects[i].Name)
 		if err != nil {
-			logs.Warningf("HTTP requests may be slower for files under %q: %s", SDConnect+"/"+project, err.Error())
-			c.sTokens[project] = sToken{}
+			logs.Warningf("HTTP requests may be slower for %s files under %q: %w", SDConnect, c.projects[i].Name, err)
 		}
 	}
 
@@ -124,7 +120,7 @@ func (c *sdConnectInfo) getUToken() error {
 	}
 
 	c.uToken = uToken.Token
-	logs.Debug("Retrieved unscoped token for %s", SDConnect)
+	logs.Debug("Retrieved unscoped token for ", SDConnect)
 	return nil
 }
 
@@ -137,11 +133,11 @@ func (c *sdConnectInfo) getSToken(project string) error {
 	sToken := sToken{}
 	err := makeRequest(strings.TrimSuffix(c.metadataURL, "/")+"/token", "", SDConnect, query, nil, &sToken)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve scoped token for %q: %w", SDConnect+"/"+project, err)
+		return fmt.Errorf("Failed to retrieve %s scoped token for %q: %w", SDConnect, project, err)
 	}
 
 	c.sTokens[project] = sToken
-	logs.Debug("Retrieved scoped token for ", SDConnect+"/"+project)
+	logs.Debug("Retrieved %s scoped token for ", SDConnect, project)
 	return nil
 }
 
@@ -151,10 +147,10 @@ func (c *sdConnectInfo) getCertificatePath() string {
 
 func (c *sdConnectInfo) testURLs() error {
 	if err := testURL(c.metadataURL); err != nil {
-		return fmt.Errorf("Cannot connect to SD-Connect metadata API: %w", err)
+		return fmt.Errorf("Cannot connect to %s metadata API: %w", SDConnect, err)
 	}
 	if err := testURL(c.dataURL); err != nil {
-		return fmt.Errorf("Cannot connect to SD-Connect data API: %w", err)
+		return fmt.Errorf("Cannot connect to %s data API: %w", SDConnect, err)
 	}
 	return nil
 }
@@ -179,6 +175,11 @@ func (c *sdConnectInfo) isTokenExpired(err error) bool {
 }
 
 func (c *sdConnectInfo) getFirstLevel() ([]Metadata, error) {
+	// So that projects are called only once (projects needed for fuse, login, gui)
+	if c.projects != nil {
+		return c.projects, nil
+	}
+
 	// Request projects
 	var projects []Metadata
 	err := makeRequest(strings.TrimSuffix(c.metadataURL, "/")+"/projects", c.uToken, SDConnect, nil, nil, &projects)
@@ -192,7 +193,7 @@ func (c *sdConnectInfo) getFirstLevel() ([]Metadata, error) {
 		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
 	}
 
-	logs.Debugf("Retrieved %d project(s) for %s", len(projects), SDConnect)
+	logs.Infof("Retrieved %d project(s) for %s", len(projects), SDConnect)
 	return projects, nil
 }
 
@@ -214,10 +215,10 @@ func (c *sdConnectInfo) getSecondLevel(project string) ([]Metadata, error) {
 	c.loggedIn = true
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve containers for %q: %w", SDConnect+"/"+project, err)
+		return nil, fmt.Errorf("Failed to retrieve %s containers for %q: %w", SDConnect, project, err)
 	}
 
-	logs.Infof("Retrieved containers for %q", SDConnect+"/"+project)
+	logs.Infof("Retrieved %s containers for %q", SDConnect, project)
 	return containers, nil
 }
 
@@ -240,17 +241,18 @@ func (c *sdConnectInfo) getThirdLevel(project, container string) ([]Metadata, er
 	c.loggedIn = true
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieving objects for %q: %w", SDConnect+"/"+project+"/"+container, err)
+		return nil, fmt.Errorf("Failed to retrieving %s objects for %q: %w", SDConnect, project+"/"+container, err)
 	}
 
-	logs.Infof("Retrieved objects for %q", SDConnect+"/"+project+"/"+container)
+	logs.Infof("Retrieved %s objects for %q", SDConnect, project+"/"+container)
 	return objects, nil
 }
 
 func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) {
 	size, ok := attr.(*int64)
 	if !ok {
-		logs.Errorf("SD-Connect updateAttributes() was called with incorrect attribute. Expected type *int64, got %v", reflect.TypeOf(attr))
+		logs.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, got %v",
+			SDConnect, reflect.TypeOf(attr))
 		*size = -1
 		return
 	}
@@ -271,7 +273,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 			logs.Infof("Object %q is automatically decrypted", path)
 			*size = dSize
 		} else {
-			logs.Warningf("API returned header X-Decrypted even though size of object %q is too small", path)
+			logs.Warningf("API returned header 'X-Decrypted' even though size of object %q is too small", path)
 		}
 	}
 }

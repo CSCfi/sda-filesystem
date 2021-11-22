@@ -65,11 +65,11 @@ func Error(err error) {
 
 // Errorf logs a message at level "Error" either on the standard logger or in the GUI
 func Errorf(format string, args ...interface{}) {
+	err := fmt.Errorf(format, args...)
 	if signal != nil {
-		err := fmt.Errorf(format, args...)
 		signal(int(log.ErrorLevel), StructureError(err))
 	} else {
-		log.Errorf(format, args...)
+		log.Error(err)
 	}
 }
 
@@ -84,10 +84,11 @@ func Warning(err error) {
 
 // Warningf logs a message at level "Warning" either on the standard logger or in the GUI
 var Warningf = func(format string, args ...interface{}) {
+	err := fmt.Errorf(format, args...)
 	if signal != nil {
-		signal(int(log.WarnLevel), []string{fmt.Sprintf(format, args...)})
+		signal(int(log.WarnLevel), StructureError(err))
 	} else {
-		log.Warningf(format, args...)
+		log.Warningf(err.Error())
 	}
 }
 

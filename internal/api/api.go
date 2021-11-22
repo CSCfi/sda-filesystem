@@ -49,8 +49,9 @@ type fuseInfo interface {
 
 // Metadata contains node metadata fetched from an api
 type Metadata struct {
-	Bytes int64  `json:"bytes"`
-	Name  string `json:"name"`
+	Bytes    int64  `json:"bytes"`
+	Name     string `json:"name"`
+	OrigName string // Is empty if Name == OrigName
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -73,7 +74,7 @@ var GetAllPossibleRepositories = func() []string {
 }
 
 // GetEnabledRepositories returns the name of every repository the user has enabled
-func GetEnabledRepositories() []string {
+var GetEnabledRepositories = func() []string {
 	var names []string
 	for key := range hi.fuseInfos {
 		names = append(names, key)
@@ -265,7 +266,7 @@ func makeRequest(url, token, repository string, query, headers map[string]string
 		if (*v).Decrypted {
 			if headerSize := response.Header.Get("X-Header-Size"); headerSize != "" {
 				if (*v).HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
-					logs.Warningf("Could not convert header X-Header-Size to integer: %s", err.Error())
+					logs.Warningf("Could not convert header X-Header-Size to integer: %w", err)
 					(*v).Decrypted = false
 				}
 			} else {
@@ -276,7 +277,7 @@ func makeRequest(url, token, repository string, query, headers map[string]string
 
 		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
 			if (*v).SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
-				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %s", err.Error())
+				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %w", err)
 				(*v).SegmentedObjectSize = -1
 			}
 		} else {
@@ -284,7 +285,7 @@ func makeRequest(url, token, repository string, query, headers map[string]string
 		}
 
 		if _, err = io.Copy(io.Discard, response.Body); err != nil {
-			logs.Warningf("Discarding response body failed when reading headers: %s", err.Error())
+			logs.Warningf("Discarding response body failed when reading headers: %w", err)
 		}
 	case []byte:
 		if _, err = io.ReadFull(response.Body, v); err != nil {
@@ -366,7 +367,7 @@ func DownloadData(nodes []string, path string, start int64, end int64, maxEnd in
 		}
 
 		downloadCache.Set(cacheKey, buf, time.Minute*60)
-		logs.Debugf("File %q stored in cache, with coordinates %d-%d", path, chStart, chEnd-1)
+		logs.Debugf("File %q stored in cache, with coordinates [%d, %d)", path, chStart, chEnd)
 
 		if endofst > int64(len(buf)) {
 			endofst = int64(len(buf))
@@ -378,6 +379,6 @@ func DownloadData(nodes []string, path string, start int64, end int64, maxEnd in
 	if endofst > int64(len(ret)) {
 		endofst = int64(len(ret))
 	}
-	logs.Debugf("Retrieved file %q from cache, with coordinates %d-%d", path, start, end-1)
+	logs.Debugf("Retrieved file %q from cache, with coordinates [%d, %d)", path, start, end)
 	return ret[ofst:endofst], nil
 }
