@@ -148,7 +148,6 @@ func (fs *Fuse) populateFilesystem(repository string, timestamp fuse.Timespec, s
 		if projects[i].OrigName == "" {
 			projects[i].OrigName = projects[i].Name
 		}
-
 		if projectSafe != projects[i].OrigName {
 			projectSafe = renameDirectory(fs.root.chld[repository], repository, projectSafe)
 		}
@@ -171,8 +170,7 @@ func (fs *Fuse) populateFilesystem(repository string, timestamp fuse.Timespec, s
 				logs.Error(err)
 				return
 			}
-
-			if len(send) > 0 {
+			if len(send) > 0 && !api.IsHidden(repository) {
 				send[0] <- LoadProjectInfo{Repository: repository, Project: projectSafe, Count: len(containers)}
 			}
 
@@ -182,9 +180,11 @@ func (fs *Fuse) populateFilesystem(repository string, timestamp fuse.Timespec, s
 				if c.OrigName == "" {
 					c.OrigName = c.Name
 				}
-
 				if containerSafe != c.OrigName {
 					containerSafe = renameDirectory(fs.root.chld[repository].chld[projectSafe], projectSafe, containerSafe)
+				}
+				if len(send) > 0 && api.IsHidden(repository) {
+					send[0] <- LoadProjectInfo{Repository: repository, Project: containerSafe, Count: 1}
 				}
 
 				containerPath := projectPath + "/" + containerSafe
@@ -256,11 +256,11 @@ func calculateFinalSize(n *node, path string) int64 {
 		return 0
 	}
 
-	finalSize := int64(0)
+	n.stat.Size = 0
 	for key, value := range n.chld {
-		finalSize += calculateFinalSize(value, path+"/"+key)
+		n.stat.Size += calculateFinalSize(value, path+"/"+key)
 	}
-	return finalSize
+	return n.stat.Size
 }
 
 var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
@@ -342,7 +342,11 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 
 		if len(send) > 0 {
 			nodes = split(containerPath)
-			send[0] <- LoadProjectInfo{Repository: nodes[0], Project: nodes[1], Count: 1}
+			if api.IsHidden(nodes[0]) {
+				send[0] <- LoadProjectInfo{Repository: nodes[0], Project: nodes[2], Count: 1}
+			} else {
+				send[0] <- LoadProjectInfo{Repository: nodes[0], Project: nodes[1], Count: 1}
+			}
 		}
 	}
 }
