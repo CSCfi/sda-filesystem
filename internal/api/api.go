@@ -20,29 +20,36 @@ import (
 
 const chunkSize = 1 << 25
 
-var hi = httpInfo{requestTimeout: 20, httpRetry: 3, fuseInfos: make(map[string]fuseInfo)}
+var hi = httpInfo{requestTimeout: 20, httpRetry: 3}
 var possibleRepositories = make(map[string]fuseInfo)
 var downloadCache *cache.Ristretto
+
+// LoginMethod is an enum that main will use to know which login method to use
+type LoginMethod int
+
+const (
+	Password LoginMethod = iota
+	Token
+)
 
 // httpInfo contains all necessary variables used during HTTP requests
 type httpInfo struct {
 	requestTimeout int
 	httpRetry      int
 	client         *http.Client
-	fuseInfos      map[string]fuseInfo
+	repositories   map[string]fuseInfo
 }
 
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
+	getLoginMethod() LoginMethod
 	validateLogin(...string) error
 	getCertificatePath() string
 	testURLs() error
 	getToken() string
-	isHidden() bool
-	getFirstLevel() ([]Metadata, error)
-	getSecondLevel(string) ([]Metadata, error)
-	getThirdLevel(string, string) ([]Metadata, error)
+	levelCount() int
+	getNthLevel(...string) ([]Metadata, error)
 	updateAttributes([]string, string, interface{})
 	downloadData([]string, []byte, int64, int64) error
 }
@@ -51,7 +58,7 @@ type fuseInfo interface {
 type Metadata struct {
 	Bytes    int64  `json:"bytes"`
 	Name     string `json:"name"`
-	OrigName string // Is empty if Name == OrigName
+	OrigName string // Is empty if Name is the original
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -76,20 +83,25 @@ var GetAllPossibleRepositories = func() []string {
 // GetEnabledRepositories returns the name of every repository the user has enabled
 var GetEnabledRepositories = func() []string {
 	var names []string
-	for key := range hi.fuseInfos {
+	for key := range hi.repositories {
 		names = append(names, key)
 	}
 	return names
 }
 
-// AddRepository adds a repository to hi.fuseInfos
+// AddRepository adds a repository to hi.repositories
 var AddRepository = func(r string) {
-	hi.fuseInfos[r] = possibleRepositories[r]
+	hi.repositories[r] = possibleRepositories[r]
 }
 
-// RemoveRepository removes a repository from hi.fuseInfos
+// RemoveRepository removes a repository from hi.repositories
 var RemoveRepository = func(r string) {
-	delete(hi.fuseInfos, r)
+	delete(hi.repositories, r)
+}
+
+// RemoveAll removes all enabled repositores
+func RemoveAll() {
+	hi.repositories = make(map[string]fuseInfo)
 }
 
 // SetRequestTimeout redefines hi.requestTimeout
@@ -99,8 +111,8 @@ var SetRequestTimeout = func(timeout int) {
 
 // GetEnvs looks up the necessary environment variables
 func GetEnvs() error {
-	for i := range hi.fuseInfos {
-		if err := hi.fuseInfos[i].getEnvs(); err != nil {
+	for i := range hi.repositories {
+		if err := hi.repositories[i].getEnvs(); err != nil {
 			return err
 		}
 	}
@@ -130,9 +142,13 @@ func validURL(env string) error {
 	return nil
 }
 
+var GetLoginMethod = func(rep string) LoginMethod {
+	return hi.repositories[rep].getLoginMethod()
+}
+
 // ValidateLogin checks if user is able to log in with given input
 var ValidateLogin = func(rep string, auth ...string) error {
-	return hi.fuseInfos[rep].validateLogin(auth...)
+	return hi.repositories[rep].validateLogin(auth...)
 }
 
 // InitializeCache creates a cache for downloaded data
@@ -149,8 +165,8 @@ func InitializeCache() error {
 func InitializeClient() error {
 	// Handle certificates if ones are set
 	caCertPool := x509.NewCertPool()
-	for i := range hi.fuseInfos {
-		certPath := hi.fuseInfos[i].getCertificatePath()
+	for i := range hi.repositories {
+		certPath := hi.repositories[i].getCertificatePath()
 		if len(certPath) > 0 {
 			caCert, err := ioutil.ReadFile(certPath)
 			if err != nil {
@@ -190,8 +206,8 @@ func InitializeClient() error {
 
 // testUrls tests whether we can connect to API urls and that certificates are valid
 var testURLs = func() error {
-	for fs := range hi.fuseInfos {
-		if err := hi.fuseInfos[fs].testURLs(); err != nil {
+	for i := range hi.repositories {
+		if err := hi.repositories[i].testURLs(); err != nil {
 			return err
 		}
 	}
@@ -205,6 +221,10 @@ func testURL(url string) error {
 	}
 	response.Body.Close()
 	return nil
+}
+
+func LevelCount(rep string) int {
+	return hi.repositories[rep].levelCount()
 }
 
 // makeRequest sends HTTP requests and parses the responses
@@ -229,7 +249,7 @@ func makeRequest(url, token, repository string, query, headers map[string]string
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	} else {
-		request.Header.Set("Authorization", "Basic "+hi.fuseInfos[repository].getToken())
+		request.Header.Set("Authorization", "Basic "+hi.repositories[repository].getToken())
 	}
 
 	// Place additional headers if any are available
@@ -304,28 +324,8 @@ func makeRequest(url, token, repository string, query, headers map[string]string
 	return nil
 }
 
-// IsHidden returns true if the directories returned by getFirstLevel() should be hidden.
-// The children of these directories are visible.
-// This is implemented like this so that
-// 1. If a repository does not have three levels this is a way to artifitially add a level
-// 2. SD-Submit has multiple APIs which is why these APIs need to be added to the hierarchy without being seen by the user
-func IsHidden(rep string) bool {
-	return hi.fuseInfos[rep].isHidden()
-}
-
-// GetFirstLevel returns the topmost directories in repository 'rep'
-func GetFirstLevel(rep string) ([]Metadata, error) {
-	return hi.fuseInfos[rep].getFirstLevel()
-}
-
-// GetSecondLevel returns the directories in repository 'rep' under directory 'dir'
-func GetSecondLevel(rep, dir string) ([]Metadata, error) {
-	return hi.fuseInfos[rep].getSecondLevel(dir)
-}
-
-// GetThirdLevel returns the directories in repository 'rep' under directory 'dir1/dir2'
-func GetThirdLevel(rep, dir1, dir2 string) ([]Metadata, error) {
-	return hi.fuseInfos[rep].getThirdLevel(dir1, dir2)
+func GetNthLevel(rep string, nodes ...string) ([]Metadata, error) {
+	return hi.repositories[rep].getNthLevel(nodes...)
 }
 
 // UpdateAttributes modifies attributes of node in 'path' in repository 'rep'.
@@ -335,7 +335,7 @@ func UpdateAttributes(nodes []string, path string, attr interface{}) {
 		logs.Errorf("Invalid path %q. Not deep enough", path)
 		return
 	}
-	hi.fuseInfos[nodes[0]].updateAttributes(nodes[1:], path, attr)
+	hi.repositories[nodes[0]].updateAttributes(nodes[1:], path, attr)
 }
 
 // DownloadData requests data between range [start, end) from an API.
@@ -364,7 +364,7 @@ func DownloadData(nodes []string, path string, start int64, end int64, maxEnd in
 
 	if !found {
 		buf := make([]byte, chEnd-chStart)
-		err := hi.fuseInfos[nodes[0]].downloadData(nodes[1:], buf, chStart, chEnd)
+		err := hi.repositories[nodes[0]].downloadData(nodes[1:], buf, chStart, chEnd)
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %q: %w", path, err)
 		}

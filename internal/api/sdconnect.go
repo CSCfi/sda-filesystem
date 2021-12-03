@@ -47,7 +47,7 @@ type SpecialHeaders struct {
 }
 
 func init() {
-	possibleRepositories[SDConnect] = &sdConnectInfo{sTokens: make(map[string]sToken), loggedIn: false, projects: nil}
+	possibleRepositories[SDConnect] = &sdConnectInfo{sTokens: make(map[string]sToken)}
 }
 
 func (c *sdConnectInfo) getEnvs() error {
@@ -67,20 +67,29 @@ func (c *sdConnectInfo) getEnvs() error {
 	return nil
 }
 
+func (c *sdConnectInfo) getLoginMethod() LoginMethod {
+	return Password
+}
+
 func (c *sdConnectInfo) validateLogin(auth ...string) error {
-	if len(auth) < 2 {
-		return fmt.Errorf("%s validateLogin() should have received two parameters, got %d", SDConnect, len(auth))
+	if len(auth) == 2 {
+		c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
 	}
 
-	c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
+	c.projects = nil
+	c.loggedIn = false
+
 	err := c.getUToken()
 	if err != nil {
 		return err
 	}
 
-	c.projects, err = c.getFirstLevel()
+	c.projects, err = c.getProjects()
 	if err != nil {
 		return err
+	}
+	if len(c.projects) == 0 {
+		return fmt.Errorf("No project permissions found for %s", SDConnect)
 	}
 
 	c.loggedIn = true
@@ -93,7 +102,7 @@ func (c *sdConnectInfo) fetchTokens() {
 	if !c.loggedIn {
 		err := c.getUToken()
 		if err != nil {
-			logs.Warningf("HTTP requests may be slower: %w", err)
+			logs.Warningf("HTTP requests may be slower for %s: %w", SDConnect, err)
 			c.uToken = ""
 			return
 		}
@@ -107,7 +116,7 @@ func (c *sdConnectInfo) fetchTokens() {
 		}
 	}
 
-	logs.Info("Fetched SD-Connect tokens")
+	logs.Infof("Fetched %s tokens", SDConnect)
 }
 
 // getUToken gets the unscoped token
@@ -159,14 +168,27 @@ func (c *sdConnectInfo) getToken() string {
 	return c.token
 }
 
-func (c *sdConnectInfo) isHidden() bool {
-	return false
+func (c *sdConnectInfo) levelCount() int {
+	return 3
+}
+
+func (c *sdConnectInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
+	switch len(nodes) {
+	case 0:
+		return c.projects, nil
+	case 1:
+		return c.getContainers(nodes[0])
+	case 2:
+		return c.getObjects(nodes[0], nodes[1])
+	default:
+		return nil, nil
+	}
 }
 
 func (c *sdConnectInfo) isTokenExpired(err error) bool {
 	var re *RequestError
 	if c.loggedIn && errors.As(err, &re) && re.StatusCode == 401 {
-		logs.Info("SD-Connect tokens no longer valid. Fetching them again")
+		logs.Infof("%s tokens no longer valid. Fetching them again", SDConnect)
 		c.loggedIn = false
 		c.fetchTokens()
 		return true
@@ -174,31 +196,19 @@ func (c *sdConnectInfo) isTokenExpired(err error) bool {
 	return false
 }
 
-func (c *sdConnectInfo) getFirstLevel() ([]Metadata, error) {
-	// So that projects are called only once (projects needed for fuse, login, gui)
-	if c.projects != nil {
-		return c.projects, nil
-	}
-
-	// Request projects
+func (c *sdConnectInfo) getProjects() ([]Metadata, error) {
 	var projects []Metadata
 	err := makeRequest(strings.TrimSuffix(c.metadataURL, "/")+"/projects", c.uToken, SDConnect, nil, nil, &projects)
-
-	if c.isTokenExpired(err) {
-		return c.getFirstLevel()
-	}
-	c.loggedIn = true
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
 	}
 
-	logs.Infof("Retrieved %d project(s) for %s", len(projects), SDConnect)
+	logs.Infof("Retrieved %d %s project(s)", len(projects), SDConnect)
 	return projects, nil
 }
 
 // GetContainers gets containers inside project
-func (c *sdConnectInfo) getSecondLevel(project string) ([]Metadata, error) {
+func (c *sdConnectInfo) getContainers(project string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": c.sTokens[project].ProjectID}
 
@@ -210,7 +220,7 @@ func (c *sdConnectInfo) getSecondLevel(project string) ([]Metadata, error) {
 			url.PathEscape(project)+"/containers", c.sTokens[project].Token, SDConnect, nil, headers, &containers)
 
 	if c.isTokenExpired(err) {
-		return c.getSecondLevel(project)
+		return c.getContainers(project)
 	}
 	c.loggedIn = true
 
@@ -223,7 +233,7 @@ func (c *sdConnectInfo) getSecondLevel(project string) ([]Metadata, error) {
 }
 
 // GetObjects gets objects inside container
-func (c *sdConnectInfo) getThirdLevel(project, container string) ([]Metadata, error) {
+func (c *sdConnectInfo) getObjects(project, container string) ([]Metadata, error) {
 	// Additional headers
 	headers := map[string]string{"X-Project-ID": c.sTokens[project].ProjectID}
 
@@ -236,7 +246,7 @@ func (c *sdConnectInfo) getThirdLevel(project, container string) ([]Metadata, er
 			url.PathEscape(container)+"/objects", c.sTokens[project].Token, SDConnect, nil, headers, &objects)
 
 	if c.isTokenExpired(err) {
-		return c.getThirdLevel(project, container)
+		return c.getObjects(project, container)
 	}
 	c.loggedIn = true
 

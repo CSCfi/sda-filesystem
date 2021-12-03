@@ -20,19 +20,19 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 		return
 	}
 
-	if on := fs.openmap[fh]; on.path[0] == api.SDConnect && !on.node.checkDecryption {
+	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.checkDecryption {
 		path = filepath.ToSlash(path)
 		path = strings.TrimPrefix(path, "/")
-		newSize := on.node.stat.Size
-		api.UpdateAttributes(on.path, path, &newSize)
+		newSize := n.node.stat.Size
+		api.UpdateAttributes(n.path, path, &newSize)
 		if newSize == -1 {
 			return -fuse.EIO, ^uint64(0)
 		}
-		if on.node.stat.Size != newSize {
-			on.node.stat.Size = newSize
-			on.node.stat.Ctim = fuse.Now()
+		if n.node.stat.Size != newSize {
+			n.node.stat.Size = newSize
+			n.node.stat.Ctim = fuse.Now()
 		}
-		on.node.checkDecryption = true
+		n.node.checkDecryption = true
 	}
 	return
 }
@@ -41,8 +41,7 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 func (fs *Fuse) Opendir(path string) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening directory ", path)
-	errc, fh = fs.openNode(path, true)
-	return
+	return fs.openNode(path, true)
 }
 
 // Release closes a file.
@@ -75,8 +74,8 @@ func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	defer fs.synchronize()()
 	logs.Debug("Reading ", path)
 
-	on := fs.getNode(path, fh)
-	if on.node == nil {
+	n := fs.getNode(path, fh)
+	if n.node == nil {
 		logs.Errorf("File %q not found", path)
 		return -fuse.ENOENT
 	}
@@ -86,22 +85,22 @@ func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 
 	// Get file end coordinate
 	endofst := ofst + int64(len(buff))
-	if endofst > on.node.stat.Size {
-		endofst = on.node.stat.Size
+	if endofst > n.node.stat.Size {
+		endofst = n.node.stat.Size
 	}
 	if endofst <= ofst {
 		return 0
 	}
 
 	// Download data from file
-	data, err := api.DownloadData(on.path, path, ofst, endofst, on.node.stat.Size)
+	data, err := api.DownloadData(n.path, path, ofst, endofst, n.node.stat.Size)
 	if err != nil {
 		logs.Error(err)
 		return -fuse.EIO
 	}
 
 	// Update file accession timestamp
-	on.node.stat.Atim = fuse.Now()
+	n.node.stat.Atim = fuse.Now()
 	return copy(buff, data)
 }
 
@@ -116,13 +115,7 @@ func (fs *Fuse) Readdir(path string, fill func(name string, stat *fuse.Stat_t, o
 	fill(".", &node.stat, 0)
 	fill("..", nil, 0)
 	for name, chld := range node.chld {
-		if fs.hidden[node.stat.Ino] {
-			for key := range chld.chld {
-				if !fill(key, &chld.chld[key].stat, 0) {
-					return 0
-				}
-			}
-		} else if !fill(name, &chld.stat, 0) {
+		if !fill(name, &chld.stat, 0) {
 			break
 		}
 	}

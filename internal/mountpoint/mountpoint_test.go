@@ -8,9 +8,6 @@ import (
 )
 
 func TestMounPoint(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
 	dir := "/spirited/away"
 
 	origHomeDir := os.Getenv("HOME")
@@ -21,9 +18,9 @@ func TestMounPoint(t *testing.T) {
 		os.Setenv("HOME", origHomeDir)
 	}()
 
-	ret := DefaultMountPoint()
-	if fatal {
-		t.Fatal("Function called Exit()")
+	ret, err := DefaultMountPoint()
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
 	}
 	if ret != dir+"/Projects" {
 		t.Fatalf("Incorrect mount point. Expected %q, got %q", dir+"/Projects", ret)
@@ -31,9 +28,6 @@ func TestMounPoint(t *testing.T) {
 }
 
 func TestMounPoint_Fail(t *testing.T) {
-	fatal := false
-	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
-
 	origHomeDir := os.Getenv("HOME")
 	os.Unsetenv("HOME")
 
@@ -42,8 +36,11 @@ func TestMounPoint_Fail(t *testing.T) {
 		os.Setenv("HOME", origHomeDir)
 	}()
 
-	_ = DefaultMountPoint()
-	if !fatal {
-		t.Fatal("Function should have called Exit()")
+	ret, err := DefaultMountPoint()
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
+	}
+	if ret != "" {
+		t.Fatalf("Function should have returned empty mount point, got %q", ret)
 	}
 }

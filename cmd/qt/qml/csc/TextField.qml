@@ -13,9 +13,8 @@ TextField {
 
     background: Rectangle {
         id: bg
-        color: CSC.Style.lightGreyBlue
-        border.width: textfield.focus ? 2 : 1
-        border.color: textfield.focus ? CSC.Style.primaryColor : CSC.Style.lineGray
+        border.width: textfield.activeFocus ? 2 : 1
+        border.color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.lineGray
         radius: 5
     }
 }

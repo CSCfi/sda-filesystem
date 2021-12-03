@@ -82,24 +82,13 @@ func (lm *LogModel) data(index *core.QModelIndex, role int) *core.QVariant {
 
 	switch role {
 	case Level:
-		{
-			return core.NewQVariant1(l.level)
-		}
-
+		return core.NewQVariant1(l.level)
 	case Timestamp:
-		{
-			return core.NewQVariant1(l.timestamp)
-		}
-
+		return core.NewQVariant1(l.timestamp)
 	case Message:
-		{
-			return core.NewQVariant1(l.message)
-		}
-
+		return core.NewQVariant1(l.message)
 	default:
-		{
-			return core.NewQVariant()
-		}
+		return core.NewQVariant()
 	}
 }
 
