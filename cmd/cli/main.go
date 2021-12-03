@@ -122,12 +122,12 @@ var login = func(lr loginReader, rep string) error {
 func loginToAll() {
 	for _, rep := range api.GetEnabledRepositories() {
 		var err error
-		if rep == api.SDConnect {
+		if api.GetLoginMethod(rep) == api.Password {
 			err = login(&stdinReader{}, rep)
-		} else if rep == api.SDSubmit {
+		} else if api.GetLoginMethod(rep) == api.Token {
 			err = api.ValidateLogin(rep)
 		} else {
-			logs.Warningf("No login method designated for %s", rep)
+			logs.Warningf("No login function designated for %s", rep)
 			continue
 		}
 		if err != nil {
@@ -166,10 +166,16 @@ func processFlags() error {
 
 func init() {
 	repOptions := api.GetAllPossibleRepositories()
+	defaultMount, err := mountpoint.DefaultMountPoint()
+
+	if err != nil {
+		logs.Error(err)
+	}
+
 	flag.StringVar(&repository, "enable", "all",
 		fmt.Sprintf("Choose which repositories you wish include in the filesystem. Possible values: {%s,all}",
 			strings.Join(repOptions, ",")))
-	flag.StringVar(&mountPoint, "mount", mountpoint.DefaultMountPoint(), "Path to filesystem mount point")
+	flag.StringVar(&mountPoint, "mount", defaultMount, "Path to filesystem mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
@@ -212,7 +218,8 @@ func main() {
 	}
 
 	done := shutdown()
-	fs := filesystem.CreateFileSystem()
+	fs := filesystem.InitializeFileSystem()
+	fs.PopulateFilesystem()
 	filesystem.MountFilesystem(fs, mountPoint)
 	<-done
 }

@@ -19,7 +19,7 @@ Popup {
     focus: modal
     closePolicy: Popup.NoAutoClose
 
-    property string errorTextContent: ""
+    property string errorMessage: ""
     property string errorTextClarify: ""
     property int type: LogLevel.Error
     property color mainColor: {
@@ -75,7 +75,7 @@ Popup {
 
             Text {
                 id: errorText
-                text: popup.errorTextContent
+                text: popup.errorMessage
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
                 font.pointSize: 15

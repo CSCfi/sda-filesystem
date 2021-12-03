@@ -7,6 +7,8 @@ Button {
     id: button
     hoverEnabled: true
     padding: 15
+    topInset: 0
+    bottomInset: 0
     enabled: !loading
 
     Material.foreground: !button.enabled ? disableForeground : foregroundColor

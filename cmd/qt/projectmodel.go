@@ -21,7 +21,7 @@ type ProjectModel struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(metadataList) `signal:"apiToProject,auto"`
+	//	_ func(metadataList) `signal:"apiToProject,auto"`
 
 	_ int `property:"loadedProjects"`
 
@@ -63,24 +63,13 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 
 	switch role {
 	case ProjectName:
-		{
-			return core.NewQVariant1(p.projectName)
-		}
-
+		return core.NewQVariant1(p.projectName)
 	case LoadedContainers:
-		{
-			return core.NewQVariant1(p.loadedContainers)
-		}
-
+		return core.NewQVariant1(p.loadedContainers)
 	case AllContainers:
-		{
-			return core.NewQVariant1(p.allContainers)
-		}
-
+		return core.NewQVariant1(p.allContainers)
 	default:
-		{
-			return core.NewQVariant()
-		}
+		return core.NewQVariant()
 	}
 }
 
@@ -96,14 +85,15 @@ func (pm *ProjectModel) roleNames() map[int]*core.QByteArray {
 	return pm.roles
 }
 
-func (pm *ProjectModel) apiToProject(projectsAPI metadataList) {
-	pm.projects = make([]*project, len(projectsAPI))
+func (pm *ProjectModel) addProjects(ch <-chan filesystem.LoadProjectInfo) {
+	pm.projects = []*project{}
 	pm.nameToIndex = make(map[string]int)
+	i := 0
 
-	for i := range projectsAPI {
-		pm.projects[i] = &project{projectName: projectsAPI[i].Name, loadedContainers: 0,
-			allContainers: -1}
-		pm.nameToIndex[projectsAPI[i].Name] = i
+	for info := range ch {
+		pm.projects = append(pm.projects, &project{projectName: info.Project, allContainers: -1})
+		pm.nameToIndex[info.Project] = i
+		i++
 	}
 }
 

@@ -29,7 +29,7 @@ Control {
         onAccepted: {
             var mountError = QmlBridge.changeMountPoint(fileDialog.fileUrl)
             if (mountError) {
-                popup.errorTextContent = mountError
+                popup.errorMessage = mountError
                 popup.type = LogLevel.Error
                 popup.open()
             }
@@ -62,7 +62,7 @@ Control {
                     width: parent.width
 
                     Text {
-                        text: "<h3>Your SD Connect data will be available at this local directory:</h3>"
+                        text: "<h3>Your data will be available at this local directory:</h3>"
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                         Layout.preferredWidth: parent.implicitWidth
@@ -107,8 +107,6 @@ Control {
                             id: changeButton
                             text: "Change"
                             outlined: true
-                            topInset: 0
-                            bottomInset: 0
                             Layout.maximumWidth: implicitWidth + 2 * padding
                             Layout.fillWidth: true
 
@@ -124,8 +122,6 @@ Control {
                         CSC.Button {
                             id: acceptButton
                             text: "OK"
-                            topInset: 0
-                            bottomInset: 0
                             enabled: mountText.text != ""
                             implicitWidth: state != "finished" ? changeButton.implicitWidth : implicitWidth
                             Layout.maximumWidth: implicitWidth + 2 * padding
@@ -169,8 +165,6 @@ Control {
                 text: "Open Folder"
                 enabled: false
                 outlined: true
-                topInset: 0
-                bottomInset: 0
                 Layout.fillWidth: true
                 Layout.minimumWidth: implicitWidth
                 

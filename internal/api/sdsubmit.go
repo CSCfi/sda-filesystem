@@ -14,11 +14,11 @@ import (
 const SDSubmit string = "SD-Submit"
 
 type sdSubmitInfo struct {
-	certPath string
-	token    string
-	urls     []string
-	fileIDs  map[string]string
-	datasets map[int][]Metadata // keys are url indexes (only the ones user can access)
+	certPath     string
+	token        string
+	urls         []string
+	fileIDs      map[string]string
+	datasetToUrl map[string]Metadata
 }
 
 type file struct {
@@ -34,7 +34,7 @@ type file struct {
 }
 
 func init() {
-	possibleRepositories[SDSubmit] = &sdSubmitInfo{fileIDs: make(map[string]string), datasets: make(map[int][]Metadata)}
+	possibleRepositories[SDSubmit] = &sdSubmitInfo{fileIDs: make(map[string]string)}
 }
 
 func (s *sdSubmitInfo) getEnvs() error {
@@ -60,21 +60,27 @@ func (s *sdSubmitInfo) getEnvs() error {
 	return nil
 }
 
+func (s *sdSubmitInfo) getLoginMethod() LoginMethod {
+	return Token
+}
+
 func (s *sdSubmitInfo) validateLogin(auth ...string) error {
+	s.datasetToUrl = make(map[string]Metadata)
 	count := 0
 
 	for i := range s.urls {
-		datasets, err := s.getSecondLevel(strconv.Itoa(i))
+		datasets, err := s.getDatasets(int64(i))
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
-				logs.Warningf("You do not have permission to access API %s", s.urls[i])
-			} else {
-				logs.Warningf("Something went wrong when validating token for API %s: %w", s.urls[i], err)
+				return err
 			}
+			logs.Warningf("Something went wrong when fetching %s datasets from API %s: %w", SDSubmit, s.urls[i], err)
 			count++
 		} else {
-			s.datasets[i] = datasets
+			for j := range datasets {
+				s.datasetToUrl[datasets[j].OrigName] = datasets[j]
+			}
 		}
 	}
 
@@ -101,40 +107,30 @@ func (s *sdSubmitInfo) getToken() string {
 	return s.token
 }
 
-func (s *sdSubmitInfo) isHidden() bool {
-	return true
+func (s *sdSubmitInfo) levelCount() int {
+	return 2
 }
 
-func (s *sdSubmitInfo) strToIdx(str string) (int, error) {
-	idx, err := strconv.Atoi(str)
-	if err != nil {
-		return -1, fmt.Errorf("%q should be an integer: %w", str, err)
+func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
+	switch len(nodes) {
+	case 0:
+		i := 0
+		datasets := make([]Metadata, len(s.datasetToUrl))
+		for _, meta := range s.datasetToUrl {
+			datasets[i] = Metadata{Name: meta.Name, OrigName: meta.OrigName, Bytes: -1}
+			i++
+		}
+		return datasets, nil
+	case 1:
+		return s.getFiles(nodes[0])
+	default:
+		return nil, nil
 	}
-	return idx, nil
 }
 
-func (s *sdSubmitInfo) getFirstLevel() ([]Metadata, error) {
-	var metadata []Metadata
-	for idx := range s.datasets {
-		metadata = append(metadata, Metadata{Name: strconv.Itoa(idx), Bytes: -1})
-	}
-	return metadata, nil
-}
-
-func (s *sdSubmitInfo) getSecondLevel(urlIdx string) ([]Metadata, error) {
-	idx, err := s.strToIdx(urlIdx)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
-	}
-
-	// So that datasets are called only once (datasets needed for fuse, login, gui)
-	if data, ok := s.datasets[idx]; ok {
-		return data, nil
-	}
-
-	// Request datasets
+func (s *sdSubmitInfo) getDatasets(idx int64) ([]Metadata, error) {
 	var datasets []string
-	err = makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
+	err := makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
 		"/metadata/datasets", s.token, SDSubmit, nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
@@ -142,7 +138,7 @@ func (s *sdSubmitInfo) getSecondLevel(urlIdx string) ([]Metadata, error) {
 
 	var metadata []Metadata
 	for i := range datasets {
-		md := Metadata{Name: datasets[i], Bytes: -1}
+		md := Metadata{Name: datasets[i], Bytes: idx} // Here Bytes represents url idx just because it's a convenient int field
 		if u, err := url.ParseRequestURI(datasets[i]); err == nil {
 			md.Name = strings.TrimLeft(strings.TrimPrefix(datasets[i], u.Scheme), ":/")
 			md.OrigName = datasets[i]
@@ -154,15 +150,16 @@ func (s *sdSubmitInfo) getSecondLevel(urlIdx string) ([]Metadata, error) {
 	return metadata, nil
 }
 
-func (s *sdSubmitInfo) getThirdLevel(urlIdx, dataset string) ([]Metadata, error) {
-	idx, err := s.strToIdx(urlIdx)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", SDSubmit+"/"+dataset, err)
+func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
+	meta, ok := s.datasetToUrl[dataset]
+	if !ok {
+		return nil, fmt.Errorf("Tried to request %s files for invalid dataset %s", SDSubmit, dataset)
 	}
+	idx := meta.Bytes
 
 	// Request files
 	var files []file
-	err = makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
+	err := makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
 		"/metadata/datasets/"+
 		url.PathEscape(dataset)+"/files", s.token, SDSubmit, nil, nil, &files)
 	if err != nil {
@@ -184,7 +181,7 @@ func (s *sdSubmitInfo) getThirdLevel(urlIdx, dataset string) ([]Metadata, error)
 		}
 	}
 
-	logs.Infof("Retrieved files for %s dataset %s", SDSubmit, dataset)
+	logs.Infof("Retrieved files for %s dataset %q", SDSubmit, dataset)
 	return metadata, nil
 }
 
@@ -193,10 +190,11 @@ func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interf
 }
 
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end int64) error {
-	idx, err := s.strToIdx(nodes[0])
-	if err != nil {
-		return err
+	meta, ok := s.datasetToUrl[nodes[0]]
+	if !ok {
+		return fmt.Errorf("Tried to request content of %s file %q with invalid dataset %q", SDSubmit, nodes[1], nodes[0])
 	}
+	idx := meta.Bytes
 
 	// Query params
 	query := map[string]string{
@@ -204,7 +202,7 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end in
 		"endCoordinate":   strconv.FormatInt(end, 10),
 	}
 
-	finalPath := nodes[1] + "_" + nodes[2]
+	finalPath := nodes[0] + "_" + nodes[1]
 
 	// Request data
 	return makeRequest(strings.TrimSuffix(s.urls[idx], "/")+

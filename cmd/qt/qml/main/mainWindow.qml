@@ -10,12 +10,12 @@ ApplicationWindow {
 	id: mainWindow
     visible: true
     title: "SDA Filesystem"
-	width: 1000
+	width: 1100
 	height: 600
 	minimumHeight: sideBarView.height + toolbar.height
 	minimumWidth: homePage.minimumWidth + sideBarView.width
 
-	property string username
+	//property string username
 
 	Material.primary: CSC.Style.primaryColor
 
@@ -33,14 +33,14 @@ ApplicationWindow {
 				Layout.margins: 5
 			}
 
-            Text {
+            /*Text {
                 text: username
 				color: "white"
 				rightPadding: 10
 				font.pointSize: 15
 				font.weight: Font.DemiBold
 				Layout.alignment: Qt.AlignRight
-            }
+            }*/
         }
     }
 
@@ -49,7 +49,7 @@ ApplicationWindow {
 
 	CSC.Popup {
 		id: popupPanic
-		errorTextContent: "How can this be! Filesystem failed to load correctly. Save logs to find out why this happened, and either quit the application or continue at your own peril..."
+		errorMessage: "How can this be! Filesystem failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
 		leftMargin: stack.x + CSC.Style.padding
 		parent: Overlay.overlay
 

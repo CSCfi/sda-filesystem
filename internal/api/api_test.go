@@ -6,7 +6,6 @@ import (
 	"os"
 	"reflect"
 	"sort"
-	"strconv"
 	"testing"
 	"time"
 
@@ -65,80 +64,6 @@ func TestGetAllPossibleRepositories(t *testing.T) {
 	sort.Strings(reps)
 	if !reflect.DeepEqual(origReps, reps) {
 		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", origReps, reps)
-	}
-}
-
-func TestGetEnabledRepositories(t *testing.T) {
-	origFuseInfos := hi.fuseInfos
-	defer func() { hi.fuseInfos = origFuseInfos }()
-
-	hi.fuseInfos = make(map[string]fuseInfo)
-	hi.fuseInfos["Monday"] = nil
-	hi.fuseInfos["Tuesday"] = nil
-	hi.fuseInfos["Wednesday"] = nil
-
-	origReps := []string{"Monday", "Tuesday", "Wednesday"}
-	reps := GetEnabledRepositories()
-	sort.Strings(reps)
-	if !reflect.DeepEqual(origReps, reps) {
-		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", origReps, reps)
-	}
-}
-
-func TestAddRepository(t *testing.T) {
-	origPossibleRepositories := possibleRepositories
-	origFuseInfos := hi.fuseInfos
-
-	defer func() {
-		possibleRepositories = origPossibleRepositories
-		hi.fuseInfos = origFuseInfos
-	}()
-
-	hi.fuseInfos = make(map[string]fuseInfo)
-	for i := 1; i < 10; i++ {
-		possibleRepositories["Rep"+strconv.Itoa(i)] = &sdSubmitInfo{}
-	}
-
-	reps := []string{"Rep6", "Rep3", "Rep1"}
-	for i := range reps {
-		AddRepository(reps[i])
-	}
-
-	for _, rep := range reps {
-		if info, ok := hi.fuseInfos[rep]; !ok {
-			t.Errorf("Function did not add repository %s", rep)
-		} else if info != possibleRepositories[rep] {
-			t.Errorf("Added repository %s has incorrect value. Expected address %p, got %p", rep, info, possibleRepositories[rep])
-		}
-	}
-
-	if len(hi.fuseInfos) != 3 {
-		t.Errorf("Extra repositories added to map: %v", hi.fuseInfos)
-	}
-}
-
-func TestRemoveRepository(t *testing.T) {
-	origFuseInfos := hi.fuseInfos
-	defer func() { hi.fuseInfos = origFuseInfos }()
-
-	hi.fuseInfos = make(map[string]fuseInfo)
-	for i := 1; i < 10; i++ {
-		hi.fuseInfos["Rep"+strconv.Itoa(i)] = &sdSubmitInfo{}
-	}
-
-	reps := []string{"Rep2", "Rep9", "Rep5"}
-	for i := range reps {
-		RemoveRepository(reps[i])
-	}
-
-	for _, rep := range reps {
-		if _, ok := hi.fuseInfos[rep]; ok {
-			t.Errorf("Function did not remove repository %s", rep)
-		}
-	}
-
-	if len(hi.fuseInfos) != 6 {
-		t.Errorf("Too many repositories removed from map: %v", hi.fuseInfos)
 	}
 }
 
