@@ -34,7 +34,7 @@ type stdinReader struct {
 }
 
 func (r *stdinReader) readPassword() (string, error) {
-	pwd, err := term.ReadPassword(syscall.Stdin)
+	pwd, err := term.ReadPassword(int(syscall.Stdin))
 	return string(pwd), err
 }
 

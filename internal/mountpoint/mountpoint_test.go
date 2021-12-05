@@ -1,46 +1,77 @@
 package mountpoint
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
-func TestMounPoint(t *testing.T) {
-	dir := "/spirited/away"
+var homeEnv string
 
-	origHomeDir := os.Getenv("HOME")
-	os.Setenv("HOME", dir)
+func TestMain(m *testing.M) {
+	homeEnv = "HOME"
+	if runtime.GOOS == "windows" {
+		homeEnv = "USERPROFILE"
+	}
 
-	defer func() {
-		logrus.StandardLogger().ExitFunc = nil
-		os.Setenv("HOME", origHomeDir)
-	}()
+	origHomeDir := os.Getenv(homeEnv)
+	code := m.Run()
+	os.Setenv(homeEnv, origHomeDir)
+	os.Exit(code)
+}
+
+func TestMountPoint(t *testing.T) {
+	origCheckMountPoint := CheckMountPoint
+	defer func() { CheckMountPoint = origCheckMountPoint }()
+
+	os.Setenv(homeEnv, filepath.FromSlash("/spirited/away"))
+	CheckMountPoint = func(mount string) error { return nil }
 
 	ret, err := DefaultMountPoint()
 	if err != nil {
 		t.Fatalf("Function returned error: %s", err.Error())
 	}
-	if ret != dir+"/Projects" {
-		t.Fatalf("Incorrect mount point. Expected %q, got %q", dir+"/Projects", ret)
+	if ret != filepath.FromSlash("/spirited/away/Projects") {
+		t.Fatalf("Incorrect mount point. Expected %q, got %q", filepath.FromSlash("/spirited/away/Projects"), ret)
 	}
 }
 
-func TestMounPoint_Fail(t *testing.T) {
-	origHomeDir := os.Getenv("HOME")
-	os.Unsetenv("HOME")
+func TestMountPoint_Fail_OS(t *testing.T) {
+	origCheckMountPoint := CheckMountPoint
+	defer func() { CheckMountPoint = origCheckMountPoint }()
 
-	defer func() {
-		logrus.StandardLogger().ExitFunc = nil
-		os.Setenv("HOME", origHomeDir)
-	}()
+	os.Unsetenv(homeEnv)
+	CheckMountPoint = func(mount string) error { return nil }
 
 	ret, err := DefaultMountPoint()
-	if err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+	if err == nil {
+		t.Fatalf("Function should have returned non-nil error")
 	}
 	if ret != "" {
-		t.Fatalf("Function should have returned empty mount point, got %q", ret)
+		t.Fatalf("Function should have returned empty mount point")
+	}
+}
+
+func TestMountPoint_Fail_Check(t *testing.T) {
+	origCheckMountPoint := CheckMountPoint
+	defer func() { CheckMountPoint = origCheckMountPoint }()
+
+	os.Setenv(homeEnv, filepath.FromSlash("/the/matrix"))
+	checkErr := errors.New("Checking mount point failed")
+	CheckMountPoint = func(mount string) error {
+		return checkErr
+	}
+
+	ret, err := DefaultMountPoint()
+	if err == nil {
+		t.Fatalf("Function should have returned non-nil error")
+	}
+	if errors.Is(checkErr, err) {
+		t.Fatalf("Function returned incorrect error %q", err.Error())
+	}
+	if ret != "" {
+		t.Fatalf("Function should have returned empty mount point")
 	}
 }
