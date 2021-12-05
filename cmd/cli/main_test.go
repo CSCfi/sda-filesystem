@@ -16,6 +16,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var errExpected = errors.New("Expected error for test")
+
 // testReader implements loginReader and contains password
 type testReader struct {
 	pwd    string
@@ -70,15 +72,6 @@ func newTestReader(input []string, password string, sErr error, rErr error) *tes
 	}
 }
 
-// testError is an error that a function should return during test
-type testError struct {
-	err string
-}
-
-func (te *testError) Error() string {
-	return te.err
-}
-
 func TestMain(m *testing.M) {
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
@@ -93,10 +86,10 @@ func TestAskForLogin(t *testing.T) {
 			"OK", "Jones", "567ghk789", nil, nil,
 		},
 		{
-			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", &testError{"Scanner error"}, nil,
+			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", errExpected, nil,
 		},
 		{
-			"FAIL_READER", "Groot", "567ghk789", nil, &testError{"Reader error"},
+			"FAIL_READER", "Groot", "567ghk789", nil, errExpected,
 		},
 	}
 
@@ -114,10 +107,9 @@ func TestAskForLogin(t *testing.T) {
 			null.Close()
 
 			if tt.testname != "OK" {
-				var te *testError
 				if err == nil {
 					t.Error("Function should have returned non-nil error")
-				} else if !errors.As(err, &te) {
+				} else if !errors.Is(err, errExpected) {
 					t.Errorf("Function returned incorrect error %q", err.Error())
 				}
 			} else if err != nil {
@@ -258,7 +250,7 @@ func TestLogin(t *testing.T) {
 			func(lr loginReader, rep string) bool { return false },
 		},
 		{
-			"FAIL_STATE", &testError{"State error"},
+			"FAIL_STATE", errExpected,
 			func(lr loginReader) (string, string, error) {
 				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
@@ -270,7 +262,7 @@ func TestLogin(t *testing.T) {
 		{
 			"FAIL_ASK", nil,
 			func(lr loginReader) (string, string, error) {
-				return "", "", &testError{"Error asking input"}
+				return "", "", errExpected
 			},
 			func(rep string, auth ...string) error {
 				return fmt.Errorf("Function should not have called api.ValidateLogin()")
@@ -287,7 +279,7 @@ func TestLogin(t *testing.T) {
 				return "", "", nil
 			},
 			func(rep string, auth ...string) error {
-				return &testError{"Validate fail"}
+				return errExpected
 			},
 			func(lr loginReader, rep string) bool { return false },
 		},
@@ -321,14 +313,13 @@ func TestLogin(t *testing.T) {
 			os.Stdout = sout
 			null.Close()
 
-			var te *testError
 			if strings.HasPrefix(tt.testname, "OK") {
 				if err != nil {
 					t.Errorf("Function returned error: %s", err.Error())
 				}
 			} else if err == nil {
 				t.Error("Function should have returned non-nil error")
-			} else if !errors.As(err, &te) {
+			} else if !errors.Is(err, errExpected) {
 				t.Errorf("Function returned incorrect error %q", err.Error())
 			}
 		})
@@ -463,7 +454,7 @@ func TestProcessFlags(t *testing.T) {
 		{
 			"FAIL_CHECK_MOUNT", "Rep3", "/bad/directory", "info",
 			[]string{"Rep3"}, 29,
-			func(mount string) error { return &testError{"Mount check error"} },
+			func(mount string) error { return errExpected },
 		},
 	}
 
@@ -521,11 +512,10 @@ func TestProcessFlags(t *testing.T) {
 
 			err := processFlags()
 
-			var te *testError
 			if strings.HasPrefix(tt.testname, "FAIL") {
 				if err == nil {
 					t.Error("Function should have returned error")
-				} else if !errors.As(err, &te) {
+				} else if !errors.Is(err, errExpected) {
 					t.Errorf("Function returned incorrect error %q", err.Error())
 				}
 			} else if err != nil {

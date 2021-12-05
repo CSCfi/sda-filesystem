@@ -21,6 +21,8 @@ var CheckMountPoint = func(mount string) error {
 			return fmt.Errorf("Could not create directory %s", mount)
 		}
 		return nil
+	} else if err != nil {
+		return err
 	}
 
 	if !info.IsDir() {
@@ -38,13 +40,13 @@ var CheckMountPoint = func(mount string) error {
 	defer dir.Close()
 
 	// Verify dir is empty
-	if _, err = dir.Readdir(1); err != io.EOF {
+	if _, err = dir.ReadDir(1); err != io.EOF {
 		if err != nil {
-			return fmt.Errorf("Error occurred when reading from directory %q: %w", mount, err)
+			return fmt.Errorf("Error occurred when trying to read from directory %q: %w", mount, err)
 		}
 		return fmt.Errorf("Mount point %q must be empty", mount)
 	}
 
-	logs.Debugf("Filesystem will be mounted at %q", mount)
+	logs.Debugf("Directory %q is a valid mount point", mount)
 	return nil
 }
