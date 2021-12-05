@@ -23,30 +23,8 @@ type testReader struct {
 	stream io.Reader
 }
 
-// testStream is an io.Reader given to testReader and contains username
-type testStream struct {
-	data string
-	done bool
-	err  error
-}
-
-func (s *testStream) Read(p []byte) (int, error) {
-	if s.err != nil {
-		return 0, s.err
-	}
-	copy(p, []byte(s.data))
-	if s.done {
-		return 0, io.EOF
-	}
-	s.done = true
-	return len([]byte(s.data)), nil
-}
-
 func (r testReader) readPassword() (string, error) {
-	if r.err != nil {
-		return "", r.err
-	}
-	return r.pwd, nil
+	return r.pwd, r.err
 }
 
 func (r testReader) getStream() io.Reader {
@@ -61,8 +39,44 @@ func (r testReader) restoreState() error {
 	return nil
 }
 
-func newTestReader(username string, password string, sErr error, rErr error) *testReader {
-	return &testReader{stream: &testStream{data: username, done: false, err: sErr}, pwd: password, err: rErr}
+// testStream is an io.Reader given to testReader
+type testStream struct {
+	data []string
+	done bool
+	idx  int
+	err  error
+}
+
+func (s *testStream) Read(p []byte) (int, error) {
+	if s.err != nil {
+		return 0, s.err
+	}
+	if s.done || s.idx == len(s.data) {
+		s.done = false
+		return 0, io.EOF
+	}
+	content := []byte(s.data[s.idx])
+	copy(p, content)
+	s.done = true
+	s.idx++
+	return len(content), nil
+}
+
+func newTestReader(input []string, password string, sErr error, rErr error) *testReader {
+	return &testReader{
+		stream: &testStream{data: input, err: sErr},
+		pwd:    password,
+		err:    rErr,
+	}
+}
+
+// testError is an error that a function should return during test
+type testError struct {
+	err string
+}
+
+func (te *testError) Error() string {
+	return te.err
 }
 
 func TestMain(m *testing.M) {
@@ -79,10 +93,10 @@ func TestAskForLogin(t *testing.T) {
 			"OK", "Jones", "567ghk789", nil, nil,
 		},
 		{
-			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", errors.New("Scanner error"), nil,
+			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", &testError{"Scanner error"}, nil,
 		},
 		{
-			"FAIL_READER", "Groot", "567ghk789", nil, errors.New("Reader error"),
+			"FAIL_READER", "Groot", "567ghk789", nil, &testError{"Reader error"},
 		},
 	}
 
@@ -93,15 +107,18 @@ func TestAskForLogin(t *testing.T) {
 			sout := os.Stdout
 			os.Stdout = null
 
-			r := newTestReader(tt.username, tt.password, tt.streamError, tt.readerError)
+			r := newTestReader([]string{tt.username}, tt.password, tt.streamError, tt.readerError)
 			str1, str2, err := askForLogin(r)
 
 			os.Stdout = sout
 			null.Close()
 
 			if tt.testname != "OK" {
+				var te *testError
 				if err == nil {
 					t.Error("Function should have returned non-nil error")
+				} else if !errors.As(err, &te) {
+					t.Errorf("Function returned incorrect error %q", err.Error())
 				}
 			} else if err != nil {
 				t.Errorf("Function returned error: %s", err.Error())
@@ -114,13 +131,78 @@ func TestAskForLogin(t *testing.T) {
 	}
 }
 
+func TestDropRepository(t *testing.T) {
+	var tests = []struct {
+		testname string
+		input    []string
+		drop     bool
+		err      error
+	}{
+		{
+			"OK_NO_1", []string{"no"}, true, nil,
+		},
+		{
+			"OK_NO_2", []string{"on", "n"}, true, nil,
+		},
+		{
+			"OK_YES_1", []string{"yes"}, false, nil,
+		},
+		{
+			"OK_YES_2", []string{"mmm", "y"}, false, nil,
+		},
+		{
+			"FAIL_SCANNER", []string{"yes"}, true, errors.New("Stream error occurred"),
+		},
+	}
+
+	origRemoveRepository := api.RemoveRepository
+	defer func() { api.RemoveRepository = origRemoveRepository }()
+
+	var removed bool
+	api.RemoveRepository = func(r string) {
+		removed = true
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			removed = false
+
+			// Ignore prints to stdout
+			null, _ := os.Open(os.DevNull)
+			sout := os.Stdout
+			os.Stdout = null
+
+			r := newTestReader(tt.input, "", tt.err, nil)
+			dropped := droppedRepository(r, "rep")
+
+			os.Stdout = sout
+			null.Close()
+
+			if tt.drop {
+				if !removed {
+					t.Errorf("Function should have called api.RemoveRepository()")
+				} else if !dropped {
+					t.Errorf("Function should have returned 'true'")
+				}
+			} else {
+				if removed {
+					t.Errorf("Function should not have called api.RemoveRepository()")
+				} else if dropped {
+					t.Errorf("Function should have returned 'false'")
+				}
+			}
+		})
+	}
+}
+
 func TestLogin(t *testing.T) {
 	var count int
 	var tests = []struct {
-		testname          string
-		readerError       error
-		mockAskForLogin   func(loginReader) (string, string, error)
-		mockValidateLogin func(string, ...string) error
+		testname              string
+		readerError           error
+		mockAskForLogin       func(loginReader) (string, string, error)
+		mockValidateLogin     func(string, ...string) error
+		mockDroppedRepository func(loginReader, string) bool
 	}{
 		{
 			"OK", nil,
@@ -141,6 +223,21 @@ func TestLogin(t *testing.T) {
 				}
 				return nil
 			},
+			func(lr loginReader, rep string) bool { return false },
+		},
+		{
+			"OK_DROPPED", nil,
+			func(lr loginReader) (string, string, error) {
+				if count > 0 {
+					return "", "", fmt.Errorf("Function did not return during first loop")
+				}
+				count++
+				return "", "", nil
+			},
+			func(rep string, auth ...string) error {
+				return &api.RequestError{StatusCode: 401}
+			},
+			func(lr loginReader, rep string) bool { return true },
 		},
 		{
 			"OK_401_ONCE", nil,
@@ -158,33 +255,52 @@ func TestLogin(t *testing.T) {
 				}
 				return &api.RequestError{StatusCode: 401}
 			},
+			func(lr loginReader, rep string) bool { return false },
 		},
 		{
-			"FAIL_STATE", errors.New("Error occurred"),
+			"FAIL_STATE", &testError{"State error"},
 			func(lr loginReader) (string, string, error) {
 				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
 			func(rep string, auth ...string) error {
 				return fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
+			func(lr loginReader, rep string) bool { return false },
 		},
 		{
 			"FAIL_ASK", nil,
 			func(lr loginReader) (string, string, error) {
-				return "", "", fmt.Errorf("Error asking input")
+				return "", "", &testError{"Error asking input"}
 			},
 			func(rep string, auth ...string) error {
-				return nil
+				return fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
+			func(lr loginReader, rep string) bool { return false },
+		},
+		{
+			"FAIL_VALIDATE", nil,
+			func(lr loginReader) (string, string, error) {
+				if count > 0 {
+					return "", "", fmt.Errorf("Function in infinite loop")
+				}
+				count++
+				return "", "", nil
+			},
+			func(rep string, auth ...string) error {
+				return &testError{"Validate fail"}
+			},
+			func(lr loginReader, rep string) bool { return false },
 		},
 	}
 
 	origAskForLogin := askForLogin
 	origValidateLogin := api.ValidateLogin
+	origDroppedRepository := droppedRepository
 
 	defer func() {
 		askForLogin = origAskForLogin
 		api.ValidateLogin = origValidateLogin
+		droppedRepository = origDroppedRepository
 	}()
 
 	for _, tt := range tests {
@@ -192,85 +308,52 @@ func TestLogin(t *testing.T) {
 			count = 0
 			askForLogin = tt.mockAskForLogin
 			api.ValidateLogin = tt.mockValidateLogin
+			droppedRepository = tt.mockDroppedRepository
 
 			// Ignore prints to stdout
 			null, _ := os.Open(os.DevNull)
 			sout := os.Stdout
 			os.Stdout = null
 
-			r := newTestReader("", "", nil, tt.readerError)
+			r := newTestReader([]string{""}, "", nil, tt.readerError)
 			err := login(r, api.SDConnect)
 
 			os.Stdout = sout
 			null.Close()
 
+			var te *testError
 			if strings.HasPrefix(tt.testname, "OK") {
 				if err != nil {
 					t.Errorf("Function returned error: %s", err.Error())
 				}
 			} else if err == nil {
 				t.Error("Function should have returned non-nil error")
+			} else if !errors.As(err, &te) {
+				t.Errorf("Function returned incorrect error %q", err.Error())
 			}
 		})
 	}
 }
 
-func TestLogin_Validation_Fail(t *testing.T) {
-	origAskForLogin := askForLogin
-	origValidateLogin := api.ValidateLogin
-
-	defer func() {
-		askForLogin = origAskForLogin
-		api.ValidateLogin = origValidateLogin
-	}()
-
-	count := 0
-	askForLogin = func(lr loginReader) (string, string, error) {
-		if count > 0 {
-			return "", "", fmt.Errorf("Function in infinite loop")
-		}
-		count++
-		return "Anna", "cgt6d8c", nil
-	}
-	api.ValidateLogin = func(rep string, auth ...string) error {
-		return &api.RequestError{StatusCode: 500}
-	}
-
-	// Ignore prints to stdout
-	null, _ := os.Open(os.DevNull)
-	sout := os.Stdout
-	os.Stdout = null
-
-	r := newTestReader("", "", nil, nil)
-	err := login(r, api.SDConnect)
-
-	os.Stdout = sout
-	null.Close()
-
-	if err == nil {
-		t.Fatal("Function should have returned non-nil error")
-	}
-
-	// To get the innermost error
-	for errors.Unwrap(err) != nil {
-		err = errors.Unwrap(err)
-	}
-
-	var re *api.RequestError
-	if !(errors.As(err, &re) && re.StatusCode == 500) {
-		t.Fatalf("Function did not return RequestError with status code 500\nGot: %s", err.Error())
-	}
-}
-
 func TestLoginToAll(t *testing.T) {
+	count := 0
+	repositories := []string{"Rep1", "Rep2", "Rep3"}
 	var tests = []struct {
-		testname          string
-		removedReps       []string
-		mockLogin         func(loginReader, string) error
-		mockValidateLogin func(string, ...string) error
+		testname           string
+		removedReps        []string
+		mockGetLoginMethod func(string) api.LoginMethod
+		mockLogin          func(loginReader, string) error
+		mockValidateLogin  func(string, ...string) error
 	}{
 		{
 			"OK", []string{},
+			func(rep string) api.LoginMethod {
+				defer func() { count++ }()
+				if count%2 == 0 {
+					return api.Token
+				}
+				return api.Password
+			},
 			func(lr loginReader, rep string) error {
 				return nil
 			},
@@ -279,7 +362,10 @@ func TestLoginToAll(t *testing.T) {
 			},
 		},
 		{
-			"FAIL_CONNECT", []string{api.SDConnect},
+			"FAIL_PASSWORD", repositories,
+			func(rep string) api.LoginMethod {
+				return api.Password
+			},
 			func(lr loginReader, rep string) error {
 				return fmt.Errorf("Error occurred")
 			},
@@ -288,7 +374,25 @@ func TestLoginToAll(t *testing.T) {
 			},
 		},
 		{
-			"FAIL_SUBMIT", []string{api.SDSubmit},
+			"FAIL_TOKEN", repositories,
+			func(rep string) api.LoginMethod {
+				return api.Token
+			},
+			func(lr loginReader, rep string) error {
+				return nil
+			},
+			func(rep string, auth ...string) error {
+				return fmt.Errorf("Error occurred")
+			},
+		},
+		{
+			"FAIL_MIXED", []string{"Rep1"},
+			func(rep string) api.LoginMethod {
+				if rep == "Rep1" {
+					return api.Token
+				}
+				return api.Password
+			},
 			func(lr loginReader, rep string) error {
 				return nil
 			},
@@ -299,12 +403,14 @@ func TestLoginToAll(t *testing.T) {
 	}
 
 	origGetEnabledRepositories := api.GetEnabledRepositories
+	origGetLoginMethod := api.GetLoginMethod
 	origLogin := login
 	origValidateLogin := api.ValidateLogin
 	origRemoveRepository := api.RemoveRepository
 
 	defer func() {
 		api.GetEnabledRepositories = origGetEnabledRepositories
+		api.GetLoginMethod = origGetLoginMethod
 		login = origLogin
 		api.ValidateLogin = origValidateLogin
 		api.RemoveRepository = origRemoveRepository
@@ -315,11 +421,12 @@ func TestLoginToAll(t *testing.T) {
 		removed = append(removed, r)
 	}
 	api.GetEnabledRepositories = func() []string {
-		return []string{api.SDConnect, api.SDSubmit, "dummy"}
+		return repositories
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
+			api.GetLoginMethod = tt.mockGetLoginMethod
 			login = tt.mockLogin
 			api.ValidateLogin = tt.mockValidateLogin
 			removed = []string{}
@@ -334,8 +441,7 @@ func TestLoginToAll(t *testing.T) {
 }
 
 func TestProcessFlags(t *testing.T) {
-	allRepositories := []string{"Rep1", "Rep2", "Rep3"}
-
+	repositories := []string{"Rep1", "Rep2", "Rep3"}
 	var tests = []struct {
 		testname, repository, mount, logLevel string
 		finalReps                             []string
@@ -348,18 +454,16 @@ func TestProcessFlags(t *testing.T) {
 		},
 		{
 			"OK_2", "all", "/goodbye", "warning",
-			allRepositories, 87, nil,
+			repositories, 87, nil,
 		},
 		{
 			"OK_3", "wrong_repository", "/hi/hello", "error",
-			allRepositories, 2, nil,
+			repositories, 2, nil,
 		},
 		{
-			"FAIL", "Rep3", "/bad/directory", "info",
+			"FAIL_CHECK_MOUNT", "Rep3", "/bad/directory", "info",
 			[]string{"Rep3"}, 29,
-			func(mount string) error {
-				return fmt.Errorf("Error occurred")
-			},
+			func(mount string) error { return &testError{"Mount check error"} },
 		},
 	}
 
@@ -382,7 +486,7 @@ func TestProcessFlags(t *testing.T) {
 	var testLevel, testMount string
 
 	api.GetAllPossibleRepositories = func() []string {
-		return allRepositories
+		return repositories
 	}
 	api.AddRepository = func(r string) {
 		reps = append(reps, r)
@@ -417,9 +521,12 @@ func TestProcessFlags(t *testing.T) {
 
 			err := processFlags()
 
-			if tt.testname == "FAIL" {
+			var te *testError
+			if strings.HasPrefix(tt.testname, "FAIL") {
 				if err == nil {
 					t.Error("Function should have returned error")
+				} else if !errors.As(err, &te) {
+					t.Errorf("Function returned incorrect error %q", err.Error())
 				}
 			} else if err != nil {
 				t.Errorf("Function returned non-nil error: %s", err.Error())

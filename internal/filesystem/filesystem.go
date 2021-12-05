@@ -130,7 +130,7 @@ func MountFilesystem(fs *Fuse, mount string) {
 		options = append(options, "-o", "auto_unmount")
 	} // Still needs windows options
 
-	logs.Infof("Mounting filesystem to %q", mount)
+	logs.Infof("Mounting filesystem at %q", mount)
 	host.Mount(mount, options)
 }
 

@@ -7,6 +7,7 @@ import (
 	"sda-filesystem/internal/logs"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // This file contains structs and functions that are strictly for SD-Submit
@@ -14,11 +15,12 @@ import (
 const SDSubmit string = "SD-Submit"
 
 type sdSubmitInfo struct {
-	certPath     string
-	token        string
-	urls         []string
-	fileIDs      map[string]string
-	datasetToUrl map[string]Metadata
+	certPath string
+	token    string
+	urls     []string
+	lock     sync.RWMutex
+	fileIDs  map[string]string
+	datasets map[string]Metadata
 }
 
 type file struct {
@@ -65,7 +67,7 @@ func (s *sdSubmitInfo) getLoginMethod() LoginMethod {
 }
 
 func (s *sdSubmitInfo) validateLogin(auth ...string) error {
-	s.datasetToUrl = make(map[string]Metadata)
+	s.datasets = make(map[string]Metadata)
 	count := 0
 
 	for i := range s.urls {
@@ -79,7 +81,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 			count++
 		} else {
 			for j := range datasets {
-				s.datasetToUrl[datasets[j].OrigName] = datasets[j]
+				s.datasets[datasets[j].OrigName] = datasets[j]
 			}
 		}
 	}
@@ -115,8 +117,8 @@ func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
 	switch len(nodes) {
 	case 0:
 		i := 0
-		datasets := make([]Metadata, len(s.datasetToUrl))
-		for _, meta := range s.datasetToUrl {
+		datasets := make([]Metadata, len(s.datasets))
+		for _, meta := range s.datasets {
 			datasets[i] = Metadata{Name: meta.Name, OrigName: meta.OrigName, Bytes: -1}
 			i++
 		}
@@ -151,7 +153,7 @@ func (s *sdSubmitInfo) getDatasets(idx int64) ([]Metadata, error) {
 }
 
 func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
-	meta, ok := s.datasetToUrl[dataset]
+	meta, ok := s.datasets[dataset]
 	if !ok {
 		return nil, fmt.Errorf("Tried to request %s files for invalid dataset %s", SDSubmit, dataset)
 	}
@@ -170,14 +172,15 @@ func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
 	for i := range files {
 		if files[i].FileStatus == "READY" {
 			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
-
-			if strings.HasSuffix(files[i].DisplayFileName, ".c4gh") {
+			if strings.HasSuffix(md.Name, ".c4gh") {
 				md.Name = strings.TrimSuffix(files[i].DisplayFileName, ".c4gh")
 				md.OrigName = files[i].DisplayFileName
 			}
-
 			metadata = append(metadata, md)
+
+			s.lock.Lock()
 			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
+			s.lock.Unlock()
 		}
 	}
 
@@ -190,7 +193,7 @@ func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interf
 }
 
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end int64) error {
-	meta, ok := s.datasetToUrl[nodes[0]]
+	meta, ok := s.datasets[nodes[0]]
 	if !ok {
 		return fmt.Errorf("Tried to request content of %s file %q with invalid dataset %q", SDSubmit, nodes[1], nodes[0])
 	}

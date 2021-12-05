@@ -28,7 +28,7 @@ type loginReader interface {
 	restoreState() error
 }
 
-// stdinReader reads username and password from stdin and implements loginReader
+// stdinReader reads username and password from stdin (implements loginReader)
 type stdinReader struct {
 	originalState *term.State
 }
@@ -72,7 +72,33 @@ var askForLogin = func(lr loginReader) (string, string, error) {
 	return username, password, nil
 }
 
-// login logs user into repository 'rep' by asking for a username and password
+var droppedRepository = func(lr loginReader, rep string) bool {
+	for {
+		fmt.Print("Do you wish to try again? (yes/no) ")
+		scanner := bufio.NewScanner(lr.getStream())
+
+		var answer string
+		if scanner.Scan() {
+			answer = scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			logs.Errorf("Could not read input, dropping repository %s: %w", rep, err)
+			break
+		}
+
+		if strings.EqualFold(answer, "yes") || strings.EqualFold(answer, "y") {
+			return false
+		} else if strings.EqualFold(answer, "no") || strings.EqualFold(answer, "n") {
+			logs.Info("User chose to drop repository ", rep)
+			break
+		}
+	}
+
+	api.RemoveRepository(rep)
+	return true
+}
+
+// login asks for a username and a password for repository 'rep'
 var login = func(lr loginReader, rep string) error {
 	// Get the state of the terminal before running the password prompt
 	err := lr.getState()
@@ -83,8 +109,10 @@ var login = func(lr loginReader, rep string) error {
 	// check for ctrl+c signal
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
+	defer func() { signal.Stop(signalChan) }()
 	go func() {
 		<-signalChan
+		fmt.Println("")
 		if err = lr.restoreState(); err != nil {
 			logs.Warningf("Could not restore terminal to original state: %w", err)
 		}
@@ -101,21 +129,19 @@ var login = func(lr loginReader, rep string) error {
 
 		err = api.ValidateLogin(rep, username, password)
 		if err == nil {
-			break
+			return nil
 		}
 
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			logs.Errorf("Incorrect username or password")
-			continue
+			if droppedRepository(lr, rep) {
+				return nil
+			}
+		} else {
+			return fmt.Errorf("Failed to log in to %s: %w", rep, err)
 		}
-
-		return fmt.Errorf("Failed to log in: %w", err)
 	}
-
-	// stop watching signals
-	signal.Stop(signalChan)
-	return nil
 }
 
 // loginToAll goes through all enabled repositories and logs into each of them
@@ -169,7 +195,7 @@ func init() {
 	defaultMount, err := mountpoint.DefaultMountPoint()
 
 	if err != nil {
-		logs.Error(err)
+		logs.Warning(err)
 	}
 
 	flag.StringVar(&repository, "enable", "all",

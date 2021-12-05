@@ -146,7 +146,7 @@ func (c *sdConnectInfo) getSToken(project string) error {
 	}
 
 	c.sTokens[project] = sToken
-	logs.Debug("Retrieved %s scoped token for ", SDConnect, project)
+	logs.Debugf("Retrieved %s scoped token for %q", SDConnect, project)
 	return nil
 }
 
