@@ -2,14 +2,12 @@ package api
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
+	"sda-filesystem/internal/logs"
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type mockCache struct {
@@ -34,7 +32,7 @@ func (c *mockCache) Del(key string) {
 }
 
 func TestMain(m *testing.M) {
-	logrus.SetOutput(ioutil.Discard)
+	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
 }
 

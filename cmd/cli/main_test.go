@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"sda-filesystem/internal/api"
@@ -12,8 +11,6 @@ import (
 	"sda-filesystem/internal/mountpoint"
 	"strings"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -73,7 +70,7 @@ func newTestReader(input []string, password string, sErr error, rErr error) *tes
 }
 
 func TestMain(m *testing.M) {
-	logrus.SetOutput(ioutil.Discard)
+	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
 }
 
