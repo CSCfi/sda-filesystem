@@ -58,7 +58,7 @@ type fuseInfo interface {
 type Metadata struct {
 	Bytes    int64  `json:"bytes"`
 	Name     string `json:"name"`
-	OrigName string // Is empty if Name is the original
+	OrigName string // Can be empty if Name is the original
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -328,10 +328,6 @@ func GetNthLevel(rep string, nodes ...string) ([]Metadata, error) {
 // UpdateAttributes modifies attributes of node in 'path' in repository 'rep'.
 // 'nodes' contains the original names of nodes in 'path'
 func UpdateAttributes(nodes []string, path string, attr interface{}) {
-	if len(nodes) < 4 {
-		logs.Errorf("Invalid path %q. Not deep enough", path)
-		return
-	}
 	hi.repositories[nodes[0]].updateAttributes(nodes[1:], path, attr)
 }
 

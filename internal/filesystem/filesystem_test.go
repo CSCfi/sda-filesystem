@@ -3,14 +3,13 @@ package filesystem
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
+	"sda-filesystem/internal/logs"
 	"sort"
 	"testing"
 
 	"github.com/billziss-gh/cgofuse/fuse"
-	"github.com/sirupsen/logrus"
 )
 
 var testFuse = `{
@@ -102,7 +101,7 @@ type jsonNode struct {
 }
 
 func TestMain(m *testing.M) {
-	logrus.SetOutput(ioutil.Discard)
+	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
 }
 

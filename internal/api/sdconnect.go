@@ -259,6 +259,12 @@ func (c *sdConnectInfo) getObjects(project, container string) ([]Metadata, error
 }
 
 func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) {
+	/*
+		if len(nodes) < 3 {
+			logs.Errorf("Invalid path %q. Not deep enough", path)
+			return
+		}
+	*/
 	size, ok := attr.(*int64)
 	if !ok {
 		logs.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, got %v",
