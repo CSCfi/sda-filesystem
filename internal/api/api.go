@@ -20,7 +20,7 @@ import (
 
 const chunkSize = 1 << 25
 
-var hi = httpInfo{requestTimeout: 20, httpRetry: 3}
+var hi = httpInfo{requestTimeout: 20, httpRetry: 3, repositories: make(map[string]fuseInfo)}
 var possibleRepositories = make(map[string]fuseInfo)
 var downloadCache *cache.Ristretto
 
