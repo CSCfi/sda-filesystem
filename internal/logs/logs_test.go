@@ -104,6 +104,7 @@ func TestStructureError(t *testing.T) {
 
 func TestError(t *testing.T) {
 	origStructureError := StructureError
+	StructureError = func(err error) []string { return nil }
 	defer func() {
 		StructureError = origStructureError
 		testHook.Reset()
@@ -111,21 +112,29 @@ func TestError(t *testing.T) {
 
 	signal = nil
 	message := "This is an error"
-	StructureError = func(err error) []string {
-		return []string{message}
-	}
 
 	Error(errors.New(message))
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.ErrorLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.ErrorLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.ErrorLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message.\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message.\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
+}
+
+func TestError_Signal(t *testing.T) {
+	origStructureError := StructureError
+	defer func() {
+		StructureError = origStructureError
+		testHook.Reset()
+	}()
+
+	message := "This is another error"
+	StructureError = func(err error) []string {
+		return []string{err.Error()}
 	}
 
 	var level int = 0
@@ -136,19 +145,18 @@ func TestError(t *testing.T) {
 
 	Error(errors.New(message))
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.ErrorLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.ErrorLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.ErrorLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.ErrorLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestErrorf(t *testing.T) {
 	origStructureError := StructureError
+	StructureError = func(err error) []string { return nil }
 	defer func() {
 		StructureError = origStructureError
 		testHook.Reset()
@@ -156,21 +164,29 @@ func TestErrorf(t *testing.T) {
 
 	signal = nil
 	message := "This is an unexpected error: Where am I?"
-	StructureError = func(err error) []string {
-		return []string{message}
-	}
 
 	Errorf("This is an %s error: %w", "unexpected", errors.New("Where am I?"))
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.ErrorLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.ErrorLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.ErrorLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
+}
+
+func TestErrorf_Signal(t *testing.T) {
+	origStructureError := StructureError
+	defer func() {
+		StructureError = origStructureError
+		testHook.Reset()
+	}()
+
+	message := "This is an unexpected error: Who are you?"
+	StructureError = func(err error) []string {
+		return []string{err.Error()}
 	}
 
 	var level int = 0
@@ -178,21 +194,21 @@ func TestErrorf(t *testing.T) {
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
-	Errorf("This is an %s error: %w", "unexpected", errors.New("Where am I?"))
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.ErrorLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.ErrorLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	Errorf("This is an %s error: %w", "unexpected", errors.New("Who are you?"))
+
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.ErrorLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.ErrorLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestWarning(t *testing.T) {
 	origStructureError := StructureError
+	StructureError = func(err error) []string { return nil }
 	defer func() {
 		StructureError = origStructureError
 		testHook.Reset()
@@ -200,21 +216,29 @@ func TestWarning(t *testing.T) {
 
 	signal = nil
 	message := "Tomorrow snow will fall"
-	StructureError = func(err error) []string {
-		return []string{message}
-	}
 
 	Warning(errors.New(message))
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.WarnLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.WarnLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.WarnLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
+}
+
+func TestWarning_Signal(t *testing.T) {
+	origStructureError := StructureError
+	defer func() {
+		StructureError = origStructureError
+		testHook.Reset()
+	}()
+
+	message := "Tomorrow snow will fall"
+	StructureError = func(err error) []string {
+		return []string{err.Error()}
 	}
 
 	var level int = 0
@@ -222,21 +246,21 @@ func TestWarning(t *testing.T) {
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
+
 	Warning(errors.New(message))
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.WarnLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.WarnLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.WarnLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.WarnLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestWarningf(t *testing.T) {
 	origStructureError := StructureError
+	StructureError = func(err error) []string { return nil }
 	defer func() {
 		StructureError = origStructureError
 		testHook.Reset()
@@ -244,21 +268,29 @@ func TestWarningf(t *testing.T) {
 
 	signal = nil
 	message := "Tomorrow the sun will shine: Remember sunscreen"
-	StructureError = func(err error) []string {
-		return []string{message}
-	}
 
 	Warningf("%s the sun will shine: %w", "Tomorrow", errors.New("Remember sunscreen"))
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.WarnLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.WarnLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.WarnLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
+}
+
+func TestWarningf_Signal(t *testing.T) {
+	origStructureError := StructureError
+	defer func() {
+		StructureError = origStructureError
+		testHook.Reset()
+	}()
+
+	message := "Tomorrow the sun will not shine: It is the end of days"
+	StructureError = func(err error) []string {
+		return []string{err.Error()}
 	}
 
 	var level int = 0
@@ -266,105 +298,114 @@ func TestWarningf(t *testing.T) {
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
-	Warningf("%s the sun will shine: %w", "Tomorrow", errors.New("Remember sunscreen"))
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.WarnLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.WarnLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	Warningf("%s the sun will not shine: %w", "Tomorrow", errors.New("It is the end of days"))
+
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.WarnLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.WarnLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestInfo(t *testing.T) {
+	defer testHook.Reset()
 	signal = nil
 	message := "I am grand, and you?"
+
 	Info("I am ", "grand,", " and you?")
-	defer testHook.Reset()
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.InfoLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.InfoLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.InfoLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
-	}
+}
+
+func TestInfo_Signal(t *testing.T) {
+	defer testHook.Reset()
+	message := "I am grand, and you?"
 
 	var level int = 0
 	var strs []string = nil
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
+
 	Info("I am ", "grand,", " and you?")
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.InfoLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.InfoLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.InfoLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.InfoLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestInfof(t *testing.T) {
+	defer testHook.Reset()
 	signal = nil
 	message := "100 students barged in the classroom"
+
 	Infof("%d students barged in the %s", 100, "classroom")
-	defer testHook.Reset()
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.InfoLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.InfoLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.InfoLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
-	}
+}
+
+func TestInfof_Signal(t *testing.T) {
+	defer testHook.Reset()
+	message := "99 students barged in the classroom"
 
 	var level int = 0
 	var strs []string = nil
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
-	Infof("%d students barged in the %s", 100, "classroom")
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.InfoLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.InfoLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	Infof("%d students barged in the %s", 99, "classroom")
+
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.InfoLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.InfoLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestDebug(t *testing.T) {
+	defer testHook.Reset()
 	signal = nil
 	message := "Why did a thing happen? I don't know"
+
 	Debug("Why did a ", "thing happen? ", "I don't know")
-	defer testHook.Reset()
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.DebugLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.DebugLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.DebugLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
-	}
+}
+
+func TestDebug_Signal(t *testing.T) {
+	defer testHook.Reset()
+	message := "When did this happen? I don't know"
 
 	var level int = 0
 	var strs []string = nil
@@ -373,42 +414,45 @@ func TestDebug(t *testing.T) {
 	}
 
 	log.SetLevel(logrus.InfoLevel)
-	Debug("Why did a ", "thing happen? ", "I don't know")
+	Debug("When did ", "this happen? ", "I don't know")
 
 	if level != 0 || strs != nil {
-		t.Fatal("With loglevel info, signal should not have been called")
+		t.Error("With loglevel info, signal should not have been called")
+		return
 	}
 
 	log.SetLevel(logrus.DebugLevel)
-	Debug("Why did a ", "thing happen? ", "I don't know")
+	Debug("When did ", "this happen? ", "I don't know")
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.DebugLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.DebugLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.DebugLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.DebugLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
 func TestDebugf(t *testing.T) {
+	defer testHook.Reset()
 	signal = nil
 	message := "10 ducks crossed the road. And?"
+
 	Debugf("%d ducks crossed the road. %s", 10, "And?")
-	defer testHook.Reset()
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.DebugLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.DebugLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.DebugLevel.String(), testHook.LastEntry().Level.String())
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
-	}
+}
+
+func TestDebugf_Signal(t *testing.T) {
+	defer testHook.Reset()
+	message := "8 dogs crossed the road. And?"
 
 	var level int = 0
 	var strs []string = nil
@@ -417,23 +461,22 @@ func TestDebugf(t *testing.T) {
 	}
 
 	log.SetLevel(logrus.InfoLevel)
-	Debugf("%d ducks crossed the road. %s", 10, "And?")
+	Debugf("%d dogs crossed the road. %s", 8, "And?")
 
 	if level != 0 || strs != nil {
-		t.Fatal("With loglevel info, signal should not have been called")
+		t.Error("With loglevel info, signal should not have been called")
+		return
 	}
 
 	log.SetLevel(logrus.DebugLevel)
-	Debugf("%d ducks crossed the road. %s", 10, "And?")
+	Debugf("%d dogs crossed the road. %s", 8, "And?")
 
-	if len(testHook.Entries) != 1 {
-		t.Fatal("Logger with signal should not have logged to stdout")
-	}
-	if level != int(logrus.DebugLevel) {
-		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.DebugLevel), level)
-	}
-	if !reflect.DeepEqual(strs, []string{message}) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
+	if len(testHook.Entries) != 0 {
+		t.Error("Logger with signal should not have logged to stdout")
+	} else if level != int(logrus.DebugLevel) {
+		t.Errorf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.DebugLevel), level)
+	} else if !reflect.DeepEqual(strs, []string{message}) {
+		t.Errorf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
@@ -448,14 +491,12 @@ func TestFatal(t *testing.T) {
 	Fatal("Too late. ", "All ", 5, " programs are dead")
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.FatalLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.FatalLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.FatalLevel.String(), testHook.LastEntry().Level.String())
-	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
 }
 
@@ -470,13 +511,11 @@ func TestFatalf(t *testing.T) {
 	Fatalf("No! This cannot be happening! %s is cancelled", "Football")
 
 	if len(testHook.Entries) != 1 {
-		t.Fatalf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
-	}
-	if testHook.LastEntry().Level != logrus.FatalLevel {
-		t.Fatalf("Logger logged at incorrect level. Expected %q, got %q",
+		t.Errorf("Logger did not make the correct amount of entries. Expected 1, got %d", len(testHook.Entries))
+	} else if testHook.LastEntry().Level != logrus.FatalLevel {
+		t.Errorf("Logger logged at incorrect level. Expected %q, got %q",
 			logrus.FatalLevel.String(), testHook.LastEntry().Level.String())
-	}
-	if testHook.LastEntry().Message != message {
-		t.Fatalf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
+	} else if testHook.LastEntry().Message != message {
+		t.Errorf("Logger displayed incorrect message\nExpected: %q\nGot: %q", message, testHook.LastEntry().Message)
 	}
 }

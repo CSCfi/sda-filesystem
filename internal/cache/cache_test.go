@@ -96,6 +96,6 @@ func TestDel(t *testing.T) {
 	_, ok := c.Get("key")
 
 	if ok {
-		t.Errorf("Item was not deleted from cache")
+		t.Fatalf("Item was not deleted from cache")
 	}
 }
