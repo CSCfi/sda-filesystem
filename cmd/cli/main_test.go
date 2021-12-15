@@ -120,7 +120,7 @@ func TestAskForLogin(t *testing.T) {
 	}
 }
 
-func TestDropRepository(t *testing.T) {
+func TestDroppedRepository(t *testing.T) {
 	var tests = []struct {
 		testname string
 		input    []string
@@ -324,69 +324,30 @@ func TestLogin(t *testing.T) {
 }
 
 func TestLoginToAll(t *testing.T) {
-	count := 0
-	repositories := []string{"Rep1", "Rep2", "Rep3"}
 	var tests = []struct {
-		testname           string
-		removedReps        []string
-		mockGetLoginMethod func(string) api.LoginMethod
-		mockLogin          func(loginReader, string) error
-		mockValidateLogin  func(string, ...string) error
+		testname              string
+		reps, removedReps     []string
+		errLogin, errValidate error
+		loginMethods          map[string]api.LoginMethod
 	}{
 		{
-			"OK", []string{},
-			func(rep string) api.LoginMethod {
-				defer func() { count++ }()
-				if count%2 == 0 {
-					return api.Token
-				}
-				return api.Password
-			},
-			func(lr loginReader, rep string) error {
-				return nil
-			},
-			func(rep string, auth ...string) error {
-				return nil
-			},
+			"OK", []string{"Rep45", "Rep0"}, []string{}, nil, nil,
+			map[string]api.LoginMethod{"Rep45": api.Token, "Rep0": api.Password},
 		},
 		{
-			"FAIL_PASSWORD", repositories,
-			func(rep string) api.LoginMethod {
-				return api.Password
-			},
-			func(lr loginReader, rep string) error {
-				return fmt.Errorf("Error occurred")
-			},
-			func(rep string, auth ...string) error {
-				return nil
-			},
+			"FAIL_PASSWORD", []string{"Rep5", "Rep8", "Rep89"}, []string{"Rep5", "Rep8", "Rep89"},
+			fmt.Errorf("Error occurred"), nil,
+			map[string]api.LoginMethod{"Rep5": api.Password, "Rep8": api.Password, "Rep89": api.Password},
 		},
 		{
-			"FAIL_TOKEN", repositories,
-			func(rep string) api.LoginMethod {
-				return api.Token
-			},
-			func(lr loginReader, rep string) error {
-				return nil
-			},
-			func(rep string, auth ...string) error {
-				return fmt.Errorf("Error occurred")
-			},
+			"FAIL_TOKEN", []string{"Rep4", "Rep78"}, []string{"Rep4", "Rep78"},
+			nil, fmt.Errorf("Error occurred"),
+			map[string]api.LoginMethod{"Rep4": api.Token, "Rep78": api.Token},
 		},
 		{
-			"FAIL_MIXED", []string{"Rep1"},
-			func(rep string) api.LoginMethod {
-				if rep == "Rep1" {
-					return api.Token
-				}
-				return api.Password
-			},
-			func(lr loginReader, rep string) error {
-				return nil
-			},
-			func(rep string, auth ...string) error {
-				return fmt.Errorf("Error occurred")
-			},
+			"FAIL_MIXED", []string{"Rep50", "Rep8", "Rep9"}, []string{"Rep8"},
+			nil, fmt.Errorf("Error occurred"),
+			map[string]api.LoginMethod{"Rep50": api.Password, "Rep8": api.Token, "Rep9": api.Password},
 		},
 	}
 
@@ -404,20 +365,24 @@ func TestLoginToAll(t *testing.T) {
 		api.RemoveRepository = origRemoveRepository
 	}()
 
-	var removed []string
-	api.RemoveRepository = func(r string) {
-		removed = append(removed, r)
-	}
-	api.GetEnabledRepositories = func() []string {
-		return repositories
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetLoginMethod = tt.mockGetLoginMethod
-			login = tt.mockLogin
-			api.ValidateLogin = tt.mockValidateLogin
-			removed = []string{}
+			api.GetEnabledRepositories = func() []string {
+				return tt.reps
+			}
+			api.GetLoginMethod = func(rep string) api.LoginMethod {
+				return tt.loginMethods[rep]
+			}
+			login = func(lr loginReader, rep string) error {
+				return tt.errLogin
+			}
+			api.ValidateLogin = func(rep string, auth ...string) error {
+				return tt.errValidate
+			}
+			removed := []string{}
+			api.RemoveRepository = func(r string) {
+				removed = append(removed, r)
+			}
 
 			loginToAll()
 

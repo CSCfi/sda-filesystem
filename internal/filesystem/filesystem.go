@@ -24,6 +24,7 @@ var signalBridge func() = nil
 type Fuse struct {
 	fuse.FileSystemBase
 	lock    sync.Mutex
+	inoLock sync.RWMutex
 	ino     uint64
 	root    *node
 	openmap map[uint64]nodeAndPath
@@ -111,6 +112,9 @@ func InitializeFileSystem(send ...chan<- LoadProjectInfo) *Fuse {
 		}
 	}
 
+	if len(send) > 0 {
+		close(send[0])
+	}
 	return &fs
 }
 
@@ -193,6 +197,8 @@ func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 					if len(send) > 0 {
 						send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: len(containers)}
 					}
+				} else if len(send) > 0 {
+					send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: 1}
 				}
 			}(rep, pr)
 		}
@@ -444,9 +450,10 @@ func (fs *Fuse) makeNode(path string, meta api.Metadata, mode uint32, dev uint64
 		}
 	}
 
-	defer fs.synchronize()()
-	fs.ino++
-	node = newNode(dev, fs.ino, mode, 0, 0, timestamp)
+	fs.inoLock.Lock()
+	fs.ino++                                           // LOCK
+	node = newNode(dev, fs.ino, mode, 0, 0, timestamp) // LOCK
+	fs.inoLock.Unlock()
 
 	node.stat.Size = meta.Bytes
 	node.originalName = meta.OrigName

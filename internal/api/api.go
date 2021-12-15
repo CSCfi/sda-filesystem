@@ -216,7 +216,7 @@ var testURL = func(url string) error {
 
 // GetLoginMethod returns the login method of repository 'rep'
 var GetLoginMethod = func(rep string) LoginMethod {
-	return hi.repositories[rep].getLoginMethod()
+	return possibleRepositories[rep].getLoginMethod()
 }
 
 // ValidateLogin checks if user is able to log in with given input to repository 'rep'

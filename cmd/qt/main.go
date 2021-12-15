@@ -114,7 +114,6 @@ func (qb *QmlBridge) login() {
 
 			logs.Info("Login successful")
 			qb.LoginResult("", "")
-			close(sendToModel)
 		}()
 		qb.fs = filesystem.InitializeFileSystem(sendToModel)
 	}()
