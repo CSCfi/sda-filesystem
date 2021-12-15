@@ -31,10 +31,10 @@ func TestMountPoint(t *testing.T) {
 
 	ret, err := DefaultMountPoint()
 	if err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+		t.Errorf("Function returned error: %s", err.Error())
 	}
 	if ret != filepath.FromSlash("/spirited/away/Projects") {
-		t.Fatalf("Incorrect mount point. Expected %q, got %q", filepath.FromSlash("/spirited/away/Projects"), ret)
+		t.Errorf("Incorrect mount point. Expected %q, got %q", filepath.FromSlash("/spirited/away/Projects"), ret)
 	}
 }
 
@@ -47,10 +47,10 @@ func TestMountPoint_Fail_OS(t *testing.T) {
 
 	ret, err := DefaultMountPoint()
 	if err == nil {
-		t.Fatalf("Function should have returned non-nil error")
+		t.Errorf("Function should have returned non-nil error")
 	}
 	if ret != "" {
-		t.Fatalf("Function should have returned empty mount point")
+		t.Errorf("Function should have returned empty mount point")
 	}
 }
 
@@ -66,12 +66,11 @@ func TestMountPoint_Fail_Check(t *testing.T) {
 
 	ret, err := DefaultMountPoint()
 	if err == nil {
-		t.Fatalf("Function should have returned non-nil error")
-	}
-	if errors.Is(checkErr, err) {
-		t.Fatalf("Function returned incorrect error %q", err.Error())
+		t.Errorf("Function should have returned non-nil error")
+	} else if !errors.Is(err, checkErr) {
+		t.Errorf("Function returned incorrect error: %s", err.Error())
 	}
 	if ret != "" {
-		t.Fatalf("Function should have returned empty mount point")
+		t.Errorf("Function should have returned empty mount point")
 	}
 }

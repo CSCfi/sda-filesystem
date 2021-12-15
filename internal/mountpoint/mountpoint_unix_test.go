@@ -20,7 +20,7 @@ func TestCheckMountPoint(t *testing.T) {
 	defer os.RemoveAll(node)
 
 	if err = CheckMountPoint(node); err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+		t.Errorf("Function returned error: %s", err.Error())
 	}
 }
 
@@ -29,12 +29,8 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 		testname, name string
 		mode           int
 	}{
-		{
-			"NO_READ_PERM", "folder", 0333,
-		},
-		{
-			"NO_WRITE_PERM", "node", 0555,
-		},
+		{"NO_READ_PERM", "folder", 0333},
+		{"NO_WRITE_PERM", "node", 0555},
 	}
 
 	for _, tt := range tests {
@@ -62,7 +58,7 @@ func TestCheckMountPoint_Not_Dir(t *testing.T) {
 	defer os.RemoveAll(file.Name())
 
 	if err = CheckMountPoint(file.Name()); err == nil {
-		t.Fatal("Function should have returned non-nil error")
+		t.Error("Function should have returned non-nil error")
 	}
 }
 
@@ -74,7 +70,7 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 	defer os.RemoveAll(file.Name())
 
 	if err = CheckMountPoint(file.Name() + "/folder"); err == nil {
-		t.Fatal("Function should have returned non-nil error")
+		t.Error("Function should have returned non-nil error")
 	}
 }
 
@@ -87,9 +83,8 @@ func TestCheckMountPoint_Fail_Mkdir(t *testing.T) {
 
 	if err = os.Chmod(node, os.FileMode(0555)); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
-	}
-	if err = CheckMountPoint(node + "/child"); err == nil {
-		t.Fatal("Function should have returned non-nil error")
+	} else if err = CheckMountPoint(node + "/child"); err == nil {
+		t.Error("Function should have returned non-nil error")
 	}
 }
 
@@ -102,10 +97,9 @@ func TestCheckMountPoint_Not_Exist(t *testing.T) {
 	defer os.RemoveAll(node) // if folder was created in function
 
 	if err = CheckMountPoint(node); err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
-	}
-	if _, err := os.Stat(node); os.IsNotExist(err) {
-		t.Fatalf("Directory was not created")
+		t.Errorf("Function returned error: %s", err.Error())
+	} else if _, err := os.Stat(node); os.IsNotExist(err) {
+		t.Error("Directory was not created")
 	}
 }
 
@@ -117,10 +111,9 @@ func TestCheckMountPoint_Not_Empty(t *testing.T) {
 	defer os.RemoveAll(node)
 
 	if file, err := ioutil.TempFile(node, "file"); err != nil {
-		t.Fatalf("Failed to create file %q: %s", file.Name(), err.Error())
-	}
-	if err = CheckMountPoint(node); err == nil {
-		t.Fatal("Function should have returned non-nil error")
+		t.Errorf("Failed to create file %q: %s", file.Name(), err.Error())
+	} else if err = CheckMountPoint(node); err == nil {
+		t.Error("Function should have returned non-nil error")
 	}
 }
 
@@ -144,7 +137,6 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not retrieve working directory: %s", err.Error())
 	}
-
 	node, err := ioutil.TempDir(basepath, "filesystem")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
@@ -164,6 +156,6 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	if err = CheckMountPoint(node); err == nil {
-		t.Fatal("Function should have returned non-nil error")
+		t.Error("Function should have returned non-nil error")
 	}
 }
