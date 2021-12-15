@@ -10,6 +10,7 @@ import (
 var cache *Ristretto
 var onceCache sync.Once
 
+// RistrettoCacheTTL contains the default time after which a key-value in cache pair will expire
 const RistrettoCacheTTL = 60 * time.Minute
 
 // Ristretto is the final data type used when dealing with cache

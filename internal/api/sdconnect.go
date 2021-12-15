@@ -10,20 +10,43 @@ import (
 	"sda-filesystem/internal/logs"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 // This file contains structs and functions that are strictly for SD-Connect
 
 const SDConnect string = "SD-Connect"
 
+// This exists for unit test mocking
+type tokenable interface {
+	getUToken(string) (string, error)
+	getSToken(string, string) (sToken, error)
+}
+
+type tokenator struct {
+}
+
+// This exists for unit test mocking
+type connectable interface {
+	tokenable
+	getProjects(string) ([]Metadata, error)
+	fetchTokens(bool, []Metadata) (string, sync.Map)
+}
+
+type connecter struct {
+	tokenable
+	url *string
+}
+
 type sdConnectInfo struct {
-	loggedIn    bool
-	metadataURL string
+	connectable
 	dataURL     string
+	metadataURL string
 	certPath    string
 	token       string
 	uToken      string
-	sTokens     map[string]sToken
+	sTokens     sync.Map
 	projects    []Metadata
 }
 
@@ -47,107 +70,106 @@ type SpecialHeaders struct {
 }
 
 func init() {
-	possibleRepositories[SDConnect] = &sdConnectInfo{sTokens: make(map[string]sToken)}
+	cr := &connecter{tokenable: tokenator{}}
+	sd := &sdConnectInfo{connectable: cr}
+	cr.url = &sd.metadataURL
+	possibleRepositories[SDConnect] = sd
 }
 
-func (c *sdConnectInfo) getEnvs() error {
-	var err error
-	c.certPath, err = getEnv("FS_SD_CONNECT_CERTS", false)
-	if err != nil {
-		return err
-	}
-	c.metadataURL, err = getEnv("FS_SD_CONNECT_METADATA_API", true)
-	if err != nil {
-		return err
-	}
-	c.dataURL, err = getEnv("FS_SD_CONNECT_DATA_API", true)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *sdConnectInfo) getLoginMethod() LoginMethod {
-	return Password
-}
-
-func (c *sdConnectInfo) validateLogin(auth ...string) error {
-	if len(auth) == 2 {
-		c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
-	}
-
-	c.projects = nil
-	c.loggedIn = false
-
-	err := c.getUToken()
-	if err != nil {
-		return err
-	}
-
-	c.projects, err = c.getProjects()
-	if err != nil {
-		return err
-	}
-	if len(c.projects) == 0 {
-		return fmt.Errorf("No project permissions found for %s", SDConnect)
-	}
-
-	c.loggedIn = true
-	c.fetchTokens()
-	return nil
-}
-
-// fetchTokens fetches the unscoped token and the scoped tokens
-func (c *sdConnectInfo) fetchTokens() {
-	if !c.loggedIn {
-		err := c.getUToken()
-		if err != nil {
-			logs.Warningf("HTTP requests may be slower for %s: %w", SDConnect, err)
-			c.uToken = ""
-			return
-		}
-	}
-
-	c.sTokens = make(map[string]sToken)
-	for i := range c.projects {
-		err := c.getSToken(c.projects[i].Name)
-		if err != nil {
-			logs.Warningf("HTTP requests may be slower for %s files under %q: %w", SDConnect, c.projects[i].Name, err)
-		}
-	}
-
-	logs.Infof("Fetched %s tokens", SDConnect)
-}
+//
+// Functions for tokenator
+//
 
 // getUToken gets the unscoped token
-func (c *sdConnectInfo) getUToken() error {
+func (t tokenator) getUToken(url string) (string, error) {
 	// Request token
-	uToken := uToken{}
-	err := makeRequest(strings.TrimSuffix(c.metadataURL, "/")+"/token", "", SDConnect, nil, nil, &uToken)
+	token := uToken{}
+	err := makeRequest(url+"/token", "", SDConnect, nil, nil, &token)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve unscoped token: %w", err)
+		return "", fmt.Errorf("Failed to retrieve %s unscoped token: %w", SDConnect, err)
 	}
 
-	c.uToken = uToken.Token
 	logs.Debug("Retrieved unscoped token for ", SDConnect)
-	return nil
+	return token.Token, nil
 }
 
-// GetSToken gets the scoped tokens for a project
-func (c *sdConnectInfo) getSToken(project string) error {
+// getSToken gets the scoped tokens for a project
+func (t tokenator) getSToken(url, project string) (sToken, error) {
 	// Query params
 	query := map[string]string{"project": project}
 
 	// Request token
-	sToken := sToken{}
-	err := makeRequest(strings.TrimSuffix(c.metadataURL, "/")+"/token", "", SDConnect, query, nil, &sToken)
+	token := sToken{}
+	err := makeRequest(url+"/token", "", SDConnect, query, nil, &token)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve %s scoped token for %q: %w", SDConnect, project, err)
+		return sToken{}, fmt.Errorf("Failed to retrieve %s scoped token for %q: %w", SDConnect, project, err)
 	}
 
-	c.sTokens[project] = sToken
 	logs.Debugf("Retrieved %s scoped token for %q", SDConnect, project)
-	return nil
+	return token, nil
+}
+
+//
+// Functions for connecter
+//
+
+func (c *connecter) getProjects(token string) ([]Metadata, error) {
+	var projects []Metadata
+	err := makeRequest(*c.url+"/projects", token, SDConnect, nil, nil, &projects)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
+	}
+
+	logs.Infof("Retrieved %d %s project(s)", len(projects), SDConnect)
+	return projects, nil
+}
+
+// fetchTokens fetches the unscoped token and the scoped tokens
+func (c *connecter) fetchTokens(skipUnscoped bool, projects []Metadata) (newUToken string, newSTokens sync.Map) {
+	var err error
+	if !skipUnscoped {
+		newUToken, err = c.getUToken(*c.url)
+		if err != nil {
+			logs.Warningf("HTTP requests may be slower for %s: %w", SDConnect, err)
+			return
+		}
+	}
+
+	for i := range projects {
+		go func(project Metadata) {
+			token, err := c.getSToken(*c.url, project.Name)
+			if err != nil {
+				logs.Warningf("HTTP requests may be slower for %s project %q: %w", SDConnect, project.Name, err)
+			} else {
+				newSTokens.Store(project.Name, token)
+			}
+		}(projects[i])
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	logs.Infof("Fetched %s tokens", SDConnect)
+	return
+}
+
+//
+// Functions for sdConnectInfo
+//
+
+func (c *sdConnectInfo) getEnvs() error {
+	api, err := getEnv("FS_SD_CONNECT_METADATA_API", true)
+	if err != nil {
+		return err
+	}
+	c.metadataURL = strings.TrimRight(api, "/")
+
+	api, err = getEnv("FS_SD_CONNECT_DATA_API", true)
+	if err != nil {
+		return err
+	}
+	c.dataURL = strings.TrimRight(api, "/")
+
+	c.certPath, err = getEnv("FS_SD_CONNECT_CERTS", false)
+	return err
 }
 
 func (c *sdConnectInfo) getCertificatePath() string {
@@ -164,107 +186,88 @@ func (c *sdConnectInfo) testURLs() error {
 	return nil
 }
 
-func (c *sdConnectInfo) getToken() string {
-	return c.token
+func (c *sdConnectInfo) getLoginMethod() LoginMethod {
+	return Password
+}
+
+func (c *sdConnectInfo) validateLogin(auth ...string) (err error) {
+	if len(auth) == 2 {
+		c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
+	}
+
+	c.projects = nil
+	if c.uToken, err = c.getUToken(c.metadataURL); err != nil {
+		return
+	}
+	if c.projects, err = c.getProjects(c.uToken); err != nil {
+		return
+	}
+	_, c.sTokens = c.fetchTokens(true, c.projects)
+	return nil
 }
 
 func (c *sdConnectInfo) levelCount() int {
 	return 3
 }
 
-func (c *sdConnectInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
-	switch len(nodes) {
-	case 0:
-		return c.projects, nil
-	case 1:
-		return c.getContainers(nodes[0])
-	case 2:
-		return c.getObjects(nodes[0], nodes[1])
-	default:
-		return nil, nil
-	}
+func (c *sdConnectInfo) getToken() string {
+	return c.token
 }
 
-func (c *sdConnectInfo) isTokenExpired(err error) bool {
+func (c *sdConnectInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
+	if len(nodes) == 0 {
+		return c.projects, nil
+	}
+
+	token := c.getSTokenFromMap(nodes[0])
+	headers := map[string]string{"X-Project-ID": token.ProjectID}
+	path := c.metadataURL + "/project/" + url.PathEscape(nodes[0])
+	if len(nodes) == 1 {
+		path += "/containers"
+	} else if len(nodes) == 2 {
+		path += "/container/" + url.PathEscape(nodes[1]) + "/objects"
+	} else {
+		return nil, nil
+	}
+
+	var meta []Metadata
+	err := makeRequest(path, token.Token, SDConnect, nil, headers, &meta)
+	if c.tokenExpired(err) {
+		token = c.getSTokenFromMap(nodes[0])
+		err = makeRequest(path, token.Token, SDConnect, nil, headers, &meta)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve %s metadata for path %q: %w", SDConnect, nodes, err)
+	}
+
+	logs.Infof("Retrieved %s metadata for %q", SDConnect, nodes)
+	return meta, nil
+}
+
+func (c *sdConnectInfo) getSTokenFromMap(project string) (token sToken) {
+	value, ok := c.sTokens.Load(project)
+	if ok {
+		token = value.(sToken)
+	}
+	return
+}
+
+func (c *sdConnectInfo) tokenExpired(err error) bool {
 	var re *RequestError
-	if c.loggedIn && errors.As(err, &re) && re.StatusCode == 401 {
+	if errors.As(err, &re) && re.StatusCode == 401 {
 		logs.Infof("%s tokens no longer valid. Fetching them again", SDConnect)
-		c.loggedIn = false
-		c.fetchTokens()
+		c.uToken, c.sTokens = c.fetchTokens(false, c.projects)
 		return true
 	}
 	return false
 }
 
-func (c *sdConnectInfo) getProjects() ([]Metadata, error) {
-	var projects []Metadata
-	err := makeRequest(strings.TrimSuffix(c.metadataURL, "/")+"/projects", c.uToken, SDConnect, nil, nil, &projects)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
-	}
-
-	logs.Infof("Retrieved %d %s project(s)", len(projects), SDConnect)
-	return projects, nil
-}
-
-// GetContainers gets containers inside project
-func (c *sdConnectInfo) getContainers(project string) ([]Metadata, error) {
-	// Additional headers
-	headers := map[string]string{"X-Project-ID": c.sTokens[project].ProjectID}
-
-	// Request containers
-	var containers []Metadata
-	err := makeRequest(
-		strings.TrimSuffix(c.metadataURL, "/")+
-			"/project/"+
-			url.PathEscape(project)+"/containers", c.sTokens[project].Token, SDConnect, nil, headers, &containers)
-
-	if c.isTokenExpired(err) {
-		return c.getContainers(project)
-	}
-	c.loggedIn = true
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s containers for %q: %w", SDConnect, project, err)
-	}
-
-	logs.Infof("Retrieved %s containers for %q", SDConnect, project)
-	return containers, nil
-}
-
-// GetObjects gets objects inside container
-func (c *sdConnectInfo) getObjects(project, container string) ([]Metadata, error) {
-	// Additional headers
-	headers := map[string]string{"X-Project-ID": c.sTokens[project].ProjectID}
-
-	// Request objects
-	var objects []Metadata
-	err := makeRequest(
-		strings.TrimSuffix(c.metadataURL, "/")+
-			"/project/"+
-			url.PathEscape(project)+"/container/"+
-			url.PathEscape(container)+"/objects", c.sTokens[project].Token, SDConnect, nil, headers, &objects)
-
-	if c.isTokenExpired(err) {
-		return c.getObjects(project, container)
-	}
-	c.loggedIn = true
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieving %s objects for %q: %w", SDConnect, project+"/"+container, err)
-	}
-
-	logs.Infof("Retrieved %s objects for %q", SDConnect, project+"/"+container)
-	return objects, nil
-}
-
 func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) {
-	/*
-		if len(nodes) < 3 {
-			logs.Errorf("Invalid path %q. Not deep enough", path)
-			return
-		}
-	*/
+	if len(nodes) < 3 {
+		logs.Errorf("Cannot update attributes for path %q", path)
+		return
+	}
+
 	size, ok := attr.(*int64)
 	if !ok {
 		logs.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, got %v",
@@ -273,8 +276,8 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 		return
 	}
 
-	headers, err := c.getSpecialHeaders(nodes, path)
-	if err != nil {
+	var headers SpecialHeaders
+	if err := c.downloadData(nodes, &headers, 0, 1); err != nil {
 		logs.Error(fmt.Errorf("Encryption status and segmented object size of object %q could not be determined: %w", path, err))
 		*size = -1
 		return
@@ -294,10 +297,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 	}
 }
 
-// getSpecialHeaders returns information on headers that can only be retirived from data api
-func (c *sdConnectInfo) getSpecialHeaders(nodes []string, path string) (SpecialHeaders, error) {
-	project := nodes[0]
-
+func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
 	// Query params
 	query := map[string]string{
 		"project":   nodes[0],
@@ -305,25 +305,25 @@ func (c *sdConnectInfo) getSpecialHeaders(nodes []string, path string) (SpecialH
 		"object":    strings.Join(nodes[2:], "/"),
 	}
 
+	token := c.getSTokenFromMap(nodes[0])
+
 	// Additional headers
-	headers := map[string]string{"Range": "bytes=0-1", "X-Project-ID": c.sTokens[project].ProjectID}
+	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
+		"X-Project-ID": token.ProjectID}
 
-	var ret SpecialHeaders
-	err := makeRequest(strings.TrimSuffix(c.dataURL, "/")+"/data", c.sTokens[project].Token, SDConnect, query, headers, &ret)
+	path := c.dataURL + "/data"
 
-	if c.isTokenExpired(err) {
-		return c.getSpecialHeaders(nodes, path)
+	// Request data
+	err := makeRequest(path, token.Token, SDConnect, query, headers, buffer)
+	if c.tokenExpired(err) {
+		token = c.getSTokenFromMap(nodes[0])
+		return makeRequest(path, token.Token, SDConnect, query, headers, buffer)
 	}
-	c.loggedIn = true
-
-	if err != nil {
-		return ret, fmt.Errorf("Failed to retrieve headers for %q: %w", path, err)
-	}
-	return ret, nil
+	return err
 }
 
 // calculateDecryptedSize calculates the decrypted size of an encrypted file size
-func calculateDecryptedSize(fileSize, headerSize int64) int64 {
+var calculateDecryptedSize = func(fileSize, headerSize int64) int64 {
 	// Crypt4GH settings
 	var blockSize int64 = 65536
 	var macSize int64 = 28
@@ -350,28 +350,4 @@ func calculateDecryptedSize(fileSize, headerSize int64) int64 {
 	decryptedSize := blocks*blockSize + remainder
 
 	return decryptedSize
-}
-
-func (c *sdConnectInfo) downloadData(nodes []string, buffer []byte, start, end int64) error {
-	project := nodes[0]
-
-	// Query params
-	query := map[string]string{
-		"project":   nodes[0],
-		"container": nodes[1],
-		"object":    strings.Join(nodes[2:], "/"),
-	}
-
-	// Additional headers
-	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
-		"X-Project-ID": c.sTokens[project].ProjectID}
-
-	// Request data
-	err := makeRequest(strings.TrimSuffix(c.dataURL, "/")+"/data", c.sTokens[project].Token, SDConnect, query, headers, buffer)
-
-	if c.isTokenExpired(err) {
-		return c.downloadData(nodes, buffer, start, end)
-	}
-	c.loggedIn = true
-	return err
 }

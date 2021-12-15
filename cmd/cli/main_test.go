@@ -312,7 +312,7 @@ func TestLogin(t *testing.T) {
 
 			if strings.HasPrefix(tt.testname, "OK") {
 				if err != nil {
-					t.Errorf("Function returned error: %s", err.Error())
+					t.Errorf("Returned unexpected error: %s", err.Error())
 				}
 			} else if err == nil {
 				t.Error("Function should have returned non-nil error")
@@ -516,7 +516,7 @@ func TestProcessFlags(t *testing.T) {
 					t.Errorf("Function returned incorrect error %q", err.Error())
 				}
 			} else if err != nil {
-				t.Errorf("Function returned non-nil error: %s", err.Error())
+				t.Errorf("Returned unexpected error: %s", err.Error())
 			} else if tt.timeout != testTimeout {
 				t.Errorf("SetRequestTimeout() received timeout %d, expected %d", testTimeout, tt.timeout)
 			} else if tt.logLevel != testLevel {

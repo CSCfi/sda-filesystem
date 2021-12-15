@@ -109,13 +109,12 @@ func TestError(t *testing.T) {
 		testHook.Reset()
 	}()
 
-	unwrapped := []string{"String1", "String2"}
-	StructureError = func(err error) []string {
-		return unwrapped
-	}
-
 	signal = nil
 	message := "This is an error"
+	StructureError = func(err error) []string {
+		return []string{message}
+	}
+
 	Error(errors.New(message))
 
 	if len(testHook.Entries) != 1 {
@@ -134,6 +133,7 @@ func TestError(t *testing.T) {
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
+
 	Error(errors.New(message))
 
 	if len(testHook.Entries) != 1 {
@@ -142,8 +142,8 @@ func TestError(t *testing.T) {
 	if level != int(logrus.ErrorLevel) {
 		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.ErrorLevel), level)
 	}
-	if !reflect.DeepEqual(strs, unwrapped) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", unwrapped, strs)
+	if !reflect.DeepEqual(strs, []string{message}) {
+		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
@@ -154,13 +154,12 @@ func TestErrorf(t *testing.T) {
 		testHook.Reset()
 	}()
 
-	unwrapped := []string{"error_1", "error_2"}
-	StructureError = func(err error) []string {
-		return unwrapped
-	}
-
 	signal = nil
 	message := "This is an unexpected error: Where am I?"
+	StructureError = func(err error) []string {
+		return []string{message}
+	}
+
 	Errorf("This is an %s error: %w", "unexpected", errors.New("Where am I?"))
 
 	if len(testHook.Entries) != 1 {
@@ -187,8 +186,8 @@ func TestErrorf(t *testing.T) {
 	if level != int(logrus.ErrorLevel) {
 		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.ErrorLevel), level)
 	}
-	if !reflect.DeepEqual(strs, unwrapped) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", unwrapped, strs)
+	if !reflect.DeepEqual(strs, []string{message}) {
+		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
@@ -199,13 +198,12 @@ func TestWarning(t *testing.T) {
 		testHook.Reset()
 	}()
 
-	unwrapped := []string{"warn_1", "warn_2", "warn_3"}
-	StructureError = func(err error) []string {
-		return unwrapped
-	}
-
 	signal = nil
 	message := "Tomorrow snow will fall"
+	StructureError = func(err error) []string {
+		return []string{message}
+	}
+
 	Warning(errors.New(message))
 
 	if len(testHook.Entries) != 1 {
@@ -232,8 +230,8 @@ func TestWarning(t *testing.T) {
 	if level != int(logrus.WarnLevel) {
 		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.WarnLevel), level)
 	}
-	if !reflect.DeepEqual(strs, unwrapped) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", unwrapped, strs)
+	if !reflect.DeepEqual(strs, []string{message}) {
+		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 
@@ -244,13 +242,12 @@ func TestWarningf(t *testing.T) {
 		testHook.Reset()
 	}()
 
-	unwrapped := []string{"1.warning", "2.warning", "3.warning"}
-	StructureError = func(err error) []string {
-		return unwrapped
-	}
-
 	signal = nil
 	message := "Tomorrow the sun will shine: Remember sunscreen"
+	StructureError = func(err error) []string {
+		return []string{message}
+	}
+
 	Warningf("%s the sun will shine: %w", "Tomorrow", errors.New("Remember sunscreen"))
 
 	if len(testHook.Entries) != 1 {
@@ -277,8 +274,8 @@ func TestWarningf(t *testing.T) {
 	if level != int(logrus.WarnLevel) {
 		t.Fatalf("Logger with signal logged at incorrect level. Expected value %d, got %d", int(logrus.WarnLevel), level)
 	}
-	if !reflect.DeepEqual(strs, unwrapped) {
-		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", unwrapped, strs)
+	if !reflect.DeepEqual(strs, []string{message}) {
+		t.Fatalf("Logger with signal gave incorrect message\nExpected: %v\nGot: %v", []string{message}, strs)
 	}
 }
 

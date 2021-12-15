@@ -1,16 +1,26 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
+	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
 
+var errExpected = errors.New("Expected error for test")
+
 type mockCache struct {
+	cache.Cacheable
 	data []byte
 	key  string
 }
@@ -28,8 +38,23 @@ func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
 	return true
 }
 
-func (c *mockCache) Del(key string) {
+type mockRepository struct {
+	fuseInfo
+	certPath string
 }
+
+//func (r *mockRepository) getEnvs() error                                    { return nil }
+//func (r *mockRepository) getLoginMethod() LoginMethod                       { return Password }
+//func (r *mockRepository) validateLogin(...string) error                     { return nil }
+func (r *mockRepository) getCertificatePath() string { return r.certPath }
+
+//func (r *mockRepository) testURLs() error                                   { return nil }
+func (r *mockRepository) getToken() string { return "" }
+
+//func (r *mockRepository) levelCount() int                                   { return 0 }
+//func (r *mockRepository) getNthLevel(...string) ([]Metadata, error)         { return nil, nil }
+//func (r *mockRepository) updateAttributes([]string, string, interface{})    {}
+//func (r *mockRepository) downloadData([]string, []byte, int64, int64) error { return nil }
 
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(i int, s []string) {})
@@ -52,18 +77,45 @@ func TestGetAllPossibleRepositories(t *testing.T) {
 	origPossibleRepositories := possibleRepositories
 	defer func() { possibleRepositories = origPossibleRepositories }()
 
-	possibleRepositories = make(map[string]fuseInfo)
-	possibleRepositories["Pouta"] = nil
-	possibleRepositories["Pilvi"] = nil
-	possibleRepositories["Aurinko"] = nil
-
-	origReps := []string{"Aurinko", "Pilvi", "Pouta"}
+	possibleRepositories = map[string]fuseInfo{"Pouta": nil, "Pilvi": nil, "Aurinko": nil}
+	ans := []string{"Aurinko", "Pilvi", "Pouta"}
 	reps := GetAllPossibleRepositories()
 	sort.Strings(reps)
-	if !reflect.DeepEqual(origReps, reps) {
-		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", origReps, reps)
+	if !reflect.DeepEqual(ans, reps) {
+		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", ans, reps)
 	}
 }
+
+func TestGetEnabledRepositories(t *testing.T) {
+	origRepositories := hi.repositories
+	defer func() { hi.repositories = origRepositories }()
+
+	hi.repositories = map[string]fuseInfo{"Monday": nil, "Friday": nil, "Sunday": nil}
+	ans := []string{"Friday", "Monday", "Sunday"}
+	reps := GetEnabledRepositories()
+	sort.Strings(reps)
+	if !reflect.DeepEqual(ans, reps) {
+		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", ans, reps)
+	}
+}
+
+/*func TestAddRepository(t *testing.T) {
+	origPossibleRepositories := possibleRepositories
+	origRepositories := hi.repositories
+
+	defer func() {
+		possibleRepositories = origPossibleRepositories
+		hi.repositories = origRepositories
+	}()
+
+	possibleRepositories = map[string]fuseInfo{"one": nil, "two": nil, "three": nil}
+	hi.repositories = map[string]fuseInfo{}
+
+	AddRepository("two")
+	if !reflect.DeepEqual(hi.repositories, map[string]fuseInfo{"two": nil}) {
+
+	}
+}*/
 
 func TestRequestTimeout(t *testing.T) {
 	timeouts := []int{34, 6, 1200, 84}
@@ -80,82 +132,24 @@ func TestGetEnvs(t *testing.T) {
 
 }
 
-/*func TestGetEnvs(t *testing.T) {
-	var tests = []struct {
-		testName  string
-		envValues [3]string
-		ok        bool
-	}{
-		{"OK", [3]string{"cert.pem", "https://example.com", "https://google.com"}, true},
-		{"NO_CERT", [3]string{"", "https://example.com", "https://google.com"}, false},
-		{"BAD_METADATA_API", [3]string{"cert.pem", "http://example.com", "https://google.com"}, false},
-		{"BAD_DATA_API", [3]string{"cert.pem", "https://example.com", ""}, false},
-	}
-
-	envNames := []string{"FS_SD_CONNECT_CERTS", "FS_SD_CONNECT_METADATA_API", "FS_SD_CONNECT_DATA_API"}
-
-	for _, tt := range tests {
-		testname := tt.testName
-		t.Run(testname, func(t *testing.T) {
-			origValues := map[string]string{}
-
-			// Define environment variables according to test
-			for i := range envNames {
-				origValue, ok := os.LookupEnv(envNames[i])
-
-				if ok {
-					origValues[envNames[i]] = origValue
-				}
-
-				if tt.envValues[i] != "" {
-					os.Setenv(envNames[i], tt.envValues[i])
-				} else if ok {
-					os.Unsetenv(envNames[i])
-				}
-			}
-
-			err := GetEnvs()
-
-			// Redefine environment variables according to their original values
-			for i := range envNames {
-				if origValue, ok := origValues[envNames[i]]; ok {
-					os.Setenv(envNames[i], origValue)
-				} else {
-					os.Unsetenv(envNames[i])
-				}
-			}
-
-			if err != nil {
-				if tt.ok {
-					t.Errorf("Unexpected err: %s", err.Error())
-				}
-			} else {
-				if !tt.ok {
-					t.Error("Test should have returned error")
-				}
-			}
-		})
-	}
-}
-
 func TestGetEnv(t *testing.T) {
 	var tests = []struct {
-		testName, envName, envValue string
-		verifyURL, ok               bool
+		testname, envName, envValue string
+		verifyURL                   bool
+		err                         error
 	}{
-		{"OK_1", "ENV_1", "banana", false, true},
-		{"OK_2", "MUUTTUJA", "http://example.com", false, true},
-		{"OK_3", "ENVAR_2", "https://github.com", true, true},
-		{"NOT_SET", "TEST_ENV", "", false, false},
-		{"WRONG_SCHEME", "MUUTTUJA_2", "http://example.com", true, false},
-		{"NO_SCHEME", "OMENA", "google.com", true, false},
+		{"OK_1", "MUUTTUJA234", "banana", false, nil},
+		{"OK_2", "MUUTTUJA9476", "https://github.com", true, nil},
+		{"FAIL_INVALID_URL", "MUUTTUJA0346", "http://google.com", true, errExpected},
+		{"FAIL_NOT_SET", "MUUTTUJA195", "", false, nil},
 	}
 
-	for _, tt := range tests {
-		testname := tt.testName
-		t.Run(testname, func(t *testing.T) {
-			origValue, ok := os.LookupEnv(tt.envName)
+	origValidURL := validURL
+	defer func() { validURL = origValidURL }()
 
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			validURL = func(env string) error { return tt.err }
 			if tt.envValue != "" {
 				os.Setenv(tt.envName, tt.envValue)
 			} else {
@@ -163,24 +157,26 @@ func TestGetEnv(t *testing.T) {
 			}
 
 			value, err := getEnv(tt.envName, tt.verifyURL)
+			os.Unsetenv(tt.envName)
 
-			if ok {
-				os.Setenv(tt.envName, origValue)
-			} else {
-				os.Unsetenv(tt.envName)
-			}
-
-			if tt.ok {
+			if strings.HasPrefix(tt.testname, "OK") {
 				if err != nil {
 					t.Errorf("Returned unexpected err: %s", err.Error())
 				} else if value != tt.envValue {
-					t.Errorf("Environment variable has incorrect value. Got %q, expected %q", value, tt.envValue)
+					t.Errorf("Environment variable has incorrect value. Expected %q, got %q", tt.envValue, value)
 				}
 			} else if err == nil {
-				t.Error("Test should have returned error")
+				t.Error("Function should have returned error")
+			} else if tt.err != nil && !errors.Is(err, errExpected) {
+				t.Errorf("Function returned incorrect error: %s", err.Error())
 			}
 		})
 	}
+}
+
+func TestValidURL(t *testing.T) {
+	/*{"WRONG_SCHEME", "MUUTTUJA_2", "http://example.com", true, false},
+	{"NO_SCHEME", "OMENA", "google.com", true, false},*/
 }
 
 func TestInitializeCache(t *testing.T) {
@@ -206,88 +202,83 @@ func TestInitializeCache_Error(t *testing.T) {
 	defer func() { cache.NewRistrettoCache = origNewRistretto }()
 
 	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
-		return nil, errors.New("Creating cache failed")
+		return nil, errExpected
 	}
 
 	err := InitializeCache()
 	if err == nil {
 		t.Fatalf("Function should have returned non-nil error")
+	} else if !errors.Is(err, errExpected) {
+		t.Fatalf("Function returned incorrect error: %s", err.Error())
 	}
 }
 
 func TestInitializeClient(t *testing.T) {
-	origTestUrls := testUrls
-	origCertPath := hi.certPath
+	origTestUrls := testURLs
+	origRepositories := hi.repositories
 
 	defer func() {
-		testUrls = origTestUrls
-		hi.certPath = origCertPath
+		testURLs = origTestUrls
+		hi.repositories = origRepositories
 	}()
 
-	testUrls = func() error { return nil }
-
-	file, err := ioutil.TempFile("", "cert")
+	file1, err := ioutil.TempFile("", "cert")
 	if err != nil {
-		t.Fatalf("Failed to create file %q", file.Name())
+		t.Fatalf("Failed to create file %q", file1.Name())
 	}
 
-	err = InitializeClient()
-
+	file2, err := ioutil.TempFile("", "cert")
 	if err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+		t.Fatalf("Failed to create file %q", file2.Name())
 	}
-	//if hi.client.
-}
 
-func TestInitializeClient_Empty_Certs(t *testing.T) {
-	origTestUrls := testUrls
-	origCertPath := hi.certPath
+	testURLs = func() error { return nil }
+	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
+		"rep2": &mockRepository{certPath: file2.Name()}}
 
-	defer func() {
-		testUrls = origTestUrls
-		hi.certPath = origCertPath
-	}()
-
-	testUrls = func() error { return nil }
-	hi.certPath = ""
-
-	err := InitializeClient()
-
-	if err != nil {
+	if err := InitializeClient(); err != nil {
 		t.Fatalf("Function returned error: %s", err.Error())
 	}
 }
 
 func TestInitializeClient_Certs_Not_Found(t *testing.T) {
-	origTestUrls := testUrls
-	origCertPath := hi.certPath
+	origTestUrls := testURLs
+	origRepositories := hi.repositories
 
 	defer func() {
-		testUrls = origTestUrls
-		hi.certPath = origCertPath
+		testURLs = origTestUrls
+		hi.repositories = origRepositories
 	}()
 
-	testUrls = func() error { return nil }
-	hi.certPath = ""
-
-	err := InitializeClient()
-
+	file1, err := ioutil.TempFile("", "cert")
 	if err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+		t.Fatalf("Failed to create file %q", file1.Name())
+	}
+
+	file2, err := ioutil.TempFile("", "cert")
+	if err != nil {
+		t.Fatalf("Failed to create file %q", file2.Name())
+	}
+	os.RemoveAll(file2.Name())
+
+	testURLs = func() error { return nil }
+	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
+		"rep2": &mockRepository{certPath: file2.Name()}}
+
+	if err := InitializeClient(); err == nil {
+		t.Fatalf("Function did not return error")
 	}
 }
 
 func TestMakeRequest(t *testing.T) {
-	handleCount := 0 // Bit of a hack, didn't figure out how to do this otherwise
-
+	handleCount := 0
 	var tests = []struct {
 		testname        string
-		mockFetchTokens func()
-		mockHandlerFunc func(rw http.ResponseWriter, req *http.Request)
+		mockHandlerFunc func(http.ResponseWriter, *http.Request)
 		expectedBody    interface{}
 	}{
 		{
-			"OK_HEADERS", func() {},
+			"OK_HEADERS",
 			func(rw http.ResponseWriter, req *http.Request) {
 				rw.Header().Set("X-Decrypted", "True")
 				rw.Header().Set("X-Header-Size", "67")
@@ -299,7 +290,7 @@ func TestMakeRequest(t *testing.T) {
 			SpecialHeaders{Decrypted: true, HeaderSize: 67, SegmentedObjectSize: 345},
 		},
 		{
-			"OK_DATA", func() {},
+			"OK_DATA",
 			func(rw http.ResponseWriter, req *http.Request) {
 				if _, err := rw.Write([]byte("This is a message from the past")); err != nil {
 					rw.WriteHeader(http.StatusNotFound)
@@ -308,9 +299,9 @@ func TestMakeRequest(t *testing.T) {
 			[]byte("This is a message from the past"),
 		},
 		{
-			"OK_JSON", func() {},
+			"OK_JSON",
 			func(rw http.ResponseWriter, req *http.Request) {
-				body, err := json.Marshal([]Metadata{{34, "project1"}, {67, "project2"}, {8, "project3"}})
+				body, err := json.Marshal([]Metadata{{34, "project1", ""}, {67, "project/2", "project_2"}, {8, "project3", ""}})
 				if err != nil {
 					rw.WriteHeader(http.StatusNotFound)
 				} else {
@@ -319,10 +310,10 @@ func TestMakeRequest(t *testing.T) {
 					}
 				}
 			},
-			[]Metadata{{34, "project1"}, {67, "project2"}, {8, "project3"}},
+			[]Metadata{{34, "project1", ""}, {67, "project/2", "project_2"}, {8, "project3", ""}},
 		},
 		{
-			"HEADERS_MISSING", func() {},
+			"HEADERS_MISSING",
 			func(rw http.ResponseWriter, req *http.Request) {
 				if _, err := rw.Write([]byte("stuff")); err != nil {
 					rw.WriteHeader(http.StatusNotFound)
@@ -331,21 +322,7 @@ func TestMakeRequest(t *testing.T) {
 			SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: -1},
 		},
 		{
-			"TOKEN_EXPIRED",
-			func() { hi.ci.uToken = "new_token" },
-			func(rw http.ResponseWriter, req *http.Request) {
-				if req.Header.Get("Authorization") == "Bearer new_token" {
-					if _, err := rw.Write([]byte("Today is sunny")); err != nil {
-						rw.WriteHeader(http.StatusNotFound)
-					}
-				} else {
-					http.Error(rw, "Wrong token", 401)
-				}
-			},
-			[]byte("Today is sunny"),
-		},
-		{
-			"FAIL_ONCE", func() {},
+			"FAIL_ONCE",
 			func(rw http.ResponseWriter, req *http.Request) {
 				if handleCount > 0 {
 					if _, err := rw.Write([]byte("Hello, I am a robot")); err != nil {
@@ -359,14 +336,14 @@ func TestMakeRequest(t *testing.T) {
 			[]byte("Hello, I am a robot"),
 		},
 		{
-			"FAIL_ALL", func() {},
+			"FAIL_ALL",
 			func(rw http.ResponseWriter, req *http.Request) {
 				http.Redirect(rw, req, "https://google.com", http.StatusSeeOther)
 			},
 			nil,
 		},
 		{
-			"FAIL_400", func() {},
+			"FAIL_400",
 			func(rw http.ResponseWriter, req *http.Request) {
 				http.Error(rw, "Bad request", 400)
 			},
@@ -374,27 +351,20 @@ func TestMakeRequest(t *testing.T) {
 		},
 	}
 
-	origFetchTokens := FetchTokens
 	origClient := hi.client
-	origUToken := hi.ci.uToken
-	origLoggedIn := hi.loggedIn
-
-	hi.loggedIn = true
+	origRepositories := hi.repositories
 
 	defer func() {
-		FetchTokens = origFetchTokens
 		hi.client = origClient
-		hi.ci.uToken = origUToken
-		hi.loggedIn = origLoggedIn
+		hi.repositories = origRepositories
 	}()
 
+	hi.repositories = map[string]fuseInfo{"mock": &mockRepository{}}
+
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			FetchTokens = tt.mockFetchTokens
+		t.Run(tt.testname, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(tt.mockHandlerFunc))
 			hi.client = server.Client()
-			hi.ci.uToken = ""
 
 			// Causes client.Do() to fail when redirecting
 			hi.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -406,15 +376,15 @@ func TestMakeRequest(t *testing.T) {
 			switch v := tt.expectedBody.(type) {
 			case SpecialHeaders:
 				var headers SpecialHeaders
-				err = makeRequest(server.URL, func() string { return hi.ci.uToken }, nil, nil, &headers)
+				err = makeRequest(server.URL, "token", "", nil, nil, &headers)
 				ret = headers
 			case []byte:
 				buf := make([]byte, len(v))
-				err = makeRequest(server.URL, func() string { return hi.ci.uToken }, nil, nil, buf)
+				err = makeRequest(server.URL, "token", "mock", nil, nil, buf)
 				ret = buf
 			default:
 				var objects []Metadata
-				err = makeRequest(server.URL, func() string { return hi.ci.uToken }, nil, nil, &objects)
+				err = makeRequest(server.URL, "", "mock", nil, nil, &objects)
 				ret = objects
 			}
 
@@ -433,6 +403,7 @@ func TestMakeRequest(t *testing.T) {
 	}
 }
 
+/*
 func TestDownloadData(t *testing.T) {
 	var tests = []struct {
 		mockMakeRequest     func(string, func() string, map[string]string, map[string]string, interface{}) error
