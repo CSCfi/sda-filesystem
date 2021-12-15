@@ -1,330 +1,201 @@
 package api
 
-/*func TestCreateToken(t *testing.T) {
-	var tests = []struct {
-		username, password, token string
-	}{
-		{"user", "pass", "dXNlcjpwYXNz"},
-		{"kalmari", "23t&io00_e", "a2FsbWFyaToyM3QmaW8wMF9l"},
-		{"qwerty123", "mnbvc456", "cXdlcnR5MTIzOm1uYnZjNDU2"},
-	}
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"sync"
+	"testing"
+)
 
-	origToken := hi.ci.token
-	defer func() { hi.ci.token = origToken }()
-
-	for i, tt := range tests {
-		testname := fmt.Sprintf("TOKEN_%d", i)
-		t.Run(testname, func(t *testing.T) {
-			hi.ci.token = ""
-			CreateToken(tt.username, tt.password)
-			if hi.ci.token != tt.token {
-				t.Errorf("Username %q and password %q should have returned token %q, got %q",
-					tt.username, tt.password, tt.token, hi.ci.token)
-			}
-		})
-	}
+type mockTokenator struct {
+	uToken  string
+	sTokens map[string]sToken
 }
 
-func TestFetchTokens(t *testing.T) {
+func (t *mockTokenator) getUToken(string) (string, error) {
+	if t.uToken == "" {
+		return "", errors.New("uToken error")
+	}
+	return t.uToken, nil
+}
+
+func (t *mockTokenator) getSToken(string, pr string) (sToken, error) {
+	if token, ok := t.sTokens[pr]; !ok {
+		return sToken{}, errors.New("sToken not found")
+	} else if token == (sToken{}) {
+		return sToken{}, errors.New("sToken error")
+	}
+	return t.sTokens[pr], nil
+}
+
+func (t *mockTokenator) keys() (ret []Metadata) {
+	for key := range t.sTokens {
+		ret = append(ret, Metadata{Name: key})
+	}
+	return
+}
+
+type mockConnecter struct {
+	tokenable
+	uToken      string
+	sTokenKey   string
+	sTokenValue sToken
+}
+
+func (c *mockConnecter) getProjects(string) ([]Metadata, error) {
+	return nil, nil
+}
+
+func (c *mockConnecter) fetchTokens(bool, []Metadata) (string, sync.Map) {
+	m := sync.Map{}
+	m.Store(c.sTokenKey, c.sTokenValue)
+	return c.uToken, m
+}
+
+func TestSDConnectGetUToken(t *testing.T) {
 	var tests = []struct {
-		mockGetUToken    func() error
-		mockGetProjects  func() ([]Metadata, error)
-		mockGetSToken    func(project string) error
-		sTokens          map[string]SToken
-		uToken, testname string
+		testname, url, expectedToken string
 	}{
-		{
-			func() error {
-				hi.ci.uToken = "uToken"
-				return nil
-			},
-			func() ([]Metadata, error) {
-				return []Metadata{{Name: "project1", Bytes: 234}, {Name: "project2", Bytes: 52}, {Name: "project3", Bytes: 90}}, nil
-			},
-			func(project string) error {
-				hi.ci.sTokens[project] = SToken{project + "_token", "435" + project}
-				return nil
-			},
-			map[string]SToken{"project1": {"project1_token", "435project1"},
-				"project2": {"project2_token", "435project2"},
-				"project3": {"project3_token", "435project3"}},
-			"uToken", "OK",
-		},
-		{
-			func() error {
-				hi.ci.uToken = "uToken"
-				return errors.New("Error occurred")
-			},
-			func() ([]Metadata, error) {
-				return []Metadata{{Name: "project1", Bytes: 234}, {Name: "project2", Bytes: 52}, {Name: "project3", Bytes: 90}}, nil
-			},
-			func(project string) error {
-				hi.ci.sTokens[project] = SToken{project + "_token", "435" + project}
-				return nil
-			},
-			map[string]SToken{},
-			"", "UTOKEN_ERROR",
-		},
-		{
-			func() error {
-				hi.ci.uToken = "new_token"
-				return nil
-			},
-			func() ([]Metadata, error) {
-				return nil, errors.New("Error")
-			},
-			func(project string) error {
-				hi.ci.sTokens[project] = SToken{project + "_secret", "890" + project}
-				return nil
-			},
-			map[string]SToken{},
-			"new_token", "PROJECTS_ERROR",
-		},
-		{
-			func() error {
-				hi.ci.uToken = "another_token"
-				return nil
-			},
-			func() ([]Metadata, error) {
-				return []Metadata{{Name: "pr1", Bytes: 43}, {Name: "pr2", Bytes: 51}, {Name: "pr3", Bytes: 900}}, nil
-			},
-			func(project string) error {
-				if project == "pr2" {
-					hi.ci.sTokens[project] = SToken{project + "_secret", "890" + project}
-					return errors.New("New error")
-				}
-				hi.ci.sTokens[project] = SToken{"secret_token", "cactus"}
-				return nil
-			},
-			map[string]SToken{"pr1": {"secret_token", "cactus"}, "pr3": {"secret_token", "cactus"}},
-			"another_token", "STOKEN_ERROR",
-		},
+		{"OK_1", "github.com", "myveryowntoken"},
+		{"OK_2", "google.com", "9765rty5678"},
 	}
 
-	origGetUToken := GetUToken
-	origGetProjects := GetProjects
-	origGetSToken := GetSToken
-	origUToken := hi.ci.uToken
-	origSTokens := hi.ci.sTokens
-
-	defer func() {
-		GetUToken = origGetUToken
-		GetProjects = origGetProjects
-		GetSToken = origGetSToken
-		hi.ci.uToken = origUToken
-		hi.ci.sTokens = origSTokens
-	}()
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			GetUToken = tt.mockGetUToken
-			GetProjects = tt.mockGetProjects
-			GetSToken = tt.mockGetSToken
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+				if url != tt.url+"/token" {
+					return fmt.Errorf("makeRequest() was called with incorrect URL. Expected %q, got %q", tt.url+"/token", url)
+				}
 
-			hi.ci.uToken = ""
-			hi.ci.sTokens = map[string]SToken{}
-
-			FetchTokens()
-
-			if hi.ci.uToken != tt.uToken {
-				t.Errorf("uToken incorrect. Expected %q, got %q", tt.uToken, hi.ci.uToken)
-			} else if !reflect.DeepEqual(hi.ci.sTokens, tt.sTokens) {
-				t.Errorf("sTokens incorrect.\nExpected %q\nGot %q", tt.sTokens, hi.ci.sTokens)
-			}
-		})
-	}
-}
-
-func TestGetUToken(t *testing.T) {
-	var tests = []struct {
-		testname        string
-		mockMakeRequest func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedToken   string
-	}{
-		{
-			"FAIL",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting token")
-			},
-			"",
-		},
-		{
-			"OK_1",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
 				switch v := ret.(type) {
-				case *UToken:
-					*v = UToken{"myveryowntoken"}
+				case *uToken:
+					*v = uToken{tt.expectedToken}
 					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *UToken", reflect.TypeOf(v))
 				}
-			},
-			"myveryowntoken",
-		},
-		{
-			"OK_2",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *UToken:
-					*v = UToken{"9765rty5678"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *UToken", reflect.TypeOf(v))
-				}
-			},
-			"9765rty5678",
-		},
-	}
-
-	origMakeRequest := makeRequest
-	origUToken := hi.ci.uToken
-
-	defer func() {
-		makeRequest = origMakeRequest
-		hi.ci.uToken = origUToken
-	}()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-			hi.ci.uToken = ""
-
-			err := GetUToken()
-
-			if tt.expectedToken == "" {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
 			}
+
+			tr := tokenator{}
+			token, err := tr.getUToken(tt.url)
 
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
-			} else if tt.expectedToken != hi.ci.uToken {
-				t.Errorf("Unscoped token is incorrect. Expected %q, got %q", tt.expectedToken, hi.ci.uToken)
+			} else if tt.expectedToken != token {
+				t.Errorf("Unscoped token is incorrect. Expected %q, got %q", tt.expectedToken, token)
 			}
 		})
 	}
 }
 
-func TestGetSToken(t *testing.T) {
+func TestSDConnectGetUToken_Error(t *testing.T) {
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+		return errExpected
+	}
+
+	tr := tokenator{}
+	token, err := tr.getUToken("")
+
+	if err == nil {
+		t.Error("Function should have returned error")
+	} else if !errors.Is(err, errExpected) {
+		t.Errorf("Function returned incorrect error: %s", err.Error())
+	}
+
+	if token != "" {
+		t.Errorf("Unscoped token should have been empty, got %q", token)
+	}
+}
+
+func TestSDConnectGetSToken(t *testing.T) {
 	var tests = []struct {
-		testname, project string
-		mockMakeRequest   func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedToken     string
-		expectedID        string
+		testname, project, url, expectedToken, expectedID string
 	}{
-		{
-			"FAIL", "",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting token")
-			},
-			"", "",
-		},
-		{
-			"OK_1", "project007",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *SToken:
-					*v = SToken{"myveryowntoken", "jbowegxf72nfbof"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
-				}
-			},
-			"myveryowntoken", "jbowegxf72nfbof",
-		},
-		{
-			"OK_2", "projectID",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *SToken:
-					*v = SToken{"9765rty5678", "ug8392nzdipqz9210z"}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
-				}
-			},
-			"9765rty5678", "ug8392nzdipqz9210z",
-		},
+		{"OK_1", "project007", "google.com", "myveryowntoken", "jbowegxf72nfbof"},
+		{"OK_2", "projectID", "github.com", "9765rty5678", "ug8392nzdipqz9210z"},
 	}
 
 	origMakeRequest := makeRequest
-	origSTokens := hi.ci.sTokens
-
-	defer func() {
-		makeRequest = origMakeRequest
-		hi.ci.sTokens = origSTokens
-	}()
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-			hi.ci.sTokens = make(map[string]sToken)
-
-			err := GetSToken(tt.project)
-
-			if tt.expectedToken == "" {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+				if url != tt.url+"/token" {
+					return fmt.Errorf("makeRequest() was called with incorrect url. Expected %q, got %q", tt.url+"/token", url)
 				}
-				return
+				if query["project"] != tt.project {
+					return fmt.Errorf("makeRequest() was called with incorrect query. Expected key 'project' to have value %q, got %q",
+						tt.project, query["project"])
+				}
+
+				switch v := ret.(type) {
+				case *sToken:
+					*v = sToken{tt.expectedToken, tt.expectedID}
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
+				}
 			}
+
+			tr := tokenator{}
+			token, err := tr.getSToken(tt.url, tt.project)
 
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
-			} else if _, ok := hi.ci.sTokens[tt.project]; !ok {
-				t.Errorf("Scoped token for %q is not defined", tt.project)
-			} else if tt.expectedToken != hi.ci.sTokens[tt.project].Token {
-				t.Errorf("Scoped token is incorrect. Expected %q, got %q", tt.expectedToken, hi.ci.sTokens[tt.project].Token)
-			} else if tt.expectedID != hi.ci.sTokens[tt.project].ProjectID {
-				t.Errorf("Project ID is incorrect. Expected %q, got %q", tt.expectedID, hi.ci.sTokens[tt.project].ProjectID)
+			} else if tt.expectedToken != token.Token {
+				t.Errorf("Scoped token is incorrect. Expected %q, got %q", tt.expectedToken, token.Token)
+			} else if tt.expectedID != token.ProjectID {
+				t.Errorf("Project ID is incorrect. Expected %q, got %q", tt.expectedID, token.ProjectID)
 			}
 		})
 	}
 }
 
-func TestGetProjects(t *testing.T) {
+func TestSDConnectGetSToken_Error(t *testing.T) {
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+		return errExpected
+	}
+
+	tr := tokenator{}
+	token, err := tr.getSToken("", "")
+
+	if err == nil {
+		t.Error("Function should have returned error")
+	} else if !errors.Is(err, errExpected) {
+		t.Errorf("Function returned incorrect error: %s", err.Error())
+	}
+
+	if token != (sToken{}) {
+		t.Errorf("Scoped token should have been empty, got %q", token)
+	}
+}
+
+func TestSDConnectGetProjects(t *testing.T) {
 	var tests = []struct {
-		testname         string
-		mockMakeRequest  func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedMetaData []Metadata
+		testname, url, token string
+		expectedMetaData     []Metadata
 	}{
 		{
-			"FAIL",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting projects")
-			},
-			nil,
+			"OK_1", "google.com", "7ce5ic",
+			[]Metadata{{234, "Jack", ""}, {2, "yur586bl", ""}, {7489, "rtu6u__78bgi", "rtu6u//78bgi"}},
 		},
 		{
-			"EMPTY",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{},
+			"OK_2", "example.com", "2cjv05fgi",
+			[]Metadata{{740, "rtu6u__78boi", "rtu6u//78boi"}, {83, "85cek6o", "hei"}},
 		},
 		{
-			"OK",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{{234, "Jack"}, {2, "yur586bl"}, {7489, "rtu6u__78bgi"}}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{{234, "Jack"}, {2, "yur586bl"}, {7489, "rtu6u__78bgi"}},
+			"OK_EMPTY", "hs.fi", "WHM6d.7k", []Metadata{},
 		},
 	}
 
@@ -332,18 +203,26 @@ func TestGetProjects(t *testing.T) {
 	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-
-			projects, err := GetProjects()
-
-			if tt.expectedMetaData == nil {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+				if url != tt.url+"/projects" {
+					return fmt.Errorf("makeRequest() was called with incorrect url. Expected %q, got %q", tt.url+"/projects", url)
 				}
-				return
+				if token != tt.token {
+					return fmt.Errorf("makeRequest() was called with incorrect token. Expected %q, got %q", tt.token, token)
+				}
+
+				switch v := ret.(type) {
+				case *[]Metadata:
+					*v = tt.expectedMetaData
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
+				}
 			}
+
+			c := connecter{url: &tt.url}
+			projects, err := c.getProjects(tt.token)
 
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
@@ -354,44 +233,188 @@ func TestGetProjects(t *testing.T) {
 	}
 }
 
-func TestGetContainers(t *testing.T) {
+func TestSDConnectGetProjects_Error(t *testing.T) {
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+		return errExpected
+	}
+
+	dummy := ""
+	c := connecter{url: &dummy}
+	projects, err := c.getProjects("")
+
+	if err == nil {
+		t.Error("Function should have returned error")
+	} else if !errors.Is(err, errExpected) {
+		t.Errorf("Function returned incorrect error: %s", err.Error())
+	}
+
+	if projects != nil {
+		t.Errorf("Slice should have been empty, got %q", projects)
+	}
+}
+
+func TestSDConnectFetchTokens(t *testing.T) {
 	var tests = []struct {
-		testname, project string
-		mockMakeRequest   func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedMetaData  []Metadata
+		testname, uToken, mockUToken string
+		skip                         bool
+		sTokens, mockSTokens         map[string]sToken
 	}{
 		{
-			"FAIL", "",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting containers")
-			},
-			nil,
+			"OK_1", "unscoped token", "unscoped token", false,
+			map[string]sToken{"project1": {"vhjk", "cud7"}, "project2": {"d6l", "88x6l"}},
+			map[string]sToken{"project1": {"vhjk", "cud7"}, "project2": {"d6l", "88x6l"}},
 		},
 		{
-			"EMPTY", "projectID",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{},
+			"OK_2", "", "garbage", true,
+			map[string]sToken{"pr1568": {"6rxy", "7cli87t"}, "pr2097": {"7cek", "25c8"}},
+			map[string]sToken{"pr1568": {"6rxy", "7cli87t"}, "pr2097": {"7cek", "25c8"}},
 		},
 		{
-			"OK", "project345",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{{2341, "tukcdfku6"}, {45, "hf678cof7uib68or6"}, {6767, "rtu6u__78bgi"}, {1, "9ob89bio"}}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
+			"FAIL_UTOKEN", "", "", false,
+			map[string]sToken{},
+			map[string]sToken{"project1": {"5xe7k", "6xwei"}, "project2": {"5xw46", "4wx6"}},
+		},
+		{
+			"FAIL_STOKENS", "utoken", "utoken", false,
+			map[string]sToken{"pr225": {"8vgicö", "xfd6"}},
+			map[string]sToken{"pr152": {}, "pr375": {}, "pr225": {"8vgicö", "xfd6"}},
+		},
+	}
+
+	dummy := ""
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			mockT := &mockTokenator{uToken: tt.mockUToken, sTokens: tt.mockSTokens}
+			c := connecter{tokenable: mockT, url: &dummy}
+
+			newUToken, newSTokensSync := c.fetchTokens(tt.skip, mockT.keys())
+
+			newSTokens := map[string]sToken{}
+			newSTokensSync.Range(func(key, value interface{}) bool {
+				newSTokens[fmt.Sprint(key)] = value.(sToken)
+				return true
+			})
+
+			if newUToken != tt.uToken {
+				t.Errorf("uToken incorrect. Expected %q, got %q", tt.uToken, newUToken)
+			} else if !reflect.DeepEqual(newSTokens, tt.sTokens) {
+				t.Errorf("sTokens incorrect.\nExpected %q\nGot %q", tt.sTokens, newSTokens)
+			}
+		})
+	}
+}
+
+func TestSDConnectGetEnvs(t *testing.T) {
+	var tests = []struct {
+		testname string
+		values   [3]string
+		failIdx  int
+	}{
+		{"OK", [3]string{"cert.pem", "https://example.com", "https://google.com"}, -1},
+		{"FAIL_1", [3]string{"", "https://example.com", "https://google.com"}, 0},
+		{"FAIL_2", [3]string{"cert.pem", "http://example.com", "https://google.com"}, 1},
+		{"FAIL_3", [3]string{"cert.pem", "https://example.com", ""}, 2},
+	}
+
+	origGetEnvs := getEnv
+	defer func() { getEnv = origGetEnvs }()
+
+	envNames := map[string]int{"FS_SD_CONNECT_CERTS": 0, "FS_SD_CONNECT_METADATA_API": 1, "FS_SD_CONNECT_DATA_API": 2}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			sd := &sdConnectInfo{}
+			getEnv = func(name string, verifyURL bool) (string, error) {
+				if tt.failIdx == envNames[name] {
+					return "", errors.New("Error")
 				}
-			},
-			[]Metadata{{2341, "tukcdfku6"}, {45, "hf678cof7uib68or6"}, {6767, "rtu6u__78bgi"}, {1, "9ob89bio"}},
+				return tt.values[envNames[name]], nil
+			}
+
+			if err := sd.getEnvs(); err != nil {
+				if tt.testname == "OK" {
+					t.Errorf("Unexpected err: %s", err.Error())
+				}
+			} else if tt.testname != "OK" {
+				t.Error("Function should have returned error")
+			} else if sd.certPath != tt.values[0] {
+				t.Errorf("Incorrect certificate path. Expected %q, got %q", tt.values[0], sd.certPath)
+			} else if sd.metadataURL != tt.values[1] {
+				t.Errorf("Incorrect metadata URL. Expected %q, got %q", tt.values[1], sd.metadataURL)
+			} else if sd.dataURL != tt.values[2] {
+				t.Errorf("Incorrect data URL. Expected %q, got %q", tt.values[2], sd.dataURL)
+			}
+		})
+	}
+}
+
+func TestSDConnectTestURLs(t *testing.T) {
+	var tests = []struct {
+		testname, metadataURL, dataURL, failURL string
+	}{
+		{"OK", "google.com", "finnkino.fi", ""},
+		{"FAIL_METADATA", "github.com", "gitlab.com", "github.com"},
+		{"FAIL_DATA", "hs.fi", "is.fi", "is.fi"},
+	}
+
+	origTestURL := testURL
+	defer func() { testURL = origTestURL }()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			sd := &sdConnectInfo{metadataURL: tt.metadataURL, dataURL: tt.dataURL}
+			testURL = func(url string) error {
+				if tt.failURL != "" && url == tt.failURL {
+					return errors.New("Error")
+				}
+				return nil
+			}
+
+			if err := sd.testURLs(); err != nil {
+				if tt.testname == "OK" {
+					t.Errorf("Unexpected error: %s", err.Error())
+				}
+			} else if tt.testname != "OK" {
+				t.Error("Function did not return error")
+			}
+		})
+	}
+}
+
+func TestSDConnectValidateLogin(t *testing.T) {
+}
+
+func TestSDConnectGetNthLevel_Projects(t *testing.T) {
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	mockC := &mockConnecter{}
+	projects := []Metadata{{34, "Pr3", ""}, {90, "Pr56", ""}, {123, "Pr7", ""}, {4, "Pr12", ""}}
+	sd := &sdConnectInfo{connectable: mockC, projects: projects}
+
+	meta, err := sd.getNthLevel()
+	if err != nil {
+		t.Errorf("Function returned error: %s", err.Error())
+	} else if !reflect.DeepEqual(meta, projects) {
+		t.Errorf("Returned metadata incorrect. Expected %q, got %q", projects, meta)
+	}
+}
+
+func TestSDConnectGetNthLevel_Containers(t *testing.T) {
+	var tests = []struct {
+		testname, project, token string
+		expectedMetaData         []Metadata
+	}{
+		{
+			"OK", "project345", "new_token",
+			[]Metadata{{2341, "tukcdfku6", ""}, {45, "hf678cof7uib68or6", ""}, {6767, "rtu6u78bgi", ""}, {1, "9ob89bio", ""}},
+		},
+		{
+			"OK_EMPTY", "projectID", "7cftlx67", []Metadata{},
 		},
 	}
 
@@ -399,66 +422,108 @@ func TestGetContainers(t *testing.T) {
 	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
+		t.Run(tt.testname, func(t *testing.T) {
+			sd := &sdConnectInfo{connectable: &mockConnecter{}}
+			sd.sTokens.Store(tt.project, sToken{tt.token, ""})
 
-			containers, err := GetContainers(tt.project)
-
-			if tt.expectedMetaData == nil {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
+			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+				path := "/project/" + tt.project + "/containers"
+				if url != path {
+					return fmt.Errorf("makeRequest() was called with incorrect URL path. Expected %q, got %q", path, url)
 				}
-				return
+				if token != tt.token {
+					return &RequestError{401}
+				}
+
+				switch v := ret.(type) {
+				case *[]Metadata:
+					*v = tt.expectedMetaData
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
+				}
 			}
 
-			if err != nil {
+			if meta, err := sd.getNthLevel(tt.project); err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedMetaData, containers) {
-				t.Errorf("Containers incorrect. Expected %v, got %v", tt.expectedMetaData, containers)
+			} else if !reflect.DeepEqual(meta, tt.expectedMetaData) {
+				t.Errorf("Incorrect containers. Expected %q, got %q", tt.expectedMetaData, meta)
 			}
 		})
 	}
 }
 
-func TestGetObjects(t *testing.T) {
+func TestSDConnectGetNthLevel_Containers_Error(t *testing.T) {
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+		return errExpected
+	}
+
+	sd := &sdConnectInfo{connectable: &mockConnecter{}}
+	meta, err := sd.getNthLevel("project")
+
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if !errors.Is(err, errExpected) {
+		t.Errorf("Function returned incorrect error: %s", err.Error())
+	}
+
+	if meta != nil {
+		t.Errorf("Metadata is non-nil: %q", meta)
+	}
+}
+
+func TestSDConnectGetNthLevel_Containers_Expired(t *testing.T) {
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	expectedProject := "project737"
+	expectedToken := "t7vwlv78"
+	expectedContainers := []Metadata{{2341, "tukcdfku6", ""}, {47, "8cxgje6uk", ""}}
+
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		path := "/project/" + expectedProject + "/containers"
+		if url != path {
+			return fmt.Errorf("makeRequest() was called with incorrect URL path. Expected %q, got %q", path, url)
+		}
+		if token != expectedToken {
+			return &RequestError{401}
+		}
+
+		switch v := ret.(type) {
+		case *[]Metadata:
+			*v = expectedContainers
+			return nil
+		default:
+			return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
+		}
+	}
+
+	mockC := &mockConnecter{sTokenKey: expectedProject, sTokenValue: sToken{Token: expectedToken}}
+	sd := &sdConnectInfo{connectable: mockC}
+	meta, err := sd.getNthLevel(expectedProject)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err.Error())
+	}
+	if !reflect.DeepEqual(meta, expectedContainers) {
+		t.Fatalf("Containers incorrect. Expected %v, got %v", expectedContainers, meta)
+	}
+}
+
+func TestSDConnectGetNthLevel_Objects(t *testing.T) {
 	var tests = []struct {
-		testname, project, container string
-		mockMakeRequest              func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedMetaData             []Metadata
+		testname, project, container, token string
+		expectedMetaData                    []Metadata
 	}{
 		{
-			"FAIL", "", "",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting containers")
-			},
-			nil,
+			"OK", "project345", "containerID", "token",
+			[]Metadata{{56, "tukcdfku6", ""}, {5, "hf678cof7ui6", ""}, {47685, "rtu6u__78bgi", ""}, {10, "9ob89bio", ""}},
 		},
 		{
-			"EMPTY", "projectID", "container349",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{},
-		},
-		{
-			"OK", "project345", "containerID",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = []Metadata{{56, "tukcdfku6"}, {5, "hf678cof7uib68or6"}, {47685, "rtu6u__78bgi"}, {10, "9ob89bio"}}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			[]Metadata{{56, "tukcdfku6"}, {5, "hf678cof7uib68or6"}, {47685, "rtu6u__78bgi"}, {10, "9ob89bio"}},
+			"OK_EMPTY", "projectID", "container349", "5voI8d", []Metadata{},
 		},
 	}
 
@@ -466,27 +531,44 @@ func TestGetObjects(t *testing.T) {
 	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
+		t.Run(tt.testname, func(t *testing.T) {
+			sd := &sdConnectInfo{connectable: &mockConnecter{}}
+			sd.sTokens.Store(tt.project, sToken{tt.token, ""})
 
-			objects, err := GetObjects(tt.project, tt.container)
-
-			if tt.expectedMetaData == nil {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
+			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+				path := "/project/" + tt.project + "/container/" + tt.container + "/objects"
+				if url != path {
+					return fmt.Errorf("makeRequest() was called with incorrect URL path\nExpected %q\nGot %q", path, url)
 				}
-				return
+				if token != tt.token {
+					return &RequestError{401}
+				}
+
+				switch v := ret.(type) {
+				case *[]Metadata:
+					*v = tt.expectedMetaData
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
+				}
 			}
 
-			if err != nil {
+			if meta, err := sd.getNthLevel(tt.project, tt.container); err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedMetaData, objects) {
-				t.Errorf("Objects incorrect. Expected %v, got %v", tt.expectedMetaData, objects)
+			} else if !reflect.DeepEqual(meta, tt.expectedMetaData) {
+				t.Errorf("Incorrect objects. Expected %q, got %q", tt.expectedMetaData, meta)
 			}
 		})
 	}
 }
+
+/*func TestSDConnectUpdateAttributes(t *testing.T) {
+
+}
+
+{"user", "pass", "dXNlcjpwYXNz"},
+		{"kalmari", "23t&io00_e", "a2FsbWFyaToyM3QmaW8wMF9l"},
+		{"qwerty123", "mnbvc456", "cXdlcnR5MTIzOm1uYnZjNDU2"},
 
 func TestGetSpecialHeaders(t *testing.T) {
 	var tests = []struct {

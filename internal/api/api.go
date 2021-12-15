@@ -43,15 +43,15 @@ type httpInfo struct {
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
-	getLoginMethod() LoginMethod
-	validateLogin(...string) error
 	getCertificatePath() string
 	testURLs() error
-	getToken() string
+	getLoginMethod() LoginMethod
+	validateLogin(...string) error
 	levelCount() int
+	getToken() string
 	getNthLevel(...string) ([]Metadata, error)
 	updateAttributes([]string, string, interface{})
-	downloadData([]string, []byte, int64, int64) error
+	downloadData([]string, interface{}, int64, int64) error
 }
 
 // Metadata contains node metadata fetched from an api
@@ -120,7 +120,7 @@ func GetEnvs() error {
 }
 
 // getEnv looks up environment variable given in 'name'
-func getEnv(name string, verifyURL bool) (string, error) {
+var getEnv = func(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 	if !ok {
 		return "", fmt.Errorf("Environment variable %q not set", name)
@@ -131,7 +131,7 @@ func getEnv(name string, verifyURL bool) (string, error) {
 	return env, nil
 }
 
-func validURL(env string) error {
+var validURL = func(env string) error {
 	u, err := url.ParseRequestURI(env)
 	if err != nil {
 		return fmt.Errorf("Environment variable %q is an invalid URL: %w", env, err)
@@ -140,15 +140,6 @@ func validURL(env string) error {
 		return fmt.Errorf("Environment variable %q does not have scheme 'https'", env)
 	}
 	return nil
-}
-
-var GetLoginMethod = func(rep string) LoginMethod {
-	return hi.repositories[rep].getLoginMethod()
-}
-
-// ValidateLogin checks if user is able to log in with given input
-var ValidateLogin = func(rep string, auth ...string) error {
-	return hi.repositories[rep].validateLogin(auth...)
 }
 
 // InitializeCache creates a cache for downloaded data
@@ -214,7 +205,7 @@ var testURLs = func() error {
 	return nil
 }
 
-func testURL(url string) error {
+var testURL = func(url string) error {
 	response, err := hi.client.Head(url)
 	if err != nil {
 		return err
@@ -223,12 +214,23 @@ func testURL(url string) error {
 	return nil
 }
 
-func LevelCount(rep string) int {
+// GetLoginMethod returns the login method of repository 'rep'
+var GetLoginMethod = func(rep string) LoginMethod {
+	return hi.repositories[rep].getLoginMethod()
+}
+
+// ValidateLogin checks if user is able to log in with given input to repository 'rep'
+var ValidateLogin = func(rep string, auth ...string) error {
+	return hi.repositories[rep].validateLogin(auth...)
+}
+
+// LevelCount returns the amount of levels repository 'rep' has
+var LevelCount = func(rep string) int {
 	return hi.repositories[rep].levelCount()
 }
 
 // makeRequest sends HTTP requests and parses the responses
-func makeRequest(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+var makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
 	var response *http.Response
 
 	// Build HTTP request

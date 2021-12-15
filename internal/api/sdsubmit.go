@@ -14,7 +14,16 @@ import (
 
 const SDSubmit string = "SD-Submit"
 
+type submittable interface {
+	getFiles(string) ([]Metadata, error)
+	getDatasets(int64) ([]Metadata, error)
+}
+
+type submitter struct {
+}
+
 type sdSubmitInfo struct {
+	submittable
 	certPath string
 	token    string
 	urls     []string
@@ -53,11 +62,11 @@ func (s *sdSubmitInfo) getEnvs() error {
 	if err != nil {
 		return err
 	}
-	for _, url := range strings.Split(urls, ",") {
-		if err = validURL(url); err != nil {
+	for _, u := range strings.Split(urls, ",") {
+		if err = validURL(u); err != nil {
 			return err
 		}
-		s.urls = append(s.urls, url)
+		s.urls = append(s.urls, strings.TrimRight(u, "/"))
 	}
 	return nil
 }
@@ -88,6 +97,9 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 
 	if count == len(s.urls) {
 		return fmt.Errorf("Cannot receive responses from any of the %s APIs", SDSubmit)
+	}
+	if len(s.datasets) == 0 {
+		return fmt.Errorf("No datasets found for %s", SDSubmit)
 	}
 	return nil
 }
@@ -132,8 +144,7 @@ func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
 
 func (s *sdSubmitInfo) getDatasets(idx int64) ([]Metadata, error) {
 	var datasets []string
-	err := makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
-		"/metadata/datasets", s.token, SDSubmit, nil, nil, &datasets)
+	err := makeRequest(s.urls[idx]+"/metadata/datasets", s.token, SDSubmit, nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
 	}
@@ -161,9 +172,8 @@ func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
 
 	// Request files
 	var files []file
-	err := makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
-		"/metadata/datasets/"+
-		url.PathEscape(dataset)+"/files", s.token, SDSubmit, nil, nil, &files)
+	path := s.urls[idx] + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
+	err := makeRequest(path, s.token, SDSubmit, nil, nil, &files)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", SDSubmit+"/"+dataset, err)
 	}
@@ -192,7 +202,7 @@ func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
 func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interface{}) {
 }
 
-func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end int64) error {
+func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
 	meta, ok := s.datasets[nodes[0]]
 	if !ok {
 		return fmt.Errorf("Tried to request content of %s file %q with invalid dataset %q", SDSubmit, nodes[1], nodes[0])
@@ -208,6 +218,6 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer []byte, start, end in
 	finalPath := nodes[0] + "_" + nodes[1]
 
 	// Request data
-	return makeRequest(strings.TrimSuffix(s.urls[idx], "/")+
-		"/files/"+s.fileIDs[finalPath], s.token, SDSubmit, query, nil, buffer)
+	path := s.urls[idx] + "/files/" + s.fileIDs[finalPath]
+	return makeRequest(path, s.token, SDSubmit, query, nil, buffer)
 }

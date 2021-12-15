@@ -161,7 +161,7 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	go host.Mount(node, options)
 	defer host.Unmount()
 
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 
 	if err = CheckMountPoint(node); err == nil {
 		t.Fatal("Function should have returned non-nil error")

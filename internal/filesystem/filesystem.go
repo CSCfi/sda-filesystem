@@ -24,7 +24,6 @@ var signalBridge func() = nil
 type Fuse struct {
 	fuse.FileSystemBase
 	lock    sync.Mutex
-	inoLock sync.RWMutex
 	ino     uint64
 	root    *node
 	openmap map[uint64]nodeAndPath
@@ -123,8 +122,8 @@ func MountFilesystem(fs *Fuse, mount string) {
 	if runtime.GOOS == "darwin" {
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+path.Base(mount))
-		options = append(options, "-o", "attr_timeout=0")
-		options = append(options, "-o", "iosize=262144") // Value not optimized
+		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
+		options = append(options, "-o", "iosize=262144")  // Value not optimized
 	} else if runtime.GOOS == "linux" {
 		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
 		options = append(options, "-o", "auto_unmount")
@@ -138,6 +137,10 @@ func MountFilesystem(fs *Fuse, mount string) {
 func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 	timestamp := fuse.Now()
 	fs.root.stat.Size = -1
+
+	/*if len(c.projects) == 0 {
+		return fmt.Errorf("No projects found for %s", SDConnect)
+	}*/
 
 	var wg sync.WaitGroup
 	forChannel := make(map[string][]api.Metadata)
@@ -441,10 +444,9 @@ func (fs *Fuse) makeNode(path string, meta api.Metadata, mode uint32, dev uint64
 		}
 	}
 
-	fs.inoLock.Lock()
-	fs.ino++                                           // LOCK
-	node = newNode(dev, fs.ino, mode, 0, 0, timestamp) // LOCK
-	fs.inoLock.Unlock()
+	defer fs.synchronize()()
+	fs.ino++
+	node = newNode(dev, fs.ino, mode, 0, 0, timestamp)
 
 	node.stat.Size = meta.Bytes
 	node.originalName = meta.OrigName
