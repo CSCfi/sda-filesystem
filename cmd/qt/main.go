@@ -32,14 +32,17 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func()                    `slot:"login,auto"`
-	_ func()                    `slot:"loadFuse,auto"`
-	_ func()                    `slot:"openFuse,auto"`
-	_ func(string) string       `slot:"changeMountPoint,auto"`
-	_ func()                    `slot:"shutdown,auto"`
-	_ func(message, err string) `signal:"loginResult"`
-	_ func()                    `signal:"fuseReady"`
-	_ func()                    `signal:"panic"`
+	_ func(int)                      `slot:"loginWithToken,auto"`
+	_ func(int, string, string)      `slot:"loginWithPassword,auto"`
+	_ func()                         `slot:"loadFuse,auto"`
+	_ func()                         `slot:"openFuse,auto"`
+	_ func(string) string            `slot:"changeMountPoint,auto"`
+	_ func()                         `slot:"shutdown,auto"`
+	_ func(repository string)        `signal:"login401"`
+	_ func(rep, message, err string) `signal:"loginError"`
+	_ func(message, err string)      `signal:"initError"`
+	_ func()                         `signal:"fuseReady"`
+	_ func()                         `signal:"panic"`
 
 	_ string    `property:"mountPoint"`
 	_ gui.QFont `property:"fixedFont"`
@@ -58,65 +61,63 @@ func (qb *QmlBridge) init() {
 	filesystem.SetSignalBridge(qb.Panic)
 }
 
-func (qb *QmlBridge) login() {
-	go func() {
-		api.RemoveAll()
-		auth := loginModel.getAuth()
-		for rep := range auth {
-			api.AddRepository(rep)
-		}
+func (qb *QmlBridge) initializeAPI() {
+	err := api.InitializeCache()
+	if err != nil {
+		logs.Error(err)
+		outer, inner := logs.Wrapper(err)
+		qb.InitError(outer, strings.Join(logs.StructureError(inner), "\n"))
+		return
+	}
 
-		err := api.GetEnvs()
-		if err != nil {
-			logs.Error(err)
-			qb.LoginResult("Environment variables not valid", strings.Join(logs.StructureError(err), "\n"))
+	err = api.InitializeClient()
+	if err != nil {
+		logs.Error(err)
+		qb.InitError("Initializing HTTP client failed", strings.Join(logs.StructureError(err), "\n"))
+		return
+	}
+}
+
+func (qb *QmlBridge) loginWithToken(idx int) {
+	qb.login(idx)
+}
+
+func (qb *QmlBridge) loginWithPassword(idx int, username, password string) {
+	qb.login(idx, username, password)
+}
+
+func (qb *QmlBridge) login(idx int, auth ...string) {
+	rep := loginModel.getRepository(idx)
+	if err := api.AddRepository(rep); err != nil {
+		logs.Error(err)
+		qb.LoginError(rep, "Environment variables not valid", strings.Join(logs.StructureError(err), "\n"))
+		return
+	}
+	if err := api.TestURLs(rep); err != nil {
+		logs.Error(err)
+		qb.LoginError(rep, "Cannot connect to APIs", strings.Join(logs.StructureError(err), "\n"))
+		return
+	}
+
+	if err := api.ValidateLogin(rep, auth...); err != nil {
+		logs.Error(err)
+
+		var re *api.RequestError
+		if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
+			qb.Login401(rep)
 			return
 		}
 
-		err = api.InitializeCache()
-		if err != nil {
-			logs.Error(err)
-			outer, inner := logs.Wrapper(err)
-			qb.LoginResult(outer, strings.Join(logs.StructureError(inner), "\n"))
-			return
-		}
+		qb.LoginError(rep, fmt.Sprintf("%s authentication failed", rep), strings.Join(logs.StructureError(err), "\n"))
+		return
+	}
 
-		err = api.InitializeClient()
-		if err != nil {
-			logs.Error(err)
-			qb.LoginResult("Initializing HTTP client failed", strings.Join(logs.StructureError(err), "\n"))
-			return
-		}
-
-		for rep := range auth {
-			if err := api.ValidateLogin(rep, auth[rep]...); err != nil {
-				logs.Error(err)
-
-				var re *api.RequestError
-				if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
-					qb.LoginResult(fmt.Sprintf("Incorrect %s username, password or token", rep), "")
-					return
-				}
-
-				qb.LoginResult(fmt.Sprintf("%s authentication failed", rep), strings.Join(logs.StructureError(err), "\n"))
-				return
-			}
-		}
-
-		sendToModel := make(chan filesystem.LoadProjectInfo)
-		go func() {
-			projectModel.addProjects(sendToModel)
-
-			if len(projectModel.projects) == 0 {
-				qb.LoginResult("No permissions found", "")
-				return
-			}
-
-			logs.Info("Login successful")
-			qb.LoginResult("", "")
-		}()
-		qb.fs = filesystem.InitializeFileSystem(sendToModel)
-	}()
+	sendToModel := make(chan filesystem.LoadProjectInfo)
+	go func() { projectModel.addProjects(sendToModel) }()
+	qb.fs = filesystem.InitializeFileSystem(sendToModel)
+	loginModel.setLogginIn(idx, true)
+	logs.Info("Login successful")
+	return
 }
 
 func (qb *QmlBridge) loadFuse() {
@@ -172,14 +173,14 @@ func (qb *QmlBridge) shutdown() {
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
 	mount := core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
-	logs.Debug("Trying to change mount point to ", mount)
+	logs.Debugf("Trying to change mount point to %q", mount)
 
 	if err := mountpoint.CheckMountPoint(mount); err != nil {
 		logs.Error(err)
 		return err.Error()
 	}
 
-	logs.Debug("Filesystem will be mounted at ", mount)
+	logs.Debugf("Filesystem will be mounted at %q", mount)
 	qb.SetMountPoint(mount)
 	return ""
 }
@@ -192,7 +193,7 @@ func init() {
 	} else {
 		logs.SetLevel("info")
 	}
-	logs.SetSignal(logModel.AddLog)
+	//logs.SetSignal(logModel.AddLog)
 }
 
 func main() {
@@ -224,5 +225,6 @@ func main() {
 
 	//fmt.Println(core.QThread_CurrentThread().Pointer())
 
+	qmlBridge.initializeAPI()
 	gui.QGuiApplication_Exec()
 }

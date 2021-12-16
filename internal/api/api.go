@@ -36,6 +36,7 @@ const (
 type httpInfo struct {
 	requestTimeout int
 	httpRetry      int
+	certPath       string
 	client         *http.Client
 	repositories   map[string]fuseInfo
 }
@@ -43,7 +44,6 @@ type httpInfo struct {
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
-	getCertificatePath() string
 	testURLs() error
 	getLoginMethod() LoginMethod
 	validateLogin(...string) error
@@ -70,6 +70,10 @@ func (re *RequestError) Error() string {
 	return fmt.Sprintf("API responded with status %d", re.StatusCode)
 }
 
+func init() {
+	hi.certPath, _ = getEnv("FS_CERTS", false)
+}
+
 // GetAllPossibleRepositories returns the names of every possible repository.
 // Every repository needs to add itself to the possibleRepositories map in an init function
 var GetAllPossibleRepositories = func() []string {
@@ -90,8 +94,9 @@ var GetEnabledRepositories = func() []string {
 }
 
 // AddRepository adds a repository to hi.repositories
-var AddRepository = func(r string) {
+var AddRepository = func(r string) (err error) {
 	hi.repositories[r] = possibleRepositories[r]
+	return hi.repositories[r].getEnvs()
 }
 
 // RemoveRepository removes a repository from hi.repositories
@@ -99,24 +104,9 @@ var RemoveRepository = func(r string) {
 	delete(hi.repositories, r)
 }
 
-// RemoveAll removes all enabled repositores
-func RemoveAll() {
-	hi.repositories = make(map[string]fuseInfo)
-}
-
 // SetRequestTimeout redefines hi.requestTimeout
 var SetRequestTimeout = func(timeout int) {
 	hi.requestTimeout = timeout
-}
-
-// GetEnvs looks up the necessary environment variables
-func GetEnvs() error {
-	for i := range hi.repositories {
-		if err := hi.repositories[i].getEnvs(); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // getEnv looks up environment variable given in 'name'
@@ -156,15 +146,14 @@ func InitializeCache() error {
 func InitializeClient() error {
 	// Handle certificates if ones are set
 	caCertPool := x509.NewCertPool()
-	for i := range hi.repositories {
-		certPath := hi.repositories[i].getCertificatePath()
-		if len(certPath) > 0 {
-			caCert, err := ioutil.ReadFile(certPath)
-			if err != nil {
-				return fmt.Errorf("Reading certificate file %q failed: %w", certPath, err)
-			}
-			caCertPool.AppendCertsFromPEM(caCert)
+	if len(hi.certPath) > 0 {
+		caCert, err := ioutil.ReadFile(hi.certPath)
+		if err != nil {
+			return fmt.Errorf("Reading certificate file %q failed: %w", hi.certPath, err)
 		}
+		caCertPool.AppendCertsFromPEM(caCert)
+	} else {
+		caCertPool = nil
 	}
 
 	// Set up HTTP client
@@ -192,17 +181,18 @@ func InitializeClient() error {
 	}
 
 	logs.Debug("Initializing HTTP client successful")
-	return testURLs()
-}
 
-// testUrls tests whether we can connect to API urls and that certificates are valid
-var testURLs = func() error {
 	for i := range hi.repositories {
 		if err := hi.repositories[i].testURLs(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// TestUrls tests whether we can connect to API urls and that certificates are valid
+var TestURLs = func(rep string) error {
+	return hi.repositories[rep].testURLs()
 }
 
 var testURL = func(url string) error {

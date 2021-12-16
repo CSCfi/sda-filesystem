@@ -441,8 +441,9 @@ func TestProcessFlags(t *testing.T) {
 	api.GetAllPossibleRepositories = func() []string {
 		return repositories
 	}
-	api.AddRepository = func(r string) {
+	api.AddRepository = func(r string) error {
 		reps = append(reps, r)
+		return nil
 	}
 	mockCheckMountPoint := func(mount string) error {
 		testMount = mount

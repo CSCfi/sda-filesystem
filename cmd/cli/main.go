@@ -170,14 +170,18 @@ func processFlags() error {
 	for _, op := range repOptions {
 		if strings.EqualFold(repository, op) || strings.EqualFold(repository, "all") {
 			found = true
-			api.AddRepository(op)
+			if err := api.AddRepository(op); err != nil {
+				return err
+			}
 		}
 	}
 
 	if !found {
 		logs.Warningf("Flag -enable=%s not supported, switching to default -enable=all", repository)
 		for _, op := range repOptions {
-			api.AddRepository(op)
+			if err := api.AddRepository(op); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -221,10 +225,6 @@ func shutdown() <-chan bool {
 func main() {
 	flag.Parse()
 	err := processFlags()
-	if err != nil {
-		logs.Fatal(err)
-	}
-	err = api.GetEnvs()
 	if err != nil {
 		logs.Fatal(err)
 	}

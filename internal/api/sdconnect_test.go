@@ -341,8 +341,6 @@ func TestSDConnectGetEnvs(t *testing.T) {
 				}
 			} else if tt.testname != "OK" {
 				t.Error("Function should have returned error")
-			} else if sd.certPath != tt.values[0] {
-				t.Errorf("Incorrect certificate path. Expected %q, got %q", tt.values[0], sd.certPath)
 			} else if sd.metadataURL != tt.values[1] {
 				t.Errorf("Incorrect metadata URL. Expected %q, got %q", tt.values[1], sd.metadataURL)
 			} else if sd.dataURL != tt.values[2] {

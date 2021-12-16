@@ -6,7 +6,10 @@ import csc 1.0 as CSC
 Button {
     id: button
     hoverEnabled: true
-    padding: 15
+    topPadding: 15
+    bottomPadding: 15
+    rightPadding: 25
+    leftPadding: 25
     topInset: 0
     bottomInset: 0
     enabled: !loading
