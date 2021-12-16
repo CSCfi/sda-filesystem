@@ -15,8 +15,6 @@ ApplicationWindow {
 	minimumHeight: sideBarView.height + toolbar.height
 	minimumWidth: homePage.minimumWidth + sideBarView.width
 
-	//property string username
-
 	Material.primary: CSC.Style.primaryColor
 
 	header: ToolBar {
@@ -32,15 +30,6 @@ ApplicationWindow {
 				Layout.preferredHeight: 50
 				Layout.margins: 5
 			}
-
-            /*Text {
-                text: username
-				color: "white"
-				rightPadding: 10
-				font.pointSize: 15
-				font.weight: Font.DemiBold
-				Layout.alignment: Qt.AlignRight
-            }*/
         }
     }
 

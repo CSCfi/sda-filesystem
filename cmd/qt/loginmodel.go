@@ -10,8 +10,10 @@ import (
 const (
 	Repository = int(core.Qt__UserRole) + 1<<iota
 	Method
+	LoggedIn
 )
 
+// LoginMethod is used to transfer the api.LoginMethod enums to qml
 type LoginMethod struct {
 	core.QObject
 
@@ -31,10 +33,6 @@ type LoginModel struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(int, bool)   `signal:"setChecked,auto"`
-	_ func(int, string) `signal:"setUsername,auto"`
-	_ func(int, string) `signal:"setPassword,auto"`
-
 	roles  map[int]*core.QByteArray
 	logins []loginRow
 }
@@ -42,15 +40,14 @@ type LoginModel struct {
 type loginRow struct {
 	repository string
 	method     int
-	checked    bool
-	username   string
-	password   string
+	loggedIn   bool
 }
 
 func (lm *LoginModel) init() {
 	lm.roles = map[int]*core.QByteArray{
 		Repository: core.NewQByteArray2("repository", -1),
 		Method:     core.NewQByteArray2("method", -1),
+		LoggedIn:   core.NewQByteArray2("loggedIn", -1),
 	}
 
 	lm.ConnectData(lm.data)
@@ -60,8 +57,7 @@ func (lm *LoginModel) init() {
 	reps := api.GetAllPossibleRepositories()
 	sort.Strings(reps)
 	for i := len(reps) - 1; i >= 0; i-- {
-		lm.logins = append(lm.logins, loginRow{repository: reps[i], method: int(api.GetLoginMethod(reps[i])),
-			username: "", password: ""})
+		lm.logins = append(lm.logins, loginRow{repository: reps[i], method: int(api.GetLoginMethod(reps[i]))})
 	}
 }
 
@@ -81,6 +77,8 @@ func (lm *LoginModel) data(index *core.QModelIndex, role int) *core.QVariant {
 		return core.NewQVariant1(l.repository)
 	case Method:
 		return core.NewQVariant1(l.method)
+	case LoggedIn:
+		return core.NewQVariant1(l.loggedIn)
 	default:
 		return core.NewQVariant()
 	}
@@ -94,29 +92,10 @@ func (lm *LoginModel) roleNames() map[int]*core.QByteArray {
 	return lm.roles
 }
 
-func (lm *LoginModel) setChecked(idx int, checked bool) {
-	lm.logins[idx].checked = checked
+func (lm *LoginModel) getRepository(idx int) string {
+	return lm.logins[idx].repository
 }
 
-func (lm *LoginModel) setUsername(idx int, username string) {
-	lm.logins[idx].username = username
-}
-
-func (lm *LoginModel) setPassword(idx int, password string) {
-	lm.logins[idx].password = password
-}
-
-func (lm *LoginModel) getAuth() map[string][]string {
-	ret := make(map[string][]string)
-	for i := range lm.logins {
-		lg := lm.logins[i]
-		if lg.checked {
-			if lg.method == int(api.Password) {
-				ret[lg.repository] = []string{lg.username, lg.password}
-			} else {
-				ret[lg.repository] = []string{}
-			}
-		}
-	}
-	return ret
+func (lm *LoginModel) setLogginIn(idx int, value bool) {
+	lm.logins[idx].loggedIn = value
 }

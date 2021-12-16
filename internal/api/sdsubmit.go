@@ -24,7 +24,6 @@ type submitter struct {
 
 type sdSubmitInfo struct {
 	submittable
-	certPath string
 	token    string
 	urls     []string
 	lock     sync.RWMutex
@@ -51,10 +50,6 @@ func init() {
 func (s *sdSubmitInfo) getEnvs() error {
 	var err error
 	s.token, err = getEnv("SDS_ACCESS_TOKEN", false)
-	if err != nil {
-		return err
-	}
-	s.certPath, err = getEnv("FS_SD_SUBMIT_CERTS", false)
 	if err != nil {
 		return err
 	}
@@ -102,10 +97,6 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		return fmt.Errorf("No datasets found for %s", SDSubmit)
 	}
 	return nil
-}
-
-func (s *sdSubmitInfo) getCertificatePath() string {
-	return s.certPath
 }
 
 func (s *sdSubmitInfo) testURLs() error {

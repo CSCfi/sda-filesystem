@@ -43,7 +43,6 @@ type sdConnectInfo struct {
 	connectable
 	dataURL     string
 	metadataURL string
-	certPath    string
 	token       string
 	uToken      string
 	sTokens     sync.Map
@@ -167,13 +166,7 @@ func (c *sdConnectInfo) getEnvs() error {
 		return err
 	}
 	c.dataURL = strings.TrimRight(api, "/")
-
-	c.certPath, err = getEnv("FS_SD_CONNECT_CERTS", false)
-	return err
-}
-
-func (c *sdConnectInfo) getCertificatePath() string {
-	return c.certPath
+	return nil
 }
 
 func (c *sdConnectInfo) testURLs() error {

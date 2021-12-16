@@ -11,10 +11,10 @@ Window {
 	id: loginWindow
 	visible: true
 	title: "SDA Filesystem"
-	minimumWidth: 600
-    minimumHeight: 450
+	minimumHeight: content.height + 2 * CSC.Style.padding
+	minimumWidth: content.width + 2 * CSC.Style.padding
+	maximumHeight: minimumHeight
 	maximumWidth: minimumWidth
-    maximumHeight: minimumHeight
 
 	property var component
 	property ApplicationWindow homeWindow
@@ -27,11 +27,115 @@ Window {
 
 	Connections {
 		target: QmlBridge
-		onLoginResult: {
-			if (!message) {
+		onInitError: {
+			content.enabled = false
+			popup.errorMessage = message
+			popup.errorTextClarify = err
+			popup.open()
+		}
+	}
+
+	Column {
+		id: content
+		spacing: CSC.Style.padding
+		height: childrenRect.height + topPadding
+		width: childrenRect.width + leftPadding
+		topPadding: 2 * CSC.Style.padding
+		leftPadding: 2 * CSC.Style.padding
+		
+		Timer {
+            id: timer
+            interval: 0; running: false; repeat: false
+            onTriggered: loginWindow.height = content.height + 2 * CSC.Style.padding
+        }
+
+		onHeightChanged: timer.restart()
+
+		RowLayout {
+			Image {
+				source: "qrc:/qml/images/CSC_logo.svg"
+				fillMode: Image.PreserveAspectFit
+				Layout.preferredWidth: paintedWidth
+				Layout.preferredHeight: 40
+			}
+
+			Text {
+				text: "<h3>Sensitive Data Services</h3>"
+				color: CSC.Style.grey
+				maximumLineCount: 1
+			}
+		}
+
+		Label {
+			text: "<h1>SDA Filesystem</h1>"
+			color: CSC.Style.primaryColor
+			maximumLineCount: 1
+		}
+
+		Label {
+			text: "Select one or more services to connect to"
+			color: CSC.Style.grey
+			maximumLineCount: 1
+		}
+
+		ListView {
+			id: repositoryList
+			model: LoginModel
+			spacing: 0.5 * CSC.Style.padding
+			boundsBehavior: Flickable.StopAtBounds
+			height: contentHeight
+			width: 450
+			
+			delegate: CSC.Accordion {
+				id: accordion
+				heading: repository
+				width: repositoryList.width
+				success: loggedIn
+				anchors.horizontalCenter: parent.horizontalCenter
+
+				onOpenedChanged: {
+					if (method == LoginMethod.Token && opened) {
+						QmlBridge.loginWithToken(index)
+					}
+				}
+
+				Connections {
+					target: QmlBridge
+					onLoginError: {
+						if (repository == rep) {
+							if (method == LoginMethod.Token) {
+								accordion.hide()
+							}
+							popup.errorMessage = message
+							popup.errorTextClarify = err
+							popup.open()
+						}
+					}
+				}
+
+				Loader {
+					width: parent.width - 2 * CSC.Style.padding
+					sourceComponent: (method == LoginMethod.Password) ? passwordComponent : tokenComponent
+					anchors.horizontalCenter: parent.horizontalCenter
+
+					property int index: index
+					property int repository: repository
+					property bool opened: accordion.opened
+				}
+			}
+		}
+
+		CSC.Button {
+			id: loginButton
+			text: "Continue"
+			enabled: false
+			leftPadding: 30
+			rightPadding: 30
+			
+			onClicked: {
 				popup.errorMessage = "Could not create main window"
 				popup.errorTextClarify = ""
-				
+
 				component = Qt.createComponent("mainWindow.qml")
 				if (component.status == Component.Ready) {
 					homeWindow = component.createObject(loginWindow)
@@ -50,196 +154,105 @@ Window {
 					}
 					popup.open()
 				}
-				return
-			}
-
-			popup.errorMessage = message
-			popup.errorTextClarify = err
-			loginButton.state = ""
-			popup.open()
-		}
-	}
-	
-	Item {
-		id: itemWrap
-		anchors.fill: parent
-		Keys.onReturnPressed: loginButton.clicked() // Enter key
-    	Keys.onEnterPressed: loginButton.clicked() // Numpad enter key
-
-		RowLayout{
-			anchors.fill: parent
-			spacing: 0
-
-			Rectangle {
-				Layout.fillHeight: true
-				Layout.preferredWidth: parent.width * 0.33
-				color: CSC.Style.primaryColor
-
-				Image {
-					source: "qrc:/qml/images/CSC_logo.svg"
-					fillMode: Image.PreserveAspectFit
-					width: parent.width - CSC.Style.padding
-					anchors.centerIn: parent
-				}
-			}
-
-			ColumnLayout {
-				Layout.fillHeight: true
-				Layout.margins: CSC.Style.padding
-				spacing: 0
-
-				Label {
-					text: "<h1>CSC Login</h1>"
-					color: CSC.Style.grey
-					Layout.bottomMargin: CSC.Style.padding
-				}
-
-				Label {
-					text: "<h3>Choose repositories:</h3>"
-					color: CSC.Style.grey
-					maximumLineCount: 1
-				}
-
-				ListView {
-					id: repositoryList
-					model: LoginModel
-					clip: true
-					boundsBehavior: Flickable.StopAtBounds
-					delegate: repositoryComponent
-					Layout.fillWidth: true
-					Layout.preferredHeight: 200
-
-					ScrollBar.vertical: ScrollBar { }
-				}
-
-				CSC.Button {
-					id: loginButton
-					text: "Login"
-					enabled: checkedButtons > 0
-					topInset: 5
-					bottomInset: 5
-					Layout.leftMargin: CSC.Style.padding
-					Layout.rightMargin: CSC.Style.padding
-					Layout.fillWidth: true
-
-					property int checkedButtons: 0
-					
-					onClicked: {
-						loginButton.state = "loading"
-						popup.close()
-						QmlBridge.login()
-					}
-
-					// Prevents button from shrinking when loading
-					Component.onCompleted: Layout.minimumHeight = implicitHeight
-
-					states: [
-                        State {
-                            name: "loading"; 
-                            PropertyChanges { target: loginButton; text: ""; loading: true }
-                            PropertyChanges { target: itemWrap; enabled: false }
-                        }
-					]
-				}
 			}
 		}
 	}
 
 	Component {
-		id: repositoryComponent
+		id: tokenComponent
+
+		Item {
+			id: empty 
+
+			Connections {
+				target: QmlBridge
+				onLogin401: {
+					if (repository == form.parent.repository) {
+						popup.errorMessage = "Invalid " + repository + " token"
+						popup.errorTextClarify = ""
+						popup.open()
+					}
+				}
+			}
+		}
+	}
+	
+	Component {
+		id: passwordComponent
 
 		ColumnLayout {
-			width: repositoryList.width
-			spacing: 0
+			id: form
+			width: parent.width
 
-			CheckBox {
-				id: checkBox
-				checked: false
-				text: repository
-				leftPadding: 15
-
-				background: Rectangle {
-					color: "white"
-				}
-
-				onCheckedChanged: {
-					if (checked) {
-						if (method == LoginMethod.Password) {
-							usernameField.forceActiveFocus() 
-						}
-						loginButton.checkedButtons++
-					} else {
-						loginButton.checkedButtons--
+			Connections {
+				target: QmlBridge
+				onLogin401: {
+					if (repository == form.parent.repository) {
+						error401.visible = true
 					}
-					LoginModel.setChecked(index, checked)
 				}
 			}
 
-			Frame {
-				id: input
+			Text {
+				text: "Please log in with your CSC credentials"
+			}
+
+			CSC.TextField {
+				id: usernameField
+				placeholderText: "Username"
 				Layout.fillWidth: true
-				Layout.rightMargin: CSC.Style.padding
-				Layout.leftMargin: CSC.Style.padding
-				visible: checkBox.checked && method == LoginMethod.Password
-				topPadding: 0
-
-				ColumnLayout {
-					width: parent.width
-					spacing: 0
-
-					CSC.TextField {
-						id: usernameField
-						placeholderText: "Username"
-						Layout.fillWidth: true
-
-						onTextChanged: LoginModel.setUsername(index, text)
-					}
-
-					CSC.TextField {
-						id: passwordField
-						placeholderText: "Password"
-						Layout.fillWidth: true
-						echoMode: TextInput.Password
-
-						onTextChanged: LoginModel.setPassword(index, text)
-					}
-				}
-
-				background: Rectangle {
-					color: "transparent"
-
-					Rectangle {
-						color: CSC.Style.lightGreyBlue
-						height: input.height * 0.6
-						width: parent.width
-					}
-
-					Rectangle {
-						color: CSC.Style.grey
-						height: parent.height * 0.6
-						width: 1
-						anchors.left: parent.left
-					}
-
-					Rectangle {
-						color: CSC.Style.grey
-						height: parent.height * 0.6
-						width: 1
-						anchors.right: parent.right
-					}
-
-					Rectangle {
-						color: CSC.Style.lightGreyBlue
-						radius: 5
-						z: -1
-						height: parent.height * 0.6
-						width: parent.width
-						border.color: CSC.Style.grey
-						border.width: 1
-						anchors.bottom: parent.bottom
-					}
-				}
 			}
-		} 						
+
+			CSC.TextField {
+				id: passwordField
+				placeholderText: "Password"
+				Layout.fillWidth: true
+				echoMode: TextInput.Password
+			}
+
+			Button {
+				id: error401
+                padding: 0
+				visible: false
+				text: "Please enter valid password"
+                icon.source: "qrc:/qml/images/x-circle-fill.svg"
+                icon.color: CSC.Style.red
+                icon.width: 10
+                icon.height: 10
+                enabled: false
+
+                background: Rectangle {
+                    color: "transparent"
+                }
+			}
+
+			CSC.Button {
+				id: loginButton
+				text: "Login"
+				outlined: true
+
+				onClicked: {
+					loginButton.state = "loading"
+					console.log(form.parent.index, form.parent.repository)
+					popup.close()
+					error401.visible = false
+					QmlBridge.loginWithPassword(form.parent.index, usernameField.text, passwordField.text)
+				}
+
+				// Prevents button from shrinking when loading
+				Component.onCompleted: {
+					Layout.minimumHeight = implicitHeight
+					Layout.minimumWidth = implicitWidth
+				}
+
+				states: [
+					State {
+						name: "loading"; 
+						PropertyChanges { target: loginButton; text: ""; loading: true }
+						PropertyChanges { target: form; enabled: false }
+					}
+				]
+			}
+		}			
 	}
 }
