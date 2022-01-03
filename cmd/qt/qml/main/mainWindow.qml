@@ -24,7 +24,7 @@ ApplicationWindow {
             anchors.fill: parent
 
             Image {
-				source: "qrc:/qml/images/CSC_logo.svg"
+				source: "qrc:/qml/images/CSC_logo_white.svg"
 				fillMode: Image.PreserveAspectFit
 				Layout.preferredWidth: paintedWidth
 				Layout.preferredHeight: 50

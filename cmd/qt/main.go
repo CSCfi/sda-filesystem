@@ -79,11 +79,11 @@ func (qb *QmlBridge) initializeAPI() {
 }
 
 func (qb *QmlBridge) loginWithToken(idx int) {
-	qb.login(idx)
+	go qb.login(idx)
 }
 
 func (qb *QmlBridge) loginWithPassword(idx int, username, password string) {
-	qb.login(idx, username, password)
+	go qb.login(idx, username, password)
 }
 
 func (qb *QmlBridge) login(idx int, auth ...string) {
@@ -91,11 +91,6 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 	if err := api.AddRepository(rep); err != nil {
 		logs.Error(err)
 		qb.LoginError(rep, "Environment variables not valid", strings.Join(logs.StructureError(err), "\n"))
-		return
-	}
-	if err := api.TestURLs(rep); err != nil {
-		logs.Error(err)
-		qb.LoginError(rep, "Cannot connect to APIs", strings.Join(logs.StructureError(err), "\n"))
 		return
 	}
 
@@ -115,7 +110,7 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 	sendToModel := make(chan filesystem.LoadProjectInfo)
 	go func() { projectModel.addProjects(sendToModel) }()
 	qb.fs = filesystem.InitializeFileSystem(sendToModel)
-	loginModel.setLogginIn(idx, true)
+	loginModel.setLoggedIn(idx, true)
 	logs.Info("Login successful")
 	return
 }

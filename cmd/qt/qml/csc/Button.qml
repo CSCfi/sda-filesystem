@@ -30,7 +30,7 @@ Button {
     background: Rectangle {
         radius: 4
         border.width: outlined ? 2 : 0
-        border.color: !button.enabled ? disableForeground : (button.pressed ? "#779DA7" : mainColor)
+        border.color: button.loading ? foregroundColor : (!button.enabled ? disableForeground : (button.pressed ? "#779DA7" : mainColor))
         color: !button.enabled ? disableBackgound : (button.pressed ? pressedColor : (button.hovered ? hoveredColor : backgroundColor))
     }
 

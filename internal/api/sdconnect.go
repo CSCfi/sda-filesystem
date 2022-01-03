@@ -16,7 +16,7 @@ import (
 
 // This file contains structs and functions that are strictly for SD-Connect
 
-const SDConnect string = "SD-Connect"
+const SDConnect string = "SD Connect"
 
 // This exists for unit test mocking
 type tokenable interface {
@@ -160,19 +160,15 @@ func (c *sdConnectInfo) getEnvs() error {
 		return err
 	}
 	c.metadataURL = strings.TrimRight(api, "/")
+	if err := testURL(c.metadataURL); err != nil {
+		return fmt.Errorf("Cannot connect to %s metadata API: %w", SDConnect, err)
+	}
 
 	api, err = getEnv("FS_SD_CONNECT_DATA_API", true)
 	if err != nil {
 		return err
 	}
 	c.dataURL = strings.TrimRight(api, "/")
-	return nil
-}
-
-func (c *sdConnectInfo) testURLs() error {
-	if err := testURL(c.metadataURL); err != nil {
-		return fmt.Errorf("Cannot connect to %s metadata API: %w", SDConnect, err)
-	}
 	if err := testURL(c.dataURL); err != nil {
 		return fmt.Errorf("Cannot connect to %s data API: %w", SDConnect, err)
 	}
@@ -270,7 +266,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 	}
 
 	var headers SpecialHeaders
-	if err := c.downloadData(nodes, &headers, 0, 1); err != nil {
+	if err := c.downloadData(nodes, &headers, 0, 2); err != nil {
 		logs.Error(fmt.Errorf("Encryption status and segmented object size of object %q could not be determined: %w", path, err))
 		*size = -1
 		return
