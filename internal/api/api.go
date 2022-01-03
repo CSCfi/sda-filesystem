@@ -44,7 +44,6 @@ type httpInfo struct {
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
-	testURLs() error
 	getLoginMethod() LoginMethod
 	validateLogin(...string) error
 	levelCount() int
@@ -181,18 +180,7 @@ func InitializeClient() error {
 	}
 
 	logs.Debug("Initializing HTTP client successful")
-
-	for i := range hi.repositories {
-		if err := hi.repositories[i].testURLs(); err != nil {
-			return err
-		}
-	}
 	return nil
-}
-
-// TestUrls tests whether we can connect to API urls and that certificates are valid
-var TestURLs = func(rep string) error {
-	return hi.repositories[rep].testURLs()
 }
 
 var testURL = func(url string) error {
@@ -328,10 +316,6 @@ func UpdateAttributes(nodes []string, path string, attr interface{}) {
 
 // DownloadData requests data between range [start, end) from an API.
 func DownloadData(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
-	if len(nodes) < 4 {
-		return nil, fmt.Errorf("Invalid path %q. Not deep enough", path)
-	}
-
 	// chunk index of cache
 	chunk := start / chunkSize
 	// start coordinate of chunk

@@ -96,6 +96,8 @@ func (lm *LoginModel) getRepository(idx int) string {
 	return lm.logins[idx].repository
 }
 
-func (lm *LoginModel) setLogginIn(idx int, value bool) {
+func (lm *LoginModel) setLoggedIn(idx int, value bool) {
 	lm.logins[idx].loggedIn = value
+	var index = lm.Index(idx, 0, core.NewQModelIndex())
+	lm.DataChanged(index, index, []int{LoggedIn})
 }

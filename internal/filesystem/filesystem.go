@@ -198,7 +198,7 @@ func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 						send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: len(containers)}
 					}
 				} else if len(send) > 0 {
-					send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: 1}
+					send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: 0}
 				}
 			}(rep, pr)
 		}

@@ -12,7 +12,7 @@ import (
 
 // This file contains structs and functions that are strictly for SD-Submit
 
-const SDSubmit string = "SD-Submit"
+const SDSubmit string = "SD Submit"
 
 type submittable interface {
 	getFiles(string) ([]Metadata, error)
@@ -57,11 +57,15 @@ func (s *sdSubmitInfo) getEnvs() error {
 	if err != nil {
 		return err
 	}
-	for _, u := range strings.Split(urls, ",") {
+	s.urls = []string{}
+	for i, u := range strings.Split(urls, ",") {
 		if err = validURL(u); err != nil {
 			return err
 		}
 		s.urls = append(s.urls, strings.TrimRight(u, "/"))
+		if err := testURL(s.urls[i]); err != nil {
+			return fmt.Errorf("Cannot connect to SD-Submit API: %w", err)
+		}
 	}
 	return nil
 }
@@ -95,15 +99,6 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	}
 	if len(s.datasets) == 0 {
 		return fmt.Errorf("No datasets found for %s", SDSubmit)
-	}
-	return nil
-}
-
-func (s *sdSubmitInfo) testURLs() error {
-	for _, url := range s.urls {
-		if err := testURL(url); err != nil {
-			return fmt.Errorf("Cannot connect to SD-Submit API: %w", err)
-		}
 	}
 	return nil
 }

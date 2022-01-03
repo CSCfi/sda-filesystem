@@ -93,9 +93,10 @@ Window {
 				success: loggedIn
 				anchors.horizontalCenter: parent.horizontalCenter
 
-				onOpenedChanged: {
-					if (method == LoginMethod.Token && opened) {
-						QmlBridge.loginWithToken(index)
+				onSuccessChanged: {
+					if (success) {
+						continueButton.enabled = true
+						loader.item.loading = false
 					}
 				}
 
@@ -103,9 +104,7 @@ Window {
 					target: QmlBridge
 					onLoginError: {
 						if (repository == rep) {
-							if (method == LoginMethod.Token) {
-								accordion.hide()
-							}
+							loader.item.loading = false
 							popup.errorMessage = message
 							popup.errorTextClarify = err
 							popup.open()
@@ -114,19 +113,23 @@ Window {
 				}
 
 				Loader {
+					id: loader
 					width: parent.width - 2 * CSC.Style.padding
 					sourceComponent: (method == LoginMethod.Password) ? passwordComponent : tokenComponent
 					anchors.horizontalCenter: parent.horizontalCenter
 
-					property int index: index
-					property int repository: repository
-					property bool opened: accordion.opened
+					onLoaded: {
+						loader.item.index = index
+						loader.item.repository = repository
+						loader.item.open = Qt.binding(function() { return accordion.open })
+						accordion.loading = Qt.binding(function() { return loader.item.loading })
+					}
 				}
 			}
 		}
 
 		CSC.Button {
-			id: loginButton
+			id: continueButton
 			text: "Continue"
 			enabled: false
 			leftPadding: 30
@@ -145,7 +148,6 @@ Window {
 						return
 					}
 
-					loginButton.state = ""
 					loginWindow.hide()
 					homeWindow.show()
 				} else {
@@ -164,10 +166,21 @@ Window {
 		Item {
 			id: empty 
 
+			property int index
+			property string repository
+			property bool open
+			property bool loading: false
+
+			onOpenChanged: {
+				loading = true
+				QmlBridge.loginWithToken(index)
+			}
+
 			Connections {
 				target: QmlBridge
 				onLogin401: {
-					if (repository == form.parent.repository) {
+					if (repository == empty.repository) {
+						loading = false
 						popup.errorMessage = "Invalid " + repository + " token"
 						popup.errorTextClarify = ""
 						popup.open()
@@ -183,18 +196,42 @@ Window {
 		ColumnLayout {
 			id: form
 			width: parent.width
+			spacing: 0.5 * CSC.Style.padding
+
+			property int index
+			property string repository
+			property bool open
+			property bool loading: !enabled
+
+			onOpenChanged: {
+				if (open) {
+					usernameField.forceActiveFocus()
+				}
+			}
+
+			Keys.onReturnPressed: loginButton.clicked() // Enter key
+	    	Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
 
 			Connections {
 				target: QmlBridge
 				onLogin401: {
-					if (repository == form.parent.repository) {
-						error401.visible = true
+					if (repository == form.repository) {
+						passwordField.errorVisible = true
+						form.enabled = true
+
+						if (usernameField.text != "") {
+							passwordField.selectAll()
+							passwordField.forceActiveFocus()
+						} else {
+							usernameField.forceActiveFocus()
+						}
 					}
 				}
 			}
 
 			Text {
 				text: "Please log in with your CSC credentials"
+				topPadding: 10
 			}
 
 			CSC.TextField {
@@ -206,52 +243,24 @@ Window {
 			CSC.TextField {
 				id: passwordField
 				placeholderText: "Password"
-				Layout.fillWidth: true
+				errorText: "Please enter valid password"
 				echoMode: TextInput.Password
-			}
-
-			Button {
-				id: error401
-                padding: 0
-				visible: false
-				text: "Please enter valid password"
-                icon.source: "qrc:/qml/images/x-circle-fill.svg"
-                icon.color: CSC.Style.red
-                icon.width: 10
-                icon.height: 10
-                enabled: false
-
-                background: Rectangle {
-                    color: "transparent"
-                }
+				Layout.fillWidth: true
 			}
 
 			CSC.Button {
 				id: loginButton
 				text: "Login"
 				outlined: true
+				topPadding: 10
+				bottomPadding: 10
 
 				onClicked: {
-					loginButton.state = "loading"
-					console.log(form.parent.index, form.parent.repository)
 					popup.close()
-					error401.visible = false
-					QmlBridge.loginWithPassword(form.parent.index, usernameField.text, passwordField.text)
+					form.enabled = false
+					passwordField.errorVisible = false
+					QmlBridge.loginWithPassword(form.index, usernameField.text, passwordField.text)
 				}
-
-				// Prevents button from shrinking when loading
-				Component.onCompleted: {
-					Layout.minimumHeight = implicitHeight
-					Layout.minimumWidth = implicitWidth
-				}
-
-				states: [
-					State {
-						name: "loading"; 
-						PropertyChanges { target: loginButton; text: ""; loading: true }
-						PropertyChanges { target: form; enabled: false }
-					}
-				]
 			}
 		}			
 	}

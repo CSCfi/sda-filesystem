@@ -11,29 +11,24 @@ ColumnLayout {
     property string heading
     property color backgroundColor: "#DBE7E9"
     property color textColor: CSC.Style.primaryColor
-    property bool opened: extraContent.visible
+    property bool open: extraContent.visible
     property bool success: false
+    property bool loading: false
 
     default property alias content: extraContent.data
 
-    function hide() {
-        extraContent.visible = false
-        toggle.toggleState()
-    }
-
     onSuccessChanged: {
         if (success) {
-            toggle.done()
+            toggle.state = "done"
             area.enabled = false
             extraContent.visible = false
         }
-        console.log(success);
     }
 
     Rectangle {
         id: bkg
         color: backgroundColor
-        implicitHeight: 40
+        implicitHeight: 45
         radius: 5
 
         Layout.preferredHeight: implicitHeight
@@ -54,19 +49,32 @@ ColumnLayout {
                 Layout.fillWidth: true
             }
 
-            CSC.Toggle {
-                id: toggle
-                width: 40
+            Item {
+                height: parent.height
+                Layout.preferredWidth: toggle.width
+
+                CSC.Toggle {
+                    id: toggle
+                    height: 0.5 * bkg.height
+                    opacity: busy.running ? 0.5 : 1
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                BusyIndicator {
+                    id: busy
+                    running: accordion.loading
+                    anchors.fill: parent
+                    anchors.centerIn: toggle
+                }
             }
         }
 
         MouseArea {
             id: area
+            cursorShape: Qt.PointingHandCursor
             anchors.fill: parent
-            onClicked: { 
-                extraContent.visible = !extraContent.visible
-                toggle.toggleState()
-            }
+
+            onClicked: extraContent.visible = !extraContent.visible
         }
     }
 
