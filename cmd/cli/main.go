@@ -223,16 +223,17 @@ func shutdown() <-chan bool {
 }
 
 func main() {
-	flag.Parse()
-	err := processFlags()
-	if err != nil {
-		logs.Fatal(err)
-	}
-	err = api.InitializeCache()
+	err := api.InitializeCache()
 	if err != nil {
 		logs.Fatal(err)
 	}
 	err = api.InitializeClient()
+	if err != nil {
+		logs.Fatal(err)
+	}
+
+	flag.Parse()
+	err = processFlags()
 	if err != nil {
 		logs.Fatal(err)
 	}
