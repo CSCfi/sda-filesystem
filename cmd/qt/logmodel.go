@@ -36,16 +36,16 @@ func (ll *LogLevel) init() {
 }
 
 type LogModel struct {
-	core.QAbstractTableModel
+	core.QAbstractListModel
 
 	_ func()              `constructor:"init"`
 	_ func(int, []string) `signal:"addLog,auto"`
-	_ func()              `signal:"removeDummy,auto"`
 	_ func(string)        `signal:"saveLogs,auto"`
 
-	roles        map[int]*core.QByteArray
-	dummyPresent bool
-	logs         []logRow
+	_ int `property:"count"`
+
+	roles map[int]*core.QByteArray
+	logs  []logRow
 }
 
 type logRow struct {
@@ -63,10 +63,8 @@ func (lm *LogModel) init() {
 
 	lm.ConnectData(lm.data)
 	lm.ConnectRowCount(lm.rowCount)
-	lm.ConnectColumnCount(lm.columnCount)
 	lm.ConnectRoleNames(lm.roleNames)
-
-	lm.addDummy()
+	lm.SetCount(0)
 }
 
 func (lm *LogModel) data(index *core.QModelIndex, role int) *core.QVariant {
@@ -78,7 +76,7 @@ func (lm *LogModel) data(index *core.QModelIndex, role int) *core.QVariant {
 		return core.NewQVariant()
 	}
 
-	var l = lm.logs[len(lm.logs)-index.Row()-1]
+	var l = lm.logs[index.Row()]
 
 	switch role {
 	case Level:
@@ -96,29 +94,8 @@ func (lm *LogModel) rowCount(parent *core.QModelIndex) int {
 	return len(lm.logs)
 }
 
-func (lm *LogModel) columnCount(parent *core.QModelIndex) int {
-	return 3
-}
-
 func (lm *LogModel) roleNames() map[int]*core.QByteArray {
 	return lm.roles
-}
-
-func (lm *LogModel) addDummy() {
-	if !lm.dummyPresent {
-		lm.logs = append(lm.logs, logRow{level: int(logrus.WarnLevel), timestamp: "0000-00-00 00:00:00", message: []string{}})
-		lm.dummyPresent = true
-	}
-}
-
-func (lm *LogModel) removeDummy() {
-	if lm.dummyPresent {
-		length := len(lm.logs)
-		lm.BeginRemoveRows(core.NewQModelIndex(), length-1, length-1)
-		lm.logs = lm.logs[:length-1]
-		lm.EndRemoveRows()
-		lm.dummyPresent = false
-	}
 }
 
 func (lm *LogModel) addLog(level int, message []string) {
@@ -126,14 +103,11 @@ func (lm *LogModel) addLog(level int, message []string) {
 		timestamp: core.QDateTime_CurrentDateTime().ToString("yyyy-MM-dd hh:mm:ss"), message: message}
 	length := len(lm.logs)
 
-	if lm.dummyPresent {
-		lm.BeginInsertRows(core.NewQModelIndex(), length-1, length-1)
-		lm.logs = append(lm.logs[:length-1], lg, lm.logs[length-1])
-	} else {
-		lm.BeginInsertRows(core.NewQModelIndex(), length, length)
-		lm.logs = append(lm.logs, lg)
-	}
+	lm.BeginInsertRows(core.NewQModelIndex(), length, length)
+	lm.logs = append(lm.logs, lg)
 	lm.EndInsertRows()
+
+	lm.SetCount(length + 1)
 }
 
 func (lm *LogModel) saveLogs(url string) {

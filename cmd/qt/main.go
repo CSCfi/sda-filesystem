@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
@@ -32,17 +31,17 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(int)                      `slot:"loginWithToken,auto"`
-	_ func(int, string, string)      `slot:"loginWithPassword,auto"`
-	_ func()                         `slot:"loadFuse,auto"`
-	_ func()                         `slot:"openFuse,auto"`
-	_ func(string) string            `slot:"changeMountPoint,auto"`
-	_ func()                         `slot:"shutdown,auto"`
-	_ func(repository string)        `signal:"login401"`
-	_ func(rep, message, err string) `signal:"loginError"`
-	_ func(message, err string)      `signal:"initError"`
-	_ func()                         `signal:"fuseReady"`
-	_ func()                         `signal:"panic"`
+	_ func(int)                     `slot:"loginWithToken,auto"`
+	_ func(int, string, string)     `slot:"loginWithPassword,auto"`
+	_ func()                        `slot:"loadFuse,auto"`
+	_ func()                        `slot:"openFuse,auto"`
+	_ func(string) string           `slot:"changeMountPoint,auto"`
+	_ func()                        `slot:"shutdown,auto"`
+	_ func(idx int)                 `signal:"login401"`
+	_ func(idx int, message string) `signal:"loginError"`
+	_ func(message string)          `signal:"initError"`
+	_ func()                        `signal:"fuseReady"`
+	_ func()                        `signal:"panic"`
 
 	_ string    `property:"mountPoint"`
 	_ gui.QFont `property:"fixedFont"`
@@ -65,15 +64,14 @@ func (qb *QmlBridge) initializeAPI() {
 	err := api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
-		outer, inner := logs.Wrapper(err)
-		qb.InitError(outer, strings.Join(logs.StructureError(inner), "\n"))
+		qb.InitError("Initializing cache failed")
 		return
 	}
 
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Error(err)
-		qb.InitError("Initializing HTTP client failed", strings.Join(logs.StructureError(err), "\n"))
+		qb.InitError("Initializing HTTP client failed")
 		return
 	}
 }
@@ -90,7 +88,7 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 	rep := loginModel.getRepository(idx)
 	if err := api.AddRepository(rep); err != nil {
 		logs.Error(err)
-		qb.LoginError(rep, "Environment variables not valid", strings.Join(logs.StructureError(err), "\n"))
+		qb.LoginError(idx, "Environment variables are not valid")
 		return
 	}
 
@@ -99,11 +97,11 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 
 		var re *api.RequestError
 		if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
-			qb.Login401(rep)
+			qb.Login401(idx)
 			return
 		}
 
-		qb.LoginError(rep, fmt.Sprintf("%s authentication failed", rep), strings.Join(logs.StructureError(err), "\n"))
+		qb.LoginError(idx, fmt.Sprintf("%s authentication failed", rep))
 		return
 	}
 
@@ -188,7 +186,7 @@ func init() {
 	} else {
 		logs.SetLevel("info")
 	}
-	//logs.SetSignal(logModel.AddLog)
+	logs.SetSignal(logModel.AddLog)
 }
 
 func main() {
@@ -216,7 +214,7 @@ func main() {
 	app.RootContext().SetContextProperty("LoginMethod", NewLoginMethod(nil))
 
 	app.AddImportPath("qrc:/qml/")
-	app.Load(core.NewQUrl3("qrc:/qml/main/login.qml", 0))
+	app.Load(core.NewQUrl3("qrc:/qml/main/main.qml", 0))
 
 	//fmt.Println(core.QThread_CurrentThread().Pointer())
 
