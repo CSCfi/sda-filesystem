@@ -39,7 +39,7 @@ type node struct {
 	checkDecryption bool
 }
 
-// nodeAndPath contains the node itself and a list of names which are the original path to the node
+// nodeAndPath contains the node itself and a list of names which are the original path to the node. Yes, a very original name
 type nodeAndPath struct {
 	node *node
 	path []string
@@ -66,11 +66,13 @@ func SetSignalBridge(fn func()) {
 
 // CheckPanic recovers from panic if one occured. Used for GUI
 func CheckPanic() {
-	if err := recover(); err != nil && signalBridge != nil {
-		logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
-			fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
-		// Send alert
-		signalBridge()
+	if signalBridge != nil {
+		if err := recover(); err != nil {
+			logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
+				fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+			// Send alert
+			signalBridge()
+		}
 	}
 }
 
@@ -79,7 +81,6 @@ func InitializeFileSystem(send ...chan<- LoadProjectInfo) *Fuse {
 	logs.Info("Initializing in-memory filesystem database")
 	timestamp := fuse.Now()
 	fs := Fuse{}
-	defer fs.synchronize()()
 	fs.ino++
 	fs.openmap = map[uint64]nodeAndPath{}
 	fs.root = newNode(0, fs.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)

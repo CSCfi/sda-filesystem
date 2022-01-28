@@ -12,7 +12,7 @@ import (
 
 // This file contains structs and functions that are strictly for SD-Submit
 
-const SDSubmit string = "SD Submit"
+const SDSubmit string = "SD-Submit"
 
 type submittable interface {
 	getFiles(string) ([]Metadata, error)

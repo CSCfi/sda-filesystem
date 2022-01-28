@@ -11,7 +11,7 @@ ColumnLayout {
     property string heading
     property color backgroundColor: "#DBE7E9"
     property color textColor: CSC.Style.primaryColor
-    property bool open: extraContent.visible
+    property bool open: false
     property bool success: false
     property bool loading: false
 
@@ -55,7 +55,7 @@ ColumnLayout {
 
                 CSC.Toggle {
                     id: toggle
-                    height: 0.5 * bkg.height
+                    height: 0.45 * bkg.height
                     opacity: busy.running ? 0.5 : 1
                     anchors.verticalCenter: parent.verticalCenter
                 }
@@ -74,7 +74,10 @@ ColumnLayout {
             cursorShape: Qt.PointingHandCursor
             anchors.fill: parent
 
-            onClicked: extraContent.visible = !extraContent.visible
+            onClicked: {
+                extraContent.visible = !extraContent.visible
+                accordion.open = extraContent.visible // Only want to trigger onOpenChanged when accordion is clicked
+            }
         }
     }
 

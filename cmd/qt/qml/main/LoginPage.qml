@@ -3,37 +3,17 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import Qt.labs.qmlmodels 1.0
-import QtQuick.Window 2.13
 import QtQml 2.13
 import csc 1.0 as CSC
 
-Window {
-	id: loginWindow
-	visible: true
-	title: "SDA Filesystem"
-	minimumHeight: content.height + 2 * CSC.Style.padding
-	minimumWidth: content.width + 2 * CSC.Style.padding
-	maximumHeight: minimumHeight
-	maximumWidth: minimumWidth
-
-	property var component
-	property ApplicationWindow homeWindow
+Page {
+	id: page
+	implicitWidth: content.width + 2 * CSC.Style.padding
+	implicitHeight: content.height + 2 * CSC.Style.padding
 
 	Material.accent: CSC.Style.primaryColor
 
-	CSC.Popup {
-		id: popup
-	}
-
-	Connections {
-		target: QmlBridge
-		onInitError: {
-			content.enabled = false
-			popup.errorMessage = message
-			popup.errorTextClarify = err
-			popup.open()
-		}
-	}
+	property bool loggedIn: false
 
 	Column {
 		id: content
@@ -42,29 +22,6 @@ Window {
 		width: childrenRect.width + leftPadding
 		topPadding: 2 * CSC.Style.padding
 		leftPadding: 2 * CSC.Style.padding
-		
-		Timer {
-            id: timer
-            interval: 0; running: false; repeat: false
-            onTriggered: loginWindow.height = content.height + 2 * CSC.Style.padding
-        }
-
-		onHeightChanged: timer.restart()
-
-		RowLayout {
-			Image {
-				source: "qrc:/qml/images/CSC_logo.svg"
-				fillMode: Image.PreserveAspectFit
-				Layout.preferredWidth: paintedWidth
-				Layout.preferredHeight: 40
-			}
-
-			Text {
-				text: "<h3>Sensitive Data Services</h3>"
-				color: CSC.Style.grey
-				maximumLineCount: 1
-			}
-		}
 
 		Label {
 			text: "<h1>SDA Filesystem</h1>"
@@ -74,7 +31,6 @@ Window {
 
 		Label {
 			text: "Select one or more services to connect to"
-			color: CSC.Style.grey
 			maximumLineCount: 1
 		}
 
@@ -103,10 +59,9 @@ Window {
 				Connections {
 					target: QmlBridge
 					onLoginError: {
-						if (repository == rep) {
+						if (index == idx) {
 							loader.item.loading = false
-							popup.errorMessage = message
-							popup.errorTextClarify = err
+							popup.errorMessage = message + ". Check logs for further details."
 							popup.open()
 						}
 					}
@@ -135,28 +90,7 @@ Window {
 			leftPadding: 30
 			rightPadding: 30
 			
-			onClicked: {
-				popup.errorMessage = "Could not create main window"
-				popup.errorTextClarify = ""
-
-				component = Qt.createComponent("mainWindow.qml")
-				if (component.status == Component.Ready) {
-					homeWindow = component.createObject(loginWindow)
-					if (homeWindow == null) {
-						console.log("Error creating main window")
-						popup.open()
-						return
-					}
-
-					loginWindow.hide()
-					homeWindow.show()
-				} else {
-					if (component.status == Component.Error) {
-						console.log("Error loading component: " + component.errorString());
-					}
-					popup.open()
-				}
-			}
+			onClicked: page.loggedIn = true
 		}
 	}
 
@@ -179,10 +113,9 @@ Window {
 			Connections {
 				target: QmlBridge
 				onLogin401: {
-					if (repository == empty.repository) {
+					if (idx == empty.index) {
 						loading = false
 						popup.errorMessage = "Invalid " + repository + " token"
-						popup.errorTextClarify = ""
 						popup.open()
 					}
 				}
@@ -215,7 +148,7 @@ Window {
 			Connections {
 				target: QmlBridge
 				onLogin401: {
-					if (repository == form.repository) {
+					if (idx == form.index) {
 						passwordField.errorVisible = true
 						form.enabled = true
 
