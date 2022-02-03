@@ -56,6 +56,10 @@ func (r *mockRepository) getToken() string { return "" }
 //func (r *mockRepository) updateAttributes([]string, string, interface{})    {}
 //func (r *mockRepository) downloadData([]string, []byte, int64, int64) error { return nil }
 
+var testURLs = func() error {
+	return nil
+}
+
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
@@ -242,28 +246,13 @@ func TestInitializeClient(t *testing.T) {
 }
 
 func TestInitializeClient_Certs_Not_Found(t *testing.T) {
-	origTestUrls := testURLs
-	origRepositories := hi.repositories
+	origHTTPInfo := hi
 
 	defer func() {
-		testURLs = origTestUrls
-		hi.repositories = origRepositories
+		hi = origHTTPInfo
 	}()
 
-	file1, err := ioutil.TempFile("", "cert")
-	if err != nil {
-		t.Fatalf("Failed to create file %q", file1.Name())
-	}
-
-	file2, err := ioutil.TempFile("", "cert")
-	if err != nil {
-		t.Fatalf("Failed to create file %q", file2.Name())
-	}
-	os.RemoveAll(file2.Name())
-
-	testURLs = func() error { return nil }
-	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
-		"rep2": &mockRepository{certPath: file2.Name()}}
+	hi.certPath = "/tmp/path/that/does/not/exist.txt"
 
 	if err := InitializeClient(); err == nil {
 		t.Fatalf("Function did not return error")

@@ -311,19 +311,18 @@ func TestSDConnectFetchTokens(t *testing.T) {
 func TestSDConnectGetEnvs(t *testing.T) {
 	var tests = []struct {
 		testname string
-		values   [3]string
+		values   [2]string
 		failIdx  int
 	}{
-		{"OK", [3]string{"cert.pem", "https://example.com", "https://google.com"}, -1},
-		{"FAIL_1", [3]string{"", "https://example.com", "https://google.com"}, 0},
-		{"FAIL_2", [3]string{"cert.pem", "http://example.com", "https://google.com"}, 1},
-		{"FAIL_3", [3]string{"cert.pem", "https://example.com", ""}, 2},
+		{"OK", [2]string{"https://example.com", "https://google.com"}, -1},
+		{"FAIL_2", [2]string{"http://example.com", "https://google.com"}, 0},
+		{"FAIL_3", [2]string{"https://example.com", ""}, 1},
 	}
 
 	origGetEnvs := getEnv
 	defer func() { getEnv = origGetEnvs }()
 
-	envNames := map[string]int{"FS_SD_CONNECT_CERTS": 0, "FS_SD_CONNECT_METADATA_API": 1, "FS_SD_CONNECT_DATA_API": 2}
+	envNames := map[string]int{"FS_SD_CONNECT_METADATA_API": 0, "FS_SD_CONNECT_DATA_API": 1}
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
@@ -340,44 +339,11 @@ func TestSDConnectGetEnvs(t *testing.T) {
 					t.Errorf("Unexpected err: %s", err.Error())
 				}
 			} else if tt.testname != "OK" {
-				t.Error("Function should have returned error")
-			} else if sd.metadataURL != tt.values[1] {
-				t.Errorf("Incorrect metadata URL. Expected %q, got %q", tt.values[1], sd.metadataURL)
-			} else if sd.dataURL != tt.values[2] {
-				t.Errorf("Incorrect data URL. Expected %q, got %q", tt.values[2], sd.dataURL)
-			}
-		})
-	}
-}
-
-func TestSDConnectTestURLs(t *testing.T) {
-	var tests = []struct {
-		testname, metadataURL, dataURL, failURL string
-	}{
-		{"OK", "google.com", "finnkino.fi", ""},
-		{"FAIL_METADATA", "github.com", "gitlab.com", "github.com"},
-		{"FAIL_DATA", "hs.fi", "is.fi", "is.fi"},
-	}
-
-	origTestURL := testURL
-	defer func() { testURL = origTestURL }()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			sd := &sdConnectInfo{metadataURL: tt.metadataURL, dataURL: tt.dataURL}
-			testURL = func(url string) error {
-				if tt.failURL != "" && url == tt.failURL {
-					return errors.New("Error")
-				}
-				return nil
-			}
-
-			if err := sd.testURLs(); err != nil {
-				if tt.testname == "OK" {
-					t.Errorf("Unexpected error: %s", err.Error())
-				}
-			} else if tt.testname != "OK" {
-				t.Error("Function did not return error")
+				t.Errorf("Test %s should have returned error", tt.testname)
+			} else if sd.metadataURL != tt.values[0] {
+				t.Errorf("Incorrect metadata URL. Expected %q, got %q", tt.values[0], sd.metadataURL)
+			} else if sd.dataURL != tt.values[1] {
+				t.Errorf("Incorrect data URL. Expected %q, got %q", tt.values[1], sd.dataURL)
 			}
 		})
 	}
