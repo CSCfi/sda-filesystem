@@ -219,12 +219,15 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 		request.Header.Set(k, v)
 	}
 
+	escapedURL := strings.Replace(request.URL.EscapedPath(), "\n", "", -1)
+	escapedURL = strings.Replace(escapedURL, "\r", "", -1)
+
 	// Execute HTTP request
 	// retry the request as specified by hi.httpRetry variable
 	count := 0
 	for {
 		response, err = hi.client.Do(request)
-		logs.Debugf("Trying Request %s, attempt %d/%d", request.URL, count+1, hi.httpRetry)
+		logs.Debugf("Trying Request %s, attempt %d/%d", escapedURL, count+1, hi.httpRetry)
 		count++
 
 		if err != nil && count >= hi.httpRetry {
@@ -274,7 +277,7 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 		}
 	}
 
-	logs.Debug("Request ", request.URL, " returned a response")
+	logs.Debugf("Request %s returned a response", escapedURL)
 	return nil
 }
 

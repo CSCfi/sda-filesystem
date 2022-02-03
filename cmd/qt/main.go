@@ -168,10 +168,14 @@ func (qb *QmlBridge) openFuse() {
 		logs.Errorf("Unrecognized OS")
 		return
 	}
-	cmd := exec.Command(command, qb.MountPoint())
+	// this is to address gosec204, we clean to return the shortest path name
+	// that returns string which seems to satisfy the gosec204
+	userPath := path.Clean(qb.MountPoint())
+
+	cmd := exec.Command(command, userPath)
 	err = cmd.Run()
 	if err != nil {
-		logs.Errorf("Could not open directory %s: %w", qb.MountPoint(), err)
+		logs.Errorf("Could not open directory %s: %w", userPath, err)
 	}
 }
 

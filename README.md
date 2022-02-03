@@ -1,5 +1,9 @@
 # SDA-Filesystem
 
+[![Linting go code](https://github.com/CSCfi/sda-filesystem/actions/workflows/linting.yml/badge.svg)](https://github.com/CSCfi/sda-filesystem/actions/workflows/linting.yml)
+[![Unit Tests](https://github.com/CSCfi/sda-filesystem/actions/workflows/unittest.yml/badge.svg)](https://github.com/CSCfi/sda-filesystem/actions/workflows/unittest.yml)
+[![Coverage Status](https://coveralls.io/repos/github/CSCfi/sda-filesystem/badge.svg?branch=faeture/add-unit-tests-action)](https://coveralls.io/github/CSCfi/sda-filesystem?branch=faeture/add-unit-tests-action)
+
 This desktop software makes use of the [SD-Connect Proxy API](docs/API.md) to build a FUSE (Filesystem in Userspace) layer. Software currently supports Linux and macOS.
 
 
