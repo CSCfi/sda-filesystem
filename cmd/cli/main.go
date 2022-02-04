@@ -244,9 +244,12 @@ func main() {
 		logs.Fatal("No repositories found. Filesystem not created")
 	}
 
+	go func() {
+		fs := filesystem.InitializeFileSystem()
+		fs.PopulateFilesystem()
+		filesystem.MountFilesystem(fs, mountPoint)
+	}()
+
 	done := shutdown()
-	fs := filesystem.InitializeFileSystem()
-	fs.PopulateFilesystem()
-	filesystem.MountFilesystem(fs, mountPoint)
 	<-done
 }
