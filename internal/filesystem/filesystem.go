@@ -94,7 +94,7 @@ func InitializeFileSystem(send ...chan<- LoadProjectInfo) *Fuse {
 		fs.makeNode(fs.root, md, enabled, fuse.S_IFDIR|sRDONLY, timestamp)
 
 		// These are the folders displayed in GUI
-		projects, _ := api.GetNthLevel(enabled)
+		projects, _ := api.GetNthLevel(enabled, enabled)
 		for _, project := range projects {
 			projectSafe := project.Name
 
@@ -167,7 +167,7 @@ func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 
 				projectPath := repository + "/" + project
 				logs.Debugf("Fetching data for %q", filepath.FromSlash(projectPath))
-				containers, err := api.GetNthLevel(repository, prntNode.originalName)
+				containers, err := api.GetNthLevel(repository, projectPath, prntNode.originalName)
 
 				if err != nil {
 					logs.Error(err)
@@ -275,14 +275,12 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 		logs.Debugf("Fetching data for directory %q", filepath.FromSlash(containerPath))
 
 		c := fs.getNode(containerPath, ^uint64(0))
-		objects, err := api.GetNthLevel(c.path[0], c.path[1], c.path[2])
+		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1], c.path[2])
 		if err != nil {
 			logs.Error(err)
 			continue
 		}
 
-		//fmt.Println("Hei", containerPath)
-		//fmt.Println(objects)
 		nodesSafe := split(containerPath)
 		fs.createLevel(c.node, objects, containerPath, timestamp)
 
@@ -360,7 +358,7 @@ var newNode = func(ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Ti
 	return &self
 }
 
-// makeNode adds a node into the fuse. If there if a conflict and the name of the node needs to changed, th
+// makeNode adds a node into the fuse. Returns created node and its name in filesystem
 func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode uint32, timestamp fuse.Timespec) (*node, string) {
 	name := path.Base(nodePath)
 	dir := (fuse.S_IFDIR == mode&fuse.S_IFMT)
@@ -374,7 +372,6 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 
 	// A folder or a file with the same name already exists
 	if possibleTwin != nil {
-		fmt.Println(nodePath, name, meta.Name)
 		// Create a unique suffix for file/folder
 		parts := strings.SplitN(name, ".", 2)
 		i := 1

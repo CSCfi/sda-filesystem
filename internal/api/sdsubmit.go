@@ -111,7 +111,7 @@ func (s *sdSubmitInfo) levelCount() int {
 	return 2
 }
 
-func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
+func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, error) {
 	switch len(nodes) {
 	case 0:
 		i := 0
@@ -122,7 +122,7 @@ func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
 		}
 		return datasets, nil
 	case 1:
-		return s.getFiles(nodes[0])
+		return s.getFiles(fsPath, nodes[0])
 	default:
 		return nil, nil
 	}
@@ -139,10 +139,10 @@ func (s *sdSubmitInfo) getDatasets(idx int) ([]string, error) {
 	return datasets, nil
 }
 
-func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
+func (s *sdSubmitInfo) getFiles(fsPath, dataset string) ([]Metadata, error) {
 	idx, ok := s.datasets[dataset]
 	if !ok {
-		return nil, fmt.Errorf("Tried to request %s files for invalid dataset %s", SDSubmit, dataset)
+		return nil, fmt.Errorf("Tried to request files for invalid dataset %q", fsPath)
 	}
 
 	// Request files
@@ -150,7 +150,7 @@ func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
 	path := s.urls[idx] + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
 	err := makeRequest(path, s.token, SDSubmit, nil, nil, &files)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", SDSubmit+"/"+dataset, err)
+		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", fsPath, err)
 	}
 
 	var metadata []Metadata
@@ -165,7 +165,7 @@ func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
 		}
 	}
 
-	logs.Infof("Retrieved files for %s dataset %q", SDSubmit, dataset)
+	logs.Infof("Retrieved files for dataset %q", SDSubmit, fsPath)
 	return metadata, nil
 }
 

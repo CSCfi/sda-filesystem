@@ -48,7 +48,7 @@ type fuseInfo interface {
 	validateLogin(...string) error
 	levelCount() int
 	getToken() string
-	getNthLevel(...string) ([]Metadata, error)
+	getNthLevel(string, ...string) ([]Metadata, error)
 	updateAttributes([]string, string, interface{})
 	downloadData([]string, interface{}, int64, int64) error
 }
@@ -300,8 +300,8 @@ var makeRequest = func(url, token, repository string, query, headers map[string]
 	return nil
 }
 
-func GetNthLevel(rep string, nodes ...string) ([]Metadata, error) {
-	return hi.repositories[rep].getNthLevel(nodes...)
+func GetNthLevel(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
+	return hi.repositories[rep].getNthLevel(fsPath, nodes...)
 }
 
 // UpdateAttributes modifies attributes of node in 'path' in repository 'rep'.

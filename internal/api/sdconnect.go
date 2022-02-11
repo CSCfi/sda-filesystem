@@ -203,7 +203,7 @@ func (c *sdConnectInfo) getToken() string {
 	return c.token
 }
 
-func (c *sdConnectInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
+func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, error) {
 	if len(nodes) == 0 {
 		return c.projects, nil
 	}
@@ -226,10 +226,10 @@ func (c *sdConnectInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
 		err = makeRequest(path, token.Token, SDConnect, nil, headers, &meta)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s metadata for path %q: %w", SDConnect, nodes, err)
+		return nil, fmt.Errorf("Failed to retrieve metadata for %q: %w", fsPath, err)
 	}
 
-	logs.Infof("Retrieved %s metadata for %q", SDConnect, nodes)
+	logs.Infof("Retrieved metadata for %q", fsPath)
 	return meta, nil
 }
 
