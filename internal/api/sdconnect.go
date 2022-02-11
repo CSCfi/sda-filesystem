@@ -278,7 +278,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 	if headers.Decrypted {
 		dSize := calculateDecryptedSize(*size, headers.HeaderSize)
 		if dSize != -1 {
-			logs.Infof("Object %q is automatically decrypted", path)
+			logs.Debugf("Object %q is automatically decrypted", path)
 			*size = dSize
 		} else {
 			logs.Warningf("API returned header 'X-Decrypted' even though size of object %q is too small", path)

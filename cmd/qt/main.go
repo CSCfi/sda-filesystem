@@ -43,8 +43,7 @@ type QmlBridge struct {
 	_ func()                        `signal:"fuseReady"`
 	_ func()                        `signal:"panic"`
 
-	_ string    `property:"mountPoint"`
-	_ gui.QFont `property:"fixedFont"`
+	_ string `property:"mountPoint"`
 
 	fs *filesystem.Fuse
 }
@@ -56,7 +55,6 @@ func (qb *QmlBridge) init() {
 		logs.Warning(err)
 	}
 
-	qb.SetFixedFont(gui.QFontDatabase_SystemFont(gui.QFontDatabase__FixedFont))
 	filesystem.SetSignalBridge(qb.Panic)
 }
 

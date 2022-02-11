@@ -20,7 +20,7 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 		return
 	}
 
-	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.checkDecryption {
+	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.checkDecryption && n.node.stat.Size != 0 {
 		path = filepath.ToSlash(path)
 		path = strings.TrimPrefix(path, "/")
 		newSize := n.node.stat.Size

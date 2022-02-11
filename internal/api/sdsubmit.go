@@ -28,7 +28,7 @@ type sdSubmitInfo struct {
 	urls     []string
 	lock     sync.RWMutex
 	fileIDs  map[string]string
-	datasets map[string]Metadata
+	datasets map[string]int
 }
 
 type file struct {
@@ -75,11 +75,11 @@ func (s *sdSubmitInfo) getLoginMethod() LoginMethod {
 }
 
 func (s *sdSubmitInfo) validateLogin(auth ...string) error {
-	s.datasets = make(map[string]Metadata)
+	s.datasets = make(map[string]int)
 	count := 0
 
 	for i := range s.urls {
-		datasets, err := s.getDatasets(int64(i))
+		datasets, err := s.getDatasets(i)
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
@@ -89,7 +89,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 			count++
 		} else {
 			for j := range datasets {
-				s.datasets[datasets[j].OrigName] = datasets[j]
+				s.datasets[datasets[j]] = i
 			}
 		}
 	}
@@ -116,8 +116,8 @@ func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
 	case 0:
 		i := 0
 		datasets := make([]Metadata, len(s.datasets))
-		for _, meta := range s.datasets {
-			datasets[i] = Metadata{Name: meta.Name, OrigName: meta.OrigName, Bytes: -1}
+		for ds := range s.datasets {
+			datasets[i] = Metadata{Name: ds, Bytes: -1}
 			i++
 		}
 		return datasets, nil
@@ -128,33 +128,22 @@ func (s *sdSubmitInfo) getNthLevel(nodes ...string) ([]Metadata, error) {
 	}
 }
 
-func (s *sdSubmitInfo) getDatasets(idx int64) ([]Metadata, error) {
+func (s *sdSubmitInfo) getDatasets(idx int) ([]string, error) {
 	var datasets []string
 	err := makeRequest(s.urls[idx]+"/metadata/datasets", s.token, SDSubmit, nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
 	}
 
-	var metadata []Metadata
-	for i := range datasets {
-		md := Metadata{Name: datasets[i], Bytes: idx} // Here Bytes represents url idx just because it's a convenient int field
-		if u, err := url.ParseRequestURI(datasets[i]); err == nil {
-			md.Name = strings.TrimLeft(strings.TrimPrefix(datasets[i], u.Scheme), ":/")
-			md.OrigName = datasets[i]
-		}
-		metadata = append(metadata, md)
-	}
-
 	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, s.urls[idx])
-	return metadata, nil
+	return datasets, nil
 }
 
 func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
-	meta, ok := s.datasets[dataset]
+	idx, ok := s.datasets[dataset]
 	if !ok {
 		return nil, fmt.Errorf("Tried to request %s files for invalid dataset %s", SDSubmit, dataset)
 	}
-	idx := meta.Bytes
 
 	// Request files
 	var files []file
@@ -168,10 +157,6 @@ func (s *sdSubmitInfo) getFiles(dataset string) ([]Metadata, error) {
 	for i := range files {
 		if files[i].FileStatus == "READY" {
 			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
-			if strings.HasSuffix(md.Name, ".c4gh") {
-				md.Name = strings.TrimSuffix(files[i].DisplayFileName, ".c4gh")
-				md.OrigName = files[i].DisplayFileName
-			}
 			metadata = append(metadata, md)
 
 			s.lock.Lock()
@@ -189,11 +174,10 @@ func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interf
 }
 
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
-	meta, ok := s.datasets[nodes[0]]
+	idx, ok := s.datasets[nodes[0]]
 	if !ok {
 		return fmt.Errorf("Tried to request content of %s file %q with invalid dataset %q", SDSubmit, nodes[1], nodes[0])
 	}
-	idx := meta.Bytes
 
 	// Query params
 	query := map[string]string{

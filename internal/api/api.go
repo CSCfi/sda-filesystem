@@ -55,9 +55,8 @@ type fuseInfo interface {
 
 // Metadata contains node metadata fetched from an api
 type Metadata struct {
-	Bytes    int64  `json:"bytes"`
-	Name     string `json:"name"`
-	OrigName string // Can be empty if Name is the original
+	Bytes int64  `json:"bytes"`
+	Name  string `json:"name"`
 }
 
 // RequestError is used to obtain the status code from the HTTP request
