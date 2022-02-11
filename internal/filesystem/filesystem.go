@@ -135,7 +135,11 @@ func MountFilesystem(fs *Fuse, mount string) {
 	} else if runtime.GOOS == "linux" {
 		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
 		options = append(options, "-o", "auto_unmount")
-	} // Still needs windows options
+	} else if runtime.GOOS == "windows" {
+		options = append(options, "-o", "umask=0222")
+		options = append(options, "-o", "uid=-1")
+		options = append(options, "-o", "gid=-1")
+	}
 
 	logs.Infof("Mounting filesystem at %q", mount)
 	host.Mount(mount, options)
