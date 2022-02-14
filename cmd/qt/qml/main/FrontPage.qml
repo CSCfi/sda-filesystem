@@ -133,7 +133,7 @@ Page {
                 Rectangle {
                     radius: 5
                     border.width: 1
-                    border.color: CSC.Style.lineGray
+                    border.color: CSC.Style.grey
                     width: 300
                     height: childrenRect.height
                     anchors.verticalCenter: changeButton.verticalCenter
@@ -163,7 +163,7 @@ Page {
                     text: "Change"
                     outlined: true
 
-                    onClicked: { popup.close(); fileDialog.visible = true }
+                    onClicked: { popup.close(); dialogCreate.visible = true }
                 }
             }
         }
@@ -185,6 +185,67 @@ Page {
             TextMetrics {
                 id: textMetrics100
                 text: "100 %"
+            }
+
+            CSC.Table {
+                id: table
+                modelSource: ProjectModel
+                delegateSource: projectLine
+
+                footer: Rectangle {
+                    height: 50
+                    width: table.width
+                    border.width: 1
+                    border.color: CSC.Style.lightGrey
+
+                    RowLayout {
+                        spacing: 30
+                        anchors.fill: parent
+                        anchors.leftMargin: CSC.Style.padding
+
+                        Label {
+                            id: levelText
+                            text: "Name"
+                            font.pointSize: 13
+                            font.weight: Font.Medium
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: "Location"
+                            font.pointSize: 13
+                            font.weight: Font.Medium
+                            Layout.preferredWidth: 100
+                        }
+
+                        Text {
+                            id: messageLabel
+                            text: "Progress"
+                            font.pointSize: 13
+                            font.weight: Font.Medium
+                            Layout.preferredWidth: 200
+                        }
+                    }
+                }
+            }
+
+            Component {
+                id: projectLine
+
+                Rectangle {
+                    height: 60
+                    width: table.width
+                    border.width: 1
+                    border.color: CSC.Style.lightGrey
+
+                    RowLayout {
+                        spacing: 30
+                        anchors.fill: parent
+                        anchors.leftMargin: CSC.Style.padding
+
+
+                    }
+                }
             }
 
             /*TableView {
@@ -305,6 +366,48 @@ Page {
                     }
                 }
             }*/
+
+            Text {
+
+            }
+
+            CSC.Button {
+                id: createButton
+                text: "Create filesystem"
+                //topInset: 0
+                //bottomInset: 0
+                enabled: mountText.text != ""
+                //implicitWidth: state != "finished" ? changeButton.implicitWidth : implicitWidth
+                Layout.maximumWidth: implicitWidth + 2 * padding
+
+                Material.accent: "white"
+
+                onClicked: {
+                    if (state == "") {
+                        state = "loading"
+                        QmlBridge.loadFuse()
+                    } else if (state == "finished") {
+                        QmlBridge.openFuse()
+                    }
+                }
+
+                Connections {
+                    target: QmlBridge
+                    onFuseReady: createButton.state = "finished"
+                }
+
+                states: [
+                    State {
+                        name: "loading";  
+                        PropertyChanges { target: createButton; text: "Creating"; loading: true }
+                        PropertyChanges { target: page; enabled: false }
+                    },
+                    State {
+                        name: "finished";
+                        PropertyChanges { target: createButton; text: "Open folder"; enabled: true }
+                    }
+                ]
+            }
         }
     }
 }

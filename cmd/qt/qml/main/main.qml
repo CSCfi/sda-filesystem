@@ -12,20 +12,14 @@ ApplicationWindow {
     id: window
     title: "SDA Filesystem"
     visible: true
-    width: minimumWidth + 200
-    height: minimumHeight + 100
-    minimumWidth: Math.max(header.implicitWidth, login.implicitWidth)
+    visibility: "Maximized"
+    minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
+    minimumHeight: header.implicitHeight + login.implicitHeight
     font.capitalization: Font.MixedCase
-
-    Component.onCompleted: {
-        minimumHeight = header.implicitHeight + login.implicitHeight
-        x = Screen.width / 2 - width / 2
-        y = Screen.height / 2 - height / 2
-    }
-
+    
     Material.background: "white"
     
-    // Ensures fuse unmounts when application shuts down
+    // Ensures fuse unmounts when application terminates
 	onClosing: QmlBridge.shutdown()
 
     header: ToolBar {
@@ -141,7 +135,7 @@ ApplicationWindow {
 
 		signal ready
 
-        onAccepted: { LogModel.saveLogs(fileDialog.fileUrl); ready() }
+        onAccepted: { LogModel.saveLogs(dialogSave.fileUrl); ready() }
     }
 
     StackLayout {
@@ -158,7 +152,6 @@ ApplicationWindow {
             LoginPage {
                 id: login
 
-                onImplicitHeightChanged: timer.restart()
                 onLoggedInChanged: {
                     if (loggedIn) {
                         stack.state = "loggedIn"
@@ -187,6 +180,7 @@ ApplicationWindow {
 
             FrontPage {
                 id: front
+                width: parent.width
             }
         }
 
@@ -199,15 +193,5 @@ ApplicationWindow {
                 }
             }
         ]
-    }
-
-    Timer {
-        id: timer
-        interval: 0; running: false; repeat: false
-        onTriggered: {
-            if (window.height < window.header.implicitHeight + login.implicitHeight) {
-                window.height = window.header.implicitHeight + login.implicitHeight
-            }
-        }
     }
 }
