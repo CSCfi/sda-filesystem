@@ -267,8 +267,14 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 
 	var headers SpecialHeaders
 	if err := c.downloadData(nodes, &headers, 0, 2); err != nil {
-		logs.Error(fmt.Errorf("Encryption status and segmented object size of object %q could not be determined: %w", path, err))
-		*size = -1
+		var re *RequestError
+		if errors.As(err, &re) && re.StatusCode == 451 {
+			logs.Errorf("You do not have permission to access file %q", path)
+			*size = -2
+		} else {
+			logs.Errorf("Encryption status and segmented object size of object %q could not be determined: %w", path, err)
+			*size = -1
+		}
 		return
 	}
 	if headers.SegmentedObjectSize != -1 {

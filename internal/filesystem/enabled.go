@@ -20,13 +20,18 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 		return
 	}
 
-	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.checkDecryption && n.node.stat.Size != 0 {
+	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.checkDecryption {
 		path = filepath.ToSlash(path)
 		path = strings.TrimPrefix(path, "/")
 		newSize := n.node.stat.Size
 		api.UpdateAttributes(n.path, path, &newSize)
 		if newSize == -1 {
 			return -fuse.EIO, ^uint64(0)
+		}
+		if newSize == -2 {
+			n.node.denied = true
+			n.node.checkDecryption = true
+			return -fuse.EACCES, ^uint64(0)
 		}
 		if n.node.stat.Size != newSize {
 			n.node.stat.Size = newSize
@@ -78,6 +83,10 @@ func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	if n.node == nil {
 		logs.Errorf("File %q not found", path)
 		return -fuse.ENOENT
+	}
+
+	if n.node.denied {
+		return -fuse.EACCES
 	}
 
 	path = filepath.ToSlash(path)

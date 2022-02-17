@@ -38,6 +38,7 @@ type node struct {
 	opencnt         int
 	originalName    string // so that api calls work
 	checkDecryption bool
+	denied          bool
 }
 
 // nodeAndPath contains the node itself and a list of names which are the original path to the node. Yes, a very original name
@@ -51,13 +52,6 @@ type containerInfo struct {
 	containerPath string
 	timestamp     fuse.Timespec
 	fs            *Fuse
-}
-
-// LoadProjectInfo is used to carry information through a channel to projectmodel
-type LoadProjectInfo struct {
-	Repository string
-	Project    string
-	Count      int
 }
 
 // SetSignalBridge initializes the signal which informs QML that program has paniced
@@ -78,7 +72,7 @@ func CheckPanic() {
 }
 
 // InitializeFileSystem initializes the in-memory filesystem database
-func InitializeFileSystem(send ...chan<- LoadProjectInfo) *Fuse {
+func InitializeFileSystem(send func(string, string)) *Fuse {
 	logs.Info("Initializing in-memory filesystem database")
 	timestamp := fuse.Now()
 	fs := Fuse{}
@@ -110,14 +104,10 @@ func InitializeFileSystem(send ...chan<- LoadProjectInfo) *Fuse {
 			logs.Debugf("Creating directory %q", filepath.FromSlash(projectPath))
 			_, projectSafe = fs.makeNode(fs.root.chld[enabled], project, projectPath, fuse.S_IFDIR|sRDONLY, timestamp)
 
-			if len(send) > 0 {
-				send[0] <- LoadProjectInfo{Repository: enabled, Project: projectSafe}
+			if send != nil {
+				send(enabled, projectSafe)
 			}
 		}
-	}
-
-	if len(send) > 0 {
-		close(send[0])
 	}
 	return &fs
 }
@@ -146,7 +136,7 @@ func MountFilesystem(fs *Fuse, mount string) {
 }
 
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
-func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
+func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	timestamp := fuse.Now()
 	fs.root.stat.Size = -1
 
@@ -198,11 +188,11 @@ func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 					numJobs += len(containers)       // LOCK
 					mapLock.Unlock()
 
-					if len(send) > 0 {
-						send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: len(containers)}
+					if send != nil {
+						send(repository, project, len(containers))
 					}
-				} else if len(send) > 0 {
-					send[0] <- LoadProjectInfo{Repository: repository, Project: project, Count: 0}
+				} else if send != nil {
+					send(repository, project, 0)
 				}
 			}(rep, pr)
 		}
@@ -213,11 +203,7 @@ func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
-		if len(send) > 0 {
-			go createObjects(w, jobs, &wg, send[0])
-		} else {
-			go createObjects(w, jobs, &wg)
-		}
+		go createObjects(w, jobs, &wg, send)
 	}
 
 	for _, value := range forChannel {
@@ -228,9 +214,6 @@ func (fs *Fuse) PopulateFilesystem(send ...chan<- LoadProjectInfo) {
 	close(jobs)
 
 	wg.Wait()
-	if len(send) > 0 {
-		close(send[0])
-	}
 
 	// Calculate the size of higher level directories whose size currently is just -1.
 	calculateFinalSize(fs.root, "")
@@ -263,7 +246,7 @@ func calculateFinalSize(n *node, path string) int64 {
 	return n.stat.Size
 }
 
-var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send ...chan<- LoadProjectInfo) {
+var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send func(string, string, int)) {
 	defer wg.Done()
 	defer CheckPanic()
 
@@ -284,8 +267,8 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 		nodesSafe := split(containerPath)
 		fs.createLevel(c.node, objects, containerPath, timestamp)
 
-		if len(send) > 0 {
-			send[0] <- LoadProjectInfo{Repository: nodesSafe[0], Project: nodesSafe[1], Count: 1}
+		if send != nil {
+			send(nodesSafe[0], nodesSafe[1], 1)
 		}
 	}
 }
@@ -350,6 +333,7 @@ var newNode = func(ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Ti
 		nil,
 		0,
 		"",
+		false,
 		false}
 	// Initialize map of children if node is a directory
 	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {

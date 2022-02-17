@@ -65,7 +65,7 @@ type RequestError struct {
 }
 
 func (re *RequestError) Error() string {
-	return fmt.Sprintf("API responded with status %d", re.StatusCode)
+	return fmt.Sprintf("API responded with status %d %s", re.StatusCode, http.StatusText(re.StatusCode))
 }
 
 func init() {

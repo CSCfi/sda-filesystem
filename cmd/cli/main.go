@@ -245,8 +245,8 @@ func main() {
 	}
 
 	go func() {
-		fs := filesystem.InitializeFileSystem()
-		fs.PopulateFilesystem()
+		fs := filesystem.InitializeFileSystem(nil)
+		fs.PopulateFilesystem(nil)
 		filesystem.MountFilesystem(fs, mountPoint)
 	}()
 

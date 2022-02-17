@@ -165,7 +165,7 @@ func (s *sdSubmitInfo) getFiles(fsPath, dataset string) ([]Metadata, error) {
 		}
 	}
 
-	logs.Infof("Retrieved files for dataset %q", SDSubmit, fsPath)
+	logs.Infof("Retrieved files for dataset %q", fsPath)
 	return metadata, nil
 }
 
