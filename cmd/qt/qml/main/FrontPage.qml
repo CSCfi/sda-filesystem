@@ -272,7 +272,19 @@ Page {
         }
 
         Text {
-
+            text: {
+                if (createButton.state == "loading") {
+                    return ProjectModel.loadedProjects + "/" + table.rowCount + " complete"
+                } else if (createButton.state == "finished") {
+                    return "Transfer is complete"
+                } else {
+                    return ""
+                }
+            }
+            visible: createButton.state != ""
+            topPadding: 10
+            bottomPadding: 10
+            font.pointSize: 15
         }
 
         CSC.Button {
@@ -305,6 +317,7 @@ Page {
                 State {
                     name: "finished";
                     PropertyChanges { target: createButton; text: "Open folder"; enabled: true }
+                    PropertyChanges { target: changeButton; enabled: false }
                 }
             ]
         }

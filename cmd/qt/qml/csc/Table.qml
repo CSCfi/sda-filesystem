@@ -22,7 +22,6 @@ ListView {
     property int maxPages: Math.ceil(rowCount / amountVisible)
 
     onPageChanged: selectVisible()
-    onAmountVisibleChanged: selectVisible()
 
     function selectVisible() {
         visibleItems.setGroups(0, visibleItems.count, "items")
@@ -77,9 +76,12 @@ ListView {
                 }
 
                 ToolButton {
+                    id: perPage
                     text: listView.amountVisible + "  "
                     font.pointSize: 15
-                    icon.source: "qrc:/qml/images/chevron-down.svg"
+                    icon.source: menu.visible ? "qrc:/qml/images/chevron-up.svg" : "qrc:/qml/images/chevron-down.svg"
+                    icon.width: 20
+                    icon.height: 20
                     LayoutMirroring.enabled: true
                     Layout.fillHeight: true
 
@@ -97,10 +99,43 @@ ListView {
                         anchors.fill: parent
                     }
 
-                    onClicked: menu.open()
+                    onClicked: {
+                        if (!menu.visible) {
+                            menu.open()
+                        } else {
+                            menu.close()
+                        }
+                    }
 
                     Menu {
                         id: menu
+                        margins: down ? 0 : -1
+
+                        property bool down: true
+
+                        onAboutToShow: {
+                            if (mapToGlobal(0, height).y > window.height) {
+                                down = false
+                                y = -height
+                            } else {
+                                down = true
+                                y = parent.height - 1
+                            }
+                        }
+
+                        onYChanged: {
+                            if (down && visible && y < parent.height - 1) {
+                                down = false
+                                y = -height
+                            }
+                        }
+
+                        background: Rectangle {
+                            implicitWidth: perPage.width
+                            color: "white"
+                            border.width: 1
+                            border.color: CSC.Style.lightGrey
+                        }
 
                         Repeater {
                             model: 4
@@ -110,7 +145,16 @@ ListView {
                                 property int amount
                                 
                                 Component.onCompleted: amount = (index + 1) * listView.amountVisible
-                                onTriggered: listView.amountVisible = amount
+                                onTriggered: {
+                                    var topLog = (listView.page - 1) * listView.amountVisible
+                                    listView.amountVisible = amount
+                                    var newPage = Math.floor(topLog / amount) + 1
+                                    if (newPage != listView.page) {
+                                        listView.page = newPage
+                                    } else {
+                                        selectVisible()
+                                    }
+                                }
                             }
                         }
                     }
@@ -164,7 +208,7 @@ ListView {
 
                 MouseArea {
                     cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.LeftButton
+                    acceptedButtons: Qt.NoButton
                     anchors.fill: parent
                 }
             }
@@ -263,7 +307,7 @@ ListView {
 
                 MouseArea {
                     cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.RightButton
+                    acceptedButtons: Qt.NoButton
                     anchors.fill: parent
                 }
             }

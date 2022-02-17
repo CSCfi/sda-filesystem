@@ -109,14 +109,16 @@ Page {
         id: logLine
 
         Rectangle {
-            height: 60
+            height: childrenRect.height
             width: table.width
             border.width: 1
             border.color: CSC.Style.lightGrey
 
             RowLayout {
                 spacing: 30
-                anchors.fill: parent
+                height: Math.max(60, messageLabel.height)
+                anchors.left: parent.left
+                anchors.right: parent.right
                 anchors.leftMargin: CSC.Style.padding
                 anchors.rightMargin: CSC.Style.padding
 
@@ -156,6 +158,7 @@ Page {
                     font.pointSize: 13
                     font.weight: Font.Medium
                     Layout.preferredWidth: textMetricsLevel.width + 30
+                    Layout.alignment: Qt.AlignVCenter
 
                     background: Rectangle {
                         color: {
@@ -181,6 +184,7 @@ Page {
                     text: timestamp
                     font.pointSize: 15
                     Layout.preferredWidth: textMetricsDate.width
+                    Layout.alignment: Qt.AlignVCenter
                 }
 
                 Text {
@@ -188,7 +192,11 @@ Page {
                     text: message[0]
                     wrapMode: Text.Wrap
                     font.pointSize: 15
+                    topPadding: 10
+                    bottomPadding: 10
+                    lineHeight: 1.2
                     Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
                 }
             }
         }
