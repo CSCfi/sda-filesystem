@@ -38,11 +38,10 @@ func (ll *LogLevel) init() {
 type LogModel struct {
 	core.QAbstractListModel
 
-	_ func()              `constructor:"init"`
+	_ func() `constructor:"init"`
+
 	_ func(int, []string) `signal:"addLog,auto"`
 	_ func(string)        `signal:"saveLogs,auto"`
-
-	_ int `property:"count"`
 
 	roles map[int]*core.QByteArray
 	logs  []logRow
@@ -64,7 +63,8 @@ func (lm *LogModel) init() {
 	lm.ConnectData(lm.data)
 	lm.ConnectRowCount(lm.rowCount)
 	lm.ConnectRoleNames(lm.roleNames)
-	lm.SetCount(0)
+
+	lm.logs = []logRow{}
 }
 
 func (lm *LogModel) data(index *core.QModelIndex, role int) *core.QVariant {
@@ -106,8 +106,6 @@ func (lm *LogModel) addLog(level int, message []string) {
 	lm.BeginInsertRows(core.NewQModelIndex(), length, length)
 	lm.logs = append(lm.logs, lg)
 	lm.EndInsertRows()
-
-	lm.SetCount(length + 1)
 }
 
 func (lm *LogModel) saveLogs(url string) {
@@ -115,7 +113,7 @@ func (lm *LogModel) saveLogs(url string) {
 
 	f, err := os.Create(file)
 	if err != nil {
-		logs.Errorf("Could not create file %s: %w", file, err)
+		logs.Errorf("Could not create file %q: %w", file, err)
 		return
 	}
 	defer f.Close()
@@ -129,15 +127,15 @@ func (lm *LogModel) saveLogs(url string) {
 			strings.Join(lg.message, ": "))
 
 		if _, err = writer.WriteString(str + "\n"); err != nil {
-			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)
+			logs.Errorf("Something went wrong when writing to file %q: %w", file, err)
 			return
 		}
 	}
 
 	err = writer.Flush()
 	if err != nil {
-		logs.Errorf("Could not flush file %s: %w", file, err)
+		logs.Errorf("Could not flush file %q: %w", file, err)
 	}
 
-	logs.Info("Logs written successfully to file ", file)
+	logs.Infof("Logs written successfully to file %q")
 }

@@ -30,8 +30,8 @@ Page {
 
             ToolButton {
                 id: exportButton
-                text: "Export logs"
-                icon.source: "qrc:/qml/images/box-arrow-up.svg"
+                text: "Export detailed logs"
+                icon.source: "qrc:/qml/images/download.svg"
                 Layout.alignment: Qt.AlignRight
 
                 Material.foreground: CSC.Style.primaryColor
@@ -62,8 +62,10 @@ Page {
 
     CSC.Table {
         id: table
+        width: parent.width
         modelSource: LogModel
         delegateSource: logLine
+        objectName: "logs"
 
         footer: Rectangle {
             height: 50
@@ -75,13 +77,14 @@ Page {
                 spacing: 30
                 anchors.fill: parent
                 anchors.leftMargin: CSC.Style.padding
+                anchors.rightMargin: CSC.Style.padding
 
-                Label {
+                Text {
                     id: levelText
                     text: "Level"
                     font.pointSize: 13
                     font.weight: Font.Medium
-                    Layout.preferredWidth: textMetricsLevel.width //+ 30
+                    Layout.preferredWidth: textMetricsLevel.width + 30
                 }
 
                 Text {
@@ -115,6 +118,7 @@ Page {
                 spacing: 30
                 anchors.fill: parent
                 anchors.leftMargin: CSC.Style.padding
+                anchors.rightMargin: CSC.Style.padding
 
                 Label {
                     id: levelText

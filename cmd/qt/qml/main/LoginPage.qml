@@ -9,9 +9,8 @@ import csc 1.0 as CSC
 Page {
 	id: page
 	implicitWidth: content.width + 2 * CSC.Style.padding
+	implicitHeight: content.height + 2 * CSC.Style.padding
 	Material.accent: CSC.Style.primaryColor
-	
-	Component.onCompleted: implicitHeight = content.height + 2 * CSC.Style.padding
 
 	property bool loggedIn: false
 
@@ -87,9 +86,6 @@ Page {
 			id: continueButton
 			text: "Continue"
 			enabled: false
-			visible: enabled
-			leftPadding: 30
-			rightPadding: 30
 			
 			onClicked: page.loggedIn = true
 		}

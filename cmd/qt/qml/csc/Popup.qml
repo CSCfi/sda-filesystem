@@ -13,7 +13,7 @@ Popup {
     topPadding: background.border.width + CSC.Style.padding
     bottomPadding: background.border.width + CSC.Style.padding
     leftPadding: background.border.width
-    rightPadding: background.border.width + 5
+    rightPadding: background.border.width + CSC.Style.padding
     leftMargin: CSC.Style.padding
     rightMargin: CSC.Style.padding
 
@@ -59,12 +59,6 @@ Popup {
                 wrapMode: Text.Wrap
                 font.pointSize: 15
                 Layout.fillWidth: true
-
-                Component.onCompleted: {
-                    if (Qt.platform.os == "osx") {
-                        font.family = "Arial"
-                    }  
-                }
             }
         }
 
@@ -82,8 +76,7 @@ Popup {
                 PropertyChanges {
                     target: popup
                     parent: Overlay.overlay
-                    x: Math.round((parent.width - width) / 2)
-                    y: Math.round((parent.height - height) / 2)
+                    anchors.centerIn: Overlay.overlay
                 }
             }
         ]

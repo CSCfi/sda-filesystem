@@ -103,20 +103,16 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 		return
 	}
 
-	sendToModel := make(chan filesystem.LoadProjectInfo)
-	go func() { projectModel.addProjects(sendToModel) }()
-	qb.fs = filesystem.InitializeFileSystem(sendToModel)
+	qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
 	loginModel.setLoggedIn(idx, true)
 	logs.Info("Login successful")
 	return
 }
 
 func (qb *QmlBridge) loadFuse() {
-	sendToModel := make(chan filesystem.LoadProjectInfo)
-	go projectModel.waitForInfo(sendToModel)
 	go func() {
 		defer filesystem.CheckPanic()
-		qb.fs.PopulateFilesystem(sendToModel)
+		qb.fs.PopulateFilesystem(projectModel.AddToCount)
 
 		go func() {
 			time.Sleep(time.Second)
@@ -195,6 +191,10 @@ func main() {
 	core.QCoreApplication_SetAttribute(core.Qt__AA_EnableHighDpiScaling, true)
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)
+
+	var font = gui.NewQFont2("Helvetica", -1, -1, false)
+	font.SetStyleHint(gui.QFont__SansSerif, gui.QFont__PreferDefault)
+	gui.QGuiApplication_SetFont(font)
 
 	// Inbuilt styles are:
 	// Default, Material, Fusion, Imagine, Universal

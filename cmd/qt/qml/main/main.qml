@@ -14,10 +14,11 @@ ApplicationWindow {
     visible: true
     visibility: "Maximized"
     minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
-    minimumHeight: header.implicitHeight + login.implicitHeight
     font.capitalization: Font.MixedCase
     
     Material.background: "white"
+
+    Component.onCompleted: minimumHeight = header.implicitHeight + login.implicitHeight
     
     // Ensures fuse unmounts when application terminates
 	onClosing: QmlBridge.shutdown()
@@ -54,7 +55,7 @@ ApplicationWindow {
             }
 
             TabBar {
-				id: tabbar
+				id: tabBar
                 spacing: CSC.Style.padding
                 contentHeight: height
                 Layout.fillHeight: true
@@ -72,7 +73,7 @@ ApplicationWindow {
                         id: tabButton
                         text: modelData
                         width: implicitWidth
-                        height: tabbar.height
+                        height: tabBar.height
 
                         contentItem: Text {
                             text: tabButton.text
@@ -112,19 +113,6 @@ ApplicationWindow {
         }
     }
 
-    CSC.Popup {
-		id: popup
-	}
-
-    Connections {
-		target: QmlBridge
-		onInitError: {
-			login.enabled = false
-			popup.errorMessage = message + ". Check logs for further details"
-			popup.open()
-		}
-	}
-
     FileDialog {
         id: dialogSave
         title: "Choose file to which save logs"
@@ -138,9 +126,22 @@ ApplicationWindow {
         onAccepted: { LogModel.saveLogs(dialogSave.fileUrl); ready() }
     }
 
+    CSC.Popup {
+		id: popup
+	}
+
+    Connections {
+		target: QmlBridge
+		onInitError: {
+			login.enabled = false
+			popup.errorMessage = message + ". Check logs for further details"
+			popup.open()
+		}
+	}
+
     StackLayout {
         id: stack
-        currentIndex: tabbar.currentIndex
+        currentIndex: tabBar.currentIndex
         anchors.fill: parent
 
         Flickable {
@@ -151,6 +152,7 @@ ApplicationWindow {
 
             LoginPage {
                 id: login
+                anchors.horizontalCenter: parent.horizontalCenter
 
                 onLoggedInChanged: {
                     if (loggedIn) {
@@ -174,7 +176,7 @@ ApplicationWindow {
 
         Flickable {
             interactive: contentHeight > height
-            contentHeight: front.contentHeight
+            contentHeight: front.height
 
             ScrollBar.vertical: ScrollBar { }
 
@@ -189,7 +191,7 @@ ApplicationWindow {
                 name: "loggedIn"
                 PropertyChanges {
                     target: stack
-                    currentIndex: 2 - tabbar.currentIndex
+                    currentIndex: 2 - tabBar.currentIndex
                 }
             }
         ]

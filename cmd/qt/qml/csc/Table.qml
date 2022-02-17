@@ -9,51 +9,60 @@ import csc 1.0 as CSC
 
 ListView {
     id: listView
-    width: parent.width
-    height: contentHeight
+    implicitHeight: contentHeight
     implicitWidth: listView.headerItem.implicitWidth
     interactive: false
-    //boundsBehavior: Flickable.StopAtBounds
     verticalLayoutDirection: ListView.BottomToTop
 
-    property int amountVisible: 5
-    property int page: 1
-    property int maxPages: Math.max(1, Math.ceil(modelSource.count / amountVisible))
     property variant modelSource
     property Component delegateSource
+    property int rowCount: visualModel.items.count
+    property int amountVisible: 5
+    property int page: 1
+    property int maxPages: Math.ceil(rowCount / amountVisible)
 
-    onPageChanged: {
+    onPageChanged: selectVisible()
+    onAmountVisibleChanged: selectVisible()
+
+    function selectVisible() {
         visibleItems.setGroups(0, visibleItems.count, "items")
         var ceilItemCount = page * amountVisible 
         var visible = amountVisible
-        if (ceilItemCount > modelSource.count) {
-            visible -= (ceilItemCount - modelSource.count)
-            ceilItemCount = modelSource.count
+        if (ceilItemCount > rowCount) {
+            visible -= (ceilItemCount - rowCount)
+            ceilItemCount = rowCount
         }
-        visualModel.items.setGroups(modelSource.count - ceilItemCount, visible, "visibleItems")
+        visualModel.items.addGroups(rowCount - ceilItemCount, visible, "visibleItems")
     }
 
     header: Rectangle {
         height: 40
         width: listView.width
-        implicitWidth: pageCount.width + 10 * height
+        implicitWidth: pageCount.width + 10 * modelButton.implicitWidth
         border.width: 1
         border.color: CSC.Style.lightGrey
 
         Text {
-            text: "No logs available"
-            visible: modelSource.count == 0
+            text: "No " + listView.objectName + " available"
+            visible: listView.rowCount == 0
             verticalAlignment: Text.AlignVCenter
             font.pointSize: 15
             anchors.fill: parent
             anchors.leftMargin: CSC.Style.padding
         }
 
+        ToolButton {
+            id: modelButton
+            text: "99999"
+            visible: false
+            enabled: false
+        } 
+
         Row {
-            spacing: 20
-            visible: modelSource.count > 0
+            id: leftRow
+            spacing: CSC.Style.padding
+            visible: listView.rowCount > 0
             height: parent.height
-            leftPadding: CSC.Style.padding
 
             Material.foreground: CSC.Style.primaryColor
 
@@ -64,6 +73,7 @@ ListView {
 
                 Text {
                     text: "Items per page: "
+                    leftPadding: CSC.Style.padding
                 }
 
                 ToolButton {
@@ -72,7 +82,8 @@ ListView {
                     icon.source: "qrc:/qml/images/chevron-down.svg"
                     LayoutMirroring.enabled: true
                     Layout.fillHeight: true
-                    Layout.preferredWidth: 1.5 * implicitWidth
+
+                    Component.onCompleted: Layout.preferredWidth = 1.5 * implicitWidth
 
                     background: Rectangle {
                         border.width: 1
@@ -107,32 +118,35 @@ ListView {
             }
 
             Text {
-                text: firstIdx + " - " + lastIdx + " of " + modelSource.count + " items"
+                text: firstIdx + " - " + lastIdx + " of " + listView.rowCount + " items"
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
+                opacity: (rightRow.x + implicitWidth - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
 
                 property int firstIdx: (listView.page - 1) * listView.amountVisible + 1
                 property int lastIdx: {
-                    if (modelSource.count < listView.amountVisible) {
-                        return modelSource.count
+                    if (listView.rowCount < listView.amountVisible) {
+                        return listView.rowCount
                     } else {
                         return firstIdx + listView.amountVisible - 1
                     }
                 }
             }
+        }
+
+        Row {
+            id: rightRow
+            visible: listView.rowCount > 0 && listView.maxPages > 1
+            height: parent.height
+            anchors.right: parent.right
 
             Text {
                 text: listView.page + " of " + listView.maxPages + " pages"
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter 
+                rightPadding: CSC.Style.padding
+                opacity: (rightRow.x - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
             }
-        }
-
-        Row {
-            id: pageSelect
-            visible: modelSource.count > 0 && listView.maxPages > 1
-            height: parent.height
-            anchors.right: parent.right
 
             ToolButton {
                 id: pageLeft
@@ -150,7 +164,7 @@ ListView {
 
                 MouseArea {
                     cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.NoButton
+                    acceptedButtons: Qt.LeftButton
                     anchors.fill: parent
                 }
             }
@@ -161,7 +175,7 @@ ListView {
                 width: contentWidth
                 orientation: ListView.Horizontal 
 
-                model: listView.maxPages < 7 ? listView.maxPages : 7
+                model: (listView.maxPages < 7) ? listView.maxPages : 7
                 delegate: ToolButton {
                     text: {
                         switch (index) {
@@ -210,13 +224,20 @@ ListView {
                         }
                     }
                     height: pageList.height
-                    width: height
-                    enabled: text != ""
+                    width: Math.max(height, implicitWidth)
                     icon.source: (text == "") ? "qrc:/qml/images/three-dots.svg" : ""
 
                     Material.foreground: parseInt(text, 10) != listView.page ? CSC.Style.grey : CSC.Style.primaryColor
 
-                    onClicked: listView.page =  parseInt(text, 10)
+                    onClicked: {
+                        if (text == "") {
+                            var high = parseInt(pageList.itemAtIndex(index + 1).text)
+                            var low = parseInt(pageList.itemAtIndex(index - 1).text)
+                            listView.page = Math.floor((high + low) / 2)
+                        } else {
+                            listView.page =  parseInt(text, 10)
+                        }
+                    }
 
                     MouseArea {
                         cursorShape: Qt.PointingHandCursor
@@ -242,7 +263,7 @@ ListView {
 
                 MouseArea {
                     cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.NoButton
+                    acceptedButtons: Qt.RightButton
                     anchors.fill: parent
                 }
             }

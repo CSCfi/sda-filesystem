@@ -1,37 +1,34 @@
 package main
 
 import (
-	"sda-filesystem/internal/api"
-	"sda-filesystem/internal/filesystem"
-
 	"github.com/therecipe/qt/core"
 )
 
 const (
 	ProjectName = int(core.Qt__UserRole) + 1<<iota
+	RepositoryName
 	LoadedContainers
 	AllContainers
 )
 
-// For some reason (bug?) the signal apiToProject() does not recognize []api.Metadata as a list
-type metadataList []api.Metadata
-
 type ProjectModel struct {
-	core.QAbstractTableModel
+	core.QAbstractListModel
 
 	_ func() `constructor:"init"`
 
-	//	_ func(metadataList) `signal:"apiToProject,auto"`
+	_ func(string, string)      `signal:"addProject,auto"`
+	_ func(string, string, int) `signal:"addToCount,auto"`
 
 	_ int `property:"loadedProjects"`
 
 	roles       map[int]*core.QByteArray
-	projects    []*project
+	projects    []project
 	nameToIndex map[string]int
 }
 
 type project struct {
 	projectName      string
+	repositoryName   string
 	loadedContainers int
 	allContainers    int
 }
@@ -39,6 +36,7 @@ type project struct {
 func (pm *ProjectModel) init() {
 	pm.roles = map[int]*core.QByteArray{
 		ProjectName:      core.NewQByteArray2("projectName", -1),
+		RepositoryName:   core.NewQByteArray2("repositoryName", -1),
 		LoadedContainers: core.NewQByteArray2("loadedContainers", -1),
 		AllContainers:    core.NewQByteArray2("allContainers", -1),
 	}
@@ -46,8 +44,10 @@ func (pm *ProjectModel) init() {
 
 	pm.ConnectData(pm.data)
 	pm.ConnectRowCount(pm.rowCount)
-	pm.ConnectColumnCount(pm.columnCount)
 	pm.ConnectRoleNames(pm.roleNames)
+
+	pm.projects = []project{}
+	pm.nameToIndex = make(map[string]int)
 }
 
 func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
@@ -64,6 +64,8 @@ func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
 	switch role {
 	case ProjectName:
 		return core.NewQVariant1(p.projectName)
+	case RepositoryName:
+		return core.NewQVariant1(p.repositoryName)
 	case LoadedContainers:
 		return core.NewQVariant1(p.loadedContainers)
 	case AllContainers:
@@ -77,44 +79,32 @@ func (pm *ProjectModel) rowCount(parent *core.QModelIndex) int {
 	return len(pm.projects)
 }
 
-func (pm *ProjectModel) columnCount(parent *core.QModelIndex) int {
-	return 2
-}
-
 func (pm *ProjectModel) roleNames() map[int]*core.QByteArray {
 	return pm.roles
 }
 
-func (pm *ProjectModel) addProjects(ch <-chan filesystem.LoadProjectInfo) {
-	pm.projects = []*project{}
-	pm.nameToIndex = make(map[string]int)
-	i := 0
-
-	for info := range ch {
-		pm.projects = append(pm.projects, &project{projectName: info.Project, allContainers: -1})
-		pm.nameToIndex[info.Project] = i
-		i++
-	}
+func (pm *ProjectModel) addProject(rep, pr string) {
+	length := len(pm.projects)
+	pm.nameToIndex[rep+"/"+pr] = length
+	pm.BeginInsertRows(core.NewQModelIndex(), length, length)
+	pm.projects = append(pm.projects, project{repositoryName: rep, projectName: pr, allContainers: -1})
+	pm.EndInsertRows()
 }
 
-func (pm *ProjectModel) waitForInfo(ch <-chan filesystem.LoadProjectInfo) {
-	for info := range ch {
-		row := pm.nameToIndex[info.Project]
-		var pr = pm.projects[row]
-		if pr.allContainers != -1 {
-			pr.loadedContainers += info.Count
-			var index = pm.Index(row, 1, core.NewQModelIndex())
-			pm.DataChanged(index, index, []int{LoadedContainers})
-			if pr.loadedContainers == pr.allContainers {
-				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
-			}
-		} else {
-			pr.allContainers = info.Count
-			var index = pm.Index(row, 1, core.NewQModelIndex())
-			pm.DataChanged(index, index, []int{AllContainers})
-			if pr.allContainers == 0 {
-				pm.SetLoadedProjects(pm.LoadedProjects() + 1)
-			}
-		}
+func (pm *ProjectModel) addToCount(rep, pr string, count int) {
+	row := pm.nameToIndex[rep+"/"+pr]
+	var project = &pm.projects[row]
+	var index = pm.Index(row, 0, core.NewQModelIndex())
+
+	if project.allContainers != -1 {
+		project.loadedContainers += count
+		pm.DataChanged(index, index, []int{LoadedContainers})
+	} else {
+		project.allContainers = count
+		pm.DataChanged(index, index, []int{AllContainers})
+	}
+
+	if project.loadedContainers == project.allContainers {
+		pm.SetLoadedProjects(pm.LoadedProjects() + 1)
 	}
 }
