@@ -46,13 +46,11 @@ type mockRepository struct {
 //func (r *mockRepository) getEnvs() error                                    { return nil }
 //func (r *mockRepository) getLoginMethod() LoginMethod                       { return Password }
 //func (r *mockRepository) validateLogin(...string) error                     { return nil }
-func (r *mockRepository) getCertificatePath() string { return r.certPath }
+//func (r *mockRepository) levelCount() int                                   { return 0 }
 
-//func (r *mockRepository) testURLs() error                                   { return nil }
 func (r *mockRepository) getToken() string { return "" }
 
-//func (r *mockRepository) levelCount() int                                   { return 0 }
-//func (r *mockRepository) getNthLevel(...string) ([]Metadata, error)         { return nil, nil }
+//func (r *mockRepository) getNthLevel(string, ...string) ([]Metadata, error) { return nil, nil }
 //func (r *mockRepository) updateAttributes([]string, string, interface{})    {}
 //func (r *mockRepository) downloadData([]string, []byte, int64, int64) error { return nil }
 
@@ -65,7 +63,7 @@ func TestRequestError(t *testing.T) {
 	codes := []int{200, 206, 404, 500}
 	for i := range codes {
 		re := RequestError{codes[i]}
-		message := fmt.Sprintf("API responded with status %d", codes[i])
+		message := fmt.Sprintf("API responded with status %d %s", codes[i], http.StatusText(codes[i]))
 		reMessage := re.Error()
 		if reMessage != message {
 			t.Fatalf("RequestError has incorrect error message. Expectedd %q, got %q", message, reMessage)
@@ -214,13 +212,8 @@ func TestInitializeCache_Error(t *testing.T) {
 }
 
 func TestInitializeClient(t *testing.T) {
-	origTestUrls := testURLs
 	origRepositories := hi.repositories
-
-	defer func() {
-		testURLs = origTestUrls
-		hi.repositories = origRepositories
-	}()
+	defer func() { hi.repositories = origRepositories }()
 
 	file1, err := ioutil.TempFile("", "cert")
 	if err != nil {
@@ -232,41 +225,11 @@ func TestInitializeClient(t *testing.T) {
 		t.Fatalf("Failed to create file %q", file2.Name())
 	}
 
-	testURLs = func() error { return nil }
 	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
 		"rep2": &mockRepository{certPath: file2.Name()}}
 
 	if err := InitializeClient(); err != nil {
 		t.Fatalf("Function returned error: %s", err.Error())
-	}
-}
-
-func TestInitializeClient_Certs_Not_Found(t *testing.T) {
-	origTestUrls := testURLs
-	origRepositories := hi.repositories
-
-	defer func() {
-		testURLs = origTestUrls
-		hi.repositories = origRepositories
-	}()
-
-	file1, err := ioutil.TempFile("", "cert")
-	if err != nil {
-		t.Fatalf("Failed to create file %q", file1.Name())
-	}
-
-	file2, err := ioutil.TempFile("", "cert")
-	if err != nil {
-		t.Fatalf("Failed to create file %q", file2.Name())
-	}
-	os.RemoveAll(file2.Name())
-
-	testURLs = func() error { return nil }
-	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
-		"rep2": &mockRepository{certPath: file2.Name()}}
-
-	if err := InitializeClient(); err == nil {
-		t.Fatalf("Function did not return error")
 	}
 }
 
@@ -301,7 +264,7 @@ func TestMakeRequest(t *testing.T) {
 		{
 			"OK_JSON",
 			func(rw http.ResponseWriter, req *http.Request) {
-				body, err := json.Marshal([]Metadata{{34, "project1", ""}, {67, "project/2", "project_2"}, {8, "project3", ""}})
+				body, err := json.Marshal([]Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}})
 				if err != nil {
 					rw.WriteHeader(http.StatusNotFound)
 				} else {
@@ -310,7 +273,7 @@ func TestMakeRequest(t *testing.T) {
 					}
 				}
 			},
-			[]Metadata{{34, "project1", ""}, {67, "project/2", "project_2"}, {8, "project3", ""}},
+			[]Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}},
 		},
 		{
 			"HEADERS_MISSING",

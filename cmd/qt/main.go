@@ -106,7 +106,6 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 	qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
 	loginModel.setLoggedIn(idx, true)
 	logs.Info("Login successful")
-	return
 }
 
 func (qb *QmlBridge) loadFuse() {

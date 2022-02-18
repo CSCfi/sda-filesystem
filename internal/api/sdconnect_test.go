@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sync"
 	"testing"
 )
 
@@ -47,9 +46,9 @@ func (c *mockConnecter) getProjects(string) ([]Metadata, error) {
 	return nil, nil
 }
 
-func (c *mockConnecter) fetchTokens(bool, []Metadata) (string, sync.Map) {
-	m := sync.Map{}
-	m.Store(c.sTokenKey, c.sTokenValue)
+func (c *mockConnecter) fetchTokens(bool, []Metadata) (string, map[string]sToken) {
+	m := make(map[string]sToken)
+	m[c.sTokenKey] = c.sTokenValue
 	return c.uToken, m
 }
 
@@ -188,11 +187,11 @@ func TestSDConnectGetProjects(t *testing.T) {
 	}{
 		{
 			"OK_1", "google.com", "7ce5ic",
-			[]Metadata{{234, "Jack", ""}, {2, "yur586bl", ""}, {7489, "rtu6u__78bgi", "rtu6u//78bgi"}},
+			[]Metadata{{234, "Jack"}, {2, "yur586bl"}, {7489, "rtu6u__78bgi"}},
 		},
 		{
 			"OK_2", "example.com", "2cjv05fgi",
-			[]Metadata{{740, "rtu6u__78boi", "rtu6u//78boi"}, {83, "85cek6o", "hei"}},
+			[]Metadata{{740, "rtu6u__78boi"}, {83, "85cek6o"}},
 		},
 		{
 			"OK_EMPTY", "hs.fi", "WHM6d.7k", []Metadata{},
@@ -291,13 +290,7 @@ func TestSDConnectFetchTokens(t *testing.T) {
 			mockT := &mockTokenator{uToken: tt.mockUToken, sTokens: tt.mockSTokens}
 			c := connecter{tokenable: mockT, url: &dummy}
 
-			newUToken, newSTokensSync := c.fetchTokens(tt.skip, mockT.keys())
-
-			newSTokens := map[string]sToken{}
-			newSTokensSync.Range(func(key, value interface{}) bool {
-				newSTokens[fmt.Sprint(key)] = value.(sToken)
-				return true
-			})
+			newUToken, newSTokens := c.fetchTokens(tt.skip, mockT.keys())
 
 			if newUToken != tt.uToken {
 				t.Errorf("uToken incorrect. Expected %q, got %q", tt.uToken, newUToken)
@@ -308,7 +301,7 @@ func TestSDConnectFetchTokens(t *testing.T) {
 	}
 }
 
-func TestSDConnectGetEnvs(t *testing.T) {
+/*func TestSDConnectGetEnvs(t *testing.T) {
 	var tests = []struct {
 		testname string
 		values   [3]string
@@ -350,51 +343,18 @@ func TestSDConnectGetEnvs(t *testing.T) {
 	}
 }
 
-func TestSDConnectTestURLs(t *testing.T) {
-	var tests = []struct {
-		testname, metadataURL, dataURL, failURL string
-	}{
-		{"OK", "google.com", "finnkino.fi", ""},
-		{"FAIL_METADATA", "github.com", "gitlab.com", "github.com"},
-		{"FAIL_DATA", "hs.fi", "is.fi", "is.fi"},
-	}
-
-	origTestURL := testURL
-	defer func() { testURL = origTestURL }()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			sd := &sdConnectInfo{metadataURL: tt.metadataURL, dataURL: tt.dataURL}
-			testURL = func(url string) error {
-				if tt.failURL != "" && url == tt.failURL {
-					return errors.New("Error")
-				}
-				return nil
-			}
-
-			if err := sd.testURLs(); err != nil {
-				if tt.testname == "OK" {
-					t.Errorf("Unexpected error: %s", err.Error())
-				}
-			} else if tt.testname != "OK" {
-				t.Error("Function did not return error")
-			}
-		})
-	}
-}
-
 func TestSDConnectValidateLogin(t *testing.T) {
-}
+}*/
 
 func TestSDConnectGetNthLevel_Projects(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
 	mockC := &mockConnecter{}
-	projects := []Metadata{{34, "Pr3", ""}, {90, "Pr56", ""}, {123, "Pr7", ""}, {4, "Pr12", ""}}
+	projects := []Metadata{{34, "Pr3"}, {90, "Pr56"}, {123, "Pr7"}, {4, "Pr12"}}
 	sd := &sdConnectInfo{connectable: mockC, projects: projects}
 
-	meta, err := sd.getNthLevel()
+	meta, err := sd.getNthLevel("")
 	if err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
 	} else if !reflect.DeepEqual(meta, projects) {
@@ -402,14 +362,14 @@ func TestSDConnectGetNthLevel_Projects(t *testing.T) {
 	}
 }
 
-func TestSDConnectGetNthLevel_Containers(t *testing.T) {
+/*func TestSDConnectGetNthLevel_Containers(t *testing.T) {
 	var tests = []struct {
 		testname, project, token string
 		expectedMetaData         []Metadata
 	}{
 		{
 			"OK", "project345", "new_token",
-			[]Metadata{{2341, "tukcdfku6", ""}, {45, "hf678cof7uib68or6", ""}, {6767, "rtu6u78bgi", ""}, {1, "9ob89bio", ""}},
+			[]Metadata{{2341, "tukcdfku6"}, {45, "hf678cof7uib68or6"}, {6767, "rtu6u78bgi"}, {1, "9ob89bio"}},
 		},
 		{
 			"OK_EMPTY", "projectID", "7cftlx67", []Metadata{},
@@ -479,7 +439,7 @@ func TestSDConnectGetNthLevel_Containers_Expired(t *testing.T) {
 
 	expectedProject := "project737"
 	expectedToken := "t7vwlv78"
-	expectedContainers := []Metadata{{2341, "tukcdfku6", ""}, {47, "8cxgje6uk", ""}}
+	expectedContainers := []Metadata{{2341, "tukcdfku6"}, {47, "8cxgje6uk"}}
 
 	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
 		path := "/project/" + expectedProject + "/containers"
@@ -518,7 +478,7 @@ func TestSDConnectGetNthLevel_Objects(t *testing.T) {
 	}{
 		{
 			"OK", "project345", "containerID", "token",
-			[]Metadata{{56, "tukcdfku6", ""}, {5, "hf678cof7ui6", ""}, {47685, "rtu6u__78bgi", ""}, {10, "9ob89bio", ""}},
+			[]Metadata{{56, "tukcdfku6"}, {5, "hf678cof7ui6"}, {47685, "rtu6u__78bgi"}, {10, "9ob89bio"}},
 		},
 		{
 			"OK_EMPTY", "projectID", "container349", "5voI8d", []Metadata{},
@@ -560,7 +520,7 @@ func TestSDConnectGetNthLevel_Objects(t *testing.T) {
 	}
 }
 
-/*func TestSDConnectUpdateAttributes(t *testing.T) {
+func TestSDConnectUpdateAttributes(t *testing.T) {
 
 }
 

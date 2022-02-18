@@ -14,19 +14,22 @@ import (
 
 const SDSubmit string = "SD-Submit"
 
+// This exists for unit test mocking
 type submittable interface {
-	getFiles(string) ([]Metadata, error)
-	getDatasets(int64) ([]Metadata, error)
+	getFiles(string, string, string) ([]Metadata, error)
+	getDatasets(string) ([]string, error)
 }
 
 type submitter struct {
+	lock    sync.RWMutex
+	token   *string
+	fileIDs map[string]string
 }
 
 type sdSubmitInfo struct {
 	submittable
 	token    string
 	urls     []string
-	lock     sync.RWMutex
 	fileIDs  map[string]string
 	datasets map[string]int
 }
@@ -44,8 +47,56 @@ type file struct {
 }
 
 func init() {
-	possibleRepositories[SDSubmit] = &sdSubmitInfo{fileIDs: make(map[string]string)}
+	su := &submitter{fileIDs: make(map[string]string)}
+	sd := &sdSubmitInfo{submittable: su}
+	su.token = &sd.token
+	sd.fileIDs = su.fileIDs
+	possibleRepositories[SDSubmit] = sd
 }
+
+//
+// Functions for submitter
+//
+
+func (s *submitter) getDatasets(urlStr string) ([]string, error) {
+	var datasets []string
+	err := makeRequest(urlStr+"/metadata/datasets", *s.token, SDSubmit, nil, nil, &datasets)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
+	}
+
+	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, urlStr)
+	return datasets, nil
+}
+
+func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
+	// Request files
+	var files []file
+	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
+	err := makeRequest(path, *s.token, SDSubmit, nil, nil, &files)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", fsPath, err)
+	}
+
+	var metadata []Metadata
+	for i := range files {
+		if files[i].FileStatus == "READY" {
+			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
+			metadata = append(metadata, md)
+
+			s.lock.Lock()
+			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
+			s.lock.Unlock()
+		}
+	}
+
+	logs.Infof("Retrieved files for dataset %q", fsPath)
+	return metadata, nil
+}
+
+//
+// Functions for sdSubmitInfo
+//
 
 func (s *sdSubmitInfo) getEnvs() error {
 	var err error
@@ -79,7 +130,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	count := 0
 
 	for i := range s.urls {
-		datasets, err := s.getDatasets(i)
+		datasets, err := s.getDatasets(s.urls[i])
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
@@ -122,51 +173,14 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 		}
 		return datasets, nil
 	case 1:
-		return s.getFiles(fsPath, nodes[0])
+		idx, ok := s.datasets[nodes[0]]
+		if !ok {
+			return nil, fmt.Errorf("Tried to request files for invalid dataset %q", fsPath)
+		}
+		return s.getFiles(fsPath, s.urls[idx], nodes[0])
 	default:
 		return nil, nil
 	}
-}
-
-func (s *sdSubmitInfo) getDatasets(idx int) ([]string, error) {
-	var datasets []string
-	err := makeRequest(s.urls[idx]+"/metadata/datasets", s.token, SDSubmit, nil, nil, &datasets)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
-	}
-
-	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, s.urls[idx])
-	return datasets, nil
-}
-
-func (s *sdSubmitInfo) getFiles(fsPath, dataset string) ([]Metadata, error) {
-	idx, ok := s.datasets[dataset]
-	if !ok {
-		return nil, fmt.Errorf("Tried to request files for invalid dataset %q", fsPath)
-	}
-
-	// Request files
-	var files []file
-	path := s.urls[idx] + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
-	err := makeRequest(path, s.token, SDSubmit, nil, nil, &files)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", fsPath, err)
-	}
-
-	var metadata []Metadata
-	for i := range files {
-		if files[i].FileStatus == "READY" {
-			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
-			metadata = append(metadata, md)
-
-			s.lock.Lock()
-			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
-			s.lock.Unlock()
-		}
-	}
-
-	logs.Infof("Retrieved files for dataset %q", fsPath)
-	return metadata, nil
 }
 
 // Dummy function, not needed

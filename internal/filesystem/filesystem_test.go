@@ -1,18 +1,6 @@
 package filesystem
 
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"reflect"
-	"sda-filesystem/internal/logs"
-	"sort"
-	"testing"
-
-	"github.com/billziss-gh/cgofuse/fuse"
-)
-
-var testFuse = `{
+/*var testFuse = `{
 	"name": "",
 	"size": 450,
     "children": [
@@ -39,7 +27,7 @@ var testFuse = `{
 							"size": 20,
 							"children": null
 						}
-					] 
+					]
 				},
 				{
 					"name": "dir",
@@ -50,9 +38,9 @@ var testFuse = `{
 							"size": 112,
 							"children": []
 						}
-					] 
+					]
 				}
-			] 
+			]
 		},
 		{
 			"name": "child_2",
@@ -182,7 +170,7 @@ func isSameFuse(fs1 map[string]*node, fs2 map[string]*node, path string) error {
 	return nil
 }
 
-/*func TestCreateFilesystem(t *testing.T) {
+func TestCreateFilesystem(t *testing.T) {
 	origFs := getNewFuse(t)
 
 	origGetProjects := api.GetProjects

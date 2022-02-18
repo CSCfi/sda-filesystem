@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // This file contains structs and functions that are strictly for SD-Connect
@@ -31,7 +30,7 @@ type tokenator struct {
 type connectable interface {
 	tokenable
 	getProjects(string) ([]Metadata, error)
-	fetchTokens(bool, []Metadata) (string, sync.Map)
+	fetchTokens(bool, []Metadata) (string, map[string]sToken)
 }
 
 type connecter struct {
@@ -45,7 +44,7 @@ type sdConnectInfo struct {
 	metadataURL string
 	token       string
 	uToken      string
-	sTokens     sync.Map
+	sTokens     map[string]sToken
 	projects    []Metadata
 }
 
@@ -70,7 +69,7 @@ type SpecialHeaders struct {
 
 func init() {
 	cr := &connecter{tokenable: tokenator{}}
-	sd := &sdConnectInfo{connectable: cr}
+	sd := &sdConnectInfo{connectable: cr, sTokens: make(map[string]sToken)}
 	cr.url = &sd.metadataURL
 	possibleRepositories[SDConnect] = sd
 }
@@ -124,7 +123,9 @@ func (c *connecter) getProjects(token string) ([]Metadata, error) {
 }
 
 // fetchTokens fetches the unscoped token and the scoped tokens
-func (c *connecter) fetchTokens(skipUnscoped bool, projects []Metadata) (newUToken string, newSTokens sync.Map) {
+func (c *connecter) fetchTokens(skipUnscoped bool, projects []Metadata) (newUToken string, newSTokens map[string]sToken) {
+	newSTokens = make(map[string]sToken)
+
 	var err error
 	if !skipUnscoped {
 		newUToken, err = c.getUToken(*c.url)
@@ -134,18 +135,31 @@ func (c *connecter) fetchTokens(skipUnscoped bool, projects []Metadata) (newUTok
 		}
 	}
 
+	var wg sync.WaitGroup
+	sTokensChan := make(chan [3]string, len(projects))
+
 	for i := range projects {
+		wg.Add(1)
+
 		go func(project Metadata) {
+			defer wg.Done()
+
 			token, err := c.getSToken(*c.url, project.Name)
 			if err != nil {
 				logs.Warningf("HTTP requests may be slower for %s project %q: %w", SDConnect, project.Name, err)
 			} else {
-				newSTokens.Store(project.Name, token)
+				sTokensChan <- [3]string{project.Name, token.Token, token.ProjectID}
 			}
 		}(projects[i])
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	wg.Wait()
+	close(sTokensChan)
+
+	for t := range sTokensChan {
+		newSTokens[t[0]] = sToken{Token: t[1], ProjectID: t[2]}
+	}
+
 	logs.Infof("Fetched %s tokens", SDConnect)
 	return
 }
@@ -208,7 +222,7 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 		return c.projects, nil
 	}
 
-	token := c.getSTokenFromMap(nodes[0])
+	token := c.sTokens[nodes[0]]
 	headers := map[string]string{"X-Project-ID": token.ProjectID}
 	path := c.metadataURL + "/project/" + url.PathEscape(nodes[0])
 	if len(nodes) == 1 {
@@ -222,7 +236,7 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	var meta []Metadata
 	err := makeRequest(path, token.Token, SDConnect, nil, headers, &meta)
 	if c.tokenExpired(err) {
-		token = c.getSTokenFromMap(nodes[0])
+		token = c.sTokens[nodes[0]]
 		err = makeRequest(path, token.Token, SDConnect, nil, headers, &meta)
 	}
 	if err != nil {
@@ -231,14 +245,6 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 
 	logs.Infof("Retrieved metadata for %q", fsPath)
 	return meta, nil
-}
-
-func (c *sdConnectInfo) getSTokenFromMap(project string) (token sToken) {
-	value, ok := c.sTokens.Load(project)
-	if ok {
-		token = value.(sToken)
-	}
-	return
 }
 
 func (c *sdConnectInfo) tokenExpired(err error) bool {
@@ -300,7 +306,7 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, 
 		"object":    strings.Join(nodes[2:], "/"),
 	}
 
-	token := c.getSTokenFromMap(nodes[0])
+	token := c.sTokens[nodes[0]]
 
 	// Additional headers
 	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
@@ -311,7 +317,7 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, 
 	// Request data
 	err := makeRequest(path, token.Token, SDConnect, query, headers, buffer)
 	if c.tokenExpired(err) {
-		token = c.getSTokenFromMap(nodes[0])
+		token = c.sTokens[nodes[0]]
 		return makeRequest(path, token.Token, SDConnect, query, headers, buffer)
 	}
 	return err

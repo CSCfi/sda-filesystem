@@ -137,5 +137,5 @@ func (lm *LogModel) saveLogs(url string) {
 		logs.Errorf("Could not flush file %q: %w", file, err)
 	}
 
-	logs.Infof("Logs written successfully to file %q")
+	logs.Infof("Logs written successfully to file %q", file)
 }
