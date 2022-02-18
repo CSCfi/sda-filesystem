@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +42,9 @@ func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
 
 type mockRepository struct {
 	fuseInfo
-	certPath string
+	certPath              string
+	mockDownloadDataBuf   []byte
+	mockDownloadDataError error
 }
 
 //func (r *mockRepository) getEnvs() error                                    { return nil }
@@ -52,7 +56,11 @@ func (r *mockRepository) getToken() string { return "" }
 
 //func (r *mockRepository) getNthLevel(string, ...string) ([]Metadata, error) { return nil, nil }
 //func (r *mockRepository) updateAttributes([]string, string, interface{})    {}
-//func (r *mockRepository) downloadData([]string, []byte, int64, int64) error { return nil }
+
+func (r *mockRepository) downloadData(nodes []string, buf interface{}, start, end int64) error {
+	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
+	return r.mockDownloadDataError
+}
 
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(i int, s []string) {})
@@ -364,6 +372,116 @@ func TestMakeRequest(t *testing.T) {
 			server.Close()
 		})
 	}
+}
+
+func TestDownloadData_FoundCache(t *testing.T) {
+
+	// Substitute mock functions
+	// Save original functions before test
+	origDownloadCache := downloadCache
+	// Restore original functions after test
+	defer func() {
+		downloadCache = origDownloadCache
+	}()
+	// Overwrite original functions with mock for duration of test
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
+
+	// Save some data to cache
+	expectedData := []byte("hellothere")
+	downloadCache.Set("sdconnect_project_container_object_0", expectedData, time.Minute*1)
+
+	// Invoke function
+	data, err := DownloadData(
+		[]string{"sdconnect", "project", "container", "object"},
+		"/path/to/file.txt",
+		0, 10, 10,
+	)
+
+	// Test results
+	if err != nil {
+		t.Errorf("TestDownloadData_FoundCache expected no error, received=%s", err.Error())
+	}
+	if !bytes.Equal(data, expectedData) {
+		t.Errorf("TestDownloadData_FoundCache expected=%s, received=%s", string(expectedData), string(data))
+	}
+
+}
+
+func TestDownloadData_FoundNoCache(t *testing.T) {
+
+	// Substitute mock functions
+	// Save original functions before test
+	origDownloadCache := downloadCache
+	origRepositories := hi.repositories
+	// Restore original functions after test
+	defer func() {
+		downloadCache = origDownloadCache
+		hi.repositories = origRepositories
+	}()
+	// Overwrite original functions with mock for duration of test
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
+	expectedData := []byte("hellothere")
+	mockRepo := &mockRepository{
+		mockDownloadDataBuf:   expectedData,
+		mockDownloadDataError: nil,
+	}
+	hi.repositories = map[string]fuseInfo{"sdconnect": mockRepo}
+
+	// Invoke function
+	data, err := DownloadData(
+		[]string{"sdconnect", "project", "container", "object"},
+		"/path/to/file.txt",
+		0, 10, 10,
+	)
+
+	// Test results
+	if err != nil {
+		t.Errorf("TestDownloadData_FoundNoCache expected no error, received=%s", err.Error())
+	}
+	if !bytes.Equal(data, expectedData) {
+		t.Errorf("TestDownloadData_FoundNoCache expected=%s, received=%s", string(expectedData), string(data))
+	}
+
+}
+
+func TestDownloadData_FoundNoCache_Error(t *testing.T) {
+
+	// Substitute mock functions
+	// Save original functions before test
+	origDownloadCache := downloadCache
+	origRepositories := hi.repositories
+	// Restore original functions after test
+	defer func() {
+		downloadCache = origDownloadCache
+		hi.repositories = origRepositories
+	}()
+	// Overwrite original functions with mock for duration of test
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
+	expectedError := "Retrieving data failed for \"/path/to/file.txt\": some error"
+	mockRepo := &mockRepository{
+		mockDownloadDataBuf:   nil,
+		mockDownloadDataError: errors.New("some error"),
+	}
+	hi.repositories = map[string]fuseInfo{"sdconnect": mockRepo}
+
+	// Invoke function
+	data, err := DownloadData(
+		[]string{"sdconnect", "project", "container", "object"},
+		"/path/to/file.txt",
+		0, 10, 10,
+	)
+
+	// Test results
+	if err == nil {
+		t.Errorf("TestDownloadData_FoundNoCache_Error expected an error, received=nil")
+	}
+	if err.Error() != expectedError {
+		t.Errorf("TestDownloadData_FoundNoCache_Error expected=%s, received=%s", expectedError, err.Error())
+	}
+	if data != nil {
+		t.Errorf("TestDownloadData_FoundNoCache_Error no data, received=%s", string(data))
+	}
+
 }
 
 /*
