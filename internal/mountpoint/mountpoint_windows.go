@@ -3,11 +3,25 @@ package mountpoint
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"sda-filesystem/internal/logs"
 )
 
 var CheckMountPoint = func(mount string) error {
 	if _, err := os.Stat(mount); !os.IsNotExist(err) {
-		return fmt.Errorf("Mount point %q already exists, remove the directory or use another mount point", mount)
+		logs.Infof("Windows requires that mount point does not exist beforehand so directory %q will be removed", mount)
+		if err = os.Remove(mount); err != nil {
+			return fmt.Errorf("Removal failed: %w", err)
+		}
+		return nil
+	}
+
+	dir := filepath.Dir(mount)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		logs.Debugf("Path to %q does not exist so it will be created", mount)
+		if err = os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("Could not create a path to directory %q: %w", mount, err)
+		}
 	}
 	return nil
 }

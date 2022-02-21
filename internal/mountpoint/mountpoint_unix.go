@@ -17,7 +17,7 @@ var CheckMountPoint = func(mount string) error {
 	info, err := os.Stat(mount)
 	if os.IsNotExist(err) {
 		logs.Debugf("Mount point %q does not exist, so it will be created", mount)
-		if err = os.Mkdir(mount, 0755); err != nil {
+		if err = os.MkdirAll(mount, 0755); err != nil {
 			return fmt.Errorf("Could not create directory %s", mount)
 		}
 		return nil

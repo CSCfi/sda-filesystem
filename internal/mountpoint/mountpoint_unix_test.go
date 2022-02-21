@@ -74,7 +74,7 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 	}
 }
 
-func TestCheckMountPoint_Fail_Mkdir(t *testing.T) {
+func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	node, err := ioutil.TempDir("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
