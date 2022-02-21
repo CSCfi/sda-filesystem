@@ -45,7 +45,7 @@ ListView {
             text: "No " + listView.objectName + " available"
             visible: listView.rowCount == 0
             verticalAlignment: Text.AlignVCenter
-            font.pointSize: 15
+            font.pixelSize: 15
             anchors.fill: parent
             anchors.leftMargin: CSC.Style.padding
         }
@@ -78,7 +78,7 @@ ListView {
                 ToolButton {
                     id: perPage
                     text: listView.amountVisible + "  "
-                    font.pointSize: 15
+                    font.pixelSize: 15
                     icon.source: menu.visible ? "qrc:/qml/images/chevron-up.svg" : "qrc:/qml/images/chevron-down.svg"
                     icon.width: 20
                     icon.height: 20

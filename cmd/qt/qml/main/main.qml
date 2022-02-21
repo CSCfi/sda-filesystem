@@ -4,7 +4,6 @@ import QtQuick.Layouts 1.13
 import QtQuick.Dialogs 1.3
 import QtQuick.Controls.Material 2.12
 import QtQuick.Window 2.13
-import Qt.labs.qmlmodels 1.0
 import QtQml 2.13
 import csc 1.0 as CSC
 
@@ -134,7 +133,9 @@ ApplicationWindow {
 		target: QmlBridge
 		onInitError: {
 			login.enabled = false
-			popup.errorMessage = message + ". Check logs for further details"
+			popup.errorMessage = message + ". Check logs for further details and rerun the application"
+            popup.closePolicy = Popup.NoAutoClose
+            popup.modal = false
 			popup.open()
 		}
 	}

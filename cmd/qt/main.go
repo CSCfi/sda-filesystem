@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/therecipe/qt/core"
@@ -120,9 +119,7 @@ func (qb *QmlBridge) loadFuse() {
 		}()
 
 		filesystem.MountFilesystem(qb.fs, qb.MountPoint())
-
-		// In case program is terminated with a ctrl+c
-		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		os.Exit(0)
 	}()
 }
 
@@ -145,10 +142,8 @@ func (qb *QmlBridge) openFuse() {
 		logs.Errorf("Unrecognized OS")
 		return
 	}
-	// this is to address gosec204, we clean to return the shortest path name
-	// that returns string which seems to satisfy the gosec204
-	userPath := path.Clean(qb.MountPoint())
 
+	userPath := qb.MountPoint()
 	cmd := exec.Command(command, userPath)
 	err = cmd.Run()
 	if err != nil {
@@ -158,20 +153,20 @@ func (qb *QmlBridge) openFuse() {
 
 func (qb *QmlBridge) shutdown() {
 	logs.Info("Shutting down SDA Filesystem")
-	// Sending interrupt signal to unmount fuse
-	_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	filesystem.UnmountFilesystem()
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
 	mount := core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
-	logs.Debugf("Trying to change mount point to %q", mount)
+	mount = filepath.Clean(mount)
+	logs.Debugf("Trying to change mount point to %s", mount)
 
 	if err := mountpoint.CheckMountPoint(mount); err != nil {
 		logs.Error(err)
 		return err.Error()
 	}
 
-	logs.Debugf("Filesystem will be mounted at %q", mount)
+	logs.Infof("Filesystem will be mounted at %s", mount)
 	qb.SetMountPoint(mount)
 	return ""
 }

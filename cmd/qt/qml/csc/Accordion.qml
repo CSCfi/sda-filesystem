@@ -44,7 +44,7 @@ ColumnLayout {
                 color: textColor
                 maximumLineCount: 1
                 font.weight: Font.Medium
-                font.pointSize: 0.33 * bkg.implicitHeight
+                font.pixelSize: 0.33 * bkg.implicitHeight
                 Layout.alignment: Qt.AlignVCenter
                 Layout.fillWidth: true
             }

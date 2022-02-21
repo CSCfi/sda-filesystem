@@ -8,8 +8,8 @@ TextField {
     topPadding: 8
     leftPadding: topPadding
     rightPadding: topPadding
-    bottomPadding: errorText != "" ? topPadding + bottomInset : topPadding
-    bottomInset: errorText != "" ? errorRow.height : 0
+    bottomPadding: errorVisible ? topPadding + bottomInset : topPadding
+    bottomInset: errorVisible ? errorRow.height : 0
     selectByMouse: true
     mouseSelectionMode: TextInput.SelectWords
 

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"sda-filesystem/internal/logs"
 	"strings"
 
@@ -120,13 +121,18 @@ func (lm *LogModel) saveLogs(url string) {
 
 	writer := bufio.NewWriter(f)
 
+	newline := "\n"
+	if runtime.GOOS == "windows" {
+		newline = "\r\n"
+	}
+
 	for i := range lm.logs {
 		lg := lm.logs[i]
 		str := fmt.Sprintf(strings.ToUpper(logrus.Level(lg.level).String())[:4] + "[" +
 			strings.ReplaceAll(lg.timestamp, " ", "T") + "] " +
 			strings.Join(lg.message, ": "))
 
-		if _, err = writer.WriteString(str + "\n"); err != nil {
+		if _, err = writer.WriteString(str + newline); err != nil {
 			logs.Errorf("Something went wrong when writing to file %q: %w", file, err)
 			return
 		}
