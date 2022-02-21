@@ -21,6 +21,7 @@ Popup {
     property color mainColor: CSC.Style.red
 
     default property alias content: extraContent.data
+    property alias state: contentColumn.state
         
     ColumnLayout {
         id: contentColumn
@@ -57,7 +58,7 @@ Popup {
                 text: popup.errorMessage
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
-                font.pointSize: 15
+                font.pixelSize: 15
                 Layout.fillWidth: true
             }
         }

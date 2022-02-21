@@ -1,10 +1,7 @@
 import QtQuick 2.13
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
-import QtQml.Models 2.13
 import QtQuick.Controls.Material 2.12
-import Qt.labs.qmlmodels 1.0
-import QtQuick.Dialogs 1.3
 import csc 1.0 as CSC
 
 Page {
@@ -50,14 +47,14 @@ Page {
     TextMetrics {
         id: textMetricsLevel
         text: "Warning"
-        font.pointSize: 13
+        font.pixelSize: 13
         font.weight: Font.Medium
     }
 
     TextMetrics {
         id: textMetricsDate
         text: "0000-00-00 00:00:00"
-        font.pointSize: 15
+        font.pixelSize: 15
     }
 
     CSC.Table {
@@ -82,14 +79,14 @@ Page {
                 Text {
                     id: levelText
                     text: "Level"
-                    font.pointSize: 13
+                    font.pixelSize: 13
                     font.weight: Font.Medium
                     Layout.preferredWidth: textMetricsLevel.width + 30
                 }
 
                 Text {
                     text: "Date and Time"
-                    font.pointSize: 13
+                    font.pixelSize: 13
                     font.weight: Font.Medium
                     Layout.preferredWidth: textMetricsDate.width
                 }
@@ -97,7 +94,7 @@ Page {
                 Text {
                     id: messageLabel
                     text: "Message"
-                    font.pointSize: 13
+                    font.pixelSize: 13
                     font.weight: Font.Medium
                     Layout.fillWidth: true
                 }
@@ -155,10 +152,9 @@ Page {
                     topPadding: 5
                     bottomPadding: 5
                     horizontalAlignment: Text.AlignHCenter
-                    font.pointSize: 13
+                    font.pixelSize: 13
                     font.weight: Font.Medium
                     Layout.preferredWidth: textMetricsLevel.width + 30
-                    Layout.alignment: Qt.AlignVCenter
 
                     background: Rectangle {
                         color: {
@@ -182,21 +178,20 @@ Page {
 
                 Text {
                     text: timestamp
-                    font.pointSize: 15
+                    font.pixelSize: 15
                     Layout.preferredWidth: textMetricsDate.width
-                    Layout.alignment: Qt.AlignVCenter
                 }
 
                 Text {
                     id: messageLabel
                     text: message[0]
                     wrapMode: Text.Wrap
-                    font.pointSize: 15
+                    font.pixelSize: 15
                     topPadding: 10
                     bottomPadding: 10
                     lineHeight: 1.2
+                    verticalAlignment: Text.AlignVCenter
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
                 }
             }
         }

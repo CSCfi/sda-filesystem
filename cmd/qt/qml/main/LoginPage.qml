@@ -2,7 +2,6 @@ import QtQuick 2.13
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
-import Qt.labs.qmlmodels 1.0
 import QtQml 2.13
 import csc 1.0 as CSC
 
@@ -60,7 +59,7 @@ Page {
 					onLoginError: {
 						if (index == idx) {
 							loader.item.loading = false
-							popup.errorMessage = message + ". Check logs for further details."
+							popup.errorMessage = message + ". Check logs for further details"
 							popup.open()
 						}
 					}
@@ -131,7 +130,7 @@ Page {
 			property int index
 			property string repository
 			property bool open
-			property bool loading: !enabled
+			property bool loading: false
 
 			onOpenChanged: {
 				if (open) {
@@ -148,6 +147,7 @@ Page {
 					if (idx == form.index) {
 						passwordField.errorVisible = true
 						form.enabled = true
+						form.loading = false
 
 						if (usernameField.text != "") {
 							passwordField.selectAll()
@@ -188,6 +188,7 @@ Page {
 				onClicked: {
 					popup.close()
 					form.enabled = false
+					form.loading = true
 					passwordField.errorVisible = false
 					QmlBridge.loginWithPassword(form.index, usernameField.text, passwordField.text)
 				}

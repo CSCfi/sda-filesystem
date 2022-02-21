@@ -2,7 +2,6 @@ import QtQuick 2.13
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
-import Qt.labs.qmlmodels 1.0
 import QtQuick.Dialogs 1.3
 import csc 1.0 as CSC
 
@@ -17,7 +16,7 @@ Page {
         selectExisting: false
         selectFolder: true
         onAccepted: {
-            var mountError = QmlBridge.changeMountPoint(dialogCreate.fileUrl)
+            var mountError = QmlBridge.changeMountPoint(folder)
             if (mountError) {
                 popup.errorMessage = mountError
                 popup.open()
@@ -120,7 +119,7 @@ Page {
                 radius: 5
                 border.width: 1
                 border.color: CSC.Style.grey
-                width: 300
+                width: 350
                 height: childrenRect.height
                 anchors.verticalCenter: changeButton.verticalCenter
 
@@ -136,7 +135,7 @@ Page {
                     Text {
                         id: mountText
                         text: QmlBridge.mountPoint
-                        font.pointSize: 15
+                        font.pixelSize: 15
                         verticalAlignment: Text.AlignVCenter
                         maximumLineCount: 1
                         padding: 10
@@ -187,14 +186,14 @@ Page {
                     Text {
                         id: levelText
                         text: "Name"
-                        font.pointSize: 13
+                        font.pixelSize: 13
                         font.weight: Font.Medium
                         Layout.fillWidth: true
                     }
 
                     Text {
                         text: "Location"
-                        font.pointSize: 13
+                        font.pixelSize: 13
                         font.weight: Font.Medium
                         visible: parent.width - table.maxProjectNameWidth > width + messageLabel.width + 2 * parent.spacing
                         Layout.preferredWidth: 150
@@ -203,7 +202,7 @@ Page {
                     Text {
                         id: messageLabel
                         text: "Progress"
-                        font.pointSize: 13
+                        font.pixelSize: 13
                         font.weight: Font.Medium
                         Layout.maximumWidth: 200
                         Layout.minimumWidth: 200
@@ -229,7 +228,7 @@ Page {
 
                     Text {
                         text: projectName
-                        font.pointSize: 15
+                        font.pixelSize: 15
                         elide: Text.ElideRight
                         Layout.fillWidth: true
 
@@ -242,7 +241,7 @@ Page {
 
                     Text {
                         text: repositoryName
-                        font.pointSize: 15
+                        font.pixelSize: 15
                         visible: parent.width - table.maxProjectNameWidth > width + loadingStatus.width + 2 * parent.spacing
                         Layout.preferredWidth: 150
                     }
@@ -284,7 +283,7 @@ Page {
             visible: createButton.state != ""
             topPadding: 10
             bottomPadding: 10
-            font.pointSize: 15
+            font.pixelSize: 15
         }
 
         CSC.Button {
