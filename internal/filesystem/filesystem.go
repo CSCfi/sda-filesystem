@@ -20,6 +20,7 @@ const sRDONLY = 00444
 const numRoutines = 4
 
 var signalBridge func() = nil
+var host *fuse.FileSystemHost = nil
 
 // Fuse stores the filesystem structure
 type Fuse struct {
@@ -114,7 +115,7 @@ func InitializeFileSystem(send func(string, string)) *Fuse {
 
 // MountFilesystem mounts filesystem 'fs' to directory 'mount'
 func MountFilesystem(fs *Fuse, mount string) {
-	host := fuse.NewFileSystemHost(fs)
+	host = fuse.NewFileSystemHost(fs)
 
 	options := []string{}
 	if runtime.GOOS == "darwin" {
@@ -131,8 +132,15 @@ func MountFilesystem(fs *Fuse, mount string) {
 		options = append(options, "-o", "gid=-1")
 	}
 
-	logs.Infof("Mounting filesystem at %q", mount)
+	logs.Infof("Mounting filesystem at %s", mount)
 	host.Mount(mount, options)
+}
+
+// UnmountFilesystem unmounts filesystem if host is defined
+func UnmountFilesystem() {
+	if host != nil {
+		host.Unmount()
+	}
 }
 
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem

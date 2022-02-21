@@ -148,7 +148,7 @@ func init() {
 	log = logrus.New()
 	// Configure Log Text Formatter
 	log.SetFormatter(&logrus.TextFormatter{
-		DisableColors: false,
 		FullTimestamp: true,
+		ForceColors:   true,
 	})
 }
