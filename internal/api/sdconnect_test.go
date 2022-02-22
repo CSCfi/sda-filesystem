@@ -502,25 +502,24 @@ func TestSDConnectGetNthLevel_Projects(t *testing.T) {
 func TestGetLoginMethod(t *testing.T) {
 
 	sd := &sdConnectInfo{}
-	expectedLoginMethod := 0 // Constant 0
 	loginMethod := sd.getLoginMethod()
 	if loginMethod != 0 {
-		t.Errorf("TestGetLoginMethod failed expected=%d, received=%d", expectedLoginMethod, loginMethod)
+		t.Errorf("TestGetLoginMethod failed expected=%d, received=%d", 0, loginMethod)
 	}
 
 }
 
-func TestLevelCount(t *testing.T) {
+func TestLevelCount_SDConnect(t *testing.T) {
 	sd := sdConnectInfo{}
 	if lc := sd.levelCount(); lc != 3 {
-		t.Errorf("TestLevelCount failed, expected=3, received=%d", lc)
+		t.Errorf("TestLevelCount_SDConnect failed, expected=3, received=%d", lc)
 	}
 }
 
-func TestGetToken(t *testing.T) {
+func TestGetToken_SDConnect(t *testing.T) {
 	sd := sdConnectInfo{token: "token"}
 	if sdt := sd.getToken(); sdt != "token" {
-		t.Errorf("TestGetToken failed, expected=token, received=%s", sdt)
+		t.Errorf("TestGetToken_SDConnect failed, expected=token, received=%s", sdt)
 	}
 }
 
