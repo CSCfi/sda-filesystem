@@ -114,7 +114,7 @@ func (lm *LogModel) saveLogs(url string) {
 
 	f, err := os.Create(file)
 	if err != nil {
-		logs.Errorf("Could not create file %q: %w", file, err)
+		logs.Errorf("Could not create file %s: %w", file, err)
 		return
 	}
 	defer f.Close()
@@ -133,15 +133,15 @@ func (lm *LogModel) saveLogs(url string) {
 			strings.Join(lg.message, ": "))
 
 		if _, err = writer.WriteString(str + newline); err != nil {
-			logs.Errorf("Something went wrong when writing to file %q: %w", file, err)
+			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)
 			return
 		}
 	}
 
 	err = writer.Flush()
 	if err != nil {
-		logs.Errorf("Could not flush file %q: %w", file, err)
+		logs.Errorf("Could not flush file %s: %w", file, err)
 	}
 
-	logs.Infof("Logs written successfully to file %q", file)
+	logs.Infof("Logs written successfully to file %s", file)
 }

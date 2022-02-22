@@ -109,6 +109,7 @@ Page {
         Text {
             text: "Choose in which local directory your data will be available"
             color: CSC.Style.grey
+            font.pixelSize: 12
         }
 
         Row {
@@ -160,6 +161,8 @@ Page {
         TextMetrics {
             id: textMetrics100
             text: "100 %"
+            font.pixelSize: 13
+            font.weight: Font.Medium
         }
 
         CSC.Table {
@@ -202,8 +205,7 @@ Page {
                     Text {
                         id: messageLabel
                         text: "Progress"
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
+                        font: textMetrics100.font
                         Layout.maximumWidth: 200
                         Layout.minimumWidth: 200
                     }
@@ -263,6 +265,7 @@ Page {
                             id: percentValue
                             text: Math.round(parent.value * 100) + " %"
                             color: CSC.Style.grey
+                            font.pixelSize: 12
                             Layout.minimumWidth: textMetrics100.width
                         }
                     }

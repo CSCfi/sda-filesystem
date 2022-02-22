@@ -77,7 +77,6 @@ Page {
                 anchors.rightMargin: CSC.Style.padding
 
                 Text {
-                    id: levelText
                     text: "Level"
                     font.pixelSize: 13
                     font.weight: Font.Medium
@@ -152,8 +151,7 @@ Page {
                     topPadding: 5
                     bottomPadding: 5
                     horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
+                    font: textMetricsLevel.font
                     Layout.preferredWidth: textMetricsLevel.width + 30
 
                     background: Rectangle {
@@ -178,7 +176,7 @@ Page {
 
                 Text {
                     text: timestamp
-                    font.pixelSize: 15
+                    font: textMetricsDate.font
                     Layout.preferredWidth: textMetricsDate.width
                 }
 

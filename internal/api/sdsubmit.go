@@ -75,7 +75,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
 	err := makeRequest(path, *s.token, SDSubmit, nil, nil, &files)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve files for dataset %q: %w", fsPath, err)
+		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
 	}
 
 	var metadata []Metadata
@@ -90,7 +90,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 		}
 	}
 
-	logs.Infof("Retrieved files for dataset %q", fsPath)
+	logs.Infof("Retrieved files for dataset %s", fsPath)
 	return metadata, nil
 }
 
@@ -175,7 +175,7 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 	case 1:
 		idx, ok := s.datasets[nodes[0]]
 		if !ok {
-			return nil, fmt.Errorf("Tried to request files for invalid dataset %q", fsPath)
+			return nil, fmt.Errorf("Tried to request files for invalid dataset %s", fsPath)
 		}
 		return s.getFiles(fsPath, s.urls[idx], nodes[0])
 	default:
@@ -190,7 +190,7 @@ func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interf
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
 	idx, ok := s.datasets[nodes[0]]
 	if !ok {
-		return fmt.Errorf("Tried to request content of %s file %q with invalid dataset %q", SDSubmit, nodes[1], nodes[0])
+		return fmt.Errorf("Tried to request content of %s file %s with invalid dataset %s", SDSubmit, nodes[1], nodes[0])
 	}
 
 	// Query params

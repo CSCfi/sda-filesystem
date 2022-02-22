@@ -47,6 +47,7 @@ TextField {
             text: errorText
             color: CSC.Style.grey
             height: contentHeight
+            font.pixelSize: 12
             Layout.fillWidth: true
         }
     }
