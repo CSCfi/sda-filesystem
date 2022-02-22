@@ -347,7 +347,7 @@ func TestLoginToAll(t *testing.T) {
 		{
 			"FAIL_MIXED", []string{"Rep50", "Rep8", "Rep9"}, []string{"Rep8"},
 			nil, fmt.Errorf("Error occurred"),
-			map[string]api.LoginMethod{"Rep50": api.Password, "Rep8": api.Token, "Rep9": api.Password},
+			map[string]api.LoginMethod{"Rep50": api.Password, "Rep8": api.Token, "Rep9": 3},
 		},
 	}
 
@@ -395,33 +395,22 @@ func TestLoginToAll(t *testing.T) {
 
 func TestProcessFlags(t *testing.T) {
 	repositories := []string{"Rep1", "Rep2", "Rep3"}
+	defaultMount := "default_dir"
+
 	var tests = []struct {
 		testname, repository, mount, logLevel string
 		finalReps                             []string
 		timeout                               int
-		mockCheckMountPoint                   func(string) error
 	}{
-		{
-			"OK_1", "Rep2", "/hello", "debug",
-			[]string{"Rep2"}, 45, nil,
-		},
-		{
-			"OK_2", "all", "/goodbye", "warning",
-			repositories, 87, nil,
-		},
-		{
-			"OK_3", "wrong_repository", "/hi/hello", "error",
-			repositories, 2, nil,
-		},
-		{
-			"FAIL_CHECK_MOUNT", "Rep3", "/bad/directory", "info",
-			[]string{"Rep3"}, 29,
-			func(mount string) error { return errExpected },
-		},
+		{"OK_1", "Rep2", "/hello", "debug", []string{"Rep2"}, 45},
+		{"OK_2", "all", "/goodbye", "warning", repositories, 87},
+		{"OK_3", "wrong_repository", "/hi/hello", "error", repositories, 2},
+		{"OK_4", "Rep3", "", "info", []string{"Rep3"}, 20},
 	}
 
 	origGetAllPossibleRepositories := api.GetAllPossibleRepositories
 	origAddRepository := api.AddRepository
+	origDefaultMountPoint := mountpoint.DefaultMountPoint
 	origCheckMountPoint := mountpoint.CheckMountPoint
 	origSetRequestTimeout := api.SetRequestTimeout
 	origSetLevel := logs.SetLevel
@@ -429,6 +418,7 @@ func TestProcessFlags(t *testing.T) {
 	defer func() {
 		api.GetAllPossibleRepositories = origGetAllPossibleRepositories
 		api.AddRepository = origAddRepository
+		mountpoint.DefaultMountPoint = origDefaultMountPoint
 		mountpoint.CheckMountPoint = origCheckMountPoint
 		api.SetRequestTimeout = origSetRequestTimeout
 		logs.SetLevel = origSetLevel
@@ -445,7 +435,10 @@ func TestProcessFlags(t *testing.T) {
 		reps = append(reps, r)
 		return nil
 	}
-	mockCheckMountPoint := func(mount string) error {
+	mountpoint.DefaultMountPoint = func() (string, error) {
+		return defaultMount, nil
+	}
+	mountpoint.CheckMountPoint = func(mount string) error {
 		testMount = mount
 		return nil
 	}
@@ -458,7 +451,7 @@ func TestProcessFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			mountPoint = tt.mount
+			mount = tt.mount
 			repository = tt.repository
 			logLevel = tt.logLevel
 			requestTimeout = tt.timeout
@@ -467,30 +460,77 @@ func TestProcessFlags(t *testing.T) {
 			testTimeout = 0
 			testLevel, testMount = "", ""
 
-			if tt.mockCheckMountPoint != nil {
-				mountpoint.CheckMountPoint = tt.mockCheckMountPoint
-			} else {
-				mountpoint.CheckMountPoint = mockCheckMountPoint
-			}
-
 			err := processFlags()
 
-			if strings.HasPrefix(tt.testname, "FAIL") {
-				if err == nil {
-					t.Error("Function should have returned error")
-				} else if !errors.Is(err, errExpected) {
-					t.Errorf("Function returned incorrect error %q", err.Error())
-				}
-			} else if err != nil {
+			if err != nil {
 				t.Errorf("Returned unexpected error: %s", err.Error())
 			} else if tt.timeout != testTimeout {
 				t.Errorf("SetRequestTimeout() received timeout %d, expected %d", testTimeout, tt.timeout)
 			} else if tt.logLevel != testLevel {
 				t.Errorf("SetLevel() received log level %s, expected %s", testLevel, tt.logLevel)
+			} else if tt.mount == "" && mount != defaultMount {
+				t.Errorf("Expected default mount point %q, received %q", defaultMount, mount)
 			} else if tt.mount != testMount {
 				t.Errorf("CheckMountPoint() received mount point %q, expected %q", testMount, tt.mount)
 			} else if !reflect.DeepEqual(reps, tt.finalReps) {
 				t.Errorf("Function did not add repositories correctly.\nExpected %v\nGot%v", tt.finalReps, reps)
+			}
+		})
+	}
+}
+
+func TestProcessFlags_Error(t *testing.T) {
+	var tests = []struct {
+		testname, repository, mount                     string
+		addRepError, checkMountError, defaultMountError error
+	}{
+		{"FAIL_ADD_REPOSITORY_1", "Rep1", "mount", errExpected, nil, nil},
+		{"FAIL_ADD_REPOSITORY_2", "Rep4", "mount", errExpected, nil, nil},
+		{"FAIL_DEFAULT_MOUNT", "misc", "", nil, nil, errExpected},
+		{"FAIL_CHECK_MOUNT", "all", "/bad/directory", nil, errExpected, nil},
+	}
+
+	origGetAllPossibleRepositories := api.GetAllPossibleRepositories
+	origAddRepository := api.AddRepository
+	origDefaultMountPoint := mountpoint.DefaultMountPoint
+	origCheckMountPoint := mountpoint.CheckMountPoint
+	origSetRequestTimeout := api.SetRequestTimeout
+	origSetLevel := logs.SetLevel
+
+	defer func() {
+		api.GetAllPossibleRepositories = origGetAllPossibleRepositories
+		api.AddRepository = origAddRepository
+		mountpoint.DefaultMountPoint = origDefaultMountPoint
+		mountpoint.CheckMountPoint = origCheckMountPoint
+		api.SetRequestTimeout = origSetRequestTimeout
+		logs.SetLevel = origSetLevel
+	}()
+
+	api.GetAllPossibleRepositories = func() []string {
+		return []string{"Rep1", "Rep2", "Rep3"}
+	}
+	api.SetRequestTimeout = func(timeout int) {}
+	logs.SetLevel = func(level string) {}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			mount = tt.mount
+			repository = tt.repository
+
+			api.AddRepository = func(r string) error {
+				return tt.addRepError
+			}
+			mountpoint.DefaultMountPoint = func() (string, error) {
+				return "", tt.defaultMountError
+			}
+			mountpoint.CheckMountPoint = func(mount string) error {
+				return tt.checkMountError
+			}
+
+			if err := processFlags(); err == nil {
+				t.Error("Function should have returned error")
+			} else if !errors.Is(err, errExpected) {
+				t.Errorf("Function returned incorrect error %q", err.Error())
 			}
 		})
 	}

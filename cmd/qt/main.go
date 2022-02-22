@@ -33,6 +33,7 @@ type QmlBridge struct {
 
 	_ func(int)                     `slot:"loginWithToken,auto"`
 	_ func(int, string, string)     `slot:"loginWithPassword,auto"`
+	_ func()                        `slot:"initFuse,auto"`
 	_ func()                        `slot:"loadFuse,auto"`
 	_ func()                        `slot:"openFuse,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
@@ -103,9 +104,12 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 		return
 	}
 
-	qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
 	loginModel.setLoggedIn(idx, true)
-	logs.Info("Login successful")
+	logs.Info(rep, " login successful")
+}
+
+func (qb *QmlBridge) initFuse() {
+	qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
 }
 
 func (qb *QmlBridge) loadFuse() {

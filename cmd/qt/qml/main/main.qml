@@ -13,11 +13,10 @@ ApplicationWindow {
     visible: true
     visibility: "Maximized"
     minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
+    minimumHeight: header.implicitHeight + login.implicitHeight
     font.capitalization: Font.MixedCase
     
     Material.background: "white"
-
-    Component.onCompleted: minimumHeight = header.implicitHeight + login.implicitHeight
     
     // Ensures fuse unmounts when application terminates
 	onClosing: QmlBridge.shutdown()
