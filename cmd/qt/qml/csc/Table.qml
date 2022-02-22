@@ -22,9 +22,12 @@ ListView {
     property int maxPages: Math.ceil(rowCount / amountVisible)
 
     onPageChanged: selectVisible()
+    onRowCountChanged: selectVisible()
 
     function selectVisible() {
-        visibleItems.setGroups(0, visibleItems.count, "items")
+        if (visibleItems.count > 0) {
+            visibleItems.remove(0, visibleItems.count)
+        }
         var ceilItemCount = page * amountVisible 
         var visible = amountVisible
         if (ceilItemCount > rowCount) {
@@ -100,13 +103,7 @@ ListView {
                         anchors.fill: parent
                     }
 
-                    onClicked: {
-                        if (!menu.visible) {
-                            menu.open()
-                        } else {
-                            menu.close()
-                        }
-                    }
+                    onClicked: menu.visible = !menu.visible
 
                     Menu {
                         id: menu
@@ -167,7 +164,7 @@ ListView {
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
                 font.pixelSize: 12
-                opacity: (rightRow.x + implicitWidth - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
+                opacity: (rightRow.x + whichPageText.width - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
 
                 property int firstIdx: (listView.page - 1) * listView.amountVisible + 1
                 property int lastIdx: {
@@ -187,12 +184,14 @@ ListView {
             anchors.right: parent.right
 
             Text {
+                id: whichPageText
                 text: listView.page + " of " + listView.maxPages + " pages"
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter 
                 rightPadding: CSC.Style.padding
+                leftPadding: CSC.Style.padding
                 font.pixelSize: 12
-                opacity: (rightRow.x - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
+                opacity: (rightRow.x > leftRow.width) ? 1.0 : 0.0
             }
 
             ToolButton {
@@ -326,13 +325,7 @@ ListView {
             DelegateModelGroup {
                 id: visibleItems
                 name: "visibleItems"
-                includeByDefault: true
-
-                onChanged: {
-                    if (count > table.amountVisible) {
-                        visibleItems.setGroups(0, 1, "items")
-                    }
-                }
+                includeByDefault: false
             }
         ]
     }
