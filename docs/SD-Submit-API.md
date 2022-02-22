@@ -2,7 +2,7 @@
 
 The API reflects data in the [FEGA](https://research.csc.fi/-/fega) and [SD-Submit](https://research.csc.fi/sensitive-data-services-for-research) services.
 
-The API implementation is [sda-download](https://github.com/neicnordic/sda-download) which a go implementation of the NeIC [Data Out API](https://neic-sda.readthedocs.io/en/latest/dataout.html#rest-api-endpoints).
+The API implementation is in [sda-download](https://github.com/neicnordic/sda-download) which is a Go implementation of the NeIC [Data Out API](https://neic-sda.readthedocs.io/en/latest/dataout.html#rest-api-endpoints).
 
 All endpoints require an `Authorization` header with an access token in the `Bearer` scheme.
 
