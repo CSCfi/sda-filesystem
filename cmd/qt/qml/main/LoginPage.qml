@@ -8,8 +8,9 @@ import csc 1.0 as CSC
 Page {
 	id: page
 	implicitWidth: content.width + 2 * CSC.Style.padding
-	implicitHeight: content.height + 2 * CSC.Style.padding
 	Material.accent: CSC.Style.primaryColor
+
+	Component.onCompleted: implicitHeight = content.height + 2 * CSC.Style.padding
 
 	property bool loggedIn: false
 
@@ -86,7 +87,10 @@ Page {
 			text: "Continue"
 			enabled: false
 			
-			onClicked: page.loggedIn = true
+			onClicked: {
+				QmlBridge.initFuse()
+				page.loggedIn = true
+			}
 		}
 	}
 

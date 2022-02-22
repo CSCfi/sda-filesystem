@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
@@ -18,7 +19,7 @@ import (
 	"golang.org/x/term"
 )
 
-var repository, mountPoint, logLevel string
+var repository, mount, logLevel string
 var requestTimeout int
 
 type loginReader interface {
@@ -185,10 +186,17 @@ func processFlags() error {
 		}
 	}
 
-	if err := mountpoint.CheckMountPoint(mountPoint); err != nil {
+	if mount == "" {
+		defaultMount, err := mountpoint.DefaultMountPoint()
+		if err != nil {
+			return err
+		}
+		mount = defaultMount
+	} else if err := mountpoint.CheckMountPoint(mount); err != nil {
 		return err
 	}
 
+	mount = filepath.Clean(mount)
 	api.SetRequestTimeout(requestTimeout)
 	logs.SetLevel(logLevel)
 	return nil
@@ -196,16 +204,11 @@ func processFlags() error {
 
 func init() {
 	repOptions := api.GetAllPossibleRepositories()
-	defaultMount, err := mountpoint.DefaultMountPoint()
-
-	if err != nil {
-		logs.Warning(err)
-	}
 
 	flag.StringVar(&repository, "enable", "all",
 		fmt.Sprintf("Choose which repositories you wish include in the filesystem. Possible values: {%s,all}",
 			strings.Join(repOptions, ",")))
-	flag.StringVar(&mountPoint, "mount", defaultMount, "Path to filesystem mount point")
+	flag.StringVar(&mount, "mount", "", "Path to filesystem mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
@@ -247,6 +250,6 @@ func main() {
 	done := shutdown()
 	fs := filesystem.InitializeFileSystem(nil)
 	fs.PopulateFilesystem(nil)
-	filesystem.MountFilesystem(fs, mountPoint)
+	filesystem.MountFilesystem(fs, mount)
 	<-done
 }
