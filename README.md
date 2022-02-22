@@ -6,8 +6,8 @@
 
 SDA-Filesystem makes use of the:
 
-- [SD-Connect Proxy API](docs/API.md) 
-- [SD-Submit Download API](https://github.com/neicnordic/sda-download/blob/main/docs/API.md) 
+- [SD-Connect Proxy API](docs/SD-Connect-API.md) 
+- [SD-Submit Download API](docs/SD-Submit-API.md) 
 
 It build a FUSE (Filesystem in Userspace) layer. Software currently supports Linux, macOS and Windows for:
 - [Graphical User Interface](#graphical-user-interface)

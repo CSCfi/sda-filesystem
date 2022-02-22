@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - github action for golangci-lint bumped to v1.44
 - GUI has a new look
-- `README.md` update with details regarding SD-Submit 
+- `README.md` update with details regarding SD-Submit
+- SD-Connect Proxy API reference documentation updated
 
 ### Added
 - run unit tests in github actions
 - filesystem supports SD-Submit service
 - support for windows (no github actions yet)
+- SD-Submit API Reference documentation
 
 ### Fixed
 - gosec204 issue with `exec.Command` by processing to string the user input
