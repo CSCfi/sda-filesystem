@@ -9,7 +9,7 @@ SDA-Filesystem makes use of the:
 - [SD-Connect Proxy API](docs/SD-Connect-API.md) 
 - [SD-Submit Download API](docs/SD-Submit-API.md) 
 
-It build a FUSE (Filesystem in Userspace) layer. Software currently supports Linux, macOS and Windows for:
+It builds a FUSE (Filesystem in Userspace) layer. Software currently supports Linux, macOS and Windows for:
 - [Graphical User Interface](#graphical-user-interface)
 - [Command Line Interface](#command-line-interface)
 
@@ -19,9 +19,9 @@ Binaries are built on each release for all supported Operating Systems.
 
 Go version 1.16
 
-Set environment variables, before running the application:
-- SD-Connect: `FS_SD_CONNECT_METADATA_API` - metadata API for building the directories, files and their associated information (size, name etc.), `FS_SD_CONNECT_DATA_API` - for downloading files;
-- SD-Submit: `FS_SD_SUBMIT_API` for we can provide a list of API separated by comma and `SDS_ACCESS_TOKEN` - which should contain a JWT for authenticating to the SD-Submit download API;
+Set these environment variables before running the application:
+- SD-Connect: `FS_SD_CONNECT_METADATA_API` - a metadata API for building the directories, files and their associated information (size, name etc.); `FS_SD_CONNECT_DATA_API` - an API for downloading files;
+- SD-Submit: `FS_SD_SUBMIT_API` – a comma-separated list of APIs; `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD-Submit download API;
 - `FS_CERTS` is required by SD-Connect and SD-Submit if self signed certificates are used on the APIs.
 
 For test environment use:
@@ -33,7 +33,8 @@ export FS_SD_SUBMIT_API=https://test.sd.csc.fi/
 
 # Connection requires a certificate only if using untrusted (e.g. self-signed) certificates
 # if signed by a trusted CA, this is not needed
-# FS_CERTS should be the file that contains the necessary certificates
+# FS_CERTS should be the path to the file that contains the necessary certificates
+# For example:
 export FS_CERTS=cert.pem
 ```
 
@@ -64,10 +65,15 @@ These are ok, and are caused as of go 1.14+
 
 ```
 qtdeploy build desktop cmd/qt/main.go
-./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project  // Path slightly different for other OSs
-```
 
-If you wish to create a build for linux regardless of the OS you are currently on, you may use the provided dockerfile. Remember to name the image `therecipe/qt:linux`
+# Running the application is slightly different for each operating system
+# On macOS:
+./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project
+# On Linux:
+./cmd/qt/deploy/linux/qt_project
+# On Windows:
+cmd\qt\deploy\windows\qt_project.exe
+```
 
 ### Deploy
 
@@ -115,7 +121,7 @@ Usage of ./go-fuse:
     	comma-separated list of pattern=N settings for file-filtered logging
 
 ```
-Example run: `./go-fuse -mount=$HOME/ExampleMount` will create in the directory `$HOME/ExampleMount` the FUSE layer for both SD-Connect and SD-Submit.
+Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both SD-Connect and SD-Submit.
 
 ## License
 
