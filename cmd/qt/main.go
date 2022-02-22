@@ -92,6 +92,7 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 	}
 
 	if err := api.ValidateLogin(rep, auth...); err != nil {
+		api.RemoveRepository(rep)
 		logs.Error(err)
 
 		var re *api.RequestError
