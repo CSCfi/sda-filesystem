@@ -167,6 +167,7 @@ Page {
 			Text {
 				text: "Please log in with your CSC credentials"
 				topPadding: 10
+				font.pixelSize: 12
 			}
 
 			CSC.TextField {

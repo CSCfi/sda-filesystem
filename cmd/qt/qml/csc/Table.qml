@@ -45,7 +45,7 @@ ListView {
             text: "No " + listView.objectName + " available"
             visible: listView.rowCount == 0
             verticalAlignment: Text.AlignVCenter
-            font.pixelSize: 15
+            font.pixelSize: 14
             anchors.fill: parent
             anchors.leftMargin: CSC.Style.padding
         }
@@ -73,6 +73,7 @@ ListView {
                 Text {
                     text: "Items per page: "
                     leftPadding: CSC.Style.padding
+                    font.pixelSize: 12
                 }
 
                 ToolButton {
@@ -165,6 +166,7 @@ ListView {
                 text: firstIdx + " - " + lastIdx + " of " + listView.rowCount + " items"
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
+                font.pixelSize: 12
                 opacity: (rightRow.x + implicitWidth - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
 
                 property int firstIdx: (listView.page - 1) * listView.amountVisible + 1
@@ -189,6 +191,7 @@ ListView {
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter 
                 rightPadding: CSC.Style.padding
+                font.pixelSize: 12
                 opacity: (rightRow.x - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
             }
 

@@ -100,10 +100,10 @@ func (t tokenator) getSToken(url, project string) (sToken, error) {
 	token := sToken{}
 	err := makeRequest(url+"/token", "", SDConnect, query, nil, &token)
 	if err != nil {
-		return sToken{}, fmt.Errorf("Failed to retrieve %s scoped token for %q: %w", SDConnect, project, err)
+		return sToken{}, fmt.Errorf("Failed to retrieve %s scoped token for %s: %w", SDConnect, project, err)
 	}
 
-	logs.Debugf("Retrieved %s scoped token for %q", SDConnect, project)
+	logs.Debugf("Retrieved %s scoped token for %s", SDConnect, project)
 	return token, nil
 }
 
@@ -146,7 +146,7 @@ func (c *connecter) fetchTokens(skipUnscoped bool, projects []Metadata) (newUTok
 
 			token, err := c.getSToken(*c.url, project.Name)
 			if err != nil {
-				logs.Warningf("HTTP requests may be slower for %s project %q: %w", SDConnect, project.Name, err)
+				logs.Warningf("HTTP requests may be slower for %s project %s: %w", SDConnect, project.Name, err)
 			} else {
 				sTokensChan <- [3]string{project.Name, token.Token, token.ProjectID}
 			}
@@ -240,10 +240,10 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 		err = makeRequest(path, token.Token, SDConnect, nil, headers, &meta)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve metadata for %q: %w", fsPath, err)
+		return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
 	}
 
-	logs.Infof("Retrieved metadata for %q", fsPath)
+	logs.Infof("Retrieved metadata for %s", fsPath)
 	return meta, nil
 }
 
@@ -259,7 +259,7 @@ func (c *sdConnectInfo) tokenExpired(err error) bool {
 
 func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) {
 	if len(nodes) < 3 {
-		logs.Errorf("Cannot update attributes for path %q", path)
+		logs.Errorf("Cannot update attributes for path %s", path)
 		return
 	}
 
@@ -275,25 +275,25 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 	if err := c.downloadData(nodes, &headers, 0, 2); err != nil {
 		var re *RequestError
 		if errors.As(err, &re) && re.StatusCode == 451 {
-			logs.Errorf("You do not have permission to access file %q", path)
+			logs.Errorf("You do not have permission to access file %s", path)
 			*size = -2
 		} else {
-			logs.Errorf("Encryption status and segmented object size of object %q could not be determined: %w", path, err)
+			logs.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", path, err)
 			*size = -1
 		}
 		return
 	}
 	if headers.SegmentedObjectSize != -1 {
-		logs.Infof("Object %q is a segmented object with size %d", path, headers.SegmentedObjectSize)
+		logs.Infof("Object %s is a segmented object with size %d", path, headers.SegmentedObjectSize)
 		*size = headers.SegmentedObjectSize
 	}
 	if headers.Decrypted {
 		dSize := calculateDecryptedSize(*size, headers.HeaderSize)
 		if dSize != -1 {
-			logs.Debugf("Object %q is automatically decrypted", path)
+			logs.Debugf("Object %s is automatically decrypted", path)
 			*size = dSize
 		} else {
-			logs.Warningf("API returned header 'X-Decrypted' even though size of object %q is too small", path)
+			logs.Warningf("API returned header 'X-Decrypted' even though size of object %s is too small", path)
 		}
 	}
 }

@@ -113,7 +113,7 @@ var SetRequestTimeout = func(timeout int) {
 var getEnv = func(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 	if !ok {
-		return "", fmt.Errorf("Environment variable %q not set", name)
+		return "", fmt.Errorf("Environment variable %s not set", name)
 	}
 	if verifyURL {
 		return env, validURL(env)
@@ -124,10 +124,10 @@ var getEnv = func(name string, verifyURL bool) (string, error) {
 var validURL = func(env string) error {
 	u, err := url.ParseRequestURI(env)
 	if err != nil {
-		return fmt.Errorf("Environment variable %q is an invalid URL: %w", env, err)
+		return fmt.Errorf("Environment variable %s is an invalid URL: %w", env, err)
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("Environment variable %q does not have scheme 'https'", env)
+		return fmt.Errorf("Environment variable %s does not have scheme 'https'", env)
 	}
 	return nil
 }
@@ -149,7 +149,7 @@ func InitializeClient() error {
 	if len(hi.certPath) > 0 {
 		caCert, err := ioutil.ReadFile(hi.certPath)
 		if err != nil {
-			return fmt.Errorf("Reading certificate file %q failed: %w", hi.certPath, err)
+			return fmt.Errorf("Reading certificate file %s failed: %w", hi.certPath, err)
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -339,11 +339,11 @@ func DownloadData(nodes []string, path string, start int64, end int64, maxEnd in
 		buf := make([]byte, chEnd-chStart)
 		err := hi.repositories[nodes[0]].downloadData(nodes[1:], buf, chStart, chEnd)
 		if err != nil {
-			return nil, fmt.Errorf("Retrieving data failed for %q: %w", path, err)
+			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
 
 		downloadCache.Set(cacheKey, buf, time.Minute*60)
-		logs.Debugf("File %q stored in cache, with coordinates [%d, %d)", path, chStart, chEnd)
+		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chStart, chEnd)
 
 		if endofst > int64(len(buf)) {
 			endofst = int64(len(buf))
@@ -355,6 +355,6 @@ func DownloadData(nodes []string, path string, start int64, end int64, maxEnd in
 	if endofst > int64(len(ret)) {
 		endofst = int64(len(ret))
 	}
-	logs.Debugf("Retrieved file %q from cache, with coordinates [%d, %d)", path, start, end)
+	logs.Debugf("Retrieved file %s from cache, with coordinates [%d, %d)", path, start, end)
 	return ret[ofst:endofst], nil
 }

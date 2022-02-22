@@ -102,7 +102,7 @@ func InitializeFileSystem(send func(string, string)) *Fuse {
 			projectPath := enabled + "/" + projectSafe
 
 			// Create a project/dataset directory
-			logs.Debugf("Creating directory %q", filepath.FromSlash(projectPath))
+			logs.Debugf("Creating directory %s", filepath.FromSlash(projectPath))
 			_, projectSafe = fs.makeNode(fs.root.chld[enabled], project, projectPath, fuse.S_IFDIR|sRDONLY, timestamp)
 
 			if send != nil {
@@ -164,7 +164,7 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 				prntNode := fs.root.chld[repository].chld[project]
 
 				projectPath := repository + "/" + project
-				logs.Debugf("Fetching data for %q", filepath.FromSlash(projectPath))
+				logs.Debugf("Fetching data for %s", filepath.FromSlash(projectPath))
 				containers, err := api.GetNthLevel(repository, projectPath, prntNode.originalName)
 
 				if err != nil {
@@ -185,7 +185,7 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 					containerPath := projectPath + "/" + containerSafe
 
 					// Create a file or a container (depending on repository)
-					logs.Debugf("Creating %s %q", nodeType, filepath.FromSlash(containerPath))
+					logs.Debugf("Creating %s %s", nodeType, filepath.FromSlash(containerPath))
 					_, containerSafe = fs.makeNode(prntNode, c, containerPath, mode, timestamp)
 					containers[i].Name = projectPath + "/" + containerSafe
 				}
@@ -243,7 +243,7 @@ func calculateFinalSize(n *node, path string) int64 {
 		return n.stat.Size
 	}
 	if n.chld == nil {
-		logs.Warningf("Node %q has size -1 but no children! Folder sizes may be displayed incorrectly", filepath.FromSlash(path))
+		logs.Warningf("Node %s has size -1 but no children! Folder sizes may be displayed incorrectly", filepath.FromSlash(path))
 		return 0
 	}
 
@@ -263,7 +263,7 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 		fs := j.fs
 		timestamp := j.timestamp
 
-		logs.Debugf("Fetching data for directory %q", filepath.FromSlash(containerPath))
+		logs.Debugf("Fetching data for directory %s", filepath.FromSlash(containerPath))
 
 		c := fs.getNode(containerPath, ^uint64(0))
 		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1], c.path[2])
@@ -297,7 +297,7 @@ func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string,
 		if len(parts) == 1 {
 			objectSafe := removeInvalidChars(parts[0])
 			objectPath := prntPath + "/" + objectSafe
-			logs.Debugf("Creating file %q", filepath.FromSlash(objectPath))
+			logs.Debugf("Creating file %s", filepath.FromSlash(objectPath))
 			fs.makeNode(prnt, obj, objectPath, fuse.S_IFREG|sRDONLY, tmsp)
 			continue
 		}
@@ -311,7 +311,7 @@ func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string,
 		md := api.Metadata{Bytes: value, Name: key}
 		dirSafe := removeInvalidChars(key)
 		p := prntPath + "/" + dirSafe
-		logs.Debugf("Creating directory %q", filepath.FromSlash(p))
+		logs.Debugf("Creating directory %s", filepath.FromSlash(p))
 		n, dirSafe := fs.makeNode(prnt, md, p, fuse.S_IFDIR|sRDONLY, tmsp)
 		fs.createLevel(n, dirChildren[key], prntPath+"/"+dirSafe, tmsp)
 	}
@@ -376,7 +376,7 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 				// Change name of node (whichever is possibly a file)
 				if dir && (fuse.S_IFREG == possibleTwin.stat.Mode&fuse.S_IFMT) {
 					prnt.chld[newName] = possibleTwin
-					logs.Warningf("File %q under directory %q has had its name changed to %q", possibleTwin.originalName, prntPath, newName)
+					logs.Warningf("File %s under directory %s has had its name changed to %s", possibleTwin.originalName, prntPath, newName)
 				} else {
 					name = newName
 				}
@@ -387,9 +387,9 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 	}
 
 	if dir && name != meta.Name {
-		logs.Warningf("Directory %q under directory %q has had its name changed to %q", meta.Name, prntPath, name)
+		logs.Warningf("Directory %s under directory %s has had its name changed to %s", meta.Name, prntPath, name)
 	} else if !dir && name != strings.TrimSuffix(meta.Name, ".c4gh") {
-		logs.Warningf("File %q under directory %q has had its name changed to %q", meta.Name, prntPath, name)
+		logs.Warningf("File %s under directory %s has had its name changed to %s", meta.Name, prntPath, name)
 	}
 
 	fs.inoLock.Lock()

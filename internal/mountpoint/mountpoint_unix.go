@@ -16,7 +16,7 @@ var CheckMountPoint = func(mount string) error {
 	// Verify mount point exists
 	info, err := os.Stat(mount)
 	if os.IsNotExist(err) {
-		logs.Debugf("Mount point %q does not exist, so it will be created", mount)
+		logs.Debugf("Mount point %s does not exist, so it will be created", mount)
 		if err = os.MkdirAll(mount, 0755); err != nil {
 			return fmt.Errorf("Could not create directory %s", mount)
 		}
@@ -26,27 +26,27 @@ var CheckMountPoint = func(mount string) error {
 	}
 
 	if !info.IsDir() {
-		return fmt.Errorf("%q is not a directory", mount)
+		return fmt.Errorf("%s is not a directory", mount)
 	}
 
 	if unix.Access(mount, unix.W_OK) != nil {
-		return fmt.Errorf("You do not have permission to write to folder %q", mount)
+		return fmt.Errorf("You do not have permission to write to folder %s", mount)
 	}
 
 	dir, err := os.Open(mount)
 	if err != nil {
-		return fmt.Errorf("Could not open mount point %q", mount)
+		return fmt.Errorf("Could not open mount point %s", mount)
 	}
 	defer dir.Close()
 
 	// Verify dir is empty
 	if _, err = dir.ReadDir(1); err != io.EOF {
 		if err != nil {
-			return fmt.Errorf("Error occurred when trying to read from directory %q: %w", mount, err)
+			return fmt.Errorf("Error occurred when trying to read from directory %s: %w", mount, err)
 		}
-		return fmt.Errorf("Mount point %q must be empty", mount)
+		return fmt.Errorf("Mount point %s must be empty", mount)
 	}
 
-	logs.Debugf("Directory %q is a valid mount point", mount)
+	logs.Debugf("Directory %s is a valid mount point", mount)
 	return nil
 }

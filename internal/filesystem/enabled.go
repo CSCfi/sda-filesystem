@@ -81,7 +81,7 @@ func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 
 	n := fs.getNode(path, fh)
 	if n.node == nil {
-		logs.Errorf("File %q not found", path)
+		logs.Errorf("File %s not found", path)
 		return -fuse.ENOENT
 	}
 
