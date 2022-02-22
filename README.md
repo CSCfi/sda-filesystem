@@ -116,3 +116,13 @@ Usage of ./go-fuse:
 
 ```
 Example run: `./go-fuse -mount=$HOME/ExampleMount` will create in the directory `$HOME/ExampleMount` the FUSE layer for both SD-Connect and SD-Submit.
+
+## License
+
+SDA-Filesystem is released under `MIT`, see [LICENSE](LICENSE).
+
+[Qt binding package for Go](https://github.com/therecipe/qt) released under [LGPLv3](https://opensource.org/licenses/LGPL-3.0)
+
+[CgoFuse](https://github.com/billziss-gh/cgofuse) is released under [MIT](https://github.com/billziss-gh/cgofuse/blob/master/LICENSE.txt)
+
+Qt itself is licensed and available under multiple [licenses](https://www.qt.io/licensing).
