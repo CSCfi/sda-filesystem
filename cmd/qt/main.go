@@ -128,29 +128,28 @@ func (qb *QmlBridge) loadFuse() {
 }
 
 func (qb *QmlBridge) openFuse() {
-	var command string
+	var cmd *exec.Cmd
+	userPath := qb.MountPoint()
 
-	_, err := os.Stat(qb.MountPoint())
+	_, err := os.Stat(userPath)
 	if err != nil {
-		logs.Errorf("Failed to find directory %q: %w", qb.MountPoint(), err)
+		logs.Errorf("Failed to find directory %s: %w", userPath, err)
 		return
 	}
+
 	switch runtime.GOOS {
 	case "darwin":
-		command = "open"
+		cmd = exec.Command("open", userPath)
 	case "linux":
-		command = "xdg-open"
+		cmd = exec.Command("xdg-open", userPath)
 	case "windows":
-		command = "start"
+		cmd = exec.Command("cmd", "/C", "start", userPath)
 	default:
 		logs.Errorf("Unrecognized OS")
 		return
 	}
 
-	userPath := qb.MountPoint()
-	cmd := exec.Command(command, userPath)
-	err = cmd.Run()
-	if err != nil {
+	if err = cmd.Run(); err != nil {
 		logs.Errorf("Could not open directory %s: %w", userPath, err)
 	}
 }
@@ -195,7 +194,7 @@ func main() {
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)
 
-	var font = gui.NewQFont2("Helvetica", -1, -1, false)
+	var font = gui.NewQFont2("Helvetica", 12, -1, false)
 	font.SetStyleHint(gui.QFont__SansSerif, gui.QFont__PreferDefault)
 	gui.QGuiApplication_SetFont(font)
 
