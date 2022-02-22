@@ -1,11 +1,18 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"reflect"
 	"testing"
 )
+
+const envMetaUrl = "FS_SD_CONNECT_METADATA_API"
+const metaUrl = "http://metadata.csc.fi"
 
 type mockTokenator struct {
 	uToken  string
@@ -43,6 +50,9 @@ type mockConnecter struct {
 }
 
 func (c *mockConnecter) getProjects(string) ([]Metadata, error) {
+	if c.uToken == "" {
+		return nil, errors.New("getProjects error")
+	}
 	return nil, nil
 }
 
@@ -301,50 +311,177 @@ func TestSDConnectFetchTokens(t *testing.T) {
 	}
 }
 
-/*func TestSDConnectGetEnvs(t *testing.T) {
+func TestSDConnectGetEnvs(t *testing.T) {
 	var tests = []struct {
-		testname string
-		values   [3]string
-		failIdx  int
+		testname            string
+		expectedMetadataURL string
+		expectedDataURL     string
+		expectedError       error
+		mockGetEnv          func(string, bool) (string, error)
+		mockTestURL         func(string) error
 	}{
-		{"OK", [3]string{"cert.pem", "https://example.com", "https://google.com"}, -1},
-		{"FAIL_1", [3]string{"", "https://example.com", "https://google.com"}, 0},
-		{"FAIL_2", [3]string{"cert.pem", "http://example.com", "https://google.com"}, 1},
-		{"FAIL_3", [3]string{"cert.pem", "https://example.com", ""}, 2},
+		{
+			testname:            "OK",
+			expectedMetadataURL: "https://metadata.csc.fi",
+			expectedDataURL:     "https://data.csc.fi",
+			expectedError:       nil,
+			mockGetEnv: func(s string, b bool) (string, error) {
+				if s == envMetaUrl {
+					return "https://metadata.csc.fi", nil
+				} else {
+					return "https://data.csc.fi", nil
+				}
+			},
+			mockTestURL: func(s string) error {
+				return nil
+			},
+		},
+		{
+			testname:            "FAIL_METADATA_ENV",
+			expectedMetadataURL: "",
+			expectedDataURL:     "",
+			expectedError:       errors.New("some error"),
+			mockGetEnv: func(s string, b bool) (string, error) {
+				return "", errors.New("some error")
+			},
+			mockTestURL: nil,
+		},
+		{
+			testname:            "FAIL_METADATA_VALIDATE",
+			expectedMetadataURL: metaUrl,
+			expectedDataURL:     "",
+			expectedError:       errors.New("Cannot connect to SD-Connect metadata API: bad url"),
+			mockGetEnv: func(s string, b bool) (string, error) {
+				return metaUrl, nil
+			},
+			mockTestURL: func(s string) error {
+				return errors.New("bad url")
+			},
+		},
+		{
+			testname:            "FAIL_DATA_ENV",
+			expectedMetadataURL: metaUrl,
+			expectedDataURL:     "",
+			expectedError:       errors.New("some error"),
+			mockGetEnv: func(s string, b bool) (string, error) {
+				if s == envMetaUrl {
+					return metaUrl, nil
+				} else {
+					return "", errors.New("some error")
+				}
+			},
+			mockTestURL: func(s string) error {
+				return nil
+			},
+		},
+		{
+			testname:            "FAIL_DATA_VALIDATE",
+			expectedMetadataURL: metaUrl,
+			expectedDataURL:     "http://data.csc.fi",
+			expectedError:       errors.New("Cannot connect to SD-Connect data API: bad url"),
+			mockGetEnv: func(s string, b bool) (string, error) {
+				if s == envMetaUrl {
+					return metaUrl, nil
+				} else {
+					return "http://data.csc.fi", nil
+				}
+			},
+			mockTestURL: func(s string) error {
+				if s == metaUrl {
+					return nil
+				} else {
+					return errors.New("bad url")
+				}
+			},
+		},
 	}
 
 	origGetEnvs := getEnv
-	defer func() { getEnv = origGetEnvs }()
-
-	envNames := map[string]int{"FS_SD_CONNECT_CERTS": 0, "FS_SD_CONNECT_METADATA_API": 1, "FS_SD_CONNECT_DATA_API": 2}
+	origTestURL := testURL
+	defer func() {
+		getEnv = origGetEnvs
+		testURL = origTestURL
+	}()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
+			// Place mocks
 			sd := &sdConnectInfo{}
-			getEnv = func(name string, verifyURL bool) (string, error) {
-				if tt.failIdx == envNames[name] {
-					return "", errors.New("Error")
-				}
-				return tt.values[envNames[name]], nil
-			}
+			getEnv = tt.mockGetEnv
+			testURL = tt.mockTestURL
 
-			if err := sd.getEnvs(); err != nil {
-				if tt.testname == "OK" {
-					t.Errorf("Unexpected err: %s", err.Error())
+			// Invoke function
+			err := sd.getEnvs()
+
+			// Test results
+			if err != nil {
+				if err.Error() != tt.expectedError.Error() {
+					t.Errorf("TestSDConnectGetEnvs %s failed, expected=%v, received=%v", tt.testname, tt.expectedError, err)
 				}
-			} else if tt.testname != "OK" {
-				t.Error("Function should have returned error")
-			} else if sd.metadataURL != tt.values[1] {
-				t.Errorf("Incorrect metadata URL. Expected %q, got %q", tt.values[1], sd.metadataURL)
-			} else if sd.dataURL != tt.values[2] {
-				t.Errorf("Incorrect data URL. Expected %q, got %q", tt.values[2], sd.dataURL)
+			}
+			if sd.metadataURL != tt.expectedMetadataURL {
+				t.Errorf("TestSDConnectGetEnvs %s failed, expected=%v, received=%v", tt.testname, tt.expectedMetadataURL, sd.metadataURL)
+			}
+			if sd.dataURL != tt.expectedDataURL {
+				t.Errorf("TestSDConnectGetEnvs %s failed, expected=%v, received=%v", tt.testname, tt.expectedDataURL, sd.dataURL)
 			}
 		})
 	}
 }
 
-func TestSDConnectValidateLogin(t *testing.T) {
-}*/
+func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
+
+	mockT := &mockTokenator{uToken: "token"}
+	mockC := &mockConnecter{tokenable: mockT, uToken: "token", sTokenKey: "s1", sTokenValue: sToken{"sToken", "proj1"}}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	err := sd.validateLogin("user", "pass")
+	if err != nil {
+		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected no error, received=%v", err)
+	}
+	if sd.token != "dXNlcjpwYXNz" {
+		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected=dXNlcjpwYXNz, received=%s", sd.token)
+	}
+	if st := sd.sTokens["s1"].Token; st != "sToken" {
+		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected=sToken, received=%s", st)
+	}
+	if pi := sd.sTokens["s1"].ProjectID; pi != "proj1" {
+		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected=sToken, received=%s", pi)
+	}
+
+}
+
+func Test_SDConnect_ValidateLogin_Fail_GetUToken(t *testing.T) {
+
+	mockT := &mockTokenator{uToken: ""}
+	mockC := &mockConnecter{tokenable: mockT, uToken: ""}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	expectedError := "uToken error"
+	err := sd.validateLogin("user", "pass")
+	if err != nil {
+		if err.Error() != expectedError {
+			t.Errorf("Test_SDConnect_ValidateLogin_Fail_GetUToken failed expected=%s, received=%s", err.Error(), expectedError)
+		}
+	}
+
+}
+
+func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
+
+	mockT := &mockTokenator{uToken: "token"}
+	mockC := &mockConnecter{tokenable: mockT, uToken: ""}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	expectedError := "getProjects error"
+	err := sd.validateLogin("user", "pass")
+	if err != nil {
+		if err.Error() != expectedError {
+			t.Errorf("Test_SDConnect_ValidateLogin_Fail_GetProjects failed expected=%s, received=%s", err.Error(), expectedError)
+		}
+	}
+
+}
 
 func TestSDConnectGetNthLevel_Projects(t *testing.T) {
 	origMakeRequest := makeRequest
@@ -362,240 +499,261 @@ func TestSDConnectGetNthLevel_Projects(t *testing.T) {
 	}
 }
 
-/*func TestSDConnectGetNthLevel_Containers(t *testing.T) {
-	var tests = []struct {
-		testname, project, token string
-		expectedMetaData         []Metadata
-	}{
-		{
-			"OK", "project345", "new_token",
-			[]Metadata{{2341, "tukcdfku6"}, {45, "hf678cof7uib68or6"}, {6767, "rtu6u78bgi"}, {1, "9ob89bio"}},
-		},
-		{
-			"OK_EMPTY", "projectID", "7cftlx67", []Metadata{},
-		},
+func TestGetLoginMethod(t *testing.T) {
+
+	sd := &sdConnectInfo{}
+	expectedLoginMethod := 0 // Constant 0
+	loginMethod := sd.getLoginMethod()
+	if loginMethod != 0 {
+		t.Errorf("TestGetLoginMethod failed expected=%d, received=%d", expectedLoginMethod, loginMethod)
 	}
 
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
+}
 
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			sd := &sdConnectInfo{connectable: &mockConnecter{}}
-			sd.sTokens.Store(tt.project, sToken{tt.token, ""})
-
-			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
-				path := "/project/" + tt.project + "/containers"
-				if url != path {
-					return fmt.Errorf("makeRequest() was called with incorrect URL path. Expected %q, got %q", path, url)
-				}
-				if token != tt.token {
-					return &RequestError{401}
-				}
-
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = tt.expectedMetaData
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			}
-
-			if meta, err := sd.getNthLevel(tt.project); err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(meta, tt.expectedMetaData) {
-				t.Errorf("Incorrect containers. Expected %q, got %q", tt.expectedMetaData, meta)
-			}
-		})
+func TestLevelCount(t *testing.T) {
+	sd := sdConnectInfo{}
+	if lc := sd.levelCount(); lc != 3 {
+		t.Errorf("TestLevelCount failed, expected=3, received=%d", lc)
 	}
 }
 
-func TestSDConnectGetNthLevel_Containers_Error(t *testing.T) {
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
-		return errExpected
-	}
-
-	sd := &sdConnectInfo{connectable: &mockConnecter{}}
-	meta, err := sd.getNthLevel("project")
-
-	if err == nil {
-		t.Error("Function did not return error")
-	} else if !errors.Is(err, errExpected) {
-		t.Errorf("Function returned incorrect error: %s", err.Error())
-	}
-
-	if meta != nil {
-		t.Errorf("Metadata is non-nil: %q", meta)
+func TestGetToken(t *testing.T) {
+	sd := sdConnectInfo{token: "token"}
+	if sdt := sd.getToken(); sdt != "token" {
+		t.Errorf("TestGetToken failed, expected=token, received=%s", sdt)
 	}
 }
 
-func TestSDConnectGetNthLevel_Containers_Expired(t *testing.T) {
+func TestCalculateDecryptedSize(t *testing.T) {
+
+	// Fail min size
+	s := calculateDecryptedSize(5, 5)
+	if s != -1 {
+		t.Errorf("TestCalculateDecryptedSize failed, expected=-1, received=%d", s)
+	}
+
+	// OK
+	s = calculateDecryptedSize(500, 128)
+	if s != 344 {
+		t.Errorf("TestCalculateDecryptedSize failed, expected=344, received=%d", s)
+	}
+
+	// OK, test remainder
+	s = calculateDecryptedSize(65690, 100)
+	if s != 65562 {
+		t.Errorf("TestCalculateDecryptedSize failed, expected=65562, received=%d", s)
+	}
+
+}
+
+func TestGetNthLevel_Fail_NoNodes(t *testing.T) {
+	md := []Metadata{{Bytes: 10, Name: "project1"}}
+	sd := &sdConnectInfo{projects: md}
+	metadata, err := sd.getNthLevel("fspath")
+	if err != nil {
+		t.Errorf("TestGetNthLevel_Fail_NoNodes failed, expected no error, received=%v", err)
+	}
+	if metadata[0].Name != "project1" {
+		t.Errorf("TestGetNthLevel_Fail_NoNodes failed, expected=project1, received=%s", metadata[0].Name)
+	}
+}
+
+func TestGetNthLevel_Fail_Path(t *testing.T) {
+	sd := &sdConnectInfo{}
+	metadata, err := sd.getNthLevel("fspath", "1", "2", "3")
+	if err != nil {
+		t.Errorf("TestGetNthLevel_Fail_Path failed, expected no error, received=%v", err)
+	}
+	if metadata != nil {
+		t.Errorf("TestGetNthLevel_Fail_Path failed, expected=nil, received=%v", metadata)
+	}
+}
+
+func TestGetNthLevel_Fail_Request(t *testing.T) {
+
+	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-
-	expectedProject := "project737"
-	expectedToken := "t7vwlv78"
-	expectedContainers := []Metadata{{2341, "tukcdfku6"}, {47, "8cxgje6uk"}}
-
 	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
-		path := "/project/" + expectedProject + "/containers"
-		if url != path {
-			return fmt.Errorf("makeRequest() was called with incorrect URL path. Expected %q, got %q", path, url)
-		}
-		if token != expectedToken {
-			return &RequestError{401}
-		}
+		return errors.New("some error")
+	}
+	sd := &sdConnectInfo{}
 
-		switch v := ret.(type) {
-		case *[]Metadata:
-			*v = expectedContainers
+	// Test
+	expectedError := "Failed to retrieve metadata for \"fspath\": some error"
+	_, err := sd.getNthLevel("fspath", "1", "2")
+	if err.Error() != expectedError {
+		t.Errorf("TestGetNthLevel_Fail_Request failed, expected=%s, received=%v", expectedError, err)
+	}
+}
+
+func TestGetNthLevel_Pass_1Node(t *testing.T) {
+
+	// Mock
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy1"}]`))).Decode(ret)
+		return nil
+	}
+	sd := &sdConnectInfo{}
+
+	// Test
+	meta, err := sd.getNthLevel("fspath", "1")
+	if err != nil {
+		t.Errorf("TestGetNthLevel_Pass_1Node failed, expected no error, received=%v", err)
+	}
+	if meta[0].Bytes != 100 {
+		t.Errorf("TestGetNthLevel_Pass_1Node failed, expected=%d, received=%d", 100, meta[0].Bytes)
+	}
+	if meta[0].Name != "thingy1" {
+		t.Errorf("TestGetNthLevel_Pass_1Node failed, expected=%s, received=%s", "thingy1", meta[0].Name)
+	}
+}
+
+func TestGetNthLevel_Pass_2Node(t *testing.T) {
+
+	// Mock
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy2"}]`))).Decode(ret)
+		return nil
+	}
+	sd := &sdConnectInfo{}
+
+	// Test
+	meta, err := sd.getNthLevel("fspath", "1", "2")
+	if err != nil {
+		t.Errorf("TestGetNthLevel_Pass_2Node failed, expected no error, received=%v", err)
+	}
+	if meta[0].Bytes != 100 {
+		t.Errorf("TestGetNthLevel_Pass_2Node failed, expected=%d, received=%d", 100, meta[0].Bytes)
+	}
+	if meta[0].Name != "thingy2" {
+		t.Errorf("TestGetNthLevel_Pass_2Node failed, expected=%s, received=%s", "thingy2", meta[0].Name)
+	}
+}
+
+func TestGetNthLevel_Pass_TokenExpired(t *testing.T) {
+
+	// Mock
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		if token == "expiredToken" {
+			return &RequestError{http.StatusUnauthorized}
+		} else {
+			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy3"}]`))).Decode(ret)
 			return nil
-		default:
-			return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
 		}
 	}
+	mockC := &mockConnecter{sTokenKey: "project", sTokenValue: sToken{"freshToken", "project"}}
+	sd := &sdConnectInfo{
+		connectable: mockC,
+		sTokens:     map[string]sToken{"project": {"expiredToken", "project"}},
+		projects:    []Metadata{},
+	}
 
-	mockC := &mockConnecter{sTokenKey: expectedProject, sTokenValue: sToken{Token: expectedToken}}
-	sd := &sdConnectInfo{connectable: mockC}
-	meta, err := sd.getNthLevel(expectedProject)
+	// Test
+	meta, err := sd.getNthLevel("sdconnect", "project", "container")
+	if err != nil {
+		t.Errorf("TestGetNthLevel_Pass_TokenExpired failed, expected no error, received=%v", err)
+	}
+	if meta[0].Bytes != 100 {
+		t.Errorf("TestGetNthLevel_Pass_TokenExpired failed, expected=%d, received=%d", 100, meta[0].Bytes)
+	}
+	if meta[0].Name != "thingy3" {
+		t.Errorf("TestGetNthLevel_Pass_TokenExpired failed, expected=%s, received=%s", "thingy3", meta[0].Name)
+	}
+}
+
+func TestGetNthLevel_Fail_TokenExpired(t *testing.T) {
+
+	// Mock
+	expectedError := "Failed to retrieve metadata for \"sdconnect\": API responded with status 401 Unauthorized"
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		return &RequestError{http.StatusUnauthorized}
+	}
+	mockC := &mockConnecter{sTokenKey: "project", sTokenValue: sToken{"freshToken", "project"}}
+	sd := &sdConnectInfo{
+		connectable: mockC,
+		sTokens:     map[string]sToken{"project": {"expiredToken", "project"}},
+		projects:    []Metadata{},
+	}
+
+	// Test
+	_, err := sd.getNthLevel("sdconnect", "project", "container")
+	if err.Error() != expectedError {
+		t.Errorf("TestGetNthLevel_Fail_TokenExpired failed, expected=%s, received=%v", expectedError, err)
+	}
+}
+
+func TestDownloadData_Pass(t *testing.T) {
+
+	// Mock
+	expectedBody := []byte("hellothere")
+	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Project-ID": "project"}
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
+		// Test that headers were computed properly
+		if !reflect.DeepEqual(headers, expectedHeaders) {
+			t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", expectedHeaders, headers)
+		}
+		return nil
+	}
+	sd := &sdConnectInfo{sTokens: map[string]sToken{"project": {"token", "project"}}}
+
+	// Test
+	buf := make([]byte, 10)
+	err := sd.downloadData([]string{"project", "container", "object"}, buf, 0, 10)
 
 	if err != nil {
-		t.Fatalf("Unexpected error: %s", err.Error())
+		t.Errorf("TestDownloadData_Pass failed, expected no error, received=%v", err)
 	}
-	if !reflect.DeepEqual(meta, expectedContainers) {
-		t.Fatalf("Containers incorrect. Expected %v, got %v", expectedContainers, meta)
+	if !bytes.Equal(buf, expectedBody) {
+		t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", string(expectedBody), string(buf))
 	}
 }
 
-func TestSDConnectGetNthLevel_Objects(t *testing.T) {
-	var tests = []struct {
-		testname, project, container, token string
-		expectedMetaData                    []Metadata
-	}{
-		{
-			"OK", "project345", "containerID", "token",
-			[]Metadata{{56, "tukcdfku6"}, {5, "hf678cof7ui6"}, {47685, "rtu6u__78bgi"}, {10, "9ob89bio"}},
-		},
-		{
-			"OK_EMPTY", "projectID", "container349", "5voI8d", []Metadata{},
-		},
-	}
+func TestDownloadData_Pass_TokenExpired(t *testing.T) {
 
+	// Mock
+	expectedBody := []byte("hellothere")
+	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Project-ID": "project"}
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			sd := &sdConnectInfo{connectable: &mockConnecter{}}
-			sd.sTokens.Store(tt.project, sToken{tt.token, ""})
-
-			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
-				path := "/project/" + tt.project + "/container/" + tt.container + "/objects"
-				if url != path {
-					return fmt.Errorf("makeRequest() was called with incorrect URL path\nExpected %q\nGot %q", path, url)
-				}
-				if token != tt.token {
-					return &RequestError{401}
-				}
-
-				switch v := ret.(type) {
-				case *[]Metadata:
-					*v = tt.expectedMetaData
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
+	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+		if token == "expiredToken" {
+			return &RequestError{http.StatusUnauthorized}
+		} else {
+			_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
+			// Test that headers were computed properly
+			if !reflect.DeepEqual(headers, expectedHeaders) {
+				t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", expectedHeaders, headers)
 			}
+			return nil
+		}
+	}
+	mockC := &mockConnecter{sTokenKey: "project", sTokenValue: sToken{"freshToken", "project"}}
+	sd := &sdConnectInfo{
+		connectable: mockC,
+		sTokens:     map[string]sToken{"project": {"expiredToken", "project"}},
+		projects:    []Metadata{},
+	}
 
-			if meta, err := sd.getNthLevel(tt.project, tt.container); err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(meta, tt.expectedMetaData) {
-				t.Errorf("Incorrect objects. Expected %q, got %q", tt.expectedMetaData, meta)
-			}
-		})
+	// Test
+	buf := make([]byte, 10)
+	err := sd.downloadData([]string{"project", "container", "object"}, buf, 0, 10)
+
+	if err != nil {
+		t.Errorf("TestDownloadData_Pass failed, expected no error, received=%v", err)
+	}
+	if !bytes.Equal(buf, expectedBody) {
+		t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", string(expectedBody), string(buf))
 	}
 }
-
-func TestSDConnectUpdateAttributes(t *testing.T) {
-
-}
-
-{"user", "pass", "dXNlcjpwYXNz"},
-		{"kalmari", "23t&io00_e", "a2FsbWFyaToyM3QmaW8wMF9l"},
-		{"qwerty123", "mnbvc456", "cXdlcnR5MTIzOm1uYnZjNDU2"},
-
-func TestGetSpecialHeaders(t *testing.T) {
-	var tests = []struct {
-		testname, path  string
-		mockMakeRequest func(string, func() string, map[string]string, map[string]string, interface{}) error
-		expectedHeaders SpecialHeaders
-	}{
-		{
-			"FAIL", "project/container/object",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("error getting headers")
-			},
-			SpecialHeaders{},
-		},
-		{
-			"OK_1", "ich/du/sie",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *SpecialHeaders:
-					*v = SpecialHeaders{Decrypted: true, HeaderSize: 345, SegmentedObjectSize: 1098}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			SpecialHeaders{Decrypted: true, HeaderSize: 345, SegmentedObjectSize: 1098},
-		},
-		{
-			"OK_2", "left/right/left",
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				switch v := ret.(type) {
-				case *SpecialHeaders:
-					*v = SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: 90}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
-				}
-			},
-			SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: 90},
-		},
-	}
-
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-
-			headers, err := GetSpecialHeaders(tt.path)
-
-			if tt.expectedHeaders == (SpecialHeaders{}) {
-				if err == nil {
-					t.Errorf("Expected non-nil error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if tt.expectedHeaders.Decrypted != headers.Decrypted {
-				t.Errorf("Field 'Decrypted' incorrect. Expected %t, got %t", tt.expectedHeaders.Decrypted, headers.Decrypted)
-			} else if tt.expectedHeaders.HeaderSize != headers.HeaderSize {
-				t.Errorf("Field 'HeaderSize' incorrect. Expected %d, got %d", tt.expectedHeaders.HeaderSize, headers.HeaderSize)
-			} else if tt.expectedHeaders.SegmentedObjectSize != headers.SegmentedObjectSize {
-				t.Errorf("Field 'SegmentedObjectSize' incorrect. Expected %d, got %d",
-					tt.expectedHeaders.SegmentedObjectSize, headers.SegmentedObjectSize)
-			}
-		})
-	}
-}*/
