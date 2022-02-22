@@ -1,6 +1,10 @@
-# API
+# SD-Connect Proxy API Reference
 
 The API reflects data in the [SD-Connect](https://research.csc.fi/-/sd-connect) services.
+
+The API is structured into:
+- [data](#data-api)
+- [metadata](#metadata-api)
 
 ## Data API
 
