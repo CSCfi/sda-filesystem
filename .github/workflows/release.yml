@@ -73,7 +73,12 @@ jobs:
         run: |
           choco install zip
           choco install WinFsp
+      - name: Build CLI artifact Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          $env:CGO_ENABLED=0; go build -o ./go-fuse ./cmd/cli/main.go
       - name: Build CLI artifact
+        if: matrix.os != 'windows-latest'
         run: |
           go build -o ./go-fuse ./cmd/cli/main.go
       - name: Archive CLI Asset
@@ -153,6 +158,7 @@ jobs:
         run: |
           choco install zip
           choco install WinFsp
+
           set GO111MODULE=off
           go get -v github.com/therecipe/qt/cmd/... 
           set GO111MODULE=on
@@ -162,10 +168,14 @@ jobs:
           git clone https://github.com/therecipe/env_windows_amd64_513.git vendor/github.com/therecipe/env_windows_amd64_513
 
           cmd.exe /c for /f %v in ('go env GOPATH') do %v\bin\qtsetup
-
-      - name: Build GUI artifact
+      - name: Build GUI artifact Windows
+        if: matrix.os == 'windows-latest'
         run: |
-           qtdeploy build desktop cmd/qt/main.go
+          $env:CGO_ENABLED=0; qtdeploy build desktop cmd/qt/main.go
+      - name: Build GUI artifact
+        if: matrix.os != 'windows-latest'
+        run: |
+          qtdeploy build desktop cmd/qt/main.go
       - name: Archive GUI Asset Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
