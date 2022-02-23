@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - filesystem supports SD-Submit service
 - support for windows (no github actions yet)
 - SD-Submit API Reference documentation
+- windows build and release via github actions
 
 ### Fixed
 - gosec204 issue with `exec.Command` by processing to string the user input
