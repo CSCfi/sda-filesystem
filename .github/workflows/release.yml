@@ -161,7 +161,7 @@ jobs:
           go mod vendor
           git clone https://github.com/therecipe/env_windows_amd64_513.git vendor/github.com/therecipe/env_windows_amd64_513
 
-          for /f %v in ('go env GOPATH') do %v\bin\qtsetup
+          cmd.exe /c for /f %v in ('go env GOPATH') do %v\bin\qtsetup
 
       - name: Build GUI artifact
         run: |
