@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var wait = 10 * time.Millisecond
+const wait = 10 * time.Millisecond
 
 func TestNewRistrettoCache(t *testing.T) {
 	c, err := NewRistrettoCache()
@@ -96,6 +96,6 @@ func TestDel(t *testing.T) {
 	_, ok := c.Get("key")
 
 	if ok {
-		t.Errorf("Item was not deleted from cache")
+		t.Fatalf("Item was not deleted from cache")
 	}
 }

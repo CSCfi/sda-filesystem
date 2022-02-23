@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - github action for golangci-lint bumped to v1.44
+- GUI has a new look
 
 ### Added
 - run unit tests in github actions
+- filesystem supports SD-Submit service
+- support for windows (no github actions yet)
 
 ### Fixed
 - gosec204 issue with `exec.Command` by processing to string the user input

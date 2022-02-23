@@ -2,178 +2,134 @@ import QtQuick 2.13
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
-import Qt.labs.qmlmodels 1.0
-import QtQuick.Dialogs 1.3
 import csc 1.0 as CSC
 
 Page {
     id: page 
+    height: table.height + implicitHeaderHeight + 4 * CSC.Style.padding
+    implicitWidth: table.implicitWidth + 4 * CSC.Style.padding
+    padding: 2 * CSC.Style.padding
 
-    property color bkgColor: CSC.Style.lightBlue
-    property color lineColor: CSC.Style.tertiaryColor
-    property FileDialog dialog
+    header: Control {
+        topPadding: 2 * CSC.Style.padding
+        rightPadding: 2 * CSC.Style.padding
+        leftPadding: 2 * CSC.Style.padding
 
-    header: ToolBar {
-        padding: 4
-        clip: true
+        contentItem: RowLayout { 
+            Label {
+                text: "<h1>Logs</h1>"
+                color: CSC.Style.grey
+                verticalAlignment: Text.AlignVCenter
+                maximumLineCount: 1
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
 
-        background: Rectangle {
-            color: page.bkgColor
+            ToolButton {
+                id: exportButton
+                text: "Export detailed logs"
+                icon.source: "qrc:/qml/images/download.svg"
+                Layout.alignment: Qt.AlignRight
 
-            Rectangle {
-                height: 2
-                color: page.lineColor
-                anchors.bottom: parent.bottom
+                Material.foreground: CSC.Style.primaryColor
+
+                onClicked: dialogSave.visible = true
+
+                MouseArea {
+                    cursorShape: Qt.PointingHandCursor
+                    acceptedButtons: Qt.NoButton
+                    anchors.fill: parent
+                }
+            }
+        }
+    }
+
+    TextMetrics {
+        id: textMetricsLevel
+        text: "Warning"
+        font.pixelSize: 13
+        font.weight: Font.Medium
+    }
+
+    TextMetrics {
+        id: textMetricsDate
+        text: "0000-00-00 00:00:00"
+        font.pixelSize: 15
+    }
+
+    CSC.Table {
+        id: table
+        width: parent.width
+        modelSource: LogModel
+        delegateSource: logLine
+        objectName: "logs"
+
+        footer: Rectangle {
+            height: 50
+            width: table.width
+            border.width: 1
+            border.color: CSC.Style.lightGrey
+
+            RowLayout {
+                spacing: 30
+                anchors.fill: parent
+                anchors.leftMargin: CSC.Style.padding
+                anchors.rightMargin: CSC.Style.padding
+
+                Text {
+                    text: "Level"
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    Layout.preferredWidth: textMetricsLevel.width + 30
+                }
+
+                Text {
+                    text: "Date and Time"
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    Layout.preferredWidth: textMetricsDate.width
+                }
+
+                Text {
+                    id: messageLabel
+                    text: "Message"
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    Layout.fillWidth: true
+                }
+            }
+        }
+    }
+
+    Component {
+        id: logLine
+
+        Rectangle {
+            height: childrenRect.height
+            width: table.width
+            border.width: 1
+            border.color: CSC.Style.lightGrey
+
+            RowLayout {
+                spacing: 30
+                height: Math.max(60, messageLabel.height)
                 anchors.left: parent.left
                 anchors.right: parent.right
-            }
-        }
+                anchors.leftMargin: CSC.Style.padding
+                anchors.rightMargin: CSC.Style.padding
 
-        contentItem: RowLayout {
-            id: headerRow
-            spacing: tableView.columnSpacing
-
-            Item {
-                id: levelItem
-                Layout.preferredWidth: tableView.firstColumn
-                Layout.fillHeight: true
-
-                Text {
-                    id: levelTitle
-                    text: "Level"
-                    font.pointSize: 20
-                    x: -tableView.contentX
-                    anchors.bottom: parent.bottom
-                }
-            }
-
-            Item {
-                Layout.preferredWidth: tableView.secondColumn
-                Layout.fillHeight: true
-
-                Text {
-                    text: "Date"
-                    font.pointSize: 20
-                    x: -tableView.contentX
-                    anchors.bottom: parent.bottom
-                }
-            }
-
-            Item {
-                Layout.preferredWidth: messageText.contentWidth
-                Layout.fillHeight: true
-                
-                Text {
-                    id: messageText
-                    text: "Message"
-                    font.pointSize: 20
-                    x: -tableView.contentX
-                    anchors.bottom: parent.bottom
-                }
-            }
-
-            Item {
-                implicitHeight: exportButton.implicitHeight
-                Layout.minimumWidth: headerRow.spacing + exportButton.implicitWidth
-                Layout.fillWidth: true
-                Layout.margins: 4
-
-                ToolButton {
-                    id: exportButton
-                    text: "Export"
-                    icon.source: "qrc:/qml/images/box-arrow-up.svg"
-                    anchors.right: parent.right
-                    anchors.rightMargin: (header.availableWidth >= headerRow.implicitWidth || tableView.contentX <= 0) ? 0 : 
-                        Math.min(tableView.contentX, headerRow.implicitWidth - header.availableWidth)
-
-                    onClicked: dialog.visible = true
-
-                    background: Rectangle {
-                        border.width: 2
-                        border.color: "black"
-                        color: exportButton.hovered ? CSC.Style.lightGrey : "transparent"
-                        radius: 5
-                    }
-
-                    MouseArea {
-                        cursorShape: Qt.PointingHandCursor
-                        acceptedButtons: Qt.NoButton
-                        anchors.fill: parent
-                    }
-                }
-            }
-        }
-    }
-
-    TableView {
-        id: tableView
-        anchors.fill: parent
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        columnSpacing: 20
-
-        property bool ready: false
-        property real firstColumn: 1
-        property real secondColumn: 1
-        property real thirdColumn: 1
-        property real rowHeight: 40
-
-        model: LogModel
-        delegate: chooser
-
-        ScrollBar.vertical: ScrollBar { }
-        ScrollBar.horizontal: ScrollBar { }
-
-        Component.onCompleted: LogModel.removeDummy()
-        onThirdColumnChanged: timer.restart()
-
-        rowHeightProvider: function (column) { return rowHeight }
-        columnWidthProvider: function (column) { return column == 0 ? firstColumn : column == 1 ? secondColumn : thirdColumn }
-
-        // Background image
-        Image {
-            source: "qrc:/qml/images/bkg-log-rect.png"
-            fillMode: Image.TileVertically
-            verticalAlignment: Image.AlignTop
-            width: Math.max(tableView.width, tableView.contentWidth)
-            height: Math.max(tableView.height, tableView.contentHeight)
-            smooth: false
-        }
-
-        // Timer is needed so that forceLayout() is called after event loop and QML doesn't complain
-        Timer {
-            id: timer
-            interval: 0; running: false; repeat: false
-            onTriggered: tableView.forceLayout()
-        }
-    }
-
-    DelegateChooser {
-        id: chooser
-
-        DelegateChoice {
-            column: 0
-            delegate: Control {
-                padding: 10
-
-                onWidthChanged: {
-                    if (width > tableView.firstColumn) {
-                        tableView.firstColumn = width
-                    }
-                }
-
-                contentItem: Label {
+                Label {
                     id: levelText
                     text: {
                         switch (level) {
                             case LogLevel.Error:
-                                return "ERROR"
+                                return "Error"
                             case LogLevel.Info:
-                                return "INFO"
+                                return "Info"
                             case LogLevel.Debug:
-                                return "DEBUG"
+                                return "Debug"
                             case LogLevel.Warning:
-                                return "WARNING"
+                                return "Warning"
                             default:
                                 return ""
                         }
@@ -181,110 +137,60 @@ Page {
                     color: {
                         switch (level) {
                             case LogLevel.Error:
+                                return "#A9252F"
                             case LogLevel.Info:
+                                return "#102E5C"
                             case LogLevel.Debug:
-                                return "white"
+                                return "#4B7923"
                             case LogLevel.Warning:
-                                return "black"
+                                return "#B84F20"
                             default:
                                 return "transparent"
                         }
                     }
-                    topPadding: 0
-                    bottomPadding: 0
-                    leftPadding: 5
-                    rightPadding: 5
-                    verticalAlignment: Text.AlignVCenter
+                    topPadding: 5
+                    bottomPadding: 5
                     horizontalAlignment: Text.AlignHCenter
-                    font.capitalization: Font.AllUppercase
-                    anchors.centerIn: parent
+                    font: textMetricsLevel.font
+                    Layout.preferredWidth: textMetricsLevel.width + 30
 
                     background: Rectangle {
                         color: {
                             if (level == LogLevel.Info) {
-                                return CSC.Style.blue
+                                return "#EEF2F7"
                             } else if (level == LogLevel.Error) {
-                                return CSC.Style.red
+                                return "#F5E6E9"
                             } else if (level == LogLevel.Warning) {
-                                return CSC.Style.yellow
+                                return "#FEF7E5"
                             } else if (level == LogLevel.Debug) {
-                                return CSC.Style.altGreen
+                                return "#E7F1DC"
                             } else {
                                 return "transparent"
                             }
                         }
-                        radius: height / 2
+                        border.color: levelText.color
+                        border.width: 1
+                        radius: height / 6
                     }
                 }
-            }
-        }
 
-        DelegateChoice {
-            column: 1
-            delegate: Label { 
-                text: timestamp
-                padding: 5
-                verticalAlignment: Text.AlignVCenter
-                color: "black"
-
-                onContentWidthChanged: {
-                    if (contentWidth + 2 * padding > tableView.secondColumn) {
-                        tableView.secondColumn = contentWidth + 2 * padding
-                    }
-                }
-            }
-        }
-
-        DelegateChoice {
-            column: 2
-            delegate: Label { 
-                id: messageLabel
-                text: message[0]
-                verticalAlignment: Text.AlignVCenter
-                padding: 5
-                color: "black"
-
-                onContentWidthChanged: {
-                    if (contentWidth + 2 * padding > tableView.thirdColumn) {
-                        tableView.thirdColumn = contentWidth + 2 * padding 
-                    }
-                    /*if (text == "") {
-                        messageLabel.grabToImage(function(result) {
-                            result.saveToFile("bkg-log-rect.png");
-                        });
-                    }*/
+                Text {
+                    text: timestamp
+                    font: textMetricsDate.font
+                    Layout.preferredWidth: textMetricsDate.width
                 }
 
-                //background: Loader { sourceComponent: bkg }
-            }
-        }
-    }
-
-    // THIS IS IMPORTANT
-    // Uncommenting the comments in messageLabel creates bkg-log-rect.png which can then be used 
-    // as background for logs after recompiling. Remember to recomment and move the new .png to /images
-    // I do it like this because this seamlessly (hopefully) fills in the background
-    // regardless of row widths and row counts
-    Component {
-        id: bkg
-
-        Rectangle {
-            color: page.bkgColor
-
-            Rectangle {
-                color: page.lineColor
-                height: 1
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.left: parent.left
-            }
-
-            Rectangle {
-                color: page.lineColor
-                height: 1
-                anchors.bottom: parent.bottom
-                anchors.right: parent.right
-                anchors.left: parent.left
+                Text {
+                    id: messageLabel
+                    text: message[0]
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 15
+                    topPadding: 10
+                    bottomPadding: 10
+                    lineHeight: 1.2
+                    verticalAlignment: Text.AlignVCenter
+                    Layout.fillWidth: true
+                }
             }
         }
     }

@@ -3,62 +3,62 @@ package api
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"sda-filesystem/internal/cache"
-	"sda-filesystem/internal/logs"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"sda-filesystem/internal/cache"
+	"sda-filesystem/internal/logs"
 )
 
 const chunkSize = 1 << 25
 
-var hi = HTTPInfo{requestTimeout: 20, httpRetry: 3, sTokens: make(map[string]SToken), loggedIn: false}
+var hi = httpInfo{requestTimeout: 20, httpRetry: 3, repositories: make(map[string]fuseInfo)}
+var possibleRepositories = make(map[string]fuseInfo)
 var downloadCache *cache.Ristretto
 
-var makeRequest func(string, func() string, map[string]string, map[string]string, interface{}) error
+// LoginMethod is an enum that main will use to know which login method to use
+type LoginMethod int
 
-// HTTPInfo contains all necessary variables used during HTTP requests
-type HTTPInfo struct {
+const (
+	Password LoginMethod = iota
+	Token
+)
+
+// httpInfo contains all necessary variables used during HTTP requests
+type httpInfo struct {
 	requestTimeout int
 	httpRetry      int
 	certPath       string
-	metadataURL    string
-	dataURL        string
-	token          string
-	uToken         string
-	sTokens        map[string]SToken
 	client         *http.Client
-	loggedIn       bool
+	repositories   map[string]fuseInfo
 }
 
-// Metadata stores data from either a call to a project, container or object
+// If you wish to add a new repository, it must implement the following functions
+type fuseInfo interface {
+	getEnvs() error
+	getLoginMethod() LoginMethod
+	validateLogin(...string) error
+	levelCount() int
+	getToken() string
+	getNthLevel(string, ...string) ([]Metadata, error)
+	updateAttributes([]string, string, interface{})
+	downloadData([]string, interface{}, int64, int64) error
+}
+
+// Metadata contains node metadata fetched from an api
 type Metadata struct {
 	Bytes int64  `json:"bytes"`
 	Name  string `json:"name"`
-}
-
-// UToken is the unscoped token
-type UToken struct {
-	Token string `json:"token"`
-}
-
-// SToken is a scoped token
-type SToken struct {
-	Token     string `json:"token"`
-	ProjectID string `json:"projectID"`
-}
-
-type specialHeaders struct {
-	decrypted           bool
-	segmentedObjectSize int64
 }
 
 // RequestError is used to obtain the status code from the HTTP request
@@ -67,67 +67,69 @@ type RequestError struct {
 }
 
 func (re *RequestError) Error() string {
-	return fmt.Sprintf("API responded with status %d", re.StatusCode)
+	return fmt.Sprintf("API responded with status %d %s", re.StatusCode, http.StatusText(re.StatusCode))
 }
 
 func init() {
-	// This is done because unit test mocking and because makeReqest is recursive
-	makeRequest = makeRequestPlaceholder
+	hi.certPath, _ = getEnv("FS_CERTS", false)
 }
 
-// GetEnvs looks up the necessary environment variables
-func GetEnvs() error {
-	var err error
-	hi.certPath, err = getEnv("FS_SD_CONNECT_CERTS", false)
-	if err != nil {
-		return err
+// GetAllPossibleRepositories returns the names of every possible repository.
+// Every repository needs to add itself to the possibleRepositories map in an init function
+var GetAllPossibleRepositories = func() []string {
+	var names []string
+	for key := range possibleRepositories {
+		names = append(names, key)
 	}
-	hi.metadataURL, err = getEnv("FS_SD_CONNECT_METADATA_API", true)
-	if err != nil {
-		return err
-	}
-	hi.dataURL, err = getEnv("FS_SD_CONNECT_DATA_API", true)
-	if err != nil {
-		return err
-	}
-	return nil
+	return names
 }
 
-// getEnv looks up environment variable given in variable 'name'
-func getEnv(name string, verifyURL bool) (string, error) {
-	env, ok := os.LookupEnv(name)
-
-	if !ok {
-		return "", fmt.Errorf("Environment variable %s not set", name)
+// GetEnabledRepositories returns the name of every repository the user has enabled
+var GetEnabledRepositories = func() []string {
+	var names []string
+	for key := range hi.repositories {
+		names = append(names, key)
 	}
+	return names
+}
 
-	if verifyURL {
-		// Verify that repository URL is valid
-		u, err := url.ParseRequestURI(env)
-		if err != nil {
-			return "", fmt.Errorf("Environment variable %s is an invalid URL: %w", name, err)
-		}
-		if u.Scheme != "https" {
-			return "", fmt.Errorf("Environment variable %s does not have scheme 'https'", name)
-		}
-	}
+// AddRepository adds a repository to hi.repositories
+var AddRepository = func(r string) (err error) {
+	hi.repositories[r] = possibleRepositories[r]
+	return hi.repositories[r].getEnvs()
+}
 
-	return env, nil
+// RemoveRepository removes a repository from hi.repositories
+var RemoveRepository = func(r string) {
+	delete(hi.repositories, r)
 }
 
 // SetRequestTimeout redefines hi.requestTimeout
-func SetRequestTimeout(timeout int) {
+var SetRequestTimeout = func(timeout int) {
 	hi.requestTimeout = timeout
 }
 
-// SetLoggedIn sets hi.loggedIn as true
-func SetLoggedIn() {
-	hi.loggedIn = true
+// getEnv looks up environment variable given in 'name'
+var getEnv = func(name string, verifyURL bool) (string, error) {
+	env, ok := os.LookupEnv(name)
+	if !ok {
+		return "", fmt.Errorf("Environment variable %s not set", name)
+	}
+	if verifyURL {
+		return env, validURL(env)
+	}
+	return env, nil
 }
 
-// CreateToken creates the authorization token based on username + password
-var CreateToken = func(username, password string) {
-	hi.token = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+var validURL = func(env string) error {
+	u, err := url.ParseRequestURI(env)
+	if err != nil {
+		return fmt.Errorf("Environment variable %s is an invalid URL: %w", env, err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("Environment variable %s does not have scheme 'https'", env)
+	}
+	return nil
 }
 
 // InitializeCache creates a cache for downloaded data
@@ -142,16 +144,16 @@ func InitializeCache() error {
 
 // InitializeClient initializes a global http client
 func InitializeClient() error {
-	// Handle certificate if one is set
+	// Handle certificates if ones are set
 	caCertPool := x509.NewCertPool()
 	if len(hi.certPath) > 0 {
 		caCert, err := ioutil.ReadFile(hi.certPath)
 		if err != nil {
-			return fmt.Errorf("Reading certificate file failed: %w", err)
+			return fmt.Errorf("Reading certificate file %s failed: %w", hi.certPath, err)
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
-		caCertPool = nil // So that default root certs are used
+		caCertPool = nil
 	}
 
 	// Set up HTTP client
@@ -165,33 +167,50 @@ func InitializeClient() error {
 	tr.ForceAttemptHTTP2 = true
 	tr.DisableKeepAlives = false
 
+	jar, err := cookiejar.New(&cookiejar.Options{})
+	if err != nil {
+		return fmt.Errorf("Failed to create a cookie jar: %w", err)
+	}
+
 	timeout := time.Duration(hi.requestTimeout) * time.Second
 
 	hi.client = &http.Client{
 		Timeout:   timeout,
 		Transport: tr,
+		Jar:       jar,
 	}
-
-	response, err := hi.client.Head(hi.metadataURL)
-	if err != nil {
-		return fmt.Errorf("Cannot connect to metadata API: %w", err)
-	}
-	response.Body.Close()
-
-	response, err = hi.client.Head(hi.dataURL)
-	if err != nil {
-		return fmt.Errorf("Cannot connect to data API: %w", err)
-	}
-	response.Body.Close()
 
 	logs.Debug("Initializing HTTP client successful")
 	return nil
 }
 
+var testURL = func(url string) error {
+	response, err := hi.client.Head(url)
+	if err != nil {
+		return err
+	}
+	response.Body.Close()
+	return nil
+}
+
+// GetLoginMethod returns the login method of repository 'rep'
+var GetLoginMethod = func(rep string) LoginMethod {
+	return possibleRepositories[rep].getLoginMethod()
+}
+
+// ValidateLogin checks if user is able to log in with given input to repository 'rep'
+var ValidateLogin = func(rep string, auth ...string) error {
+	return hi.repositories[rep].validateLogin(auth...)
+}
+
+// LevelCount returns the amount of levels repository 'rep' has
+var LevelCount = func(rep string) int {
+	return hi.repositories[rep].levelCount()
+}
+
 // makeRequest sends HTTP requests and parses the responses
-func makeRequestPlaceholder(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
+var makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
 	var response *http.Response
-	token := tokenFunc()
 
 	// Build HTTP request
 	request, err := http.NewRequest("GET", url, nil)
@@ -211,7 +230,7 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	} else {
-		request.Header.Set("Authorization", "Basic "+hi.token)
+		request.Header.Set("Authorization", "Basic "+hi.repositories[repository].getToken())
 	}
 
 	// Place additional headers if any are available
@@ -239,33 +258,38 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 	}
 	defer response.Body.Close()
 
-	if hi.loggedIn && response.StatusCode == 401 {
-		logs.Info("Tokens no longer valid. Fetching them again")
-		FetchTokens()
-		hi.loggedIn = false // To prevent unlikely infinite loop
-		err = makeRequest(url, tokenFunc, query, headers, ret)
-		hi.loggedIn = true
-		return err
-	}
-
 	if response.StatusCode != 200 && response.StatusCode != 206 {
 		return &RequestError{response.StatusCode}
 	}
 
 	// Parse request
 	switch v := ret.(type) {
-	case *specialHeaders:
-		(*v).decrypted = (response.Header.Get("X-Decrypted") == "True")
+	case *SpecialHeaders:
+		(*v).Decrypted = (response.Header.Get("X-Decrypted") == "True")
+
+		if (*v).Decrypted {
+			if headerSize := response.Header.Get("X-Header-Size"); headerSize != "" {
+				if (*v).HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
+					logs.Warningf("Could not convert header X-Header-Size to integer: %w", err)
+					(*v).Decrypted = false
+				}
+			} else {
+				logs.Warningf("Could not find header X-Header-Size in response")
+				(*v).Decrypted = false
+			}
+		}
+
 		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
-			if (*v).segmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
-				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %s", err.Error())
-				(*v).segmentedObjectSize = -1
+			if (*v).SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
+				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %w", err)
+				(*v).SegmentedObjectSize = -1
 			}
 		} else {
-			(*v).segmentedObjectSize = -1
+			(*v).SegmentedObjectSize = -1
 		}
+
 		if _, err = io.Copy(io.Discard, response.Body); err != nil {
-			logs.Warningf("Discarding response body failed when reading headers: %s", err.Error())
+			logs.Warningf("Discarding response body failed when reading headers: %w", err)
 		}
 	case []byte:
 		if _, err = io.ReadFull(response.Body, v); err != nil {
@@ -281,153 +305,18 @@ func makeRequestPlaceholder(url string, tokenFunc func() string, query map[strin
 	return nil
 }
 
-// FetchTokens fetches the unscoped token and the scoped tokens
-var FetchTokens = func() {
-	err := GetUToken()
-	if err != nil {
-		logs.Warningf("HTTP requests may be slower: %s", err.Error())
-		hi.uToken = ""
-		return
-	}
-
-	projects, err := GetProjects()
-	if err != nil {
-		logs.Warningf("HTTP requests may be slower: %s", err.Error())
-		hi.sTokens = map[string]SToken{}
-	}
-
-	for i := range projects {
-		err = GetSToken(projects[i].Name)
-		if err != nil {
-			logs.Warning(err)
-			delete(hi.sTokens, projects[i].Name)
-		}
-	}
-
-	logs.Info("Fetched tokens")
+func GetNthLevel(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
+	return hi.repositories[rep].getNthLevel(filepath.FromSlash(fsPath), nodes...)
 }
 
-// GetUToken gets the unscoped token
-var GetUToken = func() error {
-	// Request token
-	uToken := UToken{}
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", func() string { return "" }, nil, nil, &uToken)
-	if err != nil {
-		return fmt.Errorf("Retrieving unscoped token failed: %w", err)
-	}
-
-	hi.uToken = uToken.Token
-	logs.Debug("Retrieved unscoped token")
-	return nil
+// UpdateAttributes modifies attributes of node in 'fsPath'.
+// 'nodes' contains the original names of each node in 'fsPath'
+func UpdateAttributes(nodes []string, fsPath string, attr interface{}) {
+	hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
 }
 
-// GetSToken gets the scoped tokens for a project
-var GetSToken = func(project string) error {
-	// Query params
-	query := map[string]string{"project": project}
-
-	// Request token
-	sToken := SToken{}
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/token", func() string { return "" }, query, nil, &sToken)
-	if err != nil {
-		return fmt.Errorf("Retrieving scoped token for %s failed: %w", project, err)
-	}
-
-	hi.sTokens[project] = sToken
-	logs.Debug("Retrieved scoped token for ", project)
-	return nil
-}
-
-// GetProjects gets all projects user has access to
-var GetProjects = func() ([]Metadata, error) {
-	// Request projects
-	var projects []Metadata
-	err := makeRequest(strings.TrimSuffix(hi.metadataURL, "/")+"/projects",
-		func() string { return hi.uToken }, nil, nil, &projects)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request for projects failed: %w", err)
-	}
-
-	logs.Debugf("Retrieved %d projects", len(projects))
-	return projects, nil
-}
-
-// GetContainers gets conatainers inside project
-var GetContainers = func(project string) ([]Metadata, error) {
-	// Additional headers
-	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
-
-	// Request containers
-	var containers []Metadata
-	err := makeRequest(
-		strings.TrimSuffix(hi.metadataURL, "/")+
-			"/project/"+
-			url.PathEscape(project)+"/containers", func() string { return hi.sTokens[project].Token }, nil, headers, &containers)
-	if err != nil {
-		return nil, fmt.Errorf("Retrieving containers for %s failed: %w", project, err)
-	}
-
-	logs.Infof("Retrieved containers for %s", project)
-	return containers, nil
-}
-
-// GetObjects gets objects inside container
-var GetObjects = func(project, container string) ([]Metadata, error) {
-	// Additional headers
-	headers := map[string]string{"X-Project-ID": hi.sTokens[project].ProjectID}
-
-	// Request objects
-	var objects []Metadata
-	err := makeRequest(
-		strings.TrimSuffix(hi.metadataURL, "/")+
-			"/project/"+
-			url.PathEscape(project)+"/container/"+
-			url.PathEscape(container)+"/objects", func() string { return hi.sTokens[project].Token }, nil, headers, &objects)
-	if err != nil {
-		return nil, fmt.Errorf("Retrieving objects for %s failed: %w", container, err)
-	}
-
-	logs.Infof("Retrieved objects for %s/%s", project, container)
-	return objects, nil
-}
-
-// GetSpecialHeaders returns information on headers that can only be retirived from data api
-var GetSpecialHeaders = func(path string) (bool, int64, error) {
-	parts := strings.SplitN(path, "/", 3)
-	project := parts[0]
-
-	// Query params
-	query := map[string]string{
-		"project":   parts[0],
-		"container": parts[1],
-		"object":    parts[2],
-	}
-
-	// Additional headers
-	headers := map[string]string{"Range": "bytes=0-1", "X-Project-ID": hi.sTokens[project].ProjectID}
-
-	var ret specialHeaders
-	err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
-		func() string { return hi.sTokens[project].Token }, query, headers, &ret)
-	if err != nil {
-		return false, -1, fmt.Errorf("Retrieving headers failed for %s: %w", path, err)
-	}
-
-	return ret.decrypted, ret.segmentedObjectSize, nil
-}
-
-// DownloadData gets content of object from data API
-func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, error) {
-	parts := strings.SplitN(path, "/", 3)
-	project := parts[0]
-
-	// Query params
-	query := map[string]string{
-		"project":   parts[0],
-		"container": parts[1],
-		"object":    parts[2],
-	}
-
+// DownloadData requests data between range [start, end) from an API.
+func DownloadData(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
 	// chunk index of cache
 	chunk := start / chunkSize
 	// start coordinate of chunk
@@ -442,25 +331,19 @@ func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, er
 	ofst := start - chStart
 	endofst := end - chStart
 
-	// we make the cache key based on object path and requested bytes
-	cacheKey := parts[0] + "_" + parts[1] + "_" + parts[2] + "_" + strconv.FormatInt(chStart, 10)
+	// We create the cache key based on path and requested bytes
+	cacheKey := strings.Join(nodes, "_") + "_" + strconv.FormatInt(chStart, 10)
 	response, found := downloadCache.Get(cacheKey)
 
 	if !found {
-		// Additional headers
-		headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(chStart, 10) + "-" + strconv.FormatInt(chEnd-1, 10),
-			"X-Project-ID": hi.sTokens[project].ProjectID}
-
-		// Request data
 		buf := make([]byte, chEnd-chStart)
-		err := makeRequest(strings.TrimSuffix(hi.dataURL, "/")+"/data",
-			func() string { return hi.sTokens[project].Token }, query, headers, buf)
+		err := hi.repositories[nodes[0]].downloadData(nodes[1:], buf, chStart, chEnd)
 		if err != nil {
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
 
 		downloadCache.Set(cacheKey, buf, time.Minute*60)
-		logs.Debugf("Object %s stored in cache, with coordinates %d-%d", path, chStart, chEnd-1)
+		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chStart, chEnd)
 
 		if endofst > int64(len(buf)) {
 			endofst = int64(len(buf))
@@ -472,6 +355,6 @@ func DownloadData(path string, start int64, end int64, maxEnd int64) ([]byte, er
 	if endofst > int64(len(ret)) {
 		endofst = int64(len(ret))
 	}
-	logs.Debugf("Retrieved object %s from cache, with coordinates %d-%d", path, start, end-1)
+	logs.Debugf("Retrieved file %s from cache, with coordinates [%d, %d)", path, start, end)
 	return ret[ofst:endofst], nil
 }

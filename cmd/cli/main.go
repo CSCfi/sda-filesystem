@@ -6,58 +6,53 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
-	"runtime"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
+	"strings"
 	"syscall"
 
-	"github.com/billziss-gh/cgofuse/fuse"
-	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
 
-var mount string
-var getHomeDir = os.UserHomeDir
+var repository, mount, logLevel string
+var requestTimeout int
 
 type loginReader interface {
 	readPassword() (string, error)
 	getStream() io.Reader
-	getState() (*term.State, error)
+	getState() error
+	restoreState() error
 }
 
+// stdinReader reads username and password from stdin (implements loginReader)
 type stdinReader struct {
+	originalState *term.State
 }
 
-func (r stdinReader) readPassword() (string, error) {
-	pwd, err := term.ReadPassword(syscall.Stdin)
+func (r *stdinReader) readPassword() (string, error) {
+	pwd, err := term.ReadPassword(int(syscall.Stdin))
 	return string(pwd), err
 }
 
-func (r stdinReader) getStream() io.Reader {
+func (r *stdinReader) getStream() io.Reader {
 	return os.Stdin
 }
 
-func (r stdinReader) getState() (*term.State, error) {
-	return term.GetState(int(syscall.Stdin))
+func (r *stdinReader) getState() (err error) {
+	r.originalState, err = term.GetState(int(syscall.Stdin))
+	return
 }
 
-// mountPoint constructs a path to the user's home directory for mounting FUSE
-func mountPoint() string {
-	home, err := getHomeDir()
-	if err != nil {
-		logs.Fatalf("Could not find user home directory: %s", err.Error())
-	}
-	p := filepath.FromSlash(filepath.ToSlash(home) + "/Projects")
-	return p
+func (r *stdinReader) restoreState() error {
+	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
-var askForLogin = func(lr loginReader) (string, string) {
+var askForLogin = func(lr loginReader) (string, string, error) {
 	fmt.Print("Enter username: ")
 	scanner := bufio.NewScanner(lr.getStream())
 	var username string
@@ -65,116 +60,157 @@ var askForLogin = func(lr loginReader) (string, string) {
 		username = scanner.Text()
 	}
 	if err := scanner.Err(); err != nil {
-		logs.Fatal(err)
+		return "", "", fmt.Errorf("Could not read username: %w", err)
 	}
 
 	fmt.Print("Enter password: ")
 	password, err := lr.readPassword()
 	fmt.Println()
 	if err != nil {
-		logs.Fatal(err)
+		return "", "", fmt.Errorf("Could not read password: %w", err)
 	}
 
-	return username, password
+	return username, password, nil
 }
 
-func login(lr loginReader) {
+var droppedRepository = func(lr loginReader, rep string) bool {
+	for {
+		fmt.Print("Do you wish to try again? (yes/no) ")
+		scanner := bufio.NewScanner(lr.getStream())
+
+		var answer string
+		if scanner.Scan() {
+			answer = scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			logs.Errorf("Could not read input, dropping repository %s: %w", rep, err)
+			break
+		}
+
+		if strings.EqualFold(answer, "yes") || strings.EqualFold(answer, "y") {
+			return false
+		} else if strings.EqualFold(answer, "no") || strings.EqualFold(answer, "n") {
+			logs.Info("User chose to drop repository ", rep)
+			break
+		}
+	}
+
+	api.RemoveRepository(rep)
+	return true
+}
+
+// login asks for a username and a password for repository 'rep'
+var login = func(lr loginReader, rep string) error {
 	// Get the state of the terminal before running the password prompt
-	originalTerminalState, err := lr.getState()
+	err := lr.getState()
 	if err != nil {
-		logs.Fatalf("Failed to get terminal state: %s", err.Error())
+		return fmt.Errorf("Failed to get terminal state: %w", err)
 	}
 
 	// check for ctrl+c signal
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
+	defer func() { signal.Stop(signalChan) }()
 	go func() {
 		<-signalChan
-		if err = term.Restore(int(syscall.Stdin), originalTerminalState); err != nil {
-			logs.Warningf("Could not restore terminal to original state: %s", err.Error())
+		fmt.Println("")
+		if err = lr.restoreState(); err != nil {
+			logs.Warningf("Could not restore terminal to original state: %w", err)
 		}
 		os.Exit(1)
 	}()
 
-	for {
-		username, password := askForLogin(lr)
-		api.CreateToken(username, password)
-		err = api.GetUToken()
+	fmt.Printf("Log in to %s\n", rep)
 
+	for {
+		username, password, err := askForLogin(lr)
+		if err != nil {
+			return err
+		}
+
+		err = api.ValidateLogin(rep, username, password)
 		if err == nil {
-			break
+			return nil
 		}
 
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			logs.Errorf("Incorrect username or password")
+			if droppedRepository(lr, rep) {
+				return nil
+			}
+		} else {
+			return fmt.Errorf("Failed to log in to %s: %w", rep, err)
+		}
+	}
+}
+
+// loginToAll goes through all enabled repositories and logs into each of them
+func loginToAll() {
+	for _, rep := range api.GetEnabledRepositories() {
+		var err error
+		if api.GetLoginMethod(rep) == api.Password {
+			err = login(&stdinReader{}, rep)
+		} else if api.GetLoginMethod(rep) == api.Token {
+			err = api.ValidateLogin(rep)
+		} else {
+			logs.Warningf("No login function designated for %s", rep)
 			continue
 		}
-
-		logs.Fatal(err)
-	}
-
-	// stop watching signals
-	signal.Stop(signalChan)
-}
-
-func isMountPointValid(info fs.FileInfo) {
-	if !info.IsDir() {
-		logs.Fatalf("%s is not a directory", mount)
-	}
-
-	// Mount directory must not already exist in Windows
-	if runtime.GOOS == "windows" { // ?
-		logs.Fatalf("Mount point %s already exists, remove the directory or use another mount point", mount)
-	}
-
-	if unix.Access(mount, unix.W_OK) != nil { // What about windows?
-		logs.Fatal("You do not have permission to write to folder ", mount)
-	}
-
-	dir, err := os.Open(mount)
-	if err != nil {
-		logs.Fatalf("Could not open mount point %s", mount)
-	}
-	defer dir.Close()
-
-	// Verify dir is empty
-	if _, err = dir.Readdir(1); err != io.EOF {
 		if err != nil {
-			logs.Fatalf("Error occurred when reading from directory %s: %s", mount, err.Error())
+			api.RemoveRepository(rep)
+			logs.Errorf("Dropping repository %s: %w", rep, err)
 		}
-		logs.Fatalf("Mount point %s must be empty", mount)
 	}
 }
 
-func checkMountPoint() {
-	// Verify mount point exists
-	if dir, err := os.Stat(mount); os.IsNotExist(err) {
-		// In other OSs except Windows, the mount point must exist and be empty
-		if runtime.GOOS != "windows" {
-			logs.Debugf("Mount point %s does not exist, so it will be created", mount)
-			if err = os.Mkdir(mount, 0755); err != nil {
-				logs.Fatalf("Could not create directory %s", mount)
+func processFlags() error {
+	repOptions := api.GetAllPossibleRepositories()
+
+	found := false
+	for _, op := range repOptions {
+		if strings.EqualFold(repository, op) || strings.EqualFold(repository, "all") {
+			found = true
+			if err := api.AddRepository(op); err != nil {
+				return err
 			}
 		}
-	} else {
-		isMountPointValid(dir)
 	}
 
-	logs.Debugf("Filesystem will be mounted at %s", mount)
+	if !found {
+		logs.Warningf("Flag -enable=%s not supported, switching to default -enable=all", repository)
+		for _, op := range repOptions {
+			if err := api.AddRepository(op); err != nil {
+				return err
+			}
+		}
+	}
+
+	if mount == "" {
+		defaultMount, err := mountpoint.DefaultMountPoint()
+		if err != nil {
+			return err
+		}
+		mount = defaultMount
+	} else if err := mountpoint.CheckMountPoint(mount); err != nil {
+		return err
+	}
+
+	mount = filepath.Clean(mount)
+	api.SetRequestTimeout(requestTimeout)
+	logs.SetLevel(logLevel)
+	return nil
 }
 
 func init() {
-	var logLevel string
-	var timeout int
-	flag.StringVar(&mount, "mount", mountPoint(), "Path to FUSE mount point")
-	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible value: {debug,info,error}")
-	flag.IntVar(&timeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
-	flag.Parse()
+	repOptions := api.GetAllPossibleRepositories()
 
-	api.SetRequestTimeout(timeout)
-	logs.SetLevel(logLevel)
-	checkMountPoint()
+	flag.StringVar(&repository, "enable", "all",
+		fmt.Sprintf("Choose which repositories you wish include in the filesystem. Possible values: {%s,all}",
+			strings.Join(repOptions, ",")))
+	flag.StringVar(&mount, "mount", "", "Path to filesystem mount point")
+	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
+	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
 func shutdown() <-chan bool {
@@ -190,12 +226,7 @@ func shutdown() <-chan bool {
 }
 
 func main() {
-	err := api.GetEnvs()
-	if err != nil {
-		logs.Fatal(err)
-	}
-
-	err = api.InitializeCache()
+	err := api.InitializeCache()
 	if err != nil {
 		logs.Fatal(err)
 	}
@@ -204,26 +235,21 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	login(stdinReader{})
-	api.SetLoggedIn()
+	flag.Parse()
+	err = processFlags()
+	if err != nil {
+		logs.Fatal(err)
+	}
+
+	loginToAll()
+
+	if len(api.GetEnabledRepositories()) == 0 {
+		logs.Fatal("No repositories found. Filesystem not created")
+	}
 
 	done := shutdown()
-	api.FetchTokens()
-
-	connectfs := filesystem.CreateFileSystem()
-	host := fuse.NewFileSystemHost(connectfs)
-	options := []string{}
-	if runtime.GOOS == "darwin" {
-		options = append(options, "-o", "defer_permissions")
-		options = append(options, "-o", "volname="+path.Base(mount))
-		options = append(options, "-o", "attr_timeout=0")
-		options = append(options, "-o", "iosize=262144") // Value not optimized
-	} else if runtime.GOOS == "linux" {
-		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
-		options = append(options, "-o", "auto_unmount")
-	} // Still needs windows options
-
-	host.Mount(mount, options)
-
+	fs := filesystem.InitializeFileSystem(nil)
+	fs.PopulateFilesystem(nil)
+	filesystem.MountFilesystem(fs, mount)
 	<-done
 }

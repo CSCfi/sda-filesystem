@@ -1,25 +1,6 @@
 package filesystem
 
-import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
-	"reflect"
-	"sda-filesystem/internal/api"
-	"sort"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-
-	"github.com/billziss-gh/cgofuse/fuse"
-	"github.com/sirupsen/logrus"
-)
-
-var testFuse = `{
+/*var testFuse = `{
 	"name": "",
 	"size": 450,
     "children": [
@@ -46,7 +27,7 @@ var testFuse = `{
 							"size": 20,
 							"children": null
 						}
-					] 
+					]
 				},
 				{
 					"name": "dir",
@@ -57,9 +38,9 @@ var testFuse = `{
 							"size": 112,
 							"children": []
 						}
-					] 
+					]
 				}
-			] 
+			]
 		},
 		{
 			"name": "child_2",
@@ -108,23 +89,22 @@ type jsonNode struct {
 }
 
 func TestMain(m *testing.M) {
-	logrus.SetOutput(ioutil.Discard)
+	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
 }
 
 // getMockFuse returns a *Connectfs filled in based on variable testFuse
-func getNewFuse(t *testing.T) (fs *Connectfs) {
+func getNewFuse(t *testing.T) (fs *Fuse) {
 	var nodes jsonNode
 	if err := json.Unmarshal([]byte(testFuse), &nodes); err != nil {
 		t.Fatal("Could not unmarshal json")
 	}
 
-	fs = &Connectfs{}
+	fs = &Fuse{}
 	fs.root = &node{}
 	fs.root.stat.Mode = fuse.S_IFDIR | sRDONLY
 	fs.root.stat.Size = nodes.Size
 	fs.root.chld = map[string]*node{}
-	fs.renamed = map[string]string{}
 
 	assignChildren(fs.root, nodes.Children)
 	return
@@ -703,3 +683,4 @@ func TestMakeNode(t *testing.T) {
 		})
 	}
 }
+*/

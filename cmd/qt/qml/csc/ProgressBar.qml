@@ -17,7 +17,7 @@ ProgressBar {
             width: control.visualPosition * parent.width
             height: parent.height
             radius: (control.height - 2 * control.padding) / 2
-            color: CSC.Style.altGreen
+            color: CSC.Style.turquoise
         }
     }
 }

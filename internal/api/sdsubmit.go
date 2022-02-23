@@ -1,0 +1,207 @@
+package api
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"sda-filesystem/internal/logs"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+// This file contains structs and functions that are strictly for SD-Submit
+
+const SDSubmit string = "SD-Submit"
+
+// This exists for unit test mocking
+type submittable interface {
+	getFiles(string, string, string) ([]Metadata, error)
+	getDatasets(string) ([]string, error)
+}
+
+type submitter struct {
+	lock    sync.RWMutex
+	token   *string
+	fileIDs map[string]string
+}
+
+type sdSubmitInfo struct {
+	submittable
+	token    string
+	urls     []string
+	fileIDs  map[string]string
+	datasets map[string]int
+}
+
+type file struct {
+	FileID                    string `json:"fileId"`
+	DatasetID                 string `json:"datasetId"`
+	DisplayFileName           string `json:"displayFileName"`
+	FileName                  string `json:"fileName"`
+	FileSize                  int64  `json:"fileSize"`
+	DecryptedFileSize         int64  `json:"decryptedFileSize"`
+	DecryptedFileChecksum     string `json:"decryptedFileChecksum"`
+	DecryptedFileChecksumType string `json:"decryptedFileChecksumType"`
+	FileStatus                string `json:"fileStatus"`
+}
+
+func init() {
+	su := &submitter{fileIDs: make(map[string]string)}
+	sd := &sdSubmitInfo{submittable: su}
+	su.token = &sd.token
+	sd.fileIDs = su.fileIDs
+	possibleRepositories[SDSubmit] = sd
+}
+
+//
+// Functions for submitter
+//
+
+func (s *submitter) getDatasets(urlStr string) ([]string, error) {
+	var datasets []string
+	err := makeRequest(urlStr+"/metadata/datasets", *s.token, SDSubmit, nil, nil, &datasets)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
+	}
+
+	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, urlStr)
+	return datasets, nil
+}
+
+func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
+	// Request files
+	var files []file
+	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
+	err := makeRequest(path, *s.token, SDSubmit, nil, nil, &files)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
+	}
+
+	var metadata []Metadata
+	for i := range files {
+		if files[i].FileStatus == "READY" {
+			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
+			metadata = append(metadata, md)
+
+			s.lock.Lock()
+			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
+			s.lock.Unlock()
+		}
+	}
+
+	logs.Infof("Retrieved files for dataset %s", fsPath)
+	return metadata, nil
+}
+
+//
+// Functions for sdSubmitInfo
+//
+
+func (s *sdSubmitInfo) getEnvs() error {
+	var err error
+	s.token, err = getEnv("SDS_ACCESS_TOKEN", false)
+	if err != nil {
+		return err
+	}
+	urls, err := getEnv("FS_SD_SUBMIT_API", false)
+	if err != nil {
+		return err
+	}
+	s.urls = []string{}
+	for i, u := range strings.Split(urls, ",") {
+		if err = validURL(u); err != nil {
+			return err
+		}
+		s.urls = append(s.urls, strings.TrimRight(u, "/"))
+		if err := testURL(s.urls[i]); err != nil {
+			return fmt.Errorf("Cannot connect to SD-Submit API: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *sdSubmitInfo) getLoginMethod() LoginMethod {
+	return Token
+}
+
+func (s *sdSubmitInfo) validateLogin(auth ...string) error {
+	s.datasets = make(map[string]int)
+	count := 0
+
+	for i := range s.urls {
+		datasets, err := s.getDatasets(s.urls[i])
+		if err != nil {
+			var re *RequestError
+			if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
+				return err
+			}
+			logs.Warningf("Something went wrong when fetching %s datasets from API %s: %w", SDSubmit, s.urls[i], err)
+			count++
+		} else {
+			for j := range datasets {
+				s.datasets[datasets[j]] = i
+			}
+		}
+	}
+
+	if count == len(s.urls) {
+		return fmt.Errorf("Cannot receive responses from any of the %s APIs", SDSubmit)
+	}
+	if len(s.datasets) == 0 {
+		return fmt.Errorf("No datasets found for %s", SDSubmit)
+	}
+	return nil
+}
+
+func (s *sdSubmitInfo) getToken() string {
+	return s.token
+}
+
+func (s *sdSubmitInfo) levelCount() int {
+	return 2
+}
+
+func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, error) {
+	switch len(nodes) {
+	case 0:
+		i := 0
+		datasets := make([]Metadata, len(s.datasets))
+		for ds := range s.datasets {
+			datasets[i] = Metadata{Name: ds, Bytes: -1}
+			i++
+		}
+		return datasets, nil
+	case 1:
+		idx, ok := s.datasets[nodes[0]]
+		if !ok {
+			return nil, fmt.Errorf("Tried to request files for invalid dataset %s", fsPath)
+		}
+		return s.getFiles(fsPath, s.urls[idx], nodes[0])
+	default:
+		return nil, nil
+	}
+}
+
+// Dummy function, not needed
+func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interface{}) {
+}
+
+func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
+	idx, ok := s.datasets[nodes[0]]
+	if !ok {
+		return fmt.Errorf("Tried to request content of %s file %s with invalid dataset %s", SDSubmit, nodes[1], nodes[0])
+	}
+
+	// Query params
+	query := map[string]string{
+		"startCoordinate": strconv.FormatInt(start, 10),
+		"endCoordinate":   strconv.FormatInt(end, 10),
+	}
+
+	finalPath := nodes[0] + "_" + nodes[1]
+
+	// Request data
+	path := s.urls[idx] + "/files/" + s.fileIDs[finalPath]
+	return makeRequest(path, s.token, SDSubmit, query, nil, buffer)
+}
