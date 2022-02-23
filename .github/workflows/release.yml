@@ -34,7 +34,7 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             artifact_name: go-fuse
@@ -43,6 +43,10 @@ jobs:
           - os: macos-latest
             artifact_name: go-fuse
             os_suffix: macos-amd64
+            asset_name: go-fuse-cli
+          - os: windows-latest
+            artifact_name: go-fuse
+            os_suffix: windows-amd64
             asset_name: go-fuse-cli
         golang-version: [1.16]
     
@@ -64,6 +68,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
+      - name: Install Windows dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install zip
+          choco install WinFsp
       - name: Build CLI artifact
         run: |
           go build -o ./go-fuse ./cmd/cli/main.go
@@ -84,7 +93,7 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             os_folder: linux
@@ -93,6 +102,10 @@ jobs:
           - os: macos-latest
             os_folder: darwin
             os_suffix: macos-amd64
+            asset_name: go-fuse-gui
+          - os: windows-latest
+            artifact_name: go-fuse
+            os_suffix: windows-amd64
             asset_name: go-fuse-gui
         golang-version: [1.16]
     
@@ -135,6 +148,21 @@ jobs:
           
           $(go env GOPATH)/bin/qtsetup
 
+      - name: Install Windows dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install zip
+          choco install WinFsp
+          set GO111MODULE=off
+          go get -v github.com/therecipe/qt/cmd/... 
+          set GO111MODULE=on
+
+          go install -v -tags=no_env github.com/therecipe/qt/cmd/... 
+          go mod vendor
+          git clone https://github.com/therecipe/env_windows_amd64_513.git vendor/github.com/therecipe/env_windows_amd64_513
+
+          for /f %v in ('go env GOPATH') do %v\bin\qtsetup
+
       - name: Build GUI artifact
         run: |
            qtdeploy build desktop cmd/qt/main.go
@@ -149,6 +177,12 @@ jobs:
         run: |
           cd cmd/qt/deploy/darwin
           mv qt_project.app/Contents/MacOS/qt_project qt_project.app/Contents/MacOS/sda-fuse
+          zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
+      - name: Archive GUI Asset Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd cmd/qt/deploy/windows
+          ren qt_project.exe sda-fuse.exe
           zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
       - name: Upload Release Asset
         id: upload-release-asset 
