@@ -110,6 +110,7 @@ jobs:
             asset_name: go-fuse-gui
           - os: windows-latest
             artifact_name: go-fuse
+            os_folder: windows
             os_suffix: windows-amd64
             asset_name: go-fuse-gui
         golang-version: [1.16]
@@ -167,11 +168,15 @@ jobs:
           go mod vendor
           git clone https://github.com/therecipe/env_windows_amd64_513.git vendor/github.com/therecipe/env_windows_amd64_513
 
-          cmd.exe /c for /f %v in ('go env GOPATH') do %v\bin\qtsetup
+          C:\Users\runneradmin\go\bin\qtsetup.exe
+
+        shell: cmd
       - name: Build GUI artifact Windows
         if: matrix.os == 'windows-latest'
         run: |
-          $env:CGO_ENABLED=0; qtdeploy build desktop cmd/qt/main.go
+          set CPATH=C:\Program Files (x86)\WinFsp\inc\fuse
+          C:\Users\runneradmin\go\bin\qtdeploy.exe build desktop cmd/qt/main.go
+        shell: cmd
       - name: Build GUI artifact
         if: matrix.os != 'windows-latest'
         run: |
