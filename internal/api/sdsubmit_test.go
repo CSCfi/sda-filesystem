@@ -96,7 +96,7 @@ func TestGetFiles_Fail(t *testing.T) {
 	}
 
 	// Test
-	expectedError := "Failed to retrieve files for dataset \"fspath\": some error"
+	expectedError := "Failed to retrieve files for dataset fspath: some error"
 	testToken := constantToken
 	s := submitter{token: &testToken}
 	_, err := s.getFiles("fspath", "url", "dataset1")
@@ -433,7 +433,7 @@ func TestGetNthLevel_SDSubmit_Fail_1(t *testing.T) {
 	s := &sdSubmitInfo{datasets: map[string]int{"dataset1": 1}}
 
 	// Test
-	expectedError := "Tried to request files for invalid dataset \"fspath\""
+	expectedError := "Tried to request files for invalid dataset fspath"
 	_, err := s.getNthLevel("fspath", "dataset2")
 
 	if err != nil {
@@ -489,7 +489,7 @@ func TestDownloadData_SDSubmit_Fail(t *testing.T) {
 	s := sdSubmitInfo{datasets: map[string]int{"something": 0}}
 
 	// Test
-	expectedError := "Tried to request content of SD-Submit file \"file1\" with invalid dataset \"missing\""
+	expectedError := "Tried to request content of SD-Submit file file1 with invalid dataset missing"
 	buf := []byte{}
 	err := s.downloadData([]string{"missing", "file1"}, buf, 0, 0)
 

@@ -579,7 +579,7 @@ func TestGetNthLevel_Fail_Request(t *testing.T) {
 	sd := &sdConnectInfo{}
 
 	// Test
-	expectedError := "Failed to retrieve metadata for \"fspath\": some error"
+	expectedError := "Failed to retrieve metadata for fspath: some error"
 	_, err := sd.getNthLevel("fspath", "1", "2")
 	if err.Error() != expectedError {
 		t.Errorf("TestGetNthLevel_Fail_Request failed, expected=%s, received=%v", expectedError, err)
@@ -670,7 +670,7 @@ func TestGetNthLevel_Pass_TokenExpired(t *testing.T) {
 func TestGetNthLevel_Fail_TokenExpired(t *testing.T) {
 
 	// Mock
-	expectedError := "Failed to retrieve metadata for \"sdconnect\": API responded with status 401 Unauthorized"
+	expectedError := "Failed to retrieve metadata for sdconnect: API responded with status 401 Unauthorized"
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {

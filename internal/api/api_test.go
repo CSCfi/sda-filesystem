@@ -501,7 +501,7 @@ func TestDownloadData_FoundNoCache_Error(t *testing.T) {
 	}()
 	// Overwrite original functions with mock for duration of test
 	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
-	expectedError := "Retrieving data failed for \"/path/to/file.txt\": some error"
+	expectedError := "Retrieving data failed for /path/to/file.txt: some error"
 	mockRepo := &mockRepository{
 		mockDownloadDataBuf:   nil,
 		mockDownloadDataError: errors.New("some error"),
@@ -531,14 +531,14 @@ func TestDownloadData_FoundNoCache_Error(t *testing.T) {
 func TestValidURL(t *testing.T) {
 
 	// Test failure
-	expectedError := "Environment variable \"something\" is an invalid URL: parse \"something\": invalid URI for request"
+	expectedError := "Environment variable something is an invalid URL: parse \"something\": invalid URI for request"
 	err := validURL("something")
 	if err.Error() != expectedError {
 		t.Errorf("TestValidURL expected %s received %s", expectedError, err.Error())
 	}
 
 	// Test failure
-	expectedError = "Environment variable \"http://csc.fi\" does not have scheme 'https'"
+	expectedError = "Environment variable http://csc.fi does not have scheme 'https'"
 	err = validURL("http://csc.fi")
 	if err.Error() != expectedError {
 		t.Errorf("TestValidURL expected %s received %s", expectedError, err.Error())
