@@ -6,11 +6,12 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strings"
+	"testing"
+
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-	"strings"
-	"testing"
 )
 
 var errExpected = errors.New("Expected error for test")

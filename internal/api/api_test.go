@@ -11,12 +11,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
-	"sda-filesystem/internal/cache"
-	"sda-filesystem/internal/logs"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"sda-filesystem/internal/cache"
+	"sda-filesystem/internal/logs"
 )
 
 var errExpected = errors.New("Expected error for test")

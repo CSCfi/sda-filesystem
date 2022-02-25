@@ -1,10 +1,11 @@
 package mountpoint
 
 import (
-	"github.com/hectane/go-acl"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/hectane/go-acl"
 )
 
 func TestCheckMountPoint(t *testing.T) {
@@ -46,6 +47,6 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	if err = acl.Chmod(node, 0444); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
 	} else if err = CheckMountPoint(node + filepath.FromSlash("/child/grandchild")); err == nil {
-		t.Error("Function should have returned non-nil error")
+		t.Error("Function should have returned error")
 	}
 }

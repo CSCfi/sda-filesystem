@@ -305,18 +305,18 @@ var makeRequest = func(url, token, repository string, query, headers map[string]
 	return nil
 }
 
-func GetNthLevel(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
+var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
 	return hi.repositories[rep].getNthLevel(filepath.FromSlash(fsPath), nodes...)
 }
 
 // UpdateAttributes modifies attributes of node in 'fsPath'.
 // 'nodes' contains the original names of each node in 'fsPath'
-func UpdateAttributes(nodes []string, fsPath string, attr interface{}) {
+var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) {
 	hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
 }
 
 // DownloadData requests data between range [start, end) from an API.
-func DownloadData(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
+var DownloadData = func(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
 	// chunk index of cache
 	chunk := start / chunkSize
 	// start coordinate of chunk

@@ -7,10 +7,11 @@ import (
 	"math"
 	"net/url"
 	"reflect"
-	"sda-filesystem/internal/logs"
 	"strconv"
 	"strings"
 	"sync"
+
+	"sda-filesystem/internal/logs"
 )
 
 // This file contains structs and functions that are strictly for SD-Connect

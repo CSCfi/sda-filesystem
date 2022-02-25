@@ -1,8 +1,9 @@
 package main
 
 import (
-	"sda-filesystem/internal/api"
 	"sort"
+
+	"sda-filesystem/internal/api"
 
 	"github.com/therecipe/qt/core"
 )

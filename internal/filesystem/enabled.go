@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/billziss-gh/cgofuse/fuse"
-
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+
+	"github.com/billziss-gh/cgofuse/fuse"
 )
 
 // Open opens a file.

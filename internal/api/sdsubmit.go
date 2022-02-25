@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"sda-filesystem/internal/logs"
 	"strconv"
 	"strings"
 	"sync"
+
+	"sda-filesystem/internal/logs"
 )
 
 // This file contains structs and functions that are strictly for SD-Submit

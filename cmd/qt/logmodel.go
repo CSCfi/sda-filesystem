@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sda-filesystem/internal/logs"
 	"strings"
+
+	"sda-filesystem/internal/logs"
 
 	"github.com/sirupsen/logrus"
 	"github.com/therecipe/qt/core"
