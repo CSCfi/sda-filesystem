@@ -136,6 +136,71 @@ var testFuse = `{
 	]
 }`
 
+var testObjects = `{
+	"name": "dir1",
+	"nameSafe": "dir1",
+	"size": 187,
+	"children": [
+		{
+			"name": "dir+2",
+			"nameSafe": "dir_2",
+			"size": 137,
+			"children": [
+				{
+					"name": "dir3.2.1",
+					"nameSafe": "dir3.2.1",
+					"size": 30,
+					"children": [
+						{
+							"name": "file",
+							"nameSafe": "file",
+							"size": 30,
+							"children": null
+						}
+					]
+				},
+				{
+					"name": "dir3.2.1",
+					"nameSafe": "dir3(1).2.1",
+					"size": 6,
+					"children": null
+				},
+				{
+					"name": "logs",
+					"nameSafe": "logs",
+					"size": 101,
+					"children": null
+				}
+			]
+		},
+		{
+			"name": "dir4",
+			"nameSafe": "dir4",
+			"size": 50,
+			"children": [
+				{
+					"name": "another_file",
+					"nameSafe": "another_file",
+					"size": 10,
+					"children": null
+				},
+				{
+					"name": "another_file.c4gh",
+					"nameSafe": "another_file(1)",
+					"size": 13,
+					"children": null
+				},
+				{
+					"name": "another+file.c4gh",
+					"nameSafe": "another_file(2)",
+					"size": 27,
+					"children": null
+				}
+			]
+		}
+	]
+}`
+
 type jsonNode struct {
 	Name     string      `json:"name"`
 	NameSafe string      `json:"nameSafe"`
@@ -148,8 +213,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// getNewFuse returns a *Fuse filled in based on variable testFuse
-func getNewFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
+// getTestFuse returns a *Fuse filled in based on variable testFuse
+func getTestFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
 	var nodes jsonNode
 	if err := json.Unmarshal([]byte(testFuse), &nodes); err != nil {
 		t.Fatalf("Could not unmarshal json: %s", err.Error())
@@ -159,6 +224,8 @@ func getNewFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
 	fs.root = &node{}
 	fs.root.stat.Mode = fuse.S_IFDIR | sRDONLY
 	fs.root.chld = map[string]*node{}
+	fs.root.stat.Ino = 1
+	fs.openmap = map[uint64]nodeAndPath{}
 
 	if sizeUnfinished && nodes.Size < 0 {
 		fs.root.stat.Size = -1
@@ -168,14 +235,15 @@ func getNewFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
 		fs.root.stat.Size = nodes.Size
 	}
 
-	assignChildren(fs.root, nodes.Children, sizeUnfinished, maxLevel)
+	assignChildren(fs.root, nodes.Children, sizeUnfinished, maxLevel, 2)
 	return
 }
 
-func assignChildren(n *node, template *[]jsonNode, sizeUnfinished bool, maxLevel int) {
+func assignChildren(n *node, template *[]jsonNode, sizeUnfinished bool, maxLevel int, ino uint64) uint64 {
 	for i, child := range *template {
 		n.chld[child.NameSafe] = &node{}
 		n.chld[child.NameSafe].originalName = child.Name
+		n.chld[child.NameSafe].stat.Ino = ino
 
 		if sizeUnfinished && child.Size < 0 {
 			n.chld[child.NameSafe].stat.Size = -1
@@ -189,12 +257,15 @@ func assignChildren(n *node, template *[]jsonNode, sizeUnfinished bool, maxLevel
 			n.chld[child.NameSafe].stat.Mode = fuse.S_IFDIR | sRDONLY
 			n.chld[child.NameSafe].chld = map[string]*node{}
 			if maxLevel > 0 {
-				assignChildren(n.chld[child.NameSafe], (*template)[i].Children, sizeUnfinished, maxLevel-1)
+				ino = assignChildren(n.chld[child.NameSafe], (*template)[i].Children, sizeUnfinished, maxLevel-1, ino+1)
 			}
 		} else {
 			n.chld[child.NameSafe].stat.Mode = fuse.S_IFREG | sRDONLY
 		}
+
+		ino++
 	}
+	return ino
 }
 
 func isSameFuse(fs1 *node, fs2 *node, path string) error {
@@ -247,7 +318,7 @@ func isSameFuse(fs1 *node, fs2 *node, path string) error {
 }
 
 func TestCreateFilesystem(t *testing.T) {
-	origFs := getNewFuse(t, true, 1)
+	origFs := getTestFuse(t, true, 1)
 
 	origNewNode := newNode
 	origEnabledRepositories := api.GetEnabledRepositories
@@ -295,8 +366,8 @@ func TestCreateFilesystem(t *testing.T) {
 }
 
 func TestPopulateFilesystem(t *testing.T) {
-	origFs := getNewFuse(t, false, 5)
-	fs := getNewFuse(t, true, 1)
+	origFs := getTestFuse(t, false, 5)
+	fs := getTestFuse(t, true, 1)
 
 	origNewNode := newNode
 	origCheckPanic := CheckPanic
@@ -392,74 +463,9 @@ func TestPopulateFilesystem(t *testing.T) {
 	}
 }
 
-var testObjects = `{
-	"name": "dir1",
-	"nameSafe": "dir1",
-	"size": 187,
-	"children": [
-		{
-			"name": "dir+2",
-			"nameSafe": "dir_2",
-			"size": 137,
-			"children": [
-				{
-					"name": "dir3.2.1",
-					"nameSafe": "dir3.2.1",
-					"size": 30,
-					"children": [
-						{
-							"name": "file",
-							"nameSafe": "file",
-							"size": 30,
-							"children": null
-						}
-					]
-				},
-				{
-					"name": "dir3.2.1",
-					"nameSafe": "dir3(1).2.1",
-					"size": 6,
-					"children": null
-				},
-				{
-					"name": "logs",
-					"nameSafe": "logs",
-					"size": 101,
-					"children": null
-				}
-			]
-		},
-		{
-			"name": "dir4",
-			"nameSafe": "dir4",
-			"size": 50,
-			"children": [
-				{
-					"name": "another_file",
-					"nameSafe": "another_file",
-					"size": 10,
-					"children": null
-				},
-				{
-					"name": "another_file.c4gh",
-					"nameSafe": "another_file(1)",
-					"size": 13,
-					"children": null
-				},
-				{
-					"name": "another+file.c4gh",
-					"nameSafe": "another_file(2)",
-					"size": 27,
-					"children": null
-				}
-			]
-		}
-	]
-}`
-
 func TestCreateObjects(t *testing.T) {
-	origFs := getNewFuse(t, false, 5)
-	fs := getNewFuse(t, false, 5)
+	origFs := getTestFuse(t, false, 5)
+	fs := getTestFuse(t, false, 5)
 
 	origNewNode := newNode
 	origCheckPanic := CheckPanic
@@ -521,7 +527,7 @@ func TestCreateObjects(t *testing.T) {
 	if err := json.Unmarshal([]byte(testObjects), &nodes); err != nil {
 		t.Fatalf("Could not unmarshal json: %s", err.Error())
 	}
-	assignChildren(origFs.root.chld[rep].chld[pr].chld[cont], &[]jsonNode{nodes}, false, 5)
+	assignChildren(origFs.root.chld[rep].chld[pr].chld[cont], &[]jsonNode{nodes}, false, 5, 1)
 
 	if err := isSameFuse(origFs.root, fs.root, ""); err != nil {
 		t.Errorf("Objects not added correctly: %s", err.Error())
@@ -529,8 +535,8 @@ func TestCreateObjects(t *testing.T) {
 }
 
 func TestCreateObjects_Get_Node_Fail(t *testing.T) {
-	origFs := getNewFuse(t, false, 5)
-	fs := getNewFuse(t, false, 5)
+	origFs := getTestFuse(t, false, 5)
+	fs := getTestFuse(t, false, 5)
 
 	origCheckPanic := CheckPanic
 	origNthLevel := api.GetNthLevel
@@ -559,8 +565,8 @@ func TestCreateObjects_Get_Node_Fail(t *testing.T) {
 }
 
 func TestCreateObjects_Nth_Level_Fail(t *testing.T) {
-	origFs := getNewFuse(t, false, 5)
-	fs := getNewFuse(t, false, 5)
+	origFs := getTestFuse(t, false, 5)
+	fs := getTestFuse(t, false, 5)
 
 	origCheckPanic := CheckPanic
 	origNthLevel := api.GetNthLevel
@@ -655,7 +661,7 @@ func TestNewNode(t *testing.T) {
 }
 
 func TestLookupNode(t *testing.T) {
-	fs := getNewFuse(t, false, 5)
+	fs := getTestFuse(t, false, 5)
 
 	var tests = []struct {
 		testname, path string

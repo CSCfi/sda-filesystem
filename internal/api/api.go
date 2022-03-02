@@ -51,7 +51,7 @@ type fuseInfo interface {
 	levelCount() int
 	getToken() string
 	getNthLevel(string, ...string) ([]Metadata, error)
-	updateAttributes([]string, string, interface{})
+	updateAttributes([]string, string, interface{}) error
 	downloadData([]string, interface{}, int64, int64) error
 }
 
@@ -311,8 +311,8 @@ var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, 
 
 // UpdateAttributes modifies attributes of node in 'fsPath'.
 // 'nodes' contains the original names of each node in 'fsPath'
-var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) {
-	hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
+var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+	return hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
 }
 
 // DownloadData requests data between range [start, end) from an API.
@@ -324,6 +324,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 	// end coordinate of chunk
 	chEnd := (chunk + 1) * chunkSize
 
+	// Final chunk may be shorter than others if file size restricts it
 	if chEnd > maxEnd {
 		chEnd = maxEnd
 	}

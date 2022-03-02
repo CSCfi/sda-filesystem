@@ -258,31 +258,20 @@ func (c *sdConnectInfo) tokenExpired(err error) bool {
 	return false
 }
 
-func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) {
+func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) error {
 	if len(nodes) < 3 {
-		logs.Errorf("Cannot update attributes for path %s", path)
-		return
+		return fmt.Errorf("Cannot update attributes for path %s", path)
 	}
 
 	size, ok := attr.(*int64)
 	if !ok {
-		logs.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, got %v",
+		return fmt.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, got %v",
 			SDConnect, reflect.TypeOf(attr))
-		*size = -1
-		return
 	}
 
 	var headers SpecialHeaders
 	if err := c.downloadData(nodes, &headers, 0, 2); err != nil {
-		var re *RequestError
-		if errors.As(err, &re) && re.StatusCode == 451 {
-			logs.Errorf("You do not have permission to access file %s", path)
-			*size = -2
-		} else {
-			logs.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", path, err)
-			*size = -1
-		}
-		return
+		return err
 	}
 	if headers.SegmentedObjectSize != -1 {
 		logs.Infof("Object %s is a segmented object with size %d", path, headers.SegmentedObjectSize)
@@ -297,6 +286,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 			logs.Warningf("API returned header 'X-Decrypted' even though size of object %s is too small", path)
 		}
 	}
+	return nil
 }
 
 func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {

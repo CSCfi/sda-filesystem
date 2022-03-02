@@ -34,12 +34,12 @@ type Fuse struct {
 
 // node represents one file or directory
 type node struct {
-	stat            fuse.Stat_t
-	chld            map[string]*node
-	opencnt         int
-	originalName    string // so that api calls work
-	checkDecryption bool
-	denied          bool
+	stat              fuse.Stat_t
+	chld              map[string]*node
+	opencnt           int
+	originalName      string // so that api calls work
+	decryptionChecked bool
+	denied            bool
 }
 
 // nodeAndPath contains the node itself and a list of names which are the original path to the node. Yes, a very original name
@@ -406,9 +406,9 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 }
 
 // lookupNode finds the node at the end of path
-func lookupNode(root *node, path string) (node *node, origPath []string) {
+var lookupNode = func(root *node, path string) (node *node, origPath []string) {
 	node = root
-	for _, c := range split(filepath.ToSlash(path)) {
+	for _, c := range split(path) {
 		if c != "" {
 			if node == nil {
 				return
@@ -417,6 +417,24 @@ func lookupNode(root *node, path string) (node *node, origPath []string) {
 			node = node.chld[c]
 			if node != nil {
 				origPath = append(origPath, node.originalName)
+			}
+		}
+	}
+	return
+}
+
+func (fs *Fuse) updateNodeSizesAlongPath(path string, diff int64, timestamp fuse.Timespec) {
+	node := fs.root
+	for _, c := range split(path) {
+		if c != "" {
+			if node == nil {
+				return
+			}
+
+			node = node.chld[c]
+			if node != nil {
+				node.stat.Size -= diff
+				node.stat.Ctim = timestamp
 			}
 		}
 	}
