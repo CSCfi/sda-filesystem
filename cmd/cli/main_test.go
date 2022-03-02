@@ -130,11 +130,30 @@ func TestDroppedRepository(t *testing.T) {
 		drop     bool
 		err      error
 	}{
-		{"OK_NO_1", []string{"no"}, true, nil},
-		{"OK_NO_2", []string{"on", "n"}, true, nil},
-		{"OK_YES_1", []string{"yes"}, false, nil},
-		{"OK_YES_2", []string{"mmm", "y"}, false, nil},
-		{"FAIL_SCANNER", []string{"yes"}, true, errors.New("Stream error occurred")},
+		{
+			testname: "OK_NO_1",
+			input:    []string{"no"},
+			drop:     true,
+		},
+		{
+			testname: "OK_NO_2",
+			input:    []string{"on", "n"},
+			drop:     true,
+		},
+		{
+			testname: "OK_YES_1",
+			input:    []string{"yes"},
+		},
+		{
+			testname: "OK_YES_2",
+			input:    []string{"mmm", "y"},
+		},
+		{
+			testname: "FAIL_SCANNER",
+			input:    []string{"yes"},
+			drop:     true,
+			err:      errors.New("Stream error occurred"),
+		},
 	}
 
 	origRemoveRepository := api.RemoveRepository

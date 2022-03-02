@@ -12,7 +12,6 @@ import (
 	"os"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -43,20 +42,14 @@ func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
 
 type mockRepository struct {
 	fuseInfo
-	certPath              string
+	envError              error
 	mockDownloadDataBuf   []byte
 	mockDownloadDataError error
 }
 
-//func (r *mockRepository) getEnvs() error                                    { return nil }
-//func (r *mockRepository) getLoginMethod() LoginMethod                       { return Password }
-//func (r *mockRepository) validateLogin(...string) error                     { return nil }
-//func (r *mockRepository) levelCount() int                                   { return 0 }
+func (r *mockRepository) getEnvs() error { return r.envError }
 
 func (r *mockRepository) getToken() string { return "" }
-
-//func (r *mockRepository) getNthLevel(string, ...string) ([]Metadata, error) { return nil, nil }
-//func (r *mockRepository) updateAttributes([]string, string, interface{})    {}
 
 func (r *mockRepository) downloadData(nodes []string, buf interface{}, start, end int64) error {
 	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
@@ -75,7 +68,7 @@ func TestRequestError(t *testing.T) {
 		message := fmt.Sprintf("API responded with status %d %s", codes[i], http.StatusText(codes[i]))
 		reMessage := re.Error()
 		if reMessage != message {
-			t.Fatalf("RequestError has incorrect error message. Expectedd %q, got %q", message, reMessage)
+			t.Fatalf("RequestError has incorrect error message. Expected=%s, received=%s", message, reMessage)
 		}
 	}
 }
@@ -89,7 +82,7 @@ func TestGetAllPossibleRepositories(t *testing.T) {
 	reps := GetAllPossibleRepositories()
 	sort.Strings(reps)
 	if !reflect.DeepEqual(ans, reps) {
-		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", ans, reps)
+		t.Fatalf("Function returned incorrect value\nExpected=%v\nReceived=%v", ans, reps)
 	}
 }
 
@@ -102,11 +95,11 @@ func TestGetEnabledRepositories(t *testing.T) {
 	reps := GetEnabledRepositories()
 	sort.Strings(reps)
 	if !reflect.DeepEqual(ans, reps) {
-		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", ans, reps)
+		t.Fatalf("Function returned incorrect value\nExpected=%v\nReceived=%v", ans, reps)
 	}
 }
 
-/*func TestAddRepository(t *testing.T) {
+func TestAddRepository(t *testing.T) {
 	origPossibleRepositories := possibleRepositories
 	origRepositories := hi.repositories
 
@@ -115,14 +108,31 @@ func TestGetEnabledRepositories(t *testing.T) {
 		hi.repositories = origRepositories
 	}()
 
-	possibleRepositories = map[string]fuseInfo{"one": nil, "two": nil, "three": nil}
+	twoRep := &mockRepository{}
+	threeRep := &mockRepository{envError: errExpected}
+	possibleRepositories = map[string]fuseInfo{"One": nil, "Two": twoRep, "Three": threeRep}
 	hi.repositories = map[string]fuseInfo{}
 
-	AddRepository("two")
-	if !reflect.DeepEqual(hi.repositories, map[string]fuseInfo{"two": nil}) {
-
+	err := AddRepository("Two")
+	if err != nil {
+		t.Fatalf("Function returned error for repository Two: %s", err.Error())
 	}
-}*/
+	expectedReps := map[string]fuseInfo{"Two": twoRep}
+	if !reflect.DeepEqual(hi.repositories, expectedReps) {
+		t.Fatalf("Function did not add repository correctly. Expected=%v, received=%v", expectedReps, hi.repositories)
+	}
+
+	err = AddRepository("Three")
+	if err == nil {
+		t.Fatalf("Function did not return error")
+	}
+	if err.Error() != errExpected.Error() {
+		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
+	}
+	if !reflect.DeepEqual(hi.repositories, expectedReps) {
+		t.Fatalf("Function did not add repository correctly. Expected=%v, received=%v", expectedReps, hi.repositories)
+	}
+}
 
 func TestRequestTimeout(t *testing.T) {
 	timeouts := []int{34, 6, 1200, 84}
@@ -130,25 +140,21 @@ func TestRequestTimeout(t *testing.T) {
 	for i := range timeouts {
 		SetRequestTimeout(timeouts[i])
 		if hi.requestTimeout != timeouts[i] {
-			t.Fatalf("Incorrect request timeout. Expected %d, got %d", timeouts[i], hi.requestTimeout)
+			t.Fatalf("Incorrect request timeout. Expected=%d, received=%d", timeouts[i], hi.requestTimeout)
 		}
 	}
 }
 
-func TestGetEnvs(t *testing.T) {
-
-}
-
 func TestGetEnv(t *testing.T) {
 	var tests = []struct {
-		testname, envName, envValue string
-		verifyURL                   bool
-		err                         error
+		testname, envName, envValue, errText string
+		verifyURL                            bool
+		err                                  error
 	}{
-		{"OK_1", "MUUTTUJA234", "banana", false, nil},
-		{"OK_2", "MUUTTUJA9476", "https://github.com", true, nil},
-		{"FAIL_INVALID_URL", "MUUTTUJA0346", "http://google.com", true, errExpected},
-		{"FAIL_NOT_SET", "MUUTTUJA195", "", false, nil},
+		{"OK_1", "MUUTTUJA234", "banana", "", false, nil},
+		{"OK_2", "MUUTTUJA9476", "https://github.com", "", true, nil},
+		{"FAIL_INVALID_URL", "MUUTTUJA0346", "http://google.com", errExpected.Error(), true, errExpected},
+		{"FAIL_NOT_SET", "MUUTTUJA195", "", "Environment variable MUUTTUJA195 not set", false, nil},
 	}
 
 	origValidURL := validURL
@@ -166,18 +172,40 @@ func TestGetEnv(t *testing.T) {
 			value, err := getEnv(tt.envName, tt.verifyURL)
 			os.Unsetenv(tt.envName)
 
-			if strings.HasPrefix(tt.testname, "OK") {
+			if tt.errText == "" {
 				if err != nil {
 					t.Errorf("Returned unexpected err: %s", err.Error())
 				} else if value != tt.envValue {
-					t.Errorf("Environment variable has incorrect value. Expected %q, got %q", tt.envValue, value)
+					t.Errorf("Environment variable has incorrect value. Expected=%s, received=%s", tt.envValue, value)
 				}
 			} else if err == nil {
 				t.Error("Function should have returned error")
-			} else if tt.err != nil && !errors.Is(err, errExpected) {
-				t.Errorf("Function returned incorrect error: %s", err.Error())
+			} else if err.Error() != tt.errText {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 			}
 		})
+	}
+}
+
+func TestValidURL(t *testing.T) {
+	// Test failure
+	expectedError := "Environment variable something is an invalid URL: parse \"something\": invalid URI for request"
+	err := validURL("something")
+	if err.Error() != expectedError {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", expectedError, err.Error())
+	}
+
+	// Test failure
+	expectedError = "Environment variable http://csc.fi does not have scheme 'https'"
+	err = validURL("http://csc.fi")
+	if err.Error() != expectedError {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", expectedError, err.Error())
+	}
+
+	// Test passing
+	err = validURL("https://csc.fi")
+	if err != nil {
+		t.Errorf("TestValidURL received unexpected error: %s", err.Error())
 	}
 }
 
@@ -206,45 +234,71 @@ func TestInitializeCache_Error(t *testing.T) {
 	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 		return nil, errExpected
 	}
+	errText := "Could not create cache: " + errExpected.Error()
 
 	err := InitializeCache()
 	if err == nil {
-		t.Fatalf("Function should have returned non-nil error")
-	} else if !errors.Is(err, errExpected) {
-		t.Fatalf("Function returned incorrect error: %s", err.Error())
+		t.Fatalf("Function should have returned error")
+	} else if err.Error() != errText {
+		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
 	}
 }
 
 func TestInitializeClient(t *testing.T) {
 	origRepositories := hi.repositories
-	defer func() { hi.repositories = origRepositories }()
+	origCertPath := hi.certPath
+	defer func() {
+		hi.repositories = origRepositories
+		hi.certPath = origCertPath
+	}()
 
-	file1, err := ioutil.TempFile("", "cert")
+	file, err := ioutil.TempFile("", "cert")
 	if err != nil {
-		t.Fatalf("Failed to create file %q", file1.Name())
+		t.Fatalf("Failed to create file %s", file.Name())
 	}
+	defer os.RemoveAll(file.Name())
 
-	file2, err := ioutil.TempFile("", "cert")
-	if err != nil {
-		t.Fatalf("Failed to create file %q", file2.Name())
-	}
-
-	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
-		"rep2": &mockRepository{certPath: file2.Name()}}
+	hi.certPath = file.Name()
+	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{}, "rep2": &mockRepository{}}
 
 	if err := InitializeClient(); err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+		t.Errorf("Function returned error: %s", err.Error())
+	}
+}
+
+func TestInitializeClient_Error(t *testing.T) {
+	origRepositories := hi.repositories
+	origCertPath := hi.certPath
+	defer func() {
+		hi.repositories = origRepositories
+		hi.certPath = origCertPath
+	}()
+
+	file, err := ioutil.TempFile("", "cert")
+	if err != nil {
+		t.Fatalf("Failed to create file %s", file.Name())
+	}
+	os.RemoveAll(file.Name())
+
+	hi.certPath = file.Name()
+	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{}, "rep2": &mockRepository{}}
+	errText := fmt.Sprintf("Reading certificate file failed: open %s: no such file or directory", hi.certPath)
+
+	if err := InitializeClient(); err == nil {
+		t.Error("Function should have returned error")
+	} else if err.Error() != errText {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
 	}
 }
 
 func TestMakeRequest(t *testing.T) {
 	handleCount := 0
 	var tests = []struct {
-		testname        string
-		mockHandlerFunc func(http.ResponseWriter, *http.Request)
-		query           map[string]string
-		headers         map[string]string
-		expectedBody    interface{}
+		testname, errText string
+		mockHandlerFunc   func(http.ResponseWriter, *http.Request)
+		query             map[string]string
+		headers           map[string]string
+		expectedBody      interface{}
 	}{
 		{
 			testname: "OK_HEADERS",
@@ -282,11 +336,21 @@ func TestMakeRequest(t *testing.T) {
 			expectedBody: []Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}},
 		},
 		{
+			testname: "FAIL_DATA",
+			errText:  "Copying response failed: unexpected EOF",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				if _, err := rw.Write([]byte("This is a message")); err != nil {
+					rw.WriteHeader(http.StatusNotFound)
+				}
+			},
+			expectedBody: []byte("This is a message from the past"),
+		},
+		{
 			testname: "FAIL_JSON",
+			errText:  "Unable to decode response: EOF",
 			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				_, _ = rw.Write([]byte(""))
 			},
-			expectedBody: nil,
 		},
 		{
 			testname: "OK_JSON_ADD_QUERY_AND_HEADERS",
@@ -353,17 +417,17 @@ func TestMakeRequest(t *testing.T) {
 		},
 		{
 			testname: "FAIL_ALL",
+			errText:  "Get \"https://google.com\": Redirecting failed (as expected)",
 			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				http.Redirect(rw, req, "https://google.com", http.StatusSeeOther)
 			},
-			expectedBody: nil,
 		},
 		{
 			testname: "FAIL_400",
+			errText:  "API responded with status 400 Bad Request",
 			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				http.Error(rw, "Bad request", 400)
 			},
-			expectedBody: nil,
 		},
 	}
 
@@ -404,14 +468,16 @@ func TestMakeRequest(t *testing.T) {
 				ret = objects
 			}
 
-			if tt.expectedBody == nil {
+			if tt.errText != "" {
 				if err == nil {
 					t.Errorf("Function did not return error")
+				} else if err.Error() != tt.errText {
+					t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 				}
 			} else if err != nil {
-				t.Errorf("Function returned error: %s", err.Error())
+				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if !reflect.DeepEqual(tt.expectedBody, ret) {
-				t.Errorf("Incorrect response body.\nExpected %v\nGot %v", tt.expectedBody, ret)
+				t.Errorf("Incorrect response body\nExpected=%v\nReceived=%v", tt.expectedBody, ret)
 			}
 
 			server.Close()
@@ -419,8 +485,19 @@ func TestMakeRequest(t *testing.T) {
 	}
 }
 
-func TestDownloadData_FoundCache(t *testing.T) {
+func TestMakeRequest_NewRequest_Error(t *testing.T) {
+	buf := make([]byte, 5)
+	buf[0] = 0x7f
+	errText := fmt.Sprintf("parse %q: net/url: invalid control character in URL", string(buf))
 
+	if err := makeRequest(string(buf), "token", "mock", nil, nil, buf); err == nil {
+		t.Error("Function did not return error with invalid URL")
+	} else if err.Error() != errText {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
+	}
+}
+
+func TestDownloadData_FoundCache(t *testing.T) {
 	// Substitute mock functions
 	// Save original functions before test
 	origDownloadCache := downloadCache
@@ -449,11 +526,9 @@ func TestDownloadData_FoundCache(t *testing.T) {
 	if !bytes.Equal(data, expectedData) {
 		t.Errorf("TestDownloadData_FoundCache expected=%s, received=%s", string(expectedData), string(data))
 	}
-
 }
 
 func TestDownloadData_FoundNoCache(t *testing.T) {
-
 	// Substitute mock functions
 	// Save original functions before test
 	origDownloadCache := downloadCache
@@ -486,11 +561,9 @@ func TestDownloadData_FoundNoCache(t *testing.T) {
 	if !bytes.Equal(data, expectedData) {
 		t.Errorf("TestDownloadData_FoundNoCache expected=%s, received=%s", string(expectedData), string(data))
 	}
-
 }
 
 func TestDownloadData_FoundNoCache_Error(t *testing.T) {
-
 	// Substitute mock functions
 	// Save original functions before test
 	origDownloadCache := downloadCache
@@ -526,29 +599,4 @@ func TestDownloadData_FoundNoCache_Error(t *testing.T) {
 	if data != nil {
 		t.Errorf("TestDownloadData_FoundNoCache_Error no data, received=%s", string(data))
 	}
-
-}
-
-func TestValidURL(t *testing.T) {
-
-	// Test failure
-	expectedError := "Environment variable something is an invalid URL: parse \"something\": invalid URI for request"
-	err := validURL("something")
-	if err.Error() != expectedError {
-		t.Errorf("TestValidURL expected %s received %s", expectedError, err.Error())
-	}
-
-	// Test failure
-	expectedError = "Environment variable http://csc.fi does not have scheme 'https'"
-	err = validURL("http://csc.fi")
-	if err.Error() != expectedError {
-		t.Errorf("TestValidURL expected %s received %s", expectedError, err.Error())
-	}
-
-	// Test passing
-	err = validURL("https://csc.fi")
-	if err != nil {
-		t.Errorf("TestValidURL expected received error=%s", err.Error())
-	}
-
 }

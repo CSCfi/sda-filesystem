@@ -95,8 +95,11 @@ var GetEnabledRepositories = func() []string {
 
 // AddRepository adds a repository to hi.repositories
 var AddRepository = func(r string) (err error) {
-	hi.repositories[r] = possibleRepositories[r]
-	return hi.repositories[r].getEnvs()
+	err = possibleRepositories[r].getEnvs()
+	if err == nil {
+		hi.repositories[r] = possibleRepositories[r]
+	}
+	return err
 }
 
 // RemoveRepository removes a repository from hi.repositories
@@ -149,7 +152,7 @@ func InitializeClient() error {
 	if len(hi.certPath) > 0 {
 		caCert, err := ioutil.ReadFile(hi.certPath)
 		if err != nil {
-			return fmt.Errorf("Reading certificate file %s failed: %w", hi.certPath, err)
+			return fmt.Errorf("Reading certificate file failed: %w", err)
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -288,9 +291,7 @@ var makeRequest = func(url, token, repository string, query, headers map[string]
 			(*v).SegmentedObjectSize = -1
 		}
 
-		if _, err = io.Copy(io.Discard, response.Body); err != nil {
-			logs.Warningf("Discarding response body failed when reading headers: %w", err)
-		}
+		_, _ = io.Copy(io.Discard, response.Body)
 	case []byte:
 		if _, err = io.ReadFull(response.Body, v); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)

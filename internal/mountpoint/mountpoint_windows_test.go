@@ -17,23 +17,23 @@ func TestCheckMountPoint(t *testing.T) {
 
 	subnode := node + string(os.PathSeparator) + "subdir"
 	if err = os.Mkdir(subnode, 0755); err != nil {
-		t.Fatalf("Failed to create folder: %s", err.Error())
+		t.Errorf("Failed to create folder: %s", err.Error())
 	}
 
 	if err = CheckMountPoint(node); err == nil {
-		t.Fatal("Function did not return error when folder was not empty")
+		t.Error("Function did not return error when folder was not empty")
 	}
 
 	if err = CheckMountPoint(subnode); err != nil {
-		t.Fatalf("Function returned error for empty folder: %s", err.Error())
+		t.Errorf("Function returned error for empty folder: %s", err.Error())
 	}
 
 	if err = CheckMountPoint(node); err != nil {
-		t.Fatalf("Function returned error when folder did not exist: %s", err.Error())
+		t.Errorf("Function returned error when folder did not exist: %s", err.Error())
 	}
 
 	if err = CheckMountPoint(subnode); err != nil {
-		t.Fatalf("Function returned error when path to folder did not exist: %s", err.Error())
+		t.Errorf("Function returned error when path to folder did not exist: %s", err.Error())
 	}
 }
 
