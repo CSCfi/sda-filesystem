@@ -438,7 +438,6 @@ func (fs *Fuse) updateNodeSizesAlongPath(path string, diff int64, timestamp fuse
 			}
 		}
 	}
-	return
 }
 
 func (fs *Fuse) openNode(path string, dir bool) (int, uint64) {

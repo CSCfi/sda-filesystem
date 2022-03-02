@@ -22,7 +22,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestMountPoint(t *testing.T) {
+func TestDefaultMountPoint(t *testing.T) {
 	origCheckMountPoint := CheckMountPoint
 	defer func() { CheckMountPoint = origCheckMountPoint }()
 
@@ -34,11 +34,11 @@ func TestMountPoint(t *testing.T) {
 		t.Errorf("Function returned error: %s", err.Error())
 	}
 	if ret != filepath.FromSlash("/spirited/away/Projects") {
-		t.Errorf("Incorrect mount point. Expected %q, got %q", filepath.FromSlash("/spirited/away/Projects"), ret)
+		t.Errorf("Incorrect default mount point\nExpected=%s\nReceived=%s", filepath.FromSlash("/spirited/away/Projects"), ret)
 	}
 }
 
-func TestMountPoint_Fail_OS(t *testing.T) {
+func TestDefaultMountPoint_Fail_OS(t *testing.T) {
 	origCheckMountPoint := CheckMountPoint
 	defer func() { CheckMountPoint = origCheckMountPoint }()
 
@@ -47,14 +47,14 @@ func TestMountPoint_Fail_OS(t *testing.T) {
 
 	ret, err := DefaultMountPoint()
 	if err == nil {
-		t.Errorf("Function should have returned non-nil error")
+		t.Errorf("Function should have returned error")
 	}
 	if ret != "" {
 		t.Errorf("Function should have returned empty mount point")
 	}
 }
 
-func TestMountPoint_Fail_Check(t *testing.T) {
+func TestDefaultMountPoint_Fail_Check(t *testing.T) {
 	origCheckMountPoint := CheckMountPoint
 	defer func() { CheckMountPoint = origCheckMountPoint }()
 
@@ -66,7 +66,7 @@ func TestMountPoint_Fail_Check(t *testing.T) {
 
 	ret, err := DefaultMountPoint()
 	if err == nil {
-		t.Errorf("Function should have returned non-nil error")
+		t.Errorf("Function should have returned error")
 	} else if !errors.Is(err, checkErr) {
 		t.Errorf("Function returned incorrect error: %s", err.Error())
 	}

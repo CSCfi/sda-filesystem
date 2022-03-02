@@ -201,6 +201,9 @@ var testObjects = `{
 	]
 }`
 
+const rep1 = "Rep1"
+const rep2 = "Rep2"
+
 type jsonNode struct {
 	Name     string      `json:"name"`
 	NameSafe string      `json:"nameSafe"`
@@ -339,15 +342,15 @@ func TestCreateFilesystem(t *testing.T) {
 		return n
 	}
 	api.GetEnabledRepositories = func() []string {
-		return []string{"Rep1", "Rep2"}
+		return []string{rep1, rep2}
 	}
 	api.GetNthLevel = func(rep, fsPath string, nodes ...string) ([]api.Metadata, error) {
 		if len(nodes) > 0 {
 			return nil, fmt.Errorf("Third parameter of api.GetNthLevel() should have been empty, received %v", nodes)
 		}
-		if rep == "Rep1" {
+		if rep == rep1 {
 			return []api.Metadata{{Bytes: -1, Name: "child+1"}, {Bytes: -1, Name: "child_2"}, {Bytes: 0, Name: "child+2"}}, nil
-		} else if rep == "Rep2" {
+		} else if rep == rep2 {
 			return []api.Metadata{{Bytes: 5, Name: "https://example.com"}}, nil
 		}
 		return nil, fmt.Errorf("api.GetNthLevel() received invalid repository %q", rep)
@@ -396,7 +399,7 @@ func TestPopulateFilesystem(t *testing.T) {
 		if len(nodes) != 1 {
 			return nil, fmt.Errorf("Third parameter of api.GetNthLevel() should have had length 1, received %v that has length %d", nodes, len(nodes))
 		}
-		if rep == "Rep1" {
+		if rep == rep1 {
 			if nodes[0] == "child+1" {
 				return []api.Metadata{{Bytes: -1, Name: "kansio"}, {Bytes: 112, Name: "dir+"}}, nil
 			} else if nodes[0] == "child_2" {
@@ -404,7 +407,7 @@ func TestPopulateFilesystem(t *testing.T) {
 			} else {
 				return nil, fmt.Errorf("api.GetNthLevel() received invalid project %s", rep+"/"+nodes[0])
 			}
-		} else if rep == "Rep2" {
+		} else if rep == rep2 {
 			if nodes[0] == "https://example.com" {
 				return []api.Metadata{{Bytes: 5, Name: "tiedosto"}}, nil
 			} else {
@@ -448,9 +451,9 @@ func TestPopulateFilesystem(t *testing.T) {
 		}
 	}
 	api.LevelCount = func(rep string) int {
-		if rep == "Rep1" {
+		if rep == rep1 {
 			return 3
-		} else if rep == "Rep2" {
+		} else if rep == rep2 {
 			return 2
 		}
 		t.Fatalf("api.LevelCount() received invalid repository %s", rep)
@@ -479,7 +482,7 @@ func TestCreateObjects(t *testing.T) {
 		removeInvalidChars = origRemoveInvalidChars
 	}()
 
-	rep := "Rep1"
+	rep := rep1
 	pr := "child_2"
 	cont := "dir"
 
@@ -490,9 +493,9 @@ func TestCreateObjects(t *testing.T) {
 		return n
 	}
 	CheckPanic = func() {}
-	api.GetNthLevel = func(rep, fsPath string, nodes ...string) ([]api.Metadata, error) {
-		if rep != "Rep1" {
-			return nil, fmt.Errorf("GetNthLevel() received incorrect repository %s, expected Rep1", rep)
+	api.GetNthLevel = func(repository, fsPath string, nodes ...string) ([]api.Metadata, error) {
+		if repository != rep {
+			return nil, fmt.Errorf("GetNthLevel() received incorrect repository %s, expected %s", repository, rep)
 		}
 		if len(nodes) != 2 {
 			return nil, fmt.Errorf("GetNthLevel() received invalid third parameter %v", nodes)
@@ -501,7 +504,7 @@ func TestCreateObjects(t *testing.T) {
 			t.Fatalf("GetNthLevel() received incorrect project %s, expected %q", rep+"/"+nodes[0], rep+"/"+pr)
 		}
 		if nodes[1] != cont {
-			t.Fatalf("GetNthLevel() received incorrect container %q, expected %q", rep+"/"+nodes[0]+"/"+nodes[1], rep+"/"+pr+"/"+cont)
+			t.Fatalf("GetNthLevel() received incorrect container %q, expected %q", rep+"/"+pr+"/"+nodes[1], rep+"/"+pr+"/"+cont)
 		}
 		return []api.Metadata{{Bytes: 30, Name: "dir1/dir+2/dir3.2.1/file"},
 			{Bytes: 1, Name: "dir1/dir5/"},

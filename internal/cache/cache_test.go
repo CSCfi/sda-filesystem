@@ -23,7 +23,7 @@ func TestNewRistrettoCache(t *testing.T) {
 	}
 
 	if c2 != c {
-		t.Fatalf("Second call returned a different cache. Expected address %p, got %p", c, c2)
+		t.Fatalf("Second call returned a different cache. Expected address %p, received %p", c, c2)
 	}
 }
 
@@ -52,7 +52,7 @@ func TestSetAndGet(t *testing.T) {
 	if str, ok := val.(string); !ok {
 		t.Fatalf("Stored value is not a string")
 	} else if str != content {
-		t.Fatalf("Cache returned incorrect value. Expected %q, got %q", content, str)
+		t.Fatalf("Cache returned incorrect value\nExpected=%s\nReceived=%s", content, str)
 	}
 }
 
