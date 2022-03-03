@@ -23,7 +23,7 @@ sudo mv cmd/qt/icon.svg /etc/sda-fuse/icon.svg
 sudo mv cmd/qt/filesystem.desktop /etc/skel/Desktop/filesystem.desktop
 ```
 
-For the desktop icon to be functional use, each user needs to enable it using:
+For the desktop icon to be functional, each user needs to enable it using:
 ```
 chmod +x "${HOME}/Desktop/filesystem.desktop"
 gio set "${HOME}/Desktop/filesystem.desktop" "metadata::trusted" yes
