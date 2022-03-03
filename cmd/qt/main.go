@@ -156,7 +156,7 @@ func (qb *QmlBridge) openFuse() {
 }
 
 func (qb *QmlBridge) shutdown() {
-	logs.Info("Shutting down SDA Filesystem")
+	logs.Info("Shutting down Data Gateway")
 	filesystem.UnmountFilesystem()
 }
 
@@ -170,7 +170,7 @@ func (qb *QmlBridge) changeMountPoint(url string) string {
 		return err.Error()
 	}
 
-	logs.Infof("Filesystem will be mounted at %s", mount)
+	logs.Infof("Data Gateway will be mounted at %s", mount)
 	qb.SetMountPoint(mount)
 	return ""
 }
@@ -187,7 +187,7 @@ func init() {
 }
 
 func main() {
-	core.QCoreApplication_SetApplicationName("SDA Filesystem")
+	core.QCoreApplication_SetApplicationName("Data Gateway")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")
 	core.QCoreApplication_SetApplicationVersion("1.0.0")

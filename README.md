@@ -1,10 +1,12 @@
-# SDA-Filesystem
+# SDA-Filesystem / Data Gateway
 
 [![Linting go code](https://github.com/CSCfi/sda-filesystem/actions/workflows/linting.yml/badge.svg)](https://github.com/CSCfi/sda-filesystem/actions/workflows/linting.yml)
 [![Unit Tests](https://github.com/CSCfi/sda-filesystem/actions/workflows/unittest.yml/badge.svg)](https://github.com/CSCfi/sda-filesystem/actions/workflows/unittest.yml)
 [![Coverage Status](https://coveralls.io/repos/github/CSCfi/sda-filesystem/badge.svg?branch=master)](https://coveralls.io/github/CSCfi/sda-filesystem?branch=master)
 
-SDA-Filesystem makes use of the:
+**This project has been rebranded as Data Gateway**
+
+Data Gateway makes use of the:
 
 - [SD-Connect Proxy API](docs/SD-Connect-API.md) 
 - [SD-Submit Download API](docs/SD-Submit-API.md) 
@@ -100,7 +102,7 @@ Usage of ./go-fuse:
   -alsologtostderr
     	log to standard error as well as files
   -enable string
-    	Choose which repositories you wish include in the filesystem. Possible values: {SD-Connect,SD-Submit,all} (default "all")
+    	Choose which repositories you wish include in Data Gateway. Possible values: {SD-Connect,SD-Submit,all} (default "all")
   -http_timeout int
     	Number of seconds to wait before timing out an HTTP request (default 20)
   -log_backtrace_at value
@@ -112,7 +114,7 @@ Usage of ./go-fuse:
   -logtostderr
     	log to standard error instead of files
   -mount string
-    	Path to filesystem mount point
+    	Path to Data Gateway mount point
   -stderrthreshold value
     	logs at or above this threshold go to stderr
   -v value
@@ -125,7 +127,7 @@ Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in
 
 ## License
 
-SDA-Filesystem is released under `MIT`, see [LICENSE](LICENSE).
+Data Gateway is released under `MIT`, see [LICENSE](LICENSE).
 
 [Qt binding package for Go](https://github.com/therecipe/qt) released under [LGPLv3](https://opensource.org/licenses/LGPL-3.0)
 

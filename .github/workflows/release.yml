@@ -24,8 +24,8 @@ jobs:
           tag_name: ${{ github.ref }}
           name: Release ${{ steps.vars.outputs.tag }}
           body: |
-            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem GUI (Graphical User Interface).
-            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem CLI (Command Line Interface).
+            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem/Data Gateway GUI (Graphical User Interface).
+            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem/Data Gateway CLI (Command Line Interface).
             Download artifacts in zip archives below.
   
   build_cli_release:

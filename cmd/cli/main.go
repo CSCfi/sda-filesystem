@@ -207,9 +207,9 @@ func init() {
 	repOptions := api.GetAllPossibleRepositories()
 
 	flag.StringVar(&repository, "enable", "all",
-		fmt.Sprintf("Choose which repositories you wish include in the filesystem. Possible values: {%s,all}",
+		fmt.Sprintf("Choose which repositories you wish include in Data Gateway. Possible values: {%s,all}",
 			strings.Join(repOptions, ",")))
-	flag.StringVar(&mount, "mount", "", "Path to filesystem mount point")
+	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
@@ -220,7 +220,7 @@ func shutdown() <-chan bool {
 	signal.Notify(s, os.Interrupt)
 	go func() {
 		<-s
-		logs.Info("Shutting down SDA Filesystem")
+		logs.Info("Shutting down Data Gateway")
 		done <- true
 	}()
 	return done
@@ -245,7 +245,7 @@ func main() {
 	loginToAll()
 
 	if len(api.GetEnabledRepositories()) == 0 {
-		logs.Fatal("No repositories found. Filesystem not created")
+		logs.Fatal("No repositories found. Data Gateway not created")
 	}
 
 	done := shutdown()

@@ -14,7 +14,7 @@ var DefaultMountPoint = func() (string, error) {
 	}
 	p := filepath.Join(home, "Projects")
 	if err = CheckMountPoint(p); err != nil {
-		return "", fmt.Errorf("Cannot create filesystem in default directory %s: %w", p, err)
+		return "", fmt.Errorf("Cannot create Data Gateway in default directory %s: %w", p, err)
 	}
 	return p, nil
 }
