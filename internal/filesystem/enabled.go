@@ -1,43 +1,42 @@
 package filesystem
 
 import (
+	"errors"
 	"path/filepath"
-	"strings"
-
-	"github.com/billziss-gh/cgofuse/fuse"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+
+	"github.com/billziss-gh/cgofuse/fuse"
 )
 
 // Open opens a file.
 func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 	defer fs.synchronize()()
-	logs.Debug("Opening file ", path)
+	logs.Debug("Opening file ", filepath.FromSlash(path))
 
 	errc, fh = fs.openNode(path, false)
 	if errc != 0 {
 		return
 	}
 
-	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.checkDecryption {
-		path = filepath.ToSlash(path)
-		path = strings.TrimPrefix(path, "/")
+	if n := fs.openmap[fh]; n.path[0] == api.SDConnect && !n.node.decryptionChecked {
 		newSize := n.node.stat.Size
-		api.UpdateAttributes(n.path, path, &newSize)
-		if newSize == -1 {
-			return -fuse.EIO, ^uint64(0)
+		if err := api.UpdateAttributes(n.path, path, &newSize); err != nil {
+			var re *api.RequestError
+			if errors.As(err, &re) && re.StatusCode == 451 {
+				logs.Errorf("You do not have permission to access file %s: %w", path, err)
+				n.node.denied = true
+				n.node.decryptionChecked = true
+				return -fuse.EACCES, ^uint64(0)
+			} else {
+				logs.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", path, err)
+				return -fuse.EIO, ^uint64(0)
+			}
+		} else if n.node.stat.Size != newSize {
+			fs.updateNodeSizesAlongPath(path, n.node.stat.Size-newSize, fuse.Now())
 		}
-		if newSize == -2 {
-			n.node.denied = true
-			n.node.checkDecryption = true
-			return -fuse.EACCES, ^uint64(0)
-		}
-		if n.node.stat.Size != newSize {
-			n.node.stat.Size = newSize
-			n.node.stat.Ctim = fuse.Now()
-		}
-		n.node.checkDecryption = true
+		n.node.decryptionChecked = true
 	}
 	return
 }
@@ -45,21 +44,21 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 // Opendir opens a directory.
 func (fs *Fuse) Opendir(path string) (errc int, fh uint64) {
 	defer fs.synchronize()()
-	logs.Debug("Opening directory ", path)
+	logs.Debug("Opening directory ", filepath.FromSlash(path))
 	return fs.openNode(path, true)
 }
 
 // Release closes a file.
 func (fs *Fuse) Release(path string, fh uint64) (errc int) {
 	defer fs.synchronize()()
-	logs.Debug("Closing file ", path)
+	logs.Debug("Closing file ", filepath.FromSlash(path))
 	return fs.closeNode(fh)
 }
 
 // Releasedir closes a directory.
 func (fs *Fuse) Releasedir(path string, fh uint64) (errc int) {
 	defer fs.synchronize()()
-	logs.Debug("Closing directory ", path)
+	logs.Debug("Closing directory ", filepath.FromSlash(path))
 	return fs.closeNode(fh)
 }
 
@@ -77,7 +76,7 @@ func (fs *Fuse) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc int) {
 // Read returns bytes from a file
 func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	defer fs.synchronize()()
-	logs.Debug("Reading ", path)
+	logs.Debug("Reading ", filepath.FromSlash(path))
 
 	n := fs.getNode(path, fh)
 	if n.node == nil {
@@ -88,9 +87,6 @@ func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 	if n.node.denied {
 		return -fuse.EACCES
 	}
-
-	path = filepath.ToSlash(path)
-	path = strings.TrimPrefix(path, "/")
 
 	// Get file end coordinate
 	endofst := ofst + int64(len(buff))

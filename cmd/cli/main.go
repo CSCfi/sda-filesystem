@@ -9,12 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
+
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-	"strings"
-	"syscall"
 
 	"golang.org/x/term"
 )

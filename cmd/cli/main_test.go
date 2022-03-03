@@ -6,11 +6,11 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"testing"
+
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-	"strings"
-	"testing"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -78,15 +78,18 @@ func TestAskForLogin(t *testing.T) {
 	var tests = []struct {
 		testname, username, password string
 		streamError, readerError     error
+		errorText                    string
 	}{
 		{
-			"OK", "Jones", "567ghk789", nil, nil,
+			"OK", "Jones", "567ghk789", nil, nil, "",
 		},
 		{
 			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", errExpected, nil,
+			"Could not read username: " + errExpected.Error(),
 		},
 		{
 			"FAIL_READER", "Groot", "567ghk789", nil, errExpected,
+			"Could not read password: " + errExpected.Error(),
 		},
 	}
 
@@ -105,16 +108,16 @@ func TestAskForLogin(t *testing.T) {
 
 			if tt.testname != "OK" {
 				if err == nil {
-					t.Error("Function should have returned non-nil error")
-				} else if !errors.Is(err, errExpected) {
-					t.Errorf("Function returned incorrect error %q", err.Error())
+					t.Error("Function should have returned error")
+				} else if err.Error() != tt.errorText {
+					t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
 				}
 			} else if err != nil {
 				t.Errorf("Function returned error: %s", err.Error())
 			} else if str1 != tt.username {
-				t.Errorf("Username incorrect. Expected %q, got %q", tt.username, str1)
+				t.Errorf("Username incorrect. Expected=%s, received=%s", tt.username, str1)
 			} else if str2 != tt.password {
-				t.Errorf("Password incorrect. Expected %q, got %q", tt.password, str2)
+				t.Errorf("Password incorrect. Expected=%s, received=%s", tt.password, str2)
 			}
 		})
 	}
@@ -128,19 +131,28 @@ func TestDroppedRepository(t *testing.T) {
 		err      error
 	}{
 		{
-			"OK_NO_1", []string{"no"}, true, nil,
+			testname: "OK_NO_1",
+			input:    []string{"no"},
+			drop:     true,
 		},
 		{
-			"OK_NO_2", []string{"on", "n"}, true, nil,
+			testname: "OK_NO_2",
+			input:    []string{"on", "n"},
+			drop:     true,
 		},
 		{
-			"OK_YES_1", []string{"yes"}, false, nil,
+			testname: "OK_YES_1",
+			input:    []string{"yes"},
 		},
 		{
-			"OK_YES_2", []string{"mmm", "y"}, false, nil,
+			testname: "OK_YES_2",
+			input:    []string{"mmm", "y"},
 		},
 		{
-			"FAIL_SCANNER", []string{"yes"}, true, errors.New("Stream error occurred"),
+			testname: "FAIL_SCANNER",
+			input:    []string{"yes"},
+			drop:     true,
+			err:      errors.New("Stream error occurred"),
 		},
 	}
 
@@ -162,7 +174,7 @@ func TestDroppedRepository(t *testing.T) {
 			os.Stdout = null
 
 			r := newTestReader(tt.input, "", tt.err, nil)
-			dropped := droppedRepository(r, "rep")
+			dropped := droppedRepository(r, "Test Repository")
 
 			os.Stdout = sout
 			null.Close()
@@ -187,14 +199,15 @@ func TestDroppedRepository(t *testing.T) {
 func TestLogin(t *testing.T) {
 	var count int
 	var tests = []struct {
-		testname              string
-		readerError           error
-		mockAskForLogin       func(loginReader) (string, string, error)
-		mockValidateLogin     func(string, ...string) error
-		mockDroppedRepository func(loginReader, string) bool
+		testname          string
+		readerError       error
+		dropped           bool
+		errorText         string
+		mockAskForLogin   func(loginReader) (string, string, error)
+		mockValidateLogin func(string, ...string) error
 	}{
 		{
-			"OK", nil,
+			"OK", nil, false, "",
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
 					return "", "", fmt.Errorf("Function did not approve login during first loop")
@@ -205,17 +218,16 @@ func TestLogin(t *testing.T) {
 			func(rep string, auth ...string) error {
 				username, password := "dumbledore", "345fgj78"
 				if auth[0] != username {
-					return fmt.Errorf("Incorrect username. Expected %q, got %q", username, auth[0])
+					return fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, auth[0])
 				}
 				if auth[1] != password {
-					return fmt.Errorf("Incorrect password. Expected %q, got %q", password, auth[1])
+					return fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, auth[1])
 				}
 				return nil
 			},
-			func(lr loginReader, rep string) bool { return false },
 		},
 		{
-			"OK_DROPPED", nil,
+			"OK_DROPPED", nil, true, "",
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
 					return "", "", fmt.Errorf("Function did not return during first loop")
@@ -226,10 +238,9 @@ func TestLogin(t *testing.T) {
 			func(rep string, auth ...string) error {
 				return &api.RequestError{StatusCode: 401}
 			},
-			func(lr loginReader, rep string) bool { return true },
 		},
 		{
-			"OK_401_ONCE", nil,
+			"OK_401_ONCE", nil, false, "",
 			func(lr loginReader) (string, string, error) {
 				usernames, passwords := []string{"Smith", "Doris"}, []string{"hwd82bkwe", "pwd"}
 				if count > 1 {
@@ -244,30 +255,29 @@ func TestLogin(t *testing.T) {
 				}
 				return &api.RequestError{StatusCode: 401}
 			},
-			func(lr loginReader, rep string) bool { return false },
 		},
 		{
-			"FAIL_STATE", errExpected,
+			"FAIL_STATE", errExpected, false,
+			"Failed to get terminal state: " + errExpected.Error(),
 			func(lr loginReader) (string, string, error) {
 				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
 			func(rep string, auth ...string) error {
 				return fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
-			func(lr loginReader, rep string) bool { return false },
 		},
 		{
-			"FAIL_ASK", nil,
+			"FAIL_ASK", nil, false, errExpected.Error(),
 			func(lr loginReader) (string, string, error) {
 				return "", "", errExpected
 			},
 			func(rep string, auth ...string) error {
 				return fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
-			func(lr loginReader, rep string) bool { return false },
 		},
 		{
-			"FAIL_VALIDATE", nil,
+			"FAIL_VALIDATE", nil, false,
+			"Failed to log in to Test Repository: " + errExpected.Error(),
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
 					return "", "", fmt.Errorf("Function in infinite loop")
@@ -278,7 +288,6 @@ func TestLogin(t *testing.T) {
 			func(rep string, auth ...string) error {
 				return errExpected
 			},
-			func(lr loginReader, rep string) bool { return false },
 		},
 	}
 
@@ -297,7 +306,9 @@ func TestLogin(t *testing.T) {
 			count = 0
 			askForLogin = tt.mockAskForLogin
 			api.ValidateLogin = tt.mockValidateLogin
-			droppedRepository = tt.mockDroppedRepository
+			droppedRepository = func(lr loginReader, rep string) bool {
+				return tt.dropped
+			}
 
 			// Ignore prints to stdout
 			null, _ := os.Open(os.DevNull)
@@ -305,19 +316,19 @@ func TestLogin(t *testing.T) {
 			os.Stdout = null
 
 			r := newTestReader([]string{""}, "", nil, tt.readerError)
-			err := login(r, api.SDConnect)
+			err := login(r, "Test Repository")
 
 			os.Stdout = sout
 			null.Close()
 
-			if strings.HasPrefix(tt.testname, "OK") {
+			if tt.errorText == "" {
 				if err != nil {
 					t.Errorf("Returned unexpected error: %s", err.Error())
 				}
 			} else if err == nil {
-				t.Error("Function should have returned non-nil error")
-			} else if !errors.Is(err, errExpected) {
-				t.Errorf("Function returned incorrect error %q", err.Error())
+				t.Error("Function should have returned error")
+			} else if err.Error() != tt.errorText {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
 			}
 		})
 	}
@@ -387,7 +398,7 @@ func TestLoginToAll(t *testing.T) {
 			loginToAll()
 
 			if !reflect.DeepEqual(tt.removedReps, removed) {
-				t.Errorf("Incorrect repositories removed. Expected %v, got %v", tt.removedReps, removed)
+				t.Errorf("Incorrect repositories removed\nExpected %v\nReceived %v", tt.removedReps, removed)
 			}
 		})
 	}
@@ -465,15 +476,15 @@ func TestProcessFlags(t *testing.T) {
 			if err != nil {
 				t.Errorf("Returned unexpected error: %s", err.Error())
 			} else if tt.timeout != testTimeout {
-				t.Errorf("SetRequestTimeout() received timeout %d, expected %d", testTimeout, tt.timeout)
+				t.Errorf("SetRequestTimeout() received incorrect timeout. Expected=%d, received=%d", tt.timeout, testTimeout)
 			} else if tt.logLevel != testLevel {
-				t.Errorf("SetLevel() received log level %s, expected %s", testLevel, tt.logLevel)
+				t.Errorf("SetLevel() received incorrect log level. Expected=%s, received=%s", tt.logLevel, testLevel)
 			} else if tt.mount == "" && mount != defaultMount {
-				t.Errorf("Expected default mount point %q, received %q", defaultMount, mount)
+				t.Errorf("Expected default mount point %s, received=%s", defaultMount, mount)
 			} else if tt.mount != testMount {
-				t.Errorf("CheckMountPoint() received mount point %q, expected %q", testMount, tt.mount)
+				t.Errorf("CheckMountPoint() received incorrect mount point. Expected=%s, received=%s", tt.mount, testMount)
 			} else if !reflect.DeepEqual(reps, tt.finalReps) {
-				t.Errorf("Function did not add repositories correctly.\nExpected %v\nGot%v", tt.finalReps, reps)
+				t.Errorf("Function did not add repositories correctly\nExpected=%v\nReceived=%v", tt.finalReps, reps)
 			}
 		})
 	}
@@ -530,7 +541,7 @@ func TestProcessFlags_Error(t *testing.T) {
 			if err := processFlags(); err == nil {
 				t.Error("Function should have returned error")
 			} else if !errors.Is(err, errExpected) {
-				t.Errorf("Function returned incorrect error %q", err.Error())
+				t.Errorf("Function returned incorrect error: %s", err.Error())
 			}
 		})
 	}

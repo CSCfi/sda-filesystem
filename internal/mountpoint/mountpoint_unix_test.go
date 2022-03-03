@@ -42,7 +42,7 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 			} else if err = os.Chmod(node, os.FileMode(tt.mode)); err != nil {
 				t.Errorf("Changing permission bits failed: %s", err.Error())
 			} else if err = CheckMountPoint(node); err == nil {
-				t.Error("Function should have returned non-nil error")
+				t.Error("Function should have returned error")
 			}
 
 			os.RemoveAll(node)
@@ -58,7 +58,7 @@ func TestCheckMountPoint_Not_Dir(t *testing.T) {
 	defer os.RemoveAll(file.Name())
 
 	if err = CheckMountPoint(file.Name()); err == nil {
-		t.Error("Function should have returned non-nil error")
+		t.Error("Function should have returned error")
 	}
 }
 
@@ -70,7 +70,7 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 	defer os.RemoveAll(file.Name())
 
 	if err = CheckMountPoint(file.Name() + "/folder"); err == nil {
-		t.Error("Function should have returned non-nil error")
+		t.Error("Function should have returned error")
 	}
 }
 
@@ -84,7 +84,7 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	if err = os.Chmod(node, os.FileMode(0555)); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
 	} else if err = CheckMountPoint(node + "/child"); err == nil {
-		t.Error("Function should have returned non-nil error")
+		t.Error("Function should have returned error")
 	}
 }
 
@@ -111,9 +111,9 @@ func TestCheckMountPoint_Not_Empty(t *testing.T) {
 	defer os.RemoveAll(node)
 
 	if file, err := ioutil.TempFile(node, "file"); err != nil {
-		t.Errorf("Failed to create file %q: %s", file.Name(), err.Error())
+		t.Errorf("Failed to create file %s: %s", file.Name(), err.Error())
 	} else if err = CheckMountPoint(node); err == nil {
-		t.Error("Function should have returned non-nil error")
+		t.Error("Function should have returned error")
 	}
 }
 
@@ -156,6 +156,6 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	if err = CheckMountPoint(node); err == nil {
-		t.Error("Function should have returned non-nil error")
+		t.Error("Function should have returned error")
 	}
 }

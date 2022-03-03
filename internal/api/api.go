@@ -51,7 +51,7 @@ type fuseInfo interface {
 	levelCount() int
 	getToken() string
 	getNthLevel(string, ...string) ([]Metadata, error)
-	updateAttributes([]string, string, interface{})
+	updateAttributes([]string, string, interface{}) error
 	downloadData([]string, interface{}, int64, int64) error
 }
 
@@ -95,8 +95,11 @@ var GetEnabledRepositories = func() []string {
 
 // AddRepository adds a repository to hi.repositories
 var AddRepository = func(r string) (err error) {
-	hi.repositories[r] = possibleRepositories[r]
-	return hi.repositories[r].getEnvs()
+	err = possibleRepositories[r].getEnvs()
+	if err == nil {
+		hi.repositories[r] = possibleRepositories[r]
+	}
+	return err
 }
 
 // RemoveRepository removes a repository from hi.repositories
@@ -149,7 +152,7 @@ func InitializeClient() error {
 	if len(hi.certPath) > 0 {
 		caCert, err := ioutil.ReadFile(hi.certPath)
 		if err != nil {
-			return fmt.Errorf("Reading certificate file %s failed: %w", hi.certPath, err)
+			return fmt.Errorf("Reading certificate file failed: %w", err)
 		}
 		caCertPool.AppendCertsFromPEM(caCert)
 	} else {
@@ -288,9 +291,7 @@ var makeRequest = func(url, token, repository string, query, headers map[string]
 			(*v).SegmentedObjectSize = -1
 		}
 
-		if _, err = io.Copy(io.Discard, response.Body); err != nil {
-			logs.Warningf("Discarding response body failed when reading headers: %w", err)
-		}
+		_, _ = io.Copy(io.Discard, response.Body)
 	case []byte:
 		if _, err = io.ReadFull(response.Body, v); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)
@@ -305,18 +306,18 @@ var makeRequest = func(url, token, repository string, query, headers map[string]
 	return nil
 }
 
-func GetNthLevel(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
+var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
 	return hi.repositories[rep].getNthLevel(filepath.FromSlash(fsPath), nodes...)
 }
 
 // UpdateAttributes modifies attributes of node in 'fsPath'.
 // 'nodes' contains the original names of each node in 'fsPath'
-func UpdateAttributes(nodes []string, fsPath string, attr interface{}) {
-	hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
+var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+	return hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
 }
 
 // DownloadData requests data between range [start, end) from an API.
-func DownloadData(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
+var DownloadData = func(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
 	// chunk index of cache
 	chunk := start / chunkSize
 	// start coordinate of chunk
@@ -324,6 +325,7 @@ func DownloadData(nodes []string, path string, start int64, end int64, maxEnd in
 	// end coordinate of chunk
 	chEnd := (chunk + 1) * chunkSize
 
+	// Final chunk may be shorter than others if file size restricts it
 	if chEnd > maxEnd {
 		chEnd = maxEnd
 	}

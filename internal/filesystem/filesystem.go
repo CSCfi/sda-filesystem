@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/billziss-gh/cgofuse/fuse"
-
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+
+	"github.com/billziss-gh/cgofuse/fuse"
 )
 
 const sRDONLY = 00444
@@ -34,12 +34,12 @@ type Fuse struct {
 
 // node represents one file or directory
 type node struct {
-	stat            fuse.Stat_t
-	chld            map[string]*node
-	opencnt         int
-	originalName    string // so that api calls work
-	checkDecryption bool
-	denied          bool
+	stat              fuse.Stat_t
+	chld              map[string]*node
+	opencnt           int
+	originalName      string // so that api calls work
+	decryptionChecked bool
+	denied            bool
 }
 
 // nodeAndPath contains the node itself and a list of names which are the original path to the node. Yes, a very original name
@@ -61,7 +61,7 @@ func SetSignalBridge(fn func()) {
 }
 
 // CheckPanic recovers from panic if one occured. Used for GUI
-func CheckPanic() {
+var CheckPanic = func() {
 	if signalBridge != nil {
 		if err := recover(); err != nil {
 			logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
@@ -80,6 +80,7 @@ func InitializeFileSystem(send func(string, string)) *Fuse {
 	fs.ino++
 	fs.openmap = map[uint64]nodeAndPath{}
 	fs.root = newNode(fs.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
+	fs.root.stat.Size = -1
 
 	for _, enabled := range api.GetEnabledRepositories() {
 		logs.Info("Beginning filling in ", enabled)
@@ -146,7 +147,6 @@ func UnmountFilesystem() {
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
 func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	timestamp := fuse.Now()
-	fs.root.stat.Size = -1
 
 	var wg sync.WaitGroup
 	forChannel := make(map[string][]api.Metadata)
@@ -242,11 +242,6 @@ func calculateFinalSize(n *node, path string) int64 {
 	if n.stat.Size != -1 {
 		return n.stat.Size
 	}
-	if n.chld == nil {
-		logs.Warningf("Node %s has size -1 but no children! Folder sizes may be displayed incorrectly", filepath.FromSlash(path))
-		return 0
-	}
-
 	n.stat.Size = 0
 	for key, value := range n.chld {
 		n.stat.Size += calculateFinalSize(value, path+"/"+key)
@@ -266,6 +261,11 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 		logs.Debugf("Fetching data for directory %s", filepath.FromSlash(containerPath))
 
 		c := fs.getNode(containerPath, ^uint64(0))
+		if c.node == nil {
+			logs.Errorf("Bug in code? Cannot find node %s", containerPath)
+			continue
+		}
+
 		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1], c.path[2])
 		if err != nil {
 			logs.Error(err)
@@ -406,9 +406,9 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 }
 
 // lookupNode finds the node at the end of path
-func (fs *Fuse) lookupNode(path string) (node *node, origPath []string) {
-	node = fs.root
-	for _, c := range split(filepath.ToSlash(path)) {
+var lookupNode = func(root *node, path string) (node *node, origPath []string) {
+	node = root
+	for _, c := range split(path) {
 		if c != "" {
 			if node == nil {
 				return
@@ -423,8 +423,25 @@ func (fs *Fuse) lookupNode(path string) (node *node, origPath []string) {
 	return
 }
 
+func (fs *Fuse) updateNodeSizesAlongPath(path string, diff int64, timestamp fuse.Timespec) {
+	node := fs.root
+	for _, c := range split(path) {
+		if c != "" {
+			if node == nil {
+				return
+			}
+
+			node = node.chld[c]
+			if node != nil {
+				node.stat.Size -= diff
+				node.stat.Ctim = timestamp
+			}
+		}
+	}
+}
+
 func (fs *Fuse) openNode(path string, dir bool) (int, uint64) {
-	n, origPath := fs.lookupNode(path)
+	n, origPath := lookupNode(fs.root, path)
 	if n == nil {
 		return -fuse.ENOENT, ^uint64(0)
 	}
@@ -443,6 +460,9 @@ func (fs *Fuse) openNode(path string, dir bool) (int, uint64) {
 
 func (fs *Fuse) closeNode(fh uint64) int {
 	node := fs.openmap[fh].node
+	if node == nil {
+		return -fuse.ENOENT
+	}
 	node.opencnt--
 	if node.opencnt == 0 {
 		delete(fs.openmap, node.stat.Ino)
@@ -452,7 +472,7 @@ func (fs *Fuse) closeNode(fh uint64) int {
 
 func (fs *Fuse) getNode(path string, fh uint64) nodeAndPath {
 	if fh == ^uint64(0) {
-		node, origPath := fs.lookupNode(path)
+		node, origPath := lookupNode(fs.root, path)
 		return nodeAndPath{node: node, path: origPath}
 	}
 	return fs.openmap[fh]

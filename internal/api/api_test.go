@@ -1,20 +1,22 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
-	"sda-filesystem/internal/cache"
-	"sda-filesystem/internal/logs"
 	"sort"
-	"strings"
 	"testing"
 	"time"
+
+	"sda-filesystem/internal/cache"
+	"sda-filesystem/internal/logs"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -40,19 +42,19 @@ func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
 
 type mockRepository struct {
 	fuseInfo
-	certPath string
+	envError              error
+	mockDownloadDataBuf   []byte
+	mockDownloadDataError error
 }
 
-//func (r *mockRepository) getEnvs() error                                    { return nil }
-//func (r *mockRepository) getLoginMethod() LoginMethod                       { return Password }
-//func (r *mockRepository) validateLogin(...string) error                     { return nil }
-//func (r *mockRepository) levelCount() int                                   { return 0 }
+func (r *mockRepository) getEnvs() error { return r.envError }
 
 func (r *mockRepository) getToken() string { return "" }
 
-//func (r *mockRepository) getNthLevel(string, ...string) ([]Metadata, error) { return nil, nil }
-//func (r *mockRepository) updateAttributes([]string, string, interface{})    {}
-//func (r *mockRepository) downloadData([]string, []byte, int64, int64) error { return nil }
+func (r *mockRepository) downloadData(nodes []string, buf interface{}, start, end int64) error {
+	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
+	return r.mockDownloadDataError
+}
 
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(i int, s []string) {})
@@ -66,7 +68,7 @@ func TestRequestError(t *testing.T) {
 		message := fmt.Sprintf("API responded with status %d %s", codes[i], http.StatusText(codes[i]))
 		reMessage := re.Error()
 		if reMessage != message {
-			t.Fatalf("RequestError has incorrect error message. Expectedd %q, got %q", message, reMessage)
+			t.Fatalf("RequestError has incorrect error message. Expected=%s, received=%s", message, reMessage)
 		}
 	}
 }
@@ -80,7 +82,7 @@ func TestGetAllPossibleRepositories(t *testing.T) {
 	reps := GetAllPossibleRepositories()
 	sort.Strings(reps)
 	if !reflect.DeepEqual(ans, reps) {
-		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", ans, reps)
+		t.Fatalf("Function returned incorrect value\nExpected=%v\nReceived=%v", ans, reps)
 	}
 }
 
@@ -93,11 +95,11 @@ func TestGetEnabledRepositories(t *testing.T) {
 	reps := GetEnabledRepositories()
 	sort.Strings(reps)
 	if !reflect.DeepEqual(ans, reps) {
-		t.Fatalf("Function returned incorrect value\nExpected %v\nGot %v", ans, reps)
+		t.Fatalf("Function returned incorrect value\nExpected=%v\nReceived=%v", ans, reps)
 	}
 }
 
-/*func TestAddRepository(t *testing.T) {
+func TestAddRepository(t *testing.T) {
 	origPossibleRepositories := possibleRepositories
 	origRepositories := hi.repositories
 
@@ -106,14 +108,31 @@ func TestGetEnabledRepositories(t *testing.T) {
 		hi.repositories = origRepositories
 	}()
 
-	possibleRepositories = map[string]fuseInfo{"one": nil, "two": nil, "three": nil}
+	twoRep := &mockRepository{}
+	threeRep := &mockRepository{envError: errExpected}
+	possibleRepositories = map[string]fuseInfo{"One": nil, "Two": twoRep, "Three": threeRep}
 	hi.repositories = map[string]fuseInfo{}
 
-	AddRepository("two")
-	if !reflect.DeepEqual(hi.repositories, map[string]fuseInfo{"two": nil}) {
-
+	err := AddRepository("Two")
+	if err != nil {
+		t.Fatalf("Function returned error for repository Two: %s", err.Error())
 	}
-}*/
+	expectedReps := map[string]fuseInfo{"Two": twoRep}
+	if !reflect.DeepEqual(hi.repositories, expectedReps) {
+		t.Fatalf("Function did not add repository correctly. Expected=%v, received=%v", expectedReps, hi.repositories)
+	}
+
+	err = AddRepository("Three")
+	if err == nil {
+		t.Fatalf("Function did not return error")
+	}
+	if err.Error() != errExpected.Error() {
+		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
+	}
+	if !reflect.DeepEqual(hi.repositories, expectedReps) {
+		t.Fatalf("Function did not add repository correctly. Expected=%v, received=%v", expectedReps, hi.repositories)
+	}
+}
 
 func TestRequestTimeout(t *testing.T) {
 	timeouts := []int{34, 6, 1200, 84}
@@ -121,25 +140,21 @@ func TestRequestTimeout(t *testing.T) {
 	for i := range timeouts {
 		SetRequestTimeout(timeouts[i])
 		if hi.requestTimeout != timeouts[i] {
-			t.Fatalf("Incorrect request timeout. Expected %d, got %d", timeouts[i], hi.requestTimeout)
+			t.Fatalf("Incorrect request timeout. Expected=%d, received=%d", timeouts[i], hi.requestTimeout)
 		}
 	}
 }
 
-func TestGetEnvs(t *testing.T) {
-
-}
-
 func TestGetEnv(t *testing.T) {
 	var tests = []struct {
-		testname, envName, envValue string
-		verifyURL                   bool
-		err                         error
+		testname, envName, envValue, errText string
+		verifyURL                            bool
+		err                                  error
 	}{
-		{"OK_1", "MUUTTUJA234", "banana", false, nil},
-		{"OK_2", "MUUTTUJA9476", "https://github.com", true, nil},
-		{"FAIL_INVALID_URL", "MUUTTUJA0346", "http://google.com", true, errExpected},
-		{"FAIL_NOT_SET", "MUUTTUJA195", "", false, nil},
+		{"OK_1", "MUUTTUJA234", "banana", "", false, nil},
+		{"OK_2", "MUUTTUJA9476", "https://github.com", "", true, nil},
+		{"FAIL_INVALID_URL", "MUUTTUJA0346", "http://google.com", errExpected.Error(), true, errExpected},
+		{"FAIL_NOT_SET", "MUUTTUJA195", "", "Environment variable MUUTTUJA195 not set", false, nil},
 	}
 
 	origValidURL := validURL
@@ -157,24 +172,41 @@ func TestGetEnv(t *testing.T) {
 			value, err := getEnv(tt.envName, tt.verifyURL)
 			os.Unsetenv(tt.envName)
 
-			if strings.HasPrefix(tt.testname, "OK") {
+			if tt.errText == "" {
 				if err != nil {
 					t.Errorf("Returned unexpected err: %s", err.Error())
 				} else if value != tt.envValue {
-					t.Errorf("Environment variable has incorrect value. Expected %q, got %q", tt.envValue, value)
+					t.Errorf("Environment variable has incorrect value. Expected=%s, received=%s", tt.envValue, value)
 				}
 			} else if err == nil {
 				t.Error("Function should have returned error")
-			} else if tt.err != nil && !errors.Is(err, errExpected) {
-				t.Errorf("Function returned incorrect error: %s", err.Error())
+			} else if err.Error() != tt.errText {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 			}
 		})
 	}
 }
 
 func TestValidURL(t *testing.T) {
-	/*{"WRONG_SCHEME", "MUUTTUJA_2", "http://example.com", true, false},
-	{"NO_SCHEME", "OMENA", "google.com", true, false},*/
+	// Test failure
+	expectedError := "Environment variable something is an invalid URL: parse \"something\": invalid URI for request"
+	err := validURL("something")
+	if err.Error() != expectedError {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", expectedError, err.Error())
+	}
+
+	// Test failure
+	expectedError = "Environment variable http://csc.fi does not have scheme 'https'"
+	err = validURL("http://csc.fi")
+	if err.Error() != expectedError {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", expectedError, err.Error())
+	}
+
+	// Test passing
+	err = validURL("https://csc.fi")
+	if err != nil {
+		t.Errorf("Function received unexpected error: %s", err.Error())
+	}
 }
 
 func TestInitializeCache(t *testing.T) {
@@ -202,47 +234,115 @@ func TestInitializeCache_Error(t *testing.T) {
 	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 		return nil, errExpected
 	}
+	errText := "Could not create cache: " + errExpected.Error()
 
 	err := InitializeCache()
 	if err == nil {
-		t.Fatalf("Function should have returned non-nil error")
-	} else if !errors.Is(err, errExpected) {
-		t.Fatalf("Function returned incorrect error: %s", err.Error())
+		t.Fatalf("Function should have returned error")
+	} else if err.Error() != errText {
+		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
 	}
 }
 
 func TestInitializeClient(t *testing.T) {
 	origRepositories := hi.repositories
-	defer func() { hi.repositories = origRepositories }()
+	origCertPath := hi.certPath
+	defer func() {
+		hi.repositories = origRepositories
+		hi.certPath = origCertPath
+	}()
 
-	file1, err := ioutil.TempFile("", "cert")
+	file, err := ioutil.TempFile("", "cert")
 	if err != nil {
-		t.Fatalf("Failed to create file %q", file1.Name())
+		t.Fatalf("Failed to create file %s", file.Name())
 	}
+	defer os.RemoveAll(file.Name())
 
-	file2, err := ioutil.TempFile("", "cert")
-	if err != nil {
-		t.Fatalf("Failed to create file %q", file2.Name())
-	}
-
-	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{certPath: file1.Name()},
-		"rep2": &mockRepository{certPath: file2.Name()}}
+	hi.certPath = file.Name()
+	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{}, "rep2": &mockRepository{}}
 
 	if err := InitializeClient(); err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
+		t.Errorf("Function returned error: %s", err.Error())
+	}
+}
+
+func TestInitializeClient_Error(t *testing.T) {
+	origRepositories := hi.repositories
+	origCertPath := hi.certPath
+	defer func() {
+		hi.repositories = origRepositories
+		hi.certPath = origCertPath
+	}()
+
+	file, err := ioutil.TempFile("", "cert")
+	if err != nil {
+		t.Fatalf("Failed to create file %s", file.Name())
+	}
+	os.RemoveAll(file.Name())
+
+	hi.certPath = file.Name()
+	hi.repositories = map[string]fuseInfo{"rep1": &mockRepository{}, "rep2": &mockRepository{}}
+	errText := fmt.Sprintf("Reading certificate file failed: open %s: no such file or directory", hi.certPath)
+
+	if err := InitializeClient(); err == nil {
+		t.Error("Function should have returned error")
+	} else if err.Error() != errText {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
+	}
+}
+
+type testTransport struct {
+	err error
+}
+
+func (t testTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return &http.Response{}, t.err
+}
+
+func TestTestURL(t *testing.T) {
+	var tests = []struct {
+		testname string
+		err      error
+	}{
+		{"OK", nil},
+		{"FAIL", errExpected},
+	}
+
+	origClient := hi.client
+	defer func() { hi.client = origClient }()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			hi.client = &http.Client{
+				Transport: testTransport{err: tt.err},
+			}
+
+			err := testURL("test_url")
+			if tt.err == nil && err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else if tt.err != nil {
+				if err == nil {
+					t.Errorf("Function should have returned error")
+				} else if !errors.Is(err, errExpected) {
+					t.Errorf("Function returned incorrect error: %s", err.Error())
+				}
+			}
+		})
 	}
 }
 
 func TestMakeRequest(t *testing.T) {
 	handleCount := 0
 	var tests = []struct {
-		testname        string
-		mockHandlerFunc func(http.ResponseWriter, *http.Request)
-		expectedBody    interface{}
+		testname, errText string
+		mockHandlerFunc   func(http.ResponseWriter, *http.Request)
+		query             map[string]string
+		headers           map[string]string
+		expectedBody      interface{}
 	}{
 		{
-			"OK_HEADERS",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "OK_HEADERS",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				rw.Header().Set("X-Decrypted", "True")
 				rw.Header().Set("X-Header-Size", "67")
 				rw.Header().Set("X-Segmented-Object-Size", "345")
@@ -250,20 +350,20 @@ func TestMakeRequest(t *testing.T) {
 					rw.WriteHeader(http.StatusNotFound)
 				}
 			},
-			SpecialHeaders{Decrypted: true, HeaderSize: 67, SegmentedObjectSize: 345},
+			expectedBody: SpecialHeaders{Decrypted: true, HeaderSize: 67, SegmentedObjectSize: 345},
 		},
 		{
-			"OK_DATA",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "OK_DATA",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				if _, err := rw.Write([]byte("This is a message from the past")); err != nil {
 					rw.WriteHeader(http.StatusNotFound)
 				}
 			},
-			[]byte("This is a message from the past"),
+			expectedBody: []byte("This is a message from the past"),
 		},
 		{
-			"OK_JSON",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "OK_JSON",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				body, err := json.Marshal([]Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}})
 				if err != nil {
 					rw.WriteHeader(http.StatusNotFound)
@@ -273,20 +373,77 @@ func TestMakeRequest(t *testing.T) {
 					}
 				}
 			},
-			[]Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}},
+			expectedBody: []Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}},
 		},
 		{
-			"HEADERS_MISSING",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "FAIL_DATA",
+			errText:  "Copying response failed: unexpected EOF",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				if _, err := rw.Write([]byte("This is a message")); err != nil {
+					rw.WriteHeader(http.StatusNotFound)
+				}
+			},
+			expectedBody: []byte("This is a message from the past"),
+		},
+		{
+			testname: "FAIL_JSON",
+			errText:  "Unable to decode response: EOF",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				_, _ = rw.Write([]byte(""))
+			},
+		},
+		{
+			testname: "OK_JSON_ADD_QUERY_AND_HEADERS",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				body, err := json.Marshal([]Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}})
+				if err != nil {
+					rw.WriteHeader(http.StatusNotFound)
+				} else {
+					if _, err := rw.Write(body); err != nil {
+						rw.WriteHeader(http.StatusNotFound)
+					}
+				}
+			},
+			query:        map[string]string{"some": "thing"},
+			headers:      map[string]string{"some": "thing"},
+			expectedBody: []Metadata{{34, "project1"}, {67, "project/2"}, {8, "project3"}},
+		},
+		{
+			testname: "HEADERS_MISSING",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				if _, err := rw.Write([]byte("stuff")); err != nil {
 					rw.WriteHeader(http.StatusNotFound)
 				}
 			},
-			SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: -1},
+			expectedBody: SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: -1},
 		},
 		{
-			"FAIL_ONCE",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "FAIL_HEADER_SIZE_PARSE_1",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				rw.Header().Set("X-Decrypted", "True")
+				rw.Header().Set("X-Header-Size", "NaN")
+			},
+			expectedBody: SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: -1},
+		},
+		{
+			testname: "FAIL_HEADER_SIZE_PARSE_2",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				rw.Header().Set("X-Decrypted", "True")
+				rw.Header().Set("X-Header-Size", "67")
+				rw.Header().Set("X-Segmented-Object-Size", "NaN") // this one fails, but it's not fatal
+			},
+			expectedBody: SpecialHeaders{Decrypted: true, HeaderSize: 67, SegmentedObjectSize: -1},
+		},
+		{
+			testname: "FAIL_SIZE_HEADER_MISSING",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				rw.Header().Set("X-Decrypted", "True")
+			},
+			expectedBody: SpecialHeaders{Decrypted: false, HeaderSize: 0, SegmentedObjectSize: -1},
+		},
+		{
+			testname: "FAIL_ONCE",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				if handleCount > 0 {
 					if _, err := rw.Write([]byte("Hello, I am a robot")); err != nil {
 						rw.WriteHeader(http.StatusNotFound)
@@ -296,21 +453,21 @@ func TestMakeRequest(t *testing.T) {
 					http.Redirect(rw, req, "https://google.com", http.StatusSeeOther)
 				}
 			},
-			[]byte("Hello, I am a robot"),
+			expectedBody: []byte("Hello, I am a robot"),
 		},
 		{
-			"FAIL_ALL",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "FAIL_ALL",
+			errText:  "Get \"https://google.com\": Redirecting failed (as expected)",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				http.Redirect(rw, req, "https://google.com", http.StatusSeeOther)
 			},
-			nil,
 		},
 		{
-			"FAIL_400",
-			func(rw http.ResponseWriter, req *http.Request) {
+			testname: "FAIL_400",
+			errText:  "API responded with status 400 Bad Request",
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				http.Error(rw, "Bad request", 400)
 			},
-			nil,
 		},
 	}
 
@@ -339,26 +496,28 @@ func TestMakeRequest(t *testing.T) {
 			switch v := tt.expectedBody.(type) {
 			case SpecialHeaders:
 				var headers SpecialHeaders
-				err = makeRequest(server.URL, "token", "", nil, nil, &headers)
+				err = makeRequest(server.URL, "token", "", tt.query, tt.headers, &headers)
 				ret = headers
 			case []byte:
 				buf := make([]byte, len(v))
-				err = makeRequest(server.URL, "token", "mock", nil, nil, buf)
+				err = makeRequest(server.URL, "token", "mock", tt.query, tt.headers, buf)
 				ret = buf
 			default:
 				var objects []Metadata
-				err = makeRequest(server.URL, "", "mock", nil, nil, &objects)
+				err = makeRequest(server.URL, "", "mock", tt.query, tt.headers, &objects)
 				ret = objects
 			}
 
-			if tt.expectedBody == nil {
+			if tt.errText != "" {
 				if err == nil {
 					t.Errorf("Function did not return error")
+				} else if err.Error() != tt.errText {
+					t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 				}
 			} else if err != nil {
-				t.Errorf("Function returned error: %s", err.Error())
+				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if !reflect.DeepEqual(tt.expectedBody, ret) {
-				t.Errorf("Incorrect response body.\nExpected %v\nGot %v", tt.expectedBody, ret)
+				t.Errorf("Incorrect response body\nExpected=%v\nReceived=%v", tt.expectedBody, ret)
 			}
 
 			server.Close()
@@ -366,73 +525,118 @@ func TestMakeRequest(t *testing.T) {
 	}
 }
 
-/*
-func TestDownloadData(t *testing.T) {
-	var tests = []struct {
-		mockMakeRequest     func(string, func() string, map[string]string, map[string]string, interface{}) error
-		data, response      []byte
-		start, end, maxEnd  int64
-		key, path, testname string
-	}{
-		// Data in cache
-		{
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("Should not use makerequest")
-			},
-			[]byte{'i', 'a', 'm', 'i', 'n', 'f', 'o', 'r', 'm', 'a', 't', 'i', 'o', 'n', '2', '0', '!', '9'},
-			[]byte{'i', 'n', 'f', 'o', 'r', 'm', 'a', 't'},
-			3, 11, 18,
-			"project_container_object_0", "project/container/object", "OK_1",
-		},
-		// Data not in cache
-		{
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				copy(ret.([]byte), []byte{'i', 'e', 'm', 'z', 'q', 'f', 'd', 'r', 'm', 'k', 't', 'i', 'o', 'n', '3', '_', '+'})
-				return nil
-			},
-			nil, []byte{'e', 'm', 'z', 'q', 'f', 'd', 'r'},
-			chunkSize + 1, chunkSize + 8, chunkSize + 17,
-			"", "monday/tuesday/wednesay", "OK_2",
-		},
-		// Makerequest returns an error
-		{
-			func(url string, tokenFunc func() string, query map[string]string, headers map[string]string, ret interface{}) error {
-				return errors.New("Someting went wrong")
-			},
-			nil, nil,
-			3, 10, 17,
-			"project_container_object_0", "project/container/object", "MAKEREQUEST_ERROR",
-		},
-	}
+func TestMakeRequest_NewRequest_Error(t *testing.T) {
+	buf := make([]byte, 5)
+	buf[0] = 0x7f
+	errText := fmt.Sprintf("parse %q: net/url: invalid control character in URL", string(buf))
 
-	origMakeRequest := makeRequest
-	origDownloadCache := downloadCache
-
-	defer func() {
-		makeRequest = origMakeRequest
-		downloadCache = origDownloadCache
-	}()
-
-	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
-
-	for _, tt := range tests {
-		testname := tt.testname
-		t.Run(testname, func(t *testing.T) {
-			makeRequest = tt.mockMakeRequest
-			downloadCache.Set(tt.key, tt.data, -1)
-
-			ret, err := DownloadData(tt.path, tt.start, tt.end, tt.maxEnd)
-
-			if tt.response == nil {
-				if err == nil {
-					t.Errorf("Function should have returned an error")
-				}
-			} else if err != nil {
-				t.Errorf("Function returned an error: %s", err.Error())
-			} else if !bytes.Equal(ret, tt.response) {
-				t.Errorf("Response incorrect. Expected %v, got %v", tt.response, ret)
-			}
-		})
+	if err := makeRequest(string(buf), "token", "mock", nil, nil, buf); err == nil {
+		t.Error("Function did not return error with invalid URL")
+	} else if err.Error() != errText {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
 	}
 }
-*/
+
+func TestDownloadData_FoundCache(t *testing.T) {
+	// Substitute mock functions
+	// Save original functions before test
+	origDownloadCache := downloadCache
+	// Restore original functions after test
+	defer func() {
+		downloadCache = origDownloadCache
+	}()
+	// Overwrite original functions with mock for duration of test
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
+
+	// Save some data to cache
+	expectedData := []byte("hellothere")
+	downloadCache.Set("sdconnect_project_container_object_0", expectedData, time.Minute*1)
+
+	// Invoke function
+	data, err := DownloadData(
+		[]string{"sdconnect", "project", "container", "object"},
+		"/path/to/file.txt",
+		0, 15, 10,
+	)
+
+	// Test results
+	if err != nil {
+		t.Errorf("TestDownloadData_FoundCache expected no error, received=%s", err.Error())
+	}
+	if !bytes.Equal(data, expectedData) {
+		t.Errorf("TestDownloadData_FoundCache expected=%s, received=%s", string(expectedData), string(data))
+	}
+}
+
+func TestDownloadData_FoundNoCache(t *testing.T) {
+	// Substitute mock functions
+	// Save original functions before test
+	origDownloadCache := downloadCache
+	origRepositories := hi.repositories
+	// Restore original functions after test
+	defer func() {
+		downloadCache = origDownloadCache
+		hi.repositories = origRepositories
+	}()
+	// Overwrite original functions with mock for duration of test
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
+	expectedData := []byte("hellothere")
+	mockRepo := &mockRepository{
+		mockDownloadDataBuf:   expectedData,
+		mockDownloadDataError: nil,
+	}
+	hi.repositories = map[string]fuseInfo{"sdconnect": mockRepo}
+
+	// Invoke function
+	data, err := DownloadData(
+		[]string{"sdconnect", "project", "container", "object"},
+		"/path/to/file.txt",
+		0, 15, 10,
+	)
+
+	// Test results
+	if err != nil {
+		t.Errorf("TestDownloadData_FoundNoCache expected no error, received=%s", err.Error())
+	}
+	if !bytes.Equal(data, expectedData) {
+		t.Errorf("TestDownloadData_FoundNoCache expected=%s, received=%s", string(expectedData), string(data))
+	}
+}
+
+func TestDownloadData_FoundNoCache_Error(t *testing.T) {
+	// Substitute mock functions
+	// Save original functions before test
+	origDownloadCache := downloadCache
+	origRepositories := hi.repositories
+	// Restore original functions after test
+	defer func() {
+		downloadCache = origDownloadCache
+		hi.repositories = origRepositories
+	}()
+	// Overwrite original functions with mock for duration of test
+	downloadCache = &cache.Ristretto{Cacheable: &mockCache{}}
+	expectedError := "Retrieving data failed for /path/to/file.txt: some error"
+	mockRepo := &mockRepository{
+		mockDownloadDataBuf:   nil,
+		mockDownloadDataError: errors.New("some error"),
+	}
+	hi.repositories = map[string]fuseInfo{"sdconnect": mockRepo}
+
+	// Invoke function
+	data, err := DownloadData(
+		[]string{"sdconnect", "project", "container", "object"},
+		"/path/to/file.txt",
+		0, 15, 10,
+	)
+
+	// Test results
+	if err == nil {
+		t.Errorf("TestDownloadData_FoundNoCache_Error expected an error, received=nil")
+	}
+	if err.Error() != expectedError {
+		t.Errorf("TestDownloadData_FoundNoCache_Error expected=%s, received=%s", expectedError, err.Error())
+	}
+	if data != nil {
+		t.Errorf("TestDownloadData_FoundNoCache_Error no data, received=%s", string(data))
+	}
+}

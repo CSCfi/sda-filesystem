@@ -13,3 +13,5 @@ require (
 	golang.org/x/sys v0.0.0-20211102061401-a2f17f7b995c
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )
+
+replace github.com/stretchr/testify => github.com/stretchr/testify v1.7.0

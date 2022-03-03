@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"sda-filesystem/internal/logs"
 	"strconv"
 	"strings"
 	"sync"
+
+	"sda-filesystem/internal/logs"
 )
 
 // This file contains structs and functions that are strictly for SD-Submit
@@ -184,7 +185,8 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 }
 
 // Dummy function, not needed
-func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interface{}) {
+func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interface{}) error {
+	return nil
 }
 
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
