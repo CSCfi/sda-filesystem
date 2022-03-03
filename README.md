@@ -102,7 +102,7 @@ Usage of ./go-fuse:
   -alsologtostderr
     	log to standard error as well as files
   -enable string
-    	Choose which repositories you wish include in the filesystem. Possible values: {SD-Connect,SD-Submit,all} (default "all")
+    	Choose which repositories you wish include in Data Gateway. Possible values: {SD-Connect,SD-Submit,all} (default "all")
   -http_timeout int
     	Number of seconds to wait before timing out an HTTP request (default 20)
   -log_backtrace_at value
@@ -114,7 +114,7 @@ Usage of ./go-fuse:
   -logtostderr
     	log to standard error instead of files
   -mount string
-    	Path to filesystem mount point
+    	Path to Data Gateway mount point
   -stderrthreshold value
     	logs at or above this threshold go to stderr
   -v value
