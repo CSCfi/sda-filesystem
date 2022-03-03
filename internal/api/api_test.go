@@ -205,7 +205,7 @@ func TestValidURL(t *testing.T) {
 	// Test passing
 	err = validURL("https://csc.fi")
 	if err != nil {
-		t.Errorf("TestValidURL received unexpected error: %s", err.Error())
+		t.Errorf("Function received unexpected error: %s", err.Error())
 	}
 }
 
@@ -288,6 +288,46 @@ func TestInitializeClient_Error(t *testing.T) {
 		t.Error("Function should have returned error")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
+	}
+}
+
+type testTransport struct {
+	err error
+}
+
+func (t testTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return &http.Response{}, t.err
+}
+
+func TestTestURL(t *testing.T) {
+	var tests = []struct {
+		testname string
+		err      error
+	}{
+		{"OK", nil},
+		{"FAIL", errExpected},
+	}
+
+	origClient := hi.client
+	defer func() { hi.client = origClient }()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			hi.client = &http.Client{
+				Transport: testTransport{err: tt.err},
+			}
+
+			err := testURL("test_url")
+			if tt.err == nil && err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else if tt.err != nil {
+				if err == nil {
+					t.Errorf("Function should have returned error")
+				} else if !errors.Is(err, errExpected) {
+					t.Errorf("Function returned incorrect error: %s", err.Error())
+				}
+			}
+		})
 	}
 }
 

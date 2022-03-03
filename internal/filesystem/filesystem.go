@@ -460,6 +460,9 @@ func (fs *Fuse) openNode(path string, dir bool) (int, uint64) {
 
 func (fs *Fuse) closeNode(fh uint64) int {
 	node := fs.openmap[fh].node
+	if node == nil {
+		return -fuse.ENOENT
+	}
 	node.opencnt--
 	if node.opencnt == 0 {
 		delete(fs.openmap, node.stat.Ino)

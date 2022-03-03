@@ -320,6 +320,27 @@ func isSameFuse(fs1 *node, fs2 *node, path string) error {
 	return nil
 }
 
+func TestCheckPanic(t *testing.T) {
+	called := false
+	signalBridge = func() {
+		called = true
+	}
+
+	defer func() {
+		if !called {
+			t.Fatal("signalBridge() not called even though code paniced")
+		}
+	}()
+	defer CheckPanic()
+
+	CheckPanic()
+	if called {
+		t.Fatal("signalBridge() should not have been called before panic")
+	}
+
+	panic("Muahahahaa")
+}
+
 func TestCreateFilesystem(t *testing.T) {
 	origFs := getTestFuse(t, true, 1)
 

@@ -265,7 +265,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 
 	size, ok := attr.(*int64)
 	if !ok {
-		return fmt.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, got %v",
+		return fmt.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, received %v",
 			SDConnect, reflect.TypeOf(attr))
 	}
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -62,7 +63,7 @@ func (c *mockConnecter) fetchTokens(bool, []Metadata) (string, map[string]sToken
 	return c.uToken, m
 }
 
-func TestSDConnectGetUToken(t *testing.T) {
+func Test_SDConnect_GetUToken(t *testing.T) {
 	var tests = []struct {
 		testname, url, expectedToken string
 	}{
@@ -77,7 +78,7 @@ func TestSDConnectGetUToken(t *testing.T) {
 		t.Run(tt.testname, func(t *testing.T) {
 			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
 				if url != tt.url+"/token" {
-					return fmt.Errorf("makeRequest() was called with incorrect URL. Expected %q, got %q", tt.url+"/token", url)
+					return fmt.Errorf("makeRequest() was called with incorrect URL. Expected=%s, received=%s", tt.url+"/token", url)
 				}
 
 				switch v := ret.(type) {
@@ -95,13 +96,13 @@ func TestSDConnectGetUToken(t *testing.T) {
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
 			} else if tt.expectedToken != token {
-				t.Errorf("Unscoped token is incorrect. Expected %q, got %q", tt.expectedToken, token)
+				t.Errorf("Unscoped token is incorrect. Expected=%s, received=%s", tt.expectedToken, token)
 			}
 		})
 	}
 }
 
-func TestSDConnectGetUToken_Error(t *testing.T) {
+func Test_SDConnect_GetUToken_Error(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
@@ -119,11 +120,11 @@ func TestSDConnectGetUToken_Error(t *testing.T) {
 	}
 
 	if token != "" {
-		t.Errorf("Unscoped token should have been empty, got %q", token)
+		t.Errorf("Unscoped token should have been empty, received=%s", token)
 	}
 }
 
-func TestSDConnectGetSToken(t *testing.T) {
+func Test_SDConnect_GetSToken(t *testing.T) {
 	var tests = []struct {
 		testname, project, url, expectedToken, expectedID string
 	}{
@@ -138,10 +139,10 @@ func TestSDConnectGetSToken(t *testing.T) {
 		t.Run(tt.testname, func(t *testing.T) {
 			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
 				if url != tt.url+"/token" {
-					return fmt.Errorf("makeRequest() was called with incorrect url. Expected %q, got %q", tt.url+"/token", url)
+					return fmt.Errorf("makeRequest() was called with incorrect url. Expected=%s, reveived=%s", tt.url+"/token", url)
 				}
 				if query["project"] != tt.project {
-					return fmt.Errorf("makeRequest() was called with incorrect query. Expected key 'project' to have value %q, got %q",
+					return fmt.Errorf("makeRequest() was called with incorrect query. Expected key 'project' to have value %s, received=%s",
 						tt.project, query["project"])
 				}
 
@@ -160,15 +161,15 @@ func TestSDConnectGetSToken(t *testing.T) {
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
 			} else if tt.expectedToken != token.Token {
-				t.Errorf("Scoped token is incorrect. Expected %q, got %q", tt.expectedToken, token.Token)
+				t.Errorf("Scoped token is incorrect. Expected=%s, received=%q", tt.expectedToken, token.Token)
 			} else if tt.expectedID != token.ProjectID {
-				t.Errorf("Project ID is incorrect. Expected %q, got %q", tt.expectedID, token.ProjectID)
+				t.Errorf("Project ID is incorrect. Expected=%s, received=%s", tt.expectedID, token.ProjectID)
 			}
 		})
 	}
 }
 
-func TestSDConnectGetSToken_Error(t *testing.T) {
+func Test_SDConnect_GetSToken_Error(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
@@ -186,11 +187,11 @@ func TestSDConnectGetSToken_Error(t *testing.T) {
 	}
 
 	if token != (sToken{}) {
-		t.Errorf("Scoped token should have been empty, got %q", token)
+		t.Errorf("Scoped token should have been empty, received=%s", token)
 	}
 }
 
-func TestSDConnectGetProjects(t *testing.T) {
+func Test_SDConnect_GetProjects(t *testing.T) {
 	var tests = []struct {
 		testname, url, token string
 		expectedMetaData     []Metadata
@@ -215,10 +216,10 @@ func TestSDConnectGetProjects(t *testing.T) {
 		t.Run(tt.testname, func(t *testing.T) {
 			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
 				if url != tt.url+"/projects" {
-					return fmt.Errorf("makeRequest() was called with incorrect url. Expected %q, got %q", tt.url+"/projects", url)
+					return fmt.Errorf("makeRequest() was called with incorrect url. Expected=%s, received=%s", tt.url+"/projects", url)
 				}
 				if token != tt.token {
-					return fmt.Errorf("makeRequest() was called with incorrect token. Expected %q, got %q", tt.token, token)
+					return fmt.Errorf("makeRequest() was called with incorrect token. Expected=%s, received=%s", tt.token, token)
 				}
 
 				switch v := ret.(type) {
@@ -236,13 +237,13 @@ func TestSDConnectGetProjects(t *testing.T) {
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
 			} else if !reflect.DeepEqual(tt.expectedMetaData, projects) {
-				t.Errorf("Projects incorrect. Expected %v, got %v", tt.expectedMetaData, projects)
+				t.Errorf("Projects incorrect. Expected=%v, received=%v", tt.expectedMetaData, projects)
 			}
 		})
 	}
 }
 
-func TestSDConnectGetProjects_Error(t *testing.T) {
+func Test_SDConnect_GetProjects_Error(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
@@ -261,11 +262,11 @@ func TestSDConnectGetProjects_Error(t *testing.T) {
 	}
 
 	if projects != nil {
-		t.Errorf("Slice should have been empty, got %q", projects)
+		t.Errorf("Slice should have been empty, received=%v", projects)
 	}
 }
 
-func TestSDConnectFetchTokens(t *testing.T) {
+func Test_SDConnect_FetchTokens(t *testing.T) {
 	var tests = []struct {
 		testname, uToken, mockUToken string
 		skip                         bool
@@ -303,15 +304,15 @@ func TestSDConnectFetchTokens(t *testing.T) {
 			newUToken, newSTokens := c.fetchTokens(tt.skip, mockT.keys())
 
 			if newUToken != tt.uToken {
-				t.Errorf("uToken incorrect. Expected %q, got %q", tt.uToken, newUToken)
+				t.Errorf("uToken incorrect. Expected=%s, received=%s", tt.uToken, newUToken)
 			} else if !reflect.DeepEqual(newSTokens, tt.sTokens) {
-				t.Errorf("sTokens incorrect.\nExpected %q\nGot %q", tt.sTokens, newSTokens)
+				t.Errorf("sTokens incorrect.\nExpected=%s\nReceived=%s", tt.sTokens, newSTokens)
 			}
 		})
 	}
 }
 
-func TestSDConnectGetEnvs(t *testing.T) {
+func Test_SDConnect_GetEnvs(t *testing.T) {
 	var tests = []struct {
 		testname            string
 		expectedMetadataURL string
@@ -416,59 +417,57 @@ func TestSDConnectGetEnvs(t *testing.T) {
 			// Test results
 			if err != nil {
 				if err.Error() != tt.expectedError.Error() {
-					t.Errorf("TestSDConnectGetEnvs %s failed, expected=%v, received=%v", tt.testname, tt.expectedError, err)
+					t.Errorf("Function returned incorrect error\nExpected=%v\nReceived=%v", tt.expectedError, err)
 				}
 			}
 			if sd.metadataURL != tt.expectedMetadataURL {
-				t.Errorf("TestSDConnectGetEnvs %s failed, expected=%v, received=%v", tt.testname, tt.expectedMetadataURL, sd.metadataURL)
+				t.Errorf("metadataURL incorrect. Expected=%v, received=%v", tt.expectedMetadataURL, sd.metadataURL)
 			}
 			if sd.dataURL != tt.expectedDataURL {
-				t.Errorf("TestSDConnectGetEnvs %s failed, expected=%v, received=%v", tt.testname, tt.expectedDataURL, sd.dataURL)
+				t.Errorf("dataURL incorrect. Expected=%v, received=%v", tt.expectedDataURL, sd.dataURL)
 			}
 		})
 	}
 }
 
 func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
-
-	mockT := &mockTokenator{uToken: "token"}
-	mockC := &mockConnecter{tokenable: mockT, uToken: "token", sTokenKey: "s1", sTokenValue: sToken{"sToken", "proj1"}}
+	mockT := &mockTokenator{uToken: "uToken"}
+	mockC := &mockConnecter{tokenable: mockT, uToken: "uToken", sTokenKey: "s1", sTokenValue: sToken{"sToken", "proj1"}}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
-		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if sd.token != "dXNlcjpwYXNz" {
-		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected=dXNlcjpwYXNz, received=%s", sd.token)
+		t.Errorf("Token incorrect. Expected=dXNlcjpwYXNz, received=%s", sd.token)
+	}
+	if sd.uToken != "uToken" {
+		t.Errorf("uToken incorrect. Expected=uToken, received=%s", sd.uToken)
 	}
 	if st := sd.sTokens["s1"].Token; st != "sToken" {
-		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected=sToken, received=%s", st)
+		t.Errorf("sToken incorrect for project 's1'. Expected=sToken, received=%s", st)
 	}
 	if pi := sd.sTokens["s1"].ProjectID; pi != "proj1" {
-		t.Errorf("Test_SDConnect_ValidateLogin_OK failed expected=sToken, received=%s", pi)
+		t.Errorf("ProjectID incorrect for project 's1'. expected=proj1, received=%s", pi)
 	}
-
 }
 
 func Test_SDConnect_ValidateLogin_Fail_GetUToken(t *testing.T) {
-
 	mockT := &mockTokenator{uToken: ""}
-	mockC := &mockConnecter{tokenable: mockT, uToken: ""}
+	mockC := &mockConnecter{tokenable: mockT}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "uToken error"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
-			t.Errorf("Test_SDConnect_ValidateLogin_Fail_GetUToken failed expected=%s, received=%s", err.Error(), expectedError)
+			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
 		}
 	}
-
 }
 
 func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
-
 	mockT := &mockTokenator{uToken: "token"}
 	mockC := &mockConnecter{tokenable: mockT, uToken: ""}
 	sd := &sdConnectInfo{connectable: mockC}
@@ -477,13 +476,12 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
-			t.Errorf("Test_SDConnect_ValidateLogin_Fail_GetProjects failed expected=%s, received=%s", err.Error(), expectedError)
+			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
 		}
 	}
-
 }
 
-func TestSDConnectGetNthLevel_Projects(t *testing.T) {
+func Test_SDConnect_GetNthLevel_Projects(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
@@ -495,81 +493,76 @@ func TestSDConnectGetNthLevel_Projects(t *testing.T) {
 	if err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
 	} else if !reflect.DeepEqual(meta, projects) {
-		t.Errorf("Returned metadata incorrect. Expected %q, got %q", projects, meta)
+		t.Errorf("Returned incorrect metadata. Expected=%v, received=%v", projects, meta)
 	}
 }
 
-func TestGetLoginMethod(t *testing.T) {
-
+func Test_SDConnect_GetLoginMethod(t *testing.T) {
 	sd := &sdConnectInfo{}
 	loginMethod := sd.getLoginMethod()
 	if loginMethod != 0 {
-		t.Errorf("TestGetLoginMethod failed expected=%d, received=%d", 0, loginMethod)
+		t.Errorf("Function failed expected=%d, received=%d", 0, loginMethod)
 	}
-
 }
 
-func TestLevelCount_SDConnect(t *testing.T) {
+func Test_SDConnect_LevelCount(t *testing.T) {
 	sd := sdConnectInfo{}
 	if lc := sd.levelCount(); lc != 3 {
-		t.Errorf("TestLevelCount_SDConnect failed, expected=3, received=%d", lc)
+		t.Errorf("Function failed, expected=3, received=%d", lc)
 	}
 }
 
-func TestGetToken_SDConnect(t *testing.T) {
+func Test_SDConnect_GetToken(t *testing.T) {
 	sd := sdConnectInfo{token: "token"}
 	if sdt := sd.getToken(); sdt != "token" {
-		t.Errorf("TestGetToken_SDConnect failed, expected=token, received=%s", sdt)
+		t.Errorf("Function failed, expected=token, received=%s", sdt)
 	}
 }
 
-func TestCalculateDecryptedSize(t *testing.T) {
-
+func Test_SDConnect_CalculateDecryptedSize(t *testing.T) {
 	// Fail min size
 	s := calculateDecryptedSize(5, 5)
 	if s != -1 {
-		t.Errorf("TestCalculateDecryptedSize failed, expected=-1, received=%d", s)
+		t.Errorf("Function failed, expected=-1, received=%d", s)
 	}
 
 	// OK
 	s = calculateDecryptedSize(500, 128)
 	if s != 344 {
-		t.Errorf("TestCalculateDecryptedSize failed, expected=344, received=%d", s)
+		t.Errorf("Function failed, expected=344, received=%d", s)
 	}
 
 	// OK, test remainder
 	s = calculateDecryptedSize(65690, 100)
 	if s != 65562 {
-		t.Errorf("TestCalculateDecryptedSize failed, expected=65562, received=%d", s)
+		t.Errorf("Function failed, expected=65562, received=%d", s)
 	}
-
 }
 
-func TestGetNthLevel_Fail_NoNodes(t *testing.T) {
+func Test_SDConnect_GetNthLevel_Fail_NoNodes(t *testing.T) {
 	md := []Metadata{{Bytes: 10, Name: "project1"}}
 	sd := &sdConnectInfo{projects: md}
 	metadata, err := sd.getNthLevel("fspath")
 	if err != nil {
-		t.Errorf("TestGetNthLevel_Fail_NoNodes failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if metadata[0].Name != "project1" {
-		t.Errorf("TestGetNthLevel_Fail_NoNodes failed, expected=project1, received=%s", metadata[0].Name)
+		t.Errorf("Function failed, expected=project1, received=%s", metadata[0].Name)
 	}
 }
 
-func TestGetNthLevel_Fail_Path(t *testing.T) {
+func Test_SDConnect_GetNthLevel_Fail_Path(t *testing.T) {
 	sd := &sdConnectInfo{}
 	metadata, err := sd.getNthLevel("fspath", "1", "2", "3")
 	if err != nil {
-		t.Errorf("TestGetNthLevel_Fail_Path failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if metadata != nil {
-		t.Errorf("TestGetNthLevel_Fail_Path failed, expected=nil, received=%v", metadata)
+		t.Errorf("Function failed, expected=nil, received=%v", metadata)
 	}
 }
 
-func TestGetNthLevel_Fail_Request(t *testing.T) {
-
+func Test_SDConnect_GetNthLevel_Fail_Request(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
@@ -582,12 +575,11 @@ func TestGetNthLevel_Fail_Request(t *testing.T) {
 	expectedError := "Failed to retrieve metadata for fspath: some error"
 	_, err := sd.getNthLevel("fspath", "1", "2")
 	if err.Error() != expectedError {
-		t.Errorf("TestGetNthLevel_Fail_Request failed, expected=%s, received=%v", expectedError, err)
+		t.Errorf("Function failed, expected=%s, received=%v", expectedError, err)
 	}
 }
 
-func TestGetNthLevel_Pass_1Node(t *testing.T) {
-
+func Test_SDConnect_GetNthLevel_Pass_1Node(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
@@ -600,18 +592,17 @@ func TestGetNthLevel_Pass_1Node(t *testing.T) {
 	// Test
 	meta, err := sd.getNthLevel("fspath", "1")
 	if err != nil {
-		t.Errorf("TestGetNthLevel_Pass_1Node failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if meta[0].Bytes != 100 {
-		t.Errorf("TestGetNthLevel_Pass_1Node failed, expected=%d, received=%d", 100, meta[0].Bytes)
+		t.Errorf("Function failed, expected=%d, received=%d", 100, meta[0].Bytes)
 	}
 	if meta[0].Name != "thingy1" {
-		t.Errorf("TestGetNthLevel_Pass_1Node failed, expected=%s, received=%s", "thingy1", meta[0].Name)
+		t.Errorf("Function failed, expected=%s, received=%s", "thingy1", meta[0].Name)
 	}
 }
 
-func TestGetNthLevel_Pass_2Node(t *testing.T) {
-
+func Test_SDConnect_GetNthLevel_Pass_2Node(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
@@ -624,18 +615,17 @@ func TestGetNthLevel_Pass_2Node(t *testing.T) {
 	// Test
 	meta, err := sd.getNthLevel("fspath", "1", "2")
 	if err != nil {
-		t.Errorf("TestGetNthLevel_Pass_2Node failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if meta[0].Bytes != 100 {
-		t.Errorf("TestGetNthLevel_Pass_2Node failed, expected=%d, received=%d", 100, meta[0].Bytes)
+		t.Errorf("Function failed, expected=%d, received=%d", 100, meta[0].Bytes)
 	}
 	if meta[0].Name != "thingy2" {
-		t.Errorf("TestGetNthLevel_Pass_2Node failed, expected=%s, received=%s", "thingy2", meta[0].Name)
+		t.Errorf("Function failed, expected=%s, received=%s", "thingy2", meta[0].Name)
 	}
 }
 
-func TestGetNthLevel_Pass_TokenExpired(t *testing.T) {
-
+func Test_SDConnect_GetNthLevel_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
@@ -657,18 +647,17 @@ func TestGetNthLevel_Pass_TokenExpired(t *testing.T) {
 	// Test
 	meta, err := sd.getNthLevel("sdconnect", "project", "container")
 	if err != nil {
-		t.Errorf("TestGetNthLevel_Pass_TokenExpired failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if meta[0].Bytes != 100 {
-		t.Errorf("TestGetNthLevel_Pass_TokenExpired failed, expected=%d, received=%d", 100, meta[0].Bytes)
+		t.Errorf("Function failed, expected=%d, received=%d", 100, meta[0].Bytes)
 	}
 	if meta[0].Name != "thingy3" {
-		t.Errorf("TestGetNthLevel_Pass_TokenExpired failed, expected=%s, received=%s", "thingy3", meta[0].Name)
+		t.Errorf("Function failed, expected=%s, received=%s", "thingy3", meta[0].Name)
 	}
 }
 
-func TestGetNthLevel_Fail_TokenExpired(t *testing.T) {
-
+func Test_SDConnect_GetNthLevel_Fail_TokenExpired(t *testing.T) {
 	// Mock
 	expectedError := "Failed to retrieve metadata for sdconnect: API responded with status 401 Unauthorized"
 	origMakeRequest := makeRequest
@@ -686,12 +675,111 @@ func TestGetNthLevel_Fail_TokenExpired(t *testing.T) {
 	// Test
 	_, err := sd.getNthLevel("sdconnect", "project", "container")
 	if err.Error() != expectedError {
-		t.Errorf("TestGetNthLevel_Fail_TokenExpired failed, expected=%s, received=%v", expectedError, err)
+		t.Errorf("Function failed, expected=%s, received=%v", expectedError, err)
 	}
 }
 
-func TestDownloadData_Pass(t *testing.T) {
+func Test_SDConnect_UpdateAttributes(t *testing.T) {
+	var tests = []struct {
+		testname                                 string
+		segmentedObjectSize, initSize, finalSize int64
+		decrypted                                bool
+	}{
+		{"OK_SEGMENTED_DERYPTED", 30, 75, 23, true},
+		{"OK_SEGMENTED_NOT_DECRYPTED", 67, 6, 67, false},
+		{"OK_NOT_SEGMENTED_DECRYPTED", -1, 6, 6, true},
+		{"OK_NOT_SEGMENTED_NOT_DECRYPTED", -1, 34, 34, false},
+	}
 
+	origMakeRequest := makeRequest
+	origCalculateDecryptedSize := calculateDecryptedSize
+
+	defer func() {
+		makeRequest = origMakeRequest
+		calculateDecryptedSize = origCalculateDecryptedSize
+	}()
+
+	calculateDecryptedSize = func(fileSize, headerSize int64) int64 {
+		return fileSize - 7
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+				switch v := ret.(type) {
+				case *SpecialHeaders:
+					v.Decrypted = tt.decrypted
+					v.SegmentedObjectSize = tt.segmentedObjectSize
+					v.HeaderSize = 0
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *SpecialHeaders", reflect.TypeOf(v))
+				}
+			}
+
+			var size int64 = tt.initSize
+			sd := &sdConnectInfo{}
+			err := sd.updateAttributes([]string{"path", "to", "file"}, "path/to/file", &size)
+
+			if err != nil {
+				t.Errorf("Unexpected error: %s", err.Error())
+			} else if size != tt.finalSize {
+				t.Errorf("Final size was incorrect. Expected=%d, received=%d", tt.finalSize, size)
+			}
+		})
+	}
+}
+
+func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
+	var tests = []struct {
+		testname, errText string
+		nodes             []string
+		requestErr        error
+		value             interface{}
+	}{
+		{
+			"TOO_FEW_NODES", "Cannot update attributes for path Folder/file",
+			[]string{"Folder", "file"}, nil, "test",
+		},
+		{
+			"WRONG_DATA_TYPE",
+			"SD-Connect updateAttributes() was called with incorrect attribute. Expected type *int64, received *string",
+			[]string{"Folder", "dir", "file"}, nil, "test",
+		},
+		{
+			"FAIL_DOWNLOAD", errExpected.Error(),
+			[]string{"Folder", "dir", "file"}, errExpected, int64(10),
+		},
+	}
+
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+				return tt.requestErr
+			}
+
+			var err error
+			sd := &sdConnectInfo{}
+			switch v := tt.value.(type) {
+			case int64:
+				err = sd.updateAttributes(tt.nodes, strings.Join(tt.nodes, "/"), &v)
+			case string:
+				err = sd.updateAttributes(tt.nodes, strings.Join(tt.nodes, "/"), &v)
+			}
+
+			if err == nil {
+				t.Error("Function should have returned error")
+			} else if err.Error() != tt.errText {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%v", tt.errText, err)
+			}
+		})
+	}
+}
+
+func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 	// Mock
 	expectedBody := []byte("hellothere")
 	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Project-ID": "project"}
@@ -701,7 +789,7 @@ func TestDownloadData_Pass(t *testing.T) {
 		_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
 		// Test that headers were computed properly
 		if !reflect.DeepEqual(headers, expectedHeaders) {
-			t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", expectedHeaders, headers)
+			t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
 		}
 		return nil
 	}
@@ -712,15 +800,14 @@ func TestDownloadData_Pass(t *testing.T) {
 	err := sd.downloadData([]string{"project", "container", "object"}, buf, 0, 10)
 
 	if err != nil {
-		t.Errorf("TestDownloadData_Pass failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if !bytes.Equal(buf, expectedBody) {
-		t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", string(expectedBody), string(buf))
+		t.Errorf("Function failed, expected=%s, received=%s", string(expectedBody), string(buf))
 	}
 }
 
-func TestDownloadData_Pass_TokenExpired(t *testing.T) {
-
+func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	expectedBody := []byte("hellothere")
 	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Project-ID": "project"}
@@ -733,7 +820,7 @@ func TestDownloadData_Pass_TokenExpired(t *testing.T) {
 			_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
 			// Test that headers were computed properly
 			if !reflect.DeepEqual(headers, expectedHeaders) {
-				t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", expectedHeaders, headers)
+				t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
 			}
 			return nil
 		}
@@ -750,9 +837,12 @@ func TestDownloadData_Pass_TokenExpired(t *testing.T) {
 	err := sd.downloadData([]string{"project", "container", "object"}, buf, 0, 10)
 
 	if err != nil {
-		t.Errorf("TestDownloadData_Pass failed, expected no error, received=%v", err)
+		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
 	if !bytes.Equal(buf, expectedBody) {
-		t.Errorf("TestDownloadData_Pass failed, expected=%s, received=%s", string(expectedBody), string(buf))
+		t.Errorf("Function failed, expected=%s, received=%s", string(expectedBody), string(buf))
 	}
+}
+
+func Test_SDConnect_DownloadData_Error(t *testing.T) {
 }
