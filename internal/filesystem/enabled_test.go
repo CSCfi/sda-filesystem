@@ -210,6 +210,88 @@ func TestOpendir(t *testing.T) {
 	}
 }
 
+func TestRelease(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	node := fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"]
+	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
+	node.opencnt = 2
+
+	if ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino); ret != 0 {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
+	} else if node.opencnt != 1 {
+		t.Errorf("Node that was closed should have opencnt=1, received=%d", node.opencnt)
+	} else if fs.openmap[node.stat.Ino].node == nil {
+		t.Errorf("Node should not have been removed from openmap")
+	}
+
+	if ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino); ret != 0 {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
+	} else if node.opencnt != 0 {
+		t.Errorf("Node that was closed should have opencnt=0, received=%d", node.opencnt)
+	} else if fs.openmap[node.stat.Ino].node != nil {
+		t.Errorf("Node should have been removed from openmap")
+	}
+
+	if ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino); ret != -fuse.ENOENT {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
+	}
+}
+
+func TestReleaseDir(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	node := fs.root.chld["Rep1"].chld["child_1"].chld["kansio"]
+	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
+	node.opencnt = 2
+
+	if ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino); ret != 0 {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
+	} else if node.opencnt != 1 {
+		t.Errorf("Node that was closed should have opencnt=1, received=%d", node.opencnt)
+	} else if fs.openmap[node.stat.Ino].node == nil {
+		t.Errorf("Node should not have been removed from openmap")
+	}
+
+	if ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino); ret != 0 {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
+	} else if node.opencnt != 0 {
+		t.Errorf("Node that was closed should have opencnt=0, received=%d", node.opencnt)
+	} else if fs.openmap[node.stat.Ino].node != nil {
+		t.Errorf("Node should have been removed from openmap")
+	}
+
+	if ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino); ret != -fuse.ENOENT {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
+	}
+}
+
+func TestGetattr(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	node := fs.root.chld["Rep2"].chld["example.com"]
+	node.stat.Atim = fuse.Now()
+	node.stat.Uid = 4
+	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
+
+	var stat fuse.Stat_t
+	errc := fs.Getattr("Rep2/example.com", &stat, node.stat.Ino)
+
+	if errc != 0 {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
+	} else if !reflect.DeepEqual(stat, node.stat) {
+		t.Errorf("Stat defined incorrectly\nExpected=%v\nReceived=%v", node.stat, stat)
+	}
+
+	errc = fs.Getattr("Rep2/example.com/does_not_exist", &stat, ^uint64(0))
+
+	if errc != -fuse.ENOENT {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
+	} else if !reflect.DeepEqual(stat, node.stat) {
+		t.Errorf("Stat should not have been modified. Received=%v", stat)
+	}
+}
+
 func TestRead(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
 

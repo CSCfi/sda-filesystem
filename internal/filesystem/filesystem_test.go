@@ -320,11 +320,11 @@ func isSameFuse(fs1 *node, fs2 *node, path string) error {
 	return nil
 }
 
-func TestCheckPanic(t *testing.T) {
+func TestSetSignalBridge_And_CheckPanic(t *testing.T) {
 	called := false
-	signalBridge = func() {
+	SetSignalBridge(func() {
 		called = true
-	}
+	})
 
 	defer func() {
 		if !called {
@@ -332,11 +332,6 @@ func TestCheckPanic(t *testing.T) {
 		}
 	}()
 	defer CheckPanic()
-
-	CheckPanic()
-	if called {
-		t.Fatal("signalBridge() should not have been called before panic")
-	}
 
 	panic("Muahahahaa")
 }
