@@ -9,9 +9,9 @@
 	<key>CFBundleIconFile</key>
 	<string>filesystem.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>fi.csc.sda_filesystem</string>
+	<string>fi.csc.data_gateway</string>
 	<key>CFBundleName</key>
-	<string>SDA Filesystem</string>
+	<string>Data Gateway</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

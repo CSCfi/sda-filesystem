@@ -24,7 +24,7 @@ Page {
 		leftPadding: 2 * CSC.Style.padding
 
 		Label {
-			text: "<h1>SDA Filesystem</h1>"
+			text: "<h1>Data Gateway</h1>"
 			color: CSC.Style.primaryColor
 			maximumLineCount: 1
 		}

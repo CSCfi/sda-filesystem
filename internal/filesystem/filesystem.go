@@ -64,7 +64,7 @@ func SetSignalBridge(fn func()) {
 var CheckPanic = func() {
 	if signalBridge != nil {
 		if err := recover(); err != nil {
-			logs.Error(fmt.Errorf("Something went wrong when creating filesystem: %w",
+			logs.Error(fmt.Errorf("Something went wrong when creating Data Gateway: %w",
 				fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
 			// Send alert
 			signalBridge()
@@ -74,7 +74,7 @@ var CheckPanic = func() {
 
 // InitializeFileSystem initializes the in-memory filesystem database
 func InitializeFileSystem(send func(string, string)) *Fuse {
-	logs.Info("Initializing in-memory filesystem database")
+	logs.Info("Initializing in-memory Data Gateway database")
 	timestamp := fuse.Now()
 	fs := Fuse{}
 	fs.ino++
@@ -133,7 +133,7 @@ func MountFilesystem(fs *Fuse, mount string) {
 		options = append(options, "-o", "gid=-1")
 	}
 
-	logs.Infof("Mounting filesystem at %s", mount)
+	logs.Infof("Mounting Data Gateway at %s", mount)
 	host.Mount(mount, options)
 }
 
@@ -225,7 +225,7 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 
 	// Calculate the size of higher level directories whose size currently is just -1.
 	calculateFinalSize(fs.root, "")
-	logs.Info("Filesystem database completed")
+	logs.Info("Data Gateway database completed")
 }
 
 var removeInvalidChars = func(str string) string {

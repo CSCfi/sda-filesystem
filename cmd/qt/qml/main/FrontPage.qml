@@ -45,7 +45,7 @@ Page {
 
     CSC.Popup {
 		id: popupPanic
-		errorMessage: "How can this be! Filesystem failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
+		errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
         
 		ColumnLayout {
 			width: parent.width
@@ -291,7 +291,7 @@ Page {
 
         CSC.Button {
             id: createButton
-            text: "Create filesystem"
+            text: "Create Data Gateway"
             enabled: mountText.text != ""
 
             Material.accent: "white"

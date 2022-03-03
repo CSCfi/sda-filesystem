@@ -9,7 +9,7 @@ import csc 1.0 as CSC
 
 ApplicationWindow {
     id: window
-    title: "SDA Filesystem"
+    title: "Data Gateway"
     visible: true
     visibility: "Maximized"
     minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
