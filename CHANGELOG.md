@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GUI has a new look
 - `README.md` update with details regarding SD-Submit
 - SD-Connect Proxy API reference documentation updated
+- Project rebranded as Data Gateway
 
 ### Added
 - run unit tests in github actions
