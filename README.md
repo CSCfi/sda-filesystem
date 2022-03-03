@@ -83,7 +83,7 @@ qtdeploy build desktop cmd/qt/main.go
 tar -czf deploy.tar.gz -C cmd/qt/deploy linux
 ```
 
-Copy the archive of the deployment environment.
+Copy the archive of the deployment environment, for more details see: [Linux setup](docs/linux-setup.md).
 
 ## Command Line Interface
 
