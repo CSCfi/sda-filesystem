@@ -351,7 +351,7 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 			testname:            "FAIL_METADATA_VALIDATE",
 			expectedMetadataURL: metaUrl,
 			expectedDataURL:     "",
-			expectedError:       errors.New("Cannot connect to SD-Connect metadata API: bad url"),
+			expectedError:       errors.New("Cannot connect to SD Connect metadata API: bad url"),
 			mockGetEnv: func(s string, b bool) (string, error) {
 				return metaUrl, nil
 			},
@@ -379,7 +379,7 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 			testname:            "FAIL_DATA_VALIDATE",
 			expectedMetadataURL: metaUrl,
 			expectedDataURL:     "http://data.csc.fi",
-			expectedError:       errors.New("Cannot connect to SD-Connect data API: bad url"),
+			expectedError:       errors.New("Cannot connect to SD Connect data API: bad url"),
 			mockGetEnv: func(s string, b bool) (string, error) {
 				if s == envMetaUrl {
 					return metaUrl, nil
@@ -743,7 +743,7 @@ func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
 		},
 		{
 			"WRONG_DATA_TYPE",
-			"SD-Connect updateAttributes() was called with incorrect attribute. Expected type *int64, received *string",
+			"SD Connect updateAttributes() was called with incorrect attribute. Expected type *int64, received *string",
 			[]string{"Folder", "dir", "file"}, nil, "test",
 		},
 		{

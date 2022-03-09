@@ -48,7 +48,7 @@ func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
 	}
 
 	// Test
-	expectedError := "Failed to retrieve SD-Submit datasets: some error"
+	expectedError := "Failed to retrieve SD Apply datasets: some error"
 	testToken := constantToken
 	s := submitter{token: &testToken}
 	_, err := s.getDatasets("url")
@@ -229,7 +229,7 @@ func Test_SDSubmit_GetEnvs_Fail_ValidURL(t *testing.T) {
 
 func Test_SDSubmit_GetEnvs_Fail_TestURL(t *testing.T) {
 	// Mock
-	expectedError := "Cannot connect to SD-Submit API: some error"
+	expectedError := "Cannot connect to SD Apply registered API: some error"
 	origGetEnv := getEnv
 	origValidURL := validURL
 	origTestURL := testURL
@@ -329,7 +329,7 @@ func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "Cannot receive responses from any of the SD-Submit APIs"
+	expectedError := "Cannot receive responses from any of the SD Apply registered APIs"
 	err := s.validateLogin()
 
 	if err != nil {
@@ -362,7 +362,7 @@ func Test_SDSubmit_ValidateLogin_Pass_None(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"good"}}
 
 	// Test
-	expectedError := "No datasets found for SD-Submit"
+	expectedError := "No datasets found for SD Apply"
 	err := s.validateLogin()
 
 	if err != nil {
@@ -477,7 +477,7 @@ func Test_SDSubmit_DownloadData_Fail(t *testing.T) {
 	s := sdSubmitInfo{datasets: map[string]int{"something": 0}}
 
 	// Test
-	expectedError := "Tried to request content of SD-Submit file file1 with invalid dataset missing"
+	expectedError := "Tried to request content of SD Apply file file1 with invalid dataset missing"
 	buf := []byte{}
 	err := s.downloadData([]string{"missing", "file1"}, buf, 0, 0)
 

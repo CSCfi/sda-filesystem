@@ -1,6 +1,6 @@
-# SD-Submit API Reference
+# SD Apply/SD Submit API Reference
 
-The API reflects data in the [FEGA](https://research.csc.fi/-/fega) and [SD-Submit](https://research.csc.fi/sensitive-data-services-for-research) services.
+The API reflects data in the [FEGA](https://research.csc.fi/-/fega) and [SD Apply/SD Submit](https://research.csc.fi/sensitive-data-services-for-research) services.
 
 The API implementation is in [sda-download](https://github.com/neicnordic/sda-download) which is a Go implementation of the NeIC [Data Out API](https://neic-sda.readthedocs.io/en/latest/dataout.html#rest-api-endpoints).
 
