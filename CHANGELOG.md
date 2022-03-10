@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 Renamed:
-- `SD-Submit` to `SD Apply` in the UI
-- `SD-Connect` to `SD Connect` in the UI
+- `SD-Submit` to `SD Apply` in the UI and logs
+- `SD-Connect` to `SD Connect` in the UI and logs
 
 ## [v1.0.0] - 2022-03-04
 
