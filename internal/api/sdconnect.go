@@ -14,9 +14,9 @@ import (
 	"sda-filesystem/internal/logs"
 )
 
-// This file contains structs and functions that are strictly for SD-Connect
+// This file contains structs and functions that are strictly for SD Connect
 
-const SDConnect string = "SD-Connect"
+const SDConnect string = "SD Connect"
 
 // This exists for unit test mocking
 type tokenable interface {

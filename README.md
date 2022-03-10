@@ -8,8 +8,8 @@
 
 Data Gateway makes use of the:
 
-- [SD-Connect Proxy API](docs/SD-Connect-API.md) 
-- [SD-Submit Download API](docs/SD-Submit-API.md) 
+- [SD Connect Proxy API](docs/SD-Connect-API.md) 
+- [SD Apply/SD Submit Download API](docs/SD-Submit-API.md) 
 
 It builds a FUSE (Filesystem in Userspace) layer. Software currently supports Linux, macOS and Windows for:
 - [Graphical User Interface](#graphical-user-interface)
@@ -22,9 +22,9 @@ Binaries are built on each release for all supported Operating Systems.
 Go version 1.16
 
 Set these environment variables before running the application:
-- SD-Connect: `FS_SD_CONNECT_METADATA_API` - a metadata API for building the directories, files and their associated information (size, name etc.); `FS_SD_CONNECT_DATA_API` - an API for downloading files;
-- SD-Submit: `FS_SD_SUBMIT_API` – a comma-separated list of APIs; `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD-Submit download API;
-- `FS_CERTS` is required by SD-Connect and SD-Submit if self signed certificates are used on the APIs.
+- SD Connect: `FS_SD_CONNECT_METADATA_API` - a metadata API for building the directories, files and their associated information (size, name etc.); `FS_SD_CONNECT_DATA_API` - an API for downloading files;
+- SD Apply/SD Submit: `FS_SD_SUBMIT_API` – a comma-separated list of APIs; `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD Submit download API;
+- `FS_CERTS` is required by SD Connect and SD Submit if self signed certificates are used on the APIs.
 
 For test environment use:
 
@@ -102,7 +102,7 @@ Usage of ./go-fuse:
   -alsologtostderr
     	log to standard error as well as files
   -enable string
-    	Choose which repositories you wish include in Data Gateway. Possible values: {SD-Connect,SD-Submit,all} (default "all")
+    	Choose which repositories you wish include in Data Gateway. Possible values: {SD Connect,SD Apply,all} (default "all")
   -http_timeout int
     	Number of seconds to wait before timing out an HTTP request (default 20)
   -log_backtrace_at value
@@ -123,7 +123,7 @@ Usage of ./go-fuse:
     	comma-separated list of pattern=N settings for file-filtered logging
 
 ```
-Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both SD-Connect and SD-Submit.
+Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both 'SD Connect' and 'SD Apply'.
 
 ## License
 

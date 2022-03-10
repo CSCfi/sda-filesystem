@@ -11,9 +11,11 @@ import (
 	"sda-filesystem/internal/logs"
 )
 
-// This file contains structs and functions that are strictly for SD-Submit
+// This file contains structs and functions that are strictly for SD Submit
+// We name it SD Apply as that is where the datasets access is registered
+// However the datasets are mostly in SD Submit backend
 
-const SDSubmit string = "SD-Submit"
+const SDSubmit string = "SD Apply"
 
 // This exists for unit test mocking
 type submittable interface {
@@ -116,7 +118,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 		}
 		s.urls = append(s.urls, strings.TrimRight(u, "/"))
 		if err := testURL(s.urls[i]); err != nil {
-			return fmt.Errorf("Cannot connect to SD-Submit API: %w", err)
+			return fmt.Errorf("Cannot connect to %s registered API: %w", SDSubmit, err)
 		}
 	}
 	return nil
@@ -147,7 +149,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	}
 
 	if count == len(s.urls) {
-		return fmt.Errorf("Cannot receive responses from any of the %s APIs", SDSubmit)
+		return fmt.Errorf("Cannot receive responses from any of the %s registered APIs", SDSubmit)
 	}
 	if len(s.datasets) == 0 {
 		return fmt.Errorf("No datasets found for %s", SDSubmit)
