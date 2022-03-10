@@ -13,7 +13,7 @@ import (
 
 // This file contains structs and functions that are strictly for SD Submit
 // We name it SD Apply as that is where the datasets access is registered
-// however the datasets are most in SD Submit backend
+// However the datasets are mostly in SD Submit backend
 
 const SDSubmit string = "SD Apply"
 
@@ -118,7 +118,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 		}
 		s.urls = append(s.urls, strings.TrimRight(u, "/"))
 		if err := testURL(s.urls[i]); err != nil {
-			return fmt.Errorf("Cannot connect to SD Apply registered API: %w", err)
+			return fmt.Errorf("Cannot connect to %s registered API: %w", SDSubmit, err)
 		}
 	}
 	return nil
