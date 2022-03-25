@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/logs"
 
 	"github.com/therecipe/qt/core"
 )
@@ -12,6 +13,7 @@ const (
 	Repository = int(core.Qt__UserRole) + 1<<iota
 	Method
 	LoggedIn
+	EnvsMissing
 )
 
 // LoginMethod is used to transfer the api.LoginMethod enums to qml
@@ -39,16 +41,18 @@ type LoginModel struct {
 }
 
 type loginRow struct {
-	repository string
-	method     int
-	loggedIn   bool
+	repository  string
+	method      int
+	loggedIn    bool
+	envsMissing bool
 }
 
 func (lm *LoginModel) init() {
 	lm.roles = map[int]*core.QByteArray{
-		Repository: core.NewQByteArray2("repository", -1),
-		Method:     core.NewQByteArray2("method", -1),
-		LoggedIn:   core.NewQByteArray2("loggedIn", -1),
+		Repository:  core.NewQByteArray2("repository", -1),
+		Method:      core.NewQByteArray2("method", -1),
+		LoggedIn:    core.NewQByteArray2("loggedIn", -1),
+		EnvsMissing: core.NewQByteArray2("envsMissing", -1),
 	}
 
 	lm.ConnectData(lm.data)
@@ -80,6 +84,8 @@ func (lm *LoginModel) data(index *core.QModelIndex, role int) *core.QVariant {
 		return core.NewQVariant1(l.method)
 	case LoggedIn:
 		return core.NewQVariant1(l.loggedIn)
+	case EnvsMissing:
+		return core.NewQVariant1(l.envsMissing)
 	default:
 		return core.NewQVariant()
 	}
@@ -101,4 +107,15 @@ func (lm *LoginModel) setLoggedIn(idx int, value bool) {
 	lm.logins[idx].loggedIn = value
 	var index = lm.Index(idx, 0, core.NewQModelIndex())
 	lm.DataChanged(index, index, []int{LoggedIn})
+}
+
+func (lm *LoginModel) checkEnvs() {
+	for i := range lm.logins {
+		if err := api.GetEnvs(lm.logins[i].repository); err != nil {
+			logs.Error(err)
+			lm.logins[i].envsMissing = true
+			var index = lm.Index(i, 0, core.NewQModelIndex())
+			lm.DataChanged(index, index, []int{EnvsMissing})
+		}
+	}
 }

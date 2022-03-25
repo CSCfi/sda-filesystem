@@ -94,12 +94,8 @@ var GetEnabledRepositories = func() []string {
 }
 
 // AddRepository adds a repository to hi.repositories
-var AddRepository = func(r string) (err error) {
-	err = possibleRepositories[r].getEnvs()
-	if err == nil {
-		hi.repositories[r] = possibleRepositories[r]
-	}
-	return err
+var AddRepository = func(r string) {
+	hi.repositories[r] = possibleRepositories[r]
 }
 
 // RemoveRepository removes a repository from hi.repositories
@@ -110,6 +106,11 @@ var RemoveRepository = func(r string) {
 // SetRequestTimeout redefines hi.requestTimeout
 var SetRequestTimeout = func(timeout int) {
 	hi.requestTimeout = timeout
+}
+
+// GetEnvs gets the environment variables for repository 'r'
+var GetEnvs = func(r string) error {
+	return possibleRepositories[r].getEnvs()
 }
 
 // getEnv looks up environment variable given in 'name'

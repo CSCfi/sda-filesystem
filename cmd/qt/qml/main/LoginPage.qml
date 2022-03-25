@@ -47,6 +47,7 @@ Page {
 				heading: repository
 				width: repositoryList.width
 				success: loggedIn
+				enabled: !envsMissing
 				anchors.horizontalCenter: parent.horizontalCenter
 
 				onSuccessChanged: {

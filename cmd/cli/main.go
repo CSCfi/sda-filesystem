@@ -172,18 +172,20 @@ func processFlags() error {
 	for _, op := range repOptions {
 		if strings.EqualFold(repository, op) || strings.EqualFold(repository, "all") {
 			found = true
-			if err := api.AddRepository(op); err != nil {
+			if err := api.GetEnvs(op); err != nil {
 				return err
 			}
+			api.AddRepository(op)
 		}
 	}
 
 	if !found {
 		logs.Warningf("Flag -enable=%s not supported, switching to default -enable=all", repository)
 		for _, op := range repOptions {
-			if err := api.AddRepository(op); err != nil {
+			if err := api.GetEnvs(op); err != nil {
 				return err
 			}
+			api.AddRepository(op)
 		}
 	}
 
