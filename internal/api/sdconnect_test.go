@@ -48,13 +48,15 @@ type mockConnecter struct {
 	uToken      string
 	sTokenKey   string
 	sTokenValue sToken
+	projects    []Metadata
+	projectsErr error
 }
 
 func (c *mockConnecter) getProjects(string) ([]Metadata, error) {
 	if c.uToken == "" {
-		return nil, errors.New("getProjects error")
+		return nil, fmt.Errorf("getProjects error: %w", c.projectsErr)
 	}
-	return nil, nil
+	return c.projects, nil
 }
 
 func (c *mockConnecter) fetchTokens(bool, []Metadata) (string, map[string]sToken) {
@@ -431,8 +433,10 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 }
 
 func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
+	projects := []Metadata{{56, "pr1"}, {45, "pr56"}, {8, "pr88"}}
 	mockT := &mockTokenator{uToken: "uToken"}
-	mockC := &mockConnecter{tokenable: mockT, uToken: "uToken", sTokenKey: "s1", sTokenValue: sToken{"sToken", "proj1"}}
+	mockC := &mockConnecter{tokenable: mockT, uToken: "uToken", sTokenKey: "s1", sTokenValue: sToken{"sToken", "proj1"},
+		projects: projects}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	err := sd.validateLogin("user", "pass")
@@ -451,6 +455,9 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	if pi := sd.sTokens["s1"].ProjectID; pi != "proj1" {
 		t.Errorf("ProjectID incorrect for project 's1'. expected=proj1, received=%s", pi)
 	}
+	if !reflect.DeepEqual(sd.projects, projects) {
+		t.Errorf("Projects incorrect\nExpected=%v\nReceived=%v", projects, sd.projects)
+	}
 }
 
 func Test_SDConnect_ValidateLogin_Fail_GetUToken(t *testing.T) {
@@ -458,7 +465,7 @@ func Test_SDConnect_ValidateLogin_Fail_GetUToken(t *testing.T) {
 	mockC := &mockConnecter{tokenable: mockT}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "uToken error"
+	expectedError := "Error occurred for SD Connect"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
@@ -472,7 +479,49 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 	mockC := &mockConnecter{tokenable: mockT, uToken: ""}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "getProjects error"
+	expectedError := "Error occurred for SD Connect"
+	err := sd.validateLogin("user", "pass")
+	if err != nil {
+		if err.Error() != expectedError {
+			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
+		}
+	}
+}
+
+func Test_SDConnect_ValidateLogin_No_Projects(t *testing.T) {
+	mockT := &mockTokenator{uToken: "token"}
+	mockC := &mockConnecter{tokenable: mockT, uToken: "token", projects: nil}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	expectedError := "No projects found for SD Connect"
+	err := sd.validateLogin("user", "pass")
+	if err != nil {
+		if err.Error() != expectedError {
+			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
+		}
+	}
+}
+
+func Test_SDConnect_ValidateLogin_401_Error(t *testing.T) {
+	mockT := &mockTokenator{uToken: "token456"}
+	mockC := &mockConnecter{tokenable: mockT, projectsErr: &RequestError{StatusCode: 401}}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	expectedError := "getProjects error: API responded with status 401 Unauthorized"
+	err := sd.validateLogin("user", "pass")
+	if err != nil {
+		if err.Error() != expectedError {
+			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
+		}
+	}
+}
+
+func Test_SDConnect_ValidateLogin_500_Error(t *testing.T) {
+	mockT := &mockTokenator{uToken: "token456"}
+	mockC := &mockConnecter{tokenable: mockT, projectsErr: &RequestError{StatusCode: 500}}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	expectedError := "SD Connect is not available, please contact sds-support/servicedesk"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
@@ -842,7 +891,4 @@ func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 	if !bytes.Equal(buf, expectedBody) {
 		t.Errorf("Function failed, expected=%s, received=%s", string(expectedBody), string(buf))
 	}
-}
-
-func Test_SDConnect_DownloadData_Error(t *testing.T) {
 }

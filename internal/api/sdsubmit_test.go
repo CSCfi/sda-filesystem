@@ -48,14 +48,14 @@ func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
 	}
 
 	// Test
-	expectedError := "Failed to retrieve SD Apply datasets: some error"
+	expectedError := "Failed to retrieve SD Apply datasets from API url: some error"
 	testToken := constantToken
 	s := submitter{token: &testToken}
 	_, err := s.getDatasets("url")
 
 	if err != nil {
 		if err.Error() != expectedError {
-			t.Errorf("Function failed, expected=%s, received=%v", expectedError, err)
+			t.Errorf("Function failed\nExpected=%s\nReceived=%v", expectedError, err)
 		}
 	}
 }
@@ -307,7 +307,7 @@ func Test_SDSubmit_LoginMethod(t *testing.T) {
 	}
 }
 
-func Test_SDSubmit_ValidateLogin_Fail(t *testing.T) {
+func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 	// Mock
 	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusUnauthorized}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
@@ -323,13 +323,46 @@ func Test_SDSubmit_ValidateLogin_Fail(t *testing.T) {
 	}
 }
 
+func Test_SDSubmit_ValidateLogin_500_Error(t *testing.T) {
+	// Mock
+	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusInternalServerError}}
+	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
+
+	expectedError := "SD Apply is not available, please contact sds-support/servicedesk"
+	err := s.validateLogin()
+
+	if err != nil {
+		if err.Error() != expectedError {
+			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
+		}
+	}
+}
+
+func Test_SDSubmit_ValidateLogin_500_And_Pass(t *testing.T) {
+	// Mock
+	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusInternalServerError},
+		mockDatasets: []string{"dataset1", "dataset2", "dataset3"}}
+	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad", "good"}}
+
+	// Test
+	expectedDatasets := map[string]int{"dataset1": 0, "dataset2": 1, "dataset3": 2}
+	err := s.validateLogin()
+
+	if err != nil {
+		t.Errorf("Function failed, expected no error, received=%v", err)
+	}
+	if reflect.DeepEqual(s.datasets, expectedDatasets) {
+		t.Errorf("Function failed, expected=%v, received=%v", expectedDatasets, s.datasets)
+	}
+}
+
 func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 	// Mock
 	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusBadGateway}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "Cannot receive responses from any of the SD Apply registered APIs"
+	expectedError := "Error(s) occurred for SD Apply"
 	err := s.validateLogin()
 
 	if err != nil {
