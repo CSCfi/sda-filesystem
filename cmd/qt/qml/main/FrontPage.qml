@@ -278,7 +278,7 @@ Page {
                 if (createButton.state == "loading") {
                     return ProjectModel.loadedProjects + "/" + table.rowCount + " complete"
                 } else if (createButton.state == "finished") {
-                    return "Transfer is complete"
+                    return "Data Gateway complete"
                 } else {
                     return ""
                 }

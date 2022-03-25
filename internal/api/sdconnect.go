@@ -118,8 +118,6 @@ func (c *connecter) getProjects(token string) ([]Metadata, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
 	}
-
-	logs.Infof("Retrieved %d %s project(s)", len(projects), SDConnect)
 	return projects, nil
 }
 
@@ -194,20 +192,37 @@ func (c *sdConnectInfo) getLoginMethod() LoginMethod {
 	return Password
 }
 
-func (c *sdConnectInfo) validateLogin(auth ...string) (err error) {
+func (c *sdConnectInfo) validateLogin(auth ...string) error {
 	if len(auth) == 2 {
 		c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
 	}
 
+	var err error
 	c.projects = nil
-	if c.uToken, err = c.getUToken(c.metadataURL); err != nil {
-		return
+	if c.uToken, err = c.getUToken(c.metadataURL); err == nil {
+		if c.projects, err = c.getProjects(c.uToken); err == nil {
+			if len(c.projects) == 0 {
+				err = fmt.Errorf("No projects found for %s", SDConnect)
+				logs.Error(err)
+				return err
+			}
+			logs.Infof("Retrieved %d %s project(s)", len(c.projects), SDConnect)
+			_, c.sTokens = c.fetchTokens(true, c.projects)
+			return nil
+		}
 	}
-	if c.projects, err = c.getProjects(c.uToken); err != nil {
-		return
+
+	var re *RequestError
+	if errors.As(err, &re) && re.StatusCode == 401 {
+		return err
 	}
-	_, c.sTokens = c.fetchTokens(true, c.projects)
-	return nil
+
+	logs.Error(err)
+	if errors.As(err, &re) && re.StatusCode == 500 {
+		return fmt.Errorf("%s is not available, please contact sds-support/servicedesk", SDConnect)
+	}
+	return fmt.Errorf("Error occurred for %s", SDConnect)
+
 }
 
 func (c *sdConnectInfo) levelCount() int {

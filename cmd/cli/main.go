@@ -141,7 +141,7 @@ var login = func(lr loginReader, rep string) error {
 				return nil
 			}
 		} else {
-			return fmt.Errorf("Failed to log in to %s: %w", rep, err)
+			return fmt.Errorf("Failed to log in")
 		}
 	}
 }
