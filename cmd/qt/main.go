@@ -35,6 +35,7 @@ type QmlBridge struct {
 	_ func()                        `slot:"initFuse,auto"`
 	_ func()                        `slot:"loadFuse,auto"`
 	_ func()                        `slot:"openFuse,auto"`
+	_ func()                        `slot:"refreshFuse,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
 	_ func()                        `slot:"shutdown,auto"`
 	_ func(idx int)                 `signal:"login401"`
@@ -148,6 +149,19 @@ func (qb *QmlBridge) openFuse() {
 	if err = cmd.Run(); err != nil {
 		logs.Errorf("Could not open directory %s: %w", userPath, err)
 	}
+}
+
+func (qb *QmlBridge) refreshFuse() {
+	level := logs.GetLevel()
+	logs.SetLevel("debug")
+	projectModel.prepareForRefresh()
+
+	newFs := filesystem.InitializeFileSystem(projectModel.AddProject)
+	projectModel.deleteExtraProjects()
+	newFs.PopulateFilesystem(projectModel.AddToCount)
+
+	logs.SetLevel(level)
+	qb.fs.RefreshFilesystem(newFs)
 }
 
 func (qb *QmlBridge) shutdown() {

@@ -317,6 +317,10 @@ func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string,
 	}
 }
 
+func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
+
+}
+
 // split deconstructs a filepath string into an array of strings
 func split(path string) []string {
 	return strings.Split(path, "/")

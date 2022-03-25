@@ -24,6 +24,9 @@ type ProjectModel struct {
 	roles       map[int]*core.QByteArray
 	projects    []project
 	nameToIndex map[string]int
+
+	deletedIdxs map[int]bool
+	refreshing  bool
 }
 
 type project struct {
@@ -48,6 +51,8 @@ func (pm *ProjectModel) init() {
 
 	pm.projects = []project{}
 	pm.nameToIndex = make(map[string]int)
+	pm.deletedIdxs = make(map[int]bool)
+	pm.refreshing = false
 }
 
 func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
@@ -85,6 +90,14 @@ func (pm *ProjectModel) roleNames() map[int]*core.QByteArray {
 
 func (pm *ProjectModel) addProject(rep, pr string) {
 	length := len(pm.projects)
+
+	if pm.refreshing {
+		if idx, ok := pm.nameToIndex[rep+"/"+pr]; ok {
+			pm.deletedIdxs[idx] = false
+			return
+		}
+	}
+
 	pm.nameToIndex[rep+"/"+pr] = length
 	pm.BeginInsertRows(core.NewQModelIndex(), length, length)
 	pm.projects = append(pm.projects, project{repositoryName: rep, projectName: pr, allContainers: -1})
@@ -106,5 +119,24 @@ func (pm *ProjectModel) addToCount(rep, pr string, count int) {
 
 	if project.loadedContainers == project.allContainers {
 		pm.SetLoadedProjects(pm.LoadedProjects() + 1)
+	}
+}
+
+func (pm *ProjectModel) prepareForRefresh() {
+	pm.refreshing = true
+	pm.deletedIdxs = make(map[int]bool)
+	for i := range pm.projects {
+		pm.deletedIdxs[i] = true
+	}
+}
+
+func (pm *ProjectModel) deleteExtraProjects() {
+	pm.refreshing = false
+	for i := range pm.projects {
+		if pm.deletedIdxs[i] {
+			pm.BeginRemoveRows(core.NewQModelIndex(), i, i)
+			pm.projects = append(pm.projects[:i], pm.projects[i+1:]...)
+			pm.EndRemoveRows()
+		}
 	}
 }
