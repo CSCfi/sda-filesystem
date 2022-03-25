@@ -9,8 +9,8 @@ ColumnLayout {
     spacing: 0
 
     property string heading
-    property color backgroundColor: "#DBE7E9"
-    property color textColor: CSC.Style.primaryColor
+    property color backgroundColor: enabled ? "#DBE7E9" : "#E8E8E8"
+    property color textColor: enabled ? CSC.Style.primaryColor : "#8C8C8C"
     property bool open: false
     property bool success: false
     property bool loading: false

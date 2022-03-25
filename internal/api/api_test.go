@@ -99,7 +99,18 @@ func TestGetEnabledRepositories(t *testing.T) {
 	}
 }
 
-func TestAddRepository(t *testing.T) {
+func TestRequestTimeout(t *testing.T) {
+	timeouts := []int{34, 6, 1200, 84}
+
+	for i := range timeouts {
+		SetRequestTimeout(timeouts[i])
+		if hi.requestTimeout != timeouts[i] {
+			t.Fatalf("Incorrect request timeout. Expected=%d, received=%d", timeouts[i], hi.requestTimeout)
+		}
+	}
+}
+
+func TestGetEnvs(t *testing.T) {
 	origPossibleRepositories := possibleRepositories
 	origRepositories := hi.repositories
 
@@ -113,35 +124,17 @@ func TestAddRepository(t *testing.T) {
 	possibleRepositories = map[string]fuseInfo{"One": nil, "Two": twoRep, "Three": threeRep}
 	hi.repositories = map[string]fuseInfo{}
 
-	err := AddRepository("Two")
+	err := GetEnvs("Two")
 	if err != nil {
 		t.Fatalf("Function returned error for repository Two: %s", err.Error())
 	}
-	expectedReps := map[string]fuseInfo{"Two": twoRep}
-	if !reflect.DeepEqual(hi.repositories, expectedReps) {
-		t.Fatalf("Function did not add repository correctly. Expected=%v, received=%v", expectedReps, hi.repositories)
-	}
 
-	err = AddRepository("Three")
+	err = GetEnvs("Three")
 	if err == nil {
 		t.Fatalf("Function did not return error")
 	}
 	if err.Error() != errExpected.Error() {
 		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
-	}
-	if !reflect.DeepEqual(hi.repositories, expectedReps) {
-		t.Fatalf("Function did not add repository correctly. Expected=%v, received=%v", expectedReps, hi.repositories)
-	}
-}
-
-func TestRequestTimeout(t *testing.T) {
-	timeouts := []int{34, 6, 1200, 84}
-
-	for i := range timeouts {
-		SetRequestTimeout(timeouts[i])
-		if hi.requestTimeout != timeouts[i] {
-			t.Fatalf("Incorrect request timeout. Expected=%d, received=%d", timeouts[i], hi.requestTimeout)
-		}
 	}
 }
 

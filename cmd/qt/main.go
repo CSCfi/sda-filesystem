@@ -85,11 +85,7 @@ func (qb *QmlBridge) loginWithPassword(idx int, username, password string) {
 
 func (qb *QmlBridge) login(idx int, auth ...string) {
 	rep := loginModel.getRepository(idx)
-	if err := api.AddRepository(rep); err != nil {
-		logs.Error(err)
-		qb.LoginError(idx, "Environment variables are not valid")
-		return
-	}
+	api.AddRepository(rep)
 
 	if err := api.ValidateLogin(rep, auth...); err != nil {
 		api.RemoveRepository(rep)
@@ -220,5 +216,6 @@ func main() {
 	//fmt.Println(core.QThread_CurrentThread().Pointer())
 
 	qmlBridge.initializeAPI()
+	loginModel.checkEnvs()
 	gui.QGuiApplication_Exec()
 }

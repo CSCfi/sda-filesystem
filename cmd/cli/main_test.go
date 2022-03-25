@@ -442,10 +442,10 @@ func TestProcessFlags(t *testing.T) {
 	api.GetAllPossibleRepositories = func() []string {
 		return repositories
 	}
-	api.AddRepository = func(r string) error {
+	api.AddRepository = func(r string) {
 		reps = append(reps, r)
-		return nil
 	}
+	api.GetEnvs = func(r string) error { return nil }
 	mountpoint.DefaultMountPoint = func() (string, error) {
 		return defaultMount, nil
 	}
@@ -520,6 +520,7 @@ func TestProcessFlags_Error(t *testing.T) {
 	api.GetAllPossibleRepositories = func() []string {
 		return []string{"Rep1", "Rep2", "Rep3"}
 	}
+	api.AddRepository = func(r string) {}
 	api.SetRequestTimeout = func(timeout int) {}
 	logs.SetLevel = func(level string) {}
 
@@ -528,7 +529,7 @@ func TestProcessFlags_Error(t *testing.T) {
 			mount = tt.mount
 			repository = tt.repository
 
-			api.AddRepository = func(r string) error {
+			api.GetEnvs = func(r string) error {
 				return tt.addRepError
 			}
 			mountpoint.DefaultMountPoint = func() (string, error) {
