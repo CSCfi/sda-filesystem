@@ -219,7 +219,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 
 	logs.Error(err)
 	if errors.As(err, &re) && re.StatusCode == 500 {
-		return fmt.Errorf("%s is not available, please contact sds-support/servicedesk", SDConnect)
+		return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDConnect)
 	}
 	return fmt.Errorf("Error occurred for %s", SDConnect)
 
