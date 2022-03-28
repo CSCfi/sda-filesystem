@@ -521,7 +521,7 @@ func Test_SDConnect_ValidateLogin_500_Error(t *testing.T) {
 	mockC := &mockConnecter{tokenable: mockT, projectsErr: &RequestError{StatusCode: 500}}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "SD Connect is not available, please contact sds-support/servicedesk"
+	expectedError := "SD Connect is not available, please contact CSC servicedesk"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {

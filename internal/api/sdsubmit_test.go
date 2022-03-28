@@ -328,7 +328,7 @@ func Test_SDSubmit_ValidateLogin_500_Error(t *testing.T) {
 	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusInternalServerError}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
-	expectedError := "SD Apply is not available, please contact sds-support/servicedesk"
+	expectedError := "SD Apply is not available, please contact CSC servicedesk"
 	err := s.validateLogin()
 
 	if err != nil {
