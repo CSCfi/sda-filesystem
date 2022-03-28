@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,15 +88,15 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 
 	if err := api.ValidateLogin(rep, auth...); err != nil {
 		api.RemoveRepository(rep)
-		logs.Error(err)
 
 		var re *api.RequestError
-		if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
+		if errors.As(err, &re) && re.StatusCode == 401 {
+			logs.Error(err)
 			qb.Login401(idx)
 			return
 		}
 
-		qb.LoginError(idx, fmt.Sprintf("%s authentication failed", rep))
+		qb.LoginError(idx, err.Error())
 		return
 	}
 

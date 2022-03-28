@@ -62,7 +62,7 @@ Page {
 					onLoginError: {
 						if (index == idx) {
 							loader.item.loading = false
-							popup.errorMessage = message + ". Check logs for further details"
+							popup.errorMessage = message
 							popup.open()
 						}
 					}
@@ -117,7 +117,7 @@ Page {
 				onLogin401: {
 					if (idx == empty.index) {
 						loading = false
-						popup.errorMessage = "Invalid " + repository + " token"
+						popup.errorMessage = repository + " authorization failed"
 						popup.open()
 					}
 				}

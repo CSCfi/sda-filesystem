@@ -277,7 +277,7 @@ func TestLogin(t *testing.T) {
 		},
 		{
 			"FAIL_VALIDATE", nil, false,
-			"Failed to log in to Test Repository: " + errExpected.Error(),
+			"Failed to log in",
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
 					return "", "", fmt.Errorf("Function in infinite loop")

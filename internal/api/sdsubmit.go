@@ -65,7 +65,7 @@ func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	var datasets []string
 	err := makeRequest(urlStr+"/metadata/datasets", *s.token, SDSubmit, nil, nil, &datasets)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s datasets: %w", SDSubmit, err)
+		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmit, urlStr, err)
 	}
 
 	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, urlStr)
@@ -130,17 +130,23 @@ func (s *sdSubmitInfo) getLoginMethod() LoginMethod {
 
 func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	s.datasets = make(map[string]int)
-	count := 0
+	count, count500 := 0, 0
 
 	for i := range s.urls {
 		datasets, err := s.getDatasets(s.urls[i])
 		if err != nil {
 			var re *RequestError
-			if errors.As(err, &re) && (re.StatusCode == 401 || re.StatusCode == 404) {
+			if errors.As(err, &re) && re.StatusCode == 401 {
 				return err
 			}
-			logs.Warningf("Something went wrong when fetching %s datasets from API %s: %w", SDSubmit, s.urls[i], err)
-			count++
+
+			if errors.As(err, &re) && re.StatusCode == 500 {
+				logs.Warningf("Cannot connect to %s API %s: %w", SDSubmit, s.urls[i], err)
+				count500++
+			} else {
+				logs.Warningf("Something went wrong when fetching %s datasets from API %s: %w", SDSubmit, s.urls[i], err)
+				count++
+			}
 		} else {
 			for j := range datasets {
 				s.datasets[datasets[j]] = i
@@ -148,11 +154,14 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		}
 	}
 
-	if count == len(s.urls) {
-		return fmt.Errorf("Cannot receive responses from any of the %s registered APIs", SDSubmit)
-	}
 	if len(s.datasets) == 0 {
-		return fmt.Errorf("No datasets found for %s", SDSubmit)
+		if count500 > 0 {
+			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmit)
+		} else if count > 0 {
+			return fmt.Errorf("Error(s) occurred for %s", SDSubmit)
+		} else {
+			return fmt.Errorf("No datasets found for %s", SDSubmit)
+		}
 	}
 	return nil
 }

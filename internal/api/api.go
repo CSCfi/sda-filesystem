@@ -203,6 +203,7 @@ var GetLoginMethod = func(rep string) LoginMethod {
 }
 
 // ValidateLogin checks if user is able to log in with given input to repository 'rep'
+// The returned error contains ONLY the text that will be shown in an UI error popup, UNLESS the error contains status 401
 var ValidateLogin = func(rep string, auth ...string) error {
 	return hi.repositories[rep].validateLogin(auth...)
 }
