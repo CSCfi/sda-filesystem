@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.16']
+        go: [ '1.17']
     steps:
 
       - name: Check out code into the Go module directory
@@ -38,7 +38,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v2.5.2
         with:
-          version: v1.44
+          version: v1.45
           args: -E gosec,goconst,nestif,bodyclose,rowserrcheck --skip-files cmd/qt/moc.go  --timeout=10m
           skip-pkg-cache: true
           skip-go-installation: true

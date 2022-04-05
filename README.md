@@ -19,7 +19,7 @@ Binaries are built on each release for all supported Operating Systems.
 
 ### Requirements
 
-Go version 1.16
+Go version 1.17
 
 Set these environment variables before running the application:
 - SD Connect: `FS_SD_CONNECT_METADATA_API` - a metadata API for building the directories, files and their associated information (size, name etc.); `FS_SD_CONNECT_DATA_API` - an API for downloading files;
