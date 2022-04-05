@@ -31,7 +31,7 @@ Page {
 		}
 
 		Label {
-			text: "Select one or more services to connect to"
+			text: "Please select the services you would like to access"
 			maximumLineCount: 1
 		}
 
