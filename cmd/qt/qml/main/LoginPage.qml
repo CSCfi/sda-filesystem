@@ -8,6 +8,7 @@ import csc 1.0 as CSC
 Page {
 	id: page
 	height: content.height + 2 * CSC.Style.padding
+	implicitHeight: height
 	implicitWidth: content.width + 2 * CSC.Style.padding
 	Material.accent: CSC.Style.primaryColor
 

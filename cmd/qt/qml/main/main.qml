@@ -11,9 +11,9 @@ ApplicationWindow {
     id: window
     title: "Data Gateway"
     visible: true
-    visibility: "Maximized"
     minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
     minimumHeight: header.implicitHeight + login.implicitHeight
+    flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
     
     Material.background: "white"
@@ -157,6 +157,17 @@ ApplicationWindow {
                 onLoggedInChanged: {
                     if (loggedIn) {
                         stack.state = "loggedIn"
+                        window.flags = window.flags & ~Qt.WindowCloseButtonHint
+                        window.width = Math.min(1200, 0.75 * Screen.desktopAvailableWidth)
+                        if (window.width < window.minimumWidth) {
+                            window.width = Screen.desktopAvailableWidth
+                        }
+                        window.height = Math.min(800, 0.75 * Screen.desktopAvailableHeight)
+                        if (window.height < window.minimumHeight) {
+                            window.height = Screen.desktopAvailableHeight
+                        }
+                        window.x = 0.5 * (Screen.width - window.width)
+                        window.y = 0.5 * (Screen.height - window.height)
                     }
                 }
             }
