@@ -34,7 +34,9 @@ ListView {
             visible -= (ceilItemCount - rowCount)
             ceilItemCount = rowCount
         }
-        visualModel.items.addGroups(rowCount - ceilItemCount, visible, "visibleItems")
+        if (visible > 0) {
+            visualModel.items.addGroups(rowCount - ceilItemCount, visible, "visibleItems")
+        }
     }
 
     header: Rectangle {
