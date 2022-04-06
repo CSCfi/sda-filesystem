@@ -43,6 +43,9 @@ Page {
 			height: contentHeight
 			width: 450
 			
+			property int loading: 0
+			property bool success: false
+			
 			delegate: CSC.Accordion {
 				id: accordion
 				heading: repository
@@ -51,9 +54,11 @@ Page {
 				enabled: !envsMissing
 				anchors.horizontalCenter: parent.horizontalCenter
 
+				onLoadingChanged: repositoryList.loading += (loading ? 1 : -1)
+
 				onSuccessChanged: {
 					if (success) {
-						continueButton.enabled = true
+						repositoryList.success = true
 						loader.item.loading = false
 					}
 				}
@@ -88,7 +93,7 @@ Page {
 		CSC.Button {
 			id: continueButton
 			text: "Continue"
-			enabled: false
+			enabled: repositoryList.loading == 0 && repositoryList.success
 			
 			onClicked: {
 				QmlBridge.initFuse()
