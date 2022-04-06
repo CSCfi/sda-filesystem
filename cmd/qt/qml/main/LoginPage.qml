@@ -15,6 +15,7 @@ Page {
 	Component.onCompleted: implicitHeight = content.height + 2 * CSC.Style.padding
 
 	property bool loggedIn: false
+	property real formHeight: 0
 
 	Column {
 		id: content
@@ -55,6 +56,7 @@ Page {
 				anchors.horizontalCenter: parent.horizontalCenter
 
 				onLoadingChanged: repositoryList.loading += (loading ? 1 : -1)
+				Component.onCompleted: page.formHeight = Math.max(page.formHeight, loader.item.height)
 
 				onSuccessChanged: {
 					if (success) {
