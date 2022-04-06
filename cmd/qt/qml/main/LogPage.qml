@@ -60,7 +60,7 @@ Page {
     CSC.Table {
         id: table
         width: parent.width
-        modelSource: LogModel
+        modelSource: LogModel.proxy
         delegateSource: logLine
         objectName: "logs"
 
@@ -76,11 +76,50 @@ Page {
                 anchors.leftMargin: CSC.Style.padding
                 anchors.rightMargin: CSC.Style.padding
 
-                Text {
-                    text: "Level"
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
+                RowLayout{
+                    id: firstTitle
+                    spacing: 10
                     Layout.preferredWidth: textMetricsLevel.width + 30
+                    Layout.fillHeight: true
+
+                    Text {
+                        text: "Level"
+                        font.pixelSize: 13
+                        font.weight: Font.Medium
+                    }
+
+                    RoundButton {
+                        id: filterLevel
+                        padding: 7
+                        topInset: 0
+                        bottomInset: 0
+                        rightInset: 0
+                        leftInset: 0
+                        flat: true
+                        checkable: true
+                        icon.source: "qrc:/qml/images/filter.svg"
+                        icon.color: checked ? CSC.Style.primaryColor : CSC.Style.grey
+                        icon.height: 12
+                        icon.width: 18
+
+                        onCheckedChanged: menu.visible = checked
+
+                        background: Rectangle {
+                            radius: filterLevel.height * 0.5
+                            color: filterLevel.checked ? CSC.Style.lightBlue : "transparent"
+                        }
+
+                        Connections {
+                            target: menu
+                            onClosed: filterLevel.checked = false
+                        }
+
+                        MouseArea {
+                            cursorShape: Qt.PointingHandCursor
+                            acceptedButtons: Qt.NoButton
+                            anchors.fill: parent
+                        }
+                    }
                 }
 
                 Text {
@@ -96,6 +135,31 @@ Page {
                     font.pixelSize: 13
                     font.weight: Font.Medium
                     Layout.fillWidth: true
+                }
+            }
+
+            Menu {
+                id: menu
+                y: parent.height
+
+                Material.accent: CSC.Style.primaryColor
+
+                Repeater {
+                    model: LogModel.includeDebug ? levels.concat(LogLevel.Debug) : levels
+                
+                    property var levels: [-1, LogLevel.Error, LogLevel.Warning, LogLevel.Info] 
+
+                    MenuItem { 
+                        text: LogModel.getLevelStr(modelData)
+                        onTriggered: LogModel.changeFilteredLevel(modelData)
+                    }
+                }
+
+                background: Rectangle {
+                    implicitWidth: firstTitle.width + 2 * CSC.Style.padding
+                    color: "white"
+                    border.width: 1
+                    border.color: CSC.Style.lightGrey
                 }
             }
         }
@@ -120,20 +184,7 @@ Page {
 
                 Label {
                     id: levelText
-                    text: {
-                        switch (level) {
-                            case LogLevel.Error:
-                                return "Error"
-                            case LogLevel.Info:
-                                return "Info"
-                            case LogLevel.Debug:
-                                return "Debug"
-                            case LogLevel.Warning:
-                                return "Warning"
-                            default:
-                                return ""
-                        }
-                    }
+                    text: LogModel.getLevelStr(level)
                     color: {
                         switch (level) {
                             case LogLevel.Error:

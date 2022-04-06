@@ -7,6 +7,7 @@ QtObject {
     property color grey: "#595959"
     property color turquoise: "#61958D"
     property color lightGrey: "#DFE1E3"
+    property color lightBlue: "#DBE7E9"
 
     property real padding: 20
 }
