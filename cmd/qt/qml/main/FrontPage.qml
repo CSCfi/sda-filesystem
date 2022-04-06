@@ -163,39 +163,51 @@ Page {
             bottomPadding: CSC.Style.padding
         }
 
-        CSC.Button {
-            id: createButton
-            text: "Create Data Gateway"
-            enabled: mountText.text != ""
+        RowLayout {
+            spacing: CSC.Style.padding
 
-            Material.accent: "white"
+            CSC.Button {
+                id: createButton
+                text: verb + " Data Gateway"
+                enabled: !loading && mountText.text != ""
 
-            onClicked: {
-                if (state == "") {
+                property var verb: "Create"
+                Material.accent: "white"
+
+                onClicked: {
                     state = "loading"
-                    QmlBridge.loadFuse()
-                } else if (state == "finished") {
-                    QmlBridge.openFuse()
+                    changeButton.enabled = false
+                    if (verb == "Create") {
+                        QmlBridge.loadFuse()
+                    } else {
+                        QmlBridge.refreshFuse()
+                    }          
                 }
+
+                Connections {
+                    target: QmlBridge
+                    onFuseReady: {
+                        openButton.enabled = true
+                        createButton.state = ""
+                        createButton.verb = "Update"
+                    }
+                }
+
+                states: [
+                    State {
+                        name: "loading";  
+                        PropertyChanges { target: createButton; text: verb.slice(0, -1) + "ing"; loading: true }
+                    }
+                ]
             }
 
-            Connections {
-                target: QmlBridge
-                onFuseReady: createButton.state = "finished"
-            }
+            CSC.Button {
+                id: openButton
+                text: "Open folder" 
+                enabled: false
 
-            states: [
-                State {
-                    name: "loading";  
-                    PropertyChanges { target: createButton; text: "Creating"; loading: true }
-                    PropertyChanges { target: changeButton; enabled: false }
-                },
-                State {
-                    name: "finished";
-                    PropertyChanges { target: createButton; text: "Open folder"; enabled: true }
-                    PropertyChanges { target: changeButton; enabled: false }
-                }
-            ]
+                onClicked: QmlBridge.openFuse()
+            }
         }
 
         TextMetrics {
@@ -317,7 +329,7 @@ Page {
 
                         Text {
                             id: percentValue
-                            text: Math.round(parent.value * 100) + " %"
+                            text: Math.floor(parent.value * 100) + " %"
                             color: CSC.Style.grey
                             maximumLineCount: 1
                             font.pixelSize: 12

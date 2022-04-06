@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sort"
+
 	"github.com/therecipe/qt/core"
 )
 
@@ -18,15 +20,15 @@ type ProjectModel struct {
 
 	_ func(string, string)      `signal:"addProject,auto"`
 	_ func(string, string, int) `signal:"addToCount,auto"`
+	_ func()                    `signal:"prepareForRefresh,auto"`
+	_ func()                    `signal:"deleteExtraProjects,auto"`
 
 	_ int `property:"loadedProjects"`
 
 	roles       map[int]*core.QByteArray
 	projects    []project
 	nameToIndex map[string]int
-
 	deletedIdxs map[int]bool
-	refreshing  bool
 }
 
 type project struct {
@@ -52,7 +54,6 @@ func (pm *ProjectModel) init() {
 	pm.projects = []project{}
 	pm.nameToIndex = make(map[string]int)
 	pm.deletedIdxs = make(map[int]bool)
-	pm.refreshing = false
 }
 
 func (pm *ProjectModel) data(index *core.QModelIndex, role int) *core.QVariant {
@@ -89,15 +90,12 @@ func (pm *ProjectModel) roleNames() map[int]*core.QByteArray {
 }
 
 func (pm *ProjectModel) addProject(rep, pr string) {
-	length := len(pm.projects)
-
-	if pm.refreshing {
-		if idx, ok := pm.nameToIndex[rep+"/"+pr]; ok {
-			pm.deletedIdxs[idx] = false
-			return
-		}
+	if idx, ok := pm.nameToIndex[rep+"/"+pr]; ok {
+		delete(pm.deletedIdxs, idx)
+		return
 	}
 
+	length := len(pm.projects)
 	pm.nameToIndex[rep+"/"+pr] = length
 	pm.BeginInsertRows(core.NewQModelIndex(), length, length)
 	pm.projects = append(pm.projects, project{repositoryName: rep, projectName: pr, allContainers: -1})
@@ -123,20 +121,29 @@ func (pm *ProjectModel) addToCount(rep, pr string, count int) {
 }
 
 func (pm *ProjectModel) prepareForRefresh() {
-	pm.refreshing = true
 	pm.deletedIdxs = make(map[int]bool)
 	for i := range pm.projects {
 		pm.deletedIdxs[i] = true
+		pm.projects[i].loadedContainers = 0
+		pm.projects[i].allContainers = -1
 	}
+	pm.SetLoadedProjects(0)
+	pm.DataChanged(pm.Index(0, 0, core.NewQModelIndex()),
+		pm.Index(len(pm.projects)-1, 0, core.NewQModelIndex()), []int{LoadedContainers})
+	pm.DataChanged(pm.Index(0, 0, core.NewQModelIndex()),
+		pm.Index(len(pm.projects)-1, 0, core.NewQModelIndex()), []int{AllContainers})
 }
 
 func (pm *ProjectModel) deleteExtraProjects() {
-	pm.refreshing = false
-	for i := range pm.projects {
-		if pm.deletedIdxs[i] {
-			pm.BeginRemoveRows(core.NewQModelIndex(), i, i)
-			pm.projects = append(pm.projects[:i], pm.projects[i+1:]...)
-			pm.EndRemoveRows()
-		}
+	deletedSlice := []int{}
+	for i := range pm.deletedIdxs {
+		deletedSlice = append(deletedSlice, i)
+	}
+	sort.Ints(deletedSlice)
+
+	for i, deleted := range deletedSlice {
+		pm.BeginRemoveRows(core.NewQModelIndex(), deleted-i, deleted-i)
+		pm.projects = append(pm.projects[:deleted-i], pm.projects[deleted-i+1:]...)
+		pm.EndRemoveRows()
 	}
 }

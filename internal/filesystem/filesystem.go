@@ -144,6 +144,12 @@ func UnmountFilesystem() {
 	}
 }
 
+func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
+	fs.ino = newFs.ino
+	fs.root = newFs.root
+	fs.openmap = newFs.openmap
+}
+
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
 func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	timestamp := fuse.Now()
@@ -315,10 +321,6 @@ func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string,
 		n, dirSafe := fs.makeNode(prnt, md, p, fuse.S_IFDIR|sRDONLY, tmsp)
 		fs.createLevel(n, dirChildren[key], prntPath+"/"+dirSafe, tmsp)
 	}
-}
-
-func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
-
 }
 
 // split deconstructs a filepath string into an array of strings

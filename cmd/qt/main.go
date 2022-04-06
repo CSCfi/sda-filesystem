@@ -152,16 +152,15 @@ func (qb *QmlBridge) openFuse() {
 }
 
 func (qb *QmlBridge) refreshFuse() {
-	level := logs.GetLevel()
-	logs.SetLevel("debug")
-	projectModel.prepareForRefresh()
-
-	newFs := filesystem.InitializeFileSystem(projectModel.AddProject)
-	projectModel.deleteExtraProjects()
-	newFs.PopulateFilesystem(projectModel.AddToCount)
-
-	logs.SetLevel(level)
-	qb.fs.RefreshFilesystem(newFs)
+	go func() {
+		logs.Info("Updating Data Gateway")
+		projectModel.PrepareForRefresh()
+		newFs := filesystem.InitializeFileSystem(projectModel.AddProject)
+		projectModel.DeleteExtraProjects()
+		newFs.PopulateFilesystem(projectModel.AddToCount)
+		qb.fs.RefreshFilesystem(newFs)
+		qb.FuseReady()
+	}()
 }
 
 func (qb *QmlBridge) shutdown() {
