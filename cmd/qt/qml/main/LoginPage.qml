@@ -97,7 +97,18 @@ Page {
 			text: "Continue"
 			enabled: repositoryList.loading == 0 && repositoryList.success
 			
-			onClicked: {
+			onEnabledChanged: {
+				if (enabled) {
+					continueButton.forceActiveFocus()
+				}
+			}
+
+			Keys.onReturnPressed: initialize() // Enter key
+			Keys.onEnterPressed: initialize()  // Numpad enter key
+
+			onClicked: initialize()
+
+			function initialize() {
 				QmlBridge.initFuse()
 				page.loggedIn = true
 			}
