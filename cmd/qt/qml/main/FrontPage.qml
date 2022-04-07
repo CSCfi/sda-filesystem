@@ -112,12 +112,12 @@ Page {
             color: CSC.Style.grey
             font.pixelSize: 13
             maximumLineCount: 1
-            bottomPadding: 0.5 * CSC.Style.padding
+            bottomPadding: CSC.Style.padding
         }
 
         Row {
             spacing: CSC.Style.padding
-            bottomPadding: 2 * CSC.Style.padding
+            bottomPadding: 3 * CSC.Style.padding
 
             Rectangle {
                 radius: 5
@@ -244,8 +244,9 @@ Page {
                     return ProjectModel.loadedProjects + "/" + table.rowCount + " loaded"
                 }
             }
+            color: CSC.Style.grey
             font.pixelSize: 15
-            font.weight: Font.Medium
+            font.weight: Font.DemiBold
             topPadding: CSC.Style.padding
         }
 

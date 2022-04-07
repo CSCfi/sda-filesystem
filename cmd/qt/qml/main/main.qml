@@ -13,6 +13,7 @@ ApplicationWindow {
     visible: true
     minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
     minimumHeight: header.implicitHeight + login.implicitHeight
+    height: minimumHeight + login.formHeight
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
     
@@ -166,8 +167,8 @@ ApplicationWindow {
                         if (window.height < window.minimumHeight) {
                             window.height = Screen.desktopAvailableHeight
                         }
-                        window.x = 0.5 * (Screen.width - window.width)
-                        window.y = 0.5 * (Screen.height - window.height)
+                        window.x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - window.width)
+                        window.y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - window.height)
                     }
                 }
             }

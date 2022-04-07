@@ -192,6 +192,7 @@ func init() {
 		logs.SetLevel("info")
 	}
 	logs.SetSignal(logModel.AddLog)
+	logModel.SetIncludeDebug(*debug)
 }
 
 func main() {

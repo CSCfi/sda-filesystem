@@ -19,6 +19,7 @@ const (
 	Message
 )
 
+// Couldn't find a way to use actual enums so this will have to do
 type LogLevel struct {
 	core.QObject
 
@@ -37,13 +38,40 @@ func (ll *LogLevel) init() {
 	ll.SetDebug(int(logrus.DebugLevel))
 }
 
+// Contains the model filtered based on log levels (chosen by the user in UI)
+type LogModelFiltered struct {
+	core.QSortFilterProxyModel
+
+	_ func() `constructor:"init"`
+
+	chosenLevel int
+}
+
+func (lf *LogModelFiltered) init() {
+	lf.ConnectFilterAcceptsRow(lf.filterAcceptsRow)
+	lf.chosenLevel = -1
+}
+
+func (lf *LogModelFiltered) filterAcceptsRow(sourceRow int, sourceParent *core.QModelIndex) bool {
+	var ok bool
+	index := lf.SourceModel().Index(sourceRow, 0, sourceParent)
+	level := lf.SourceModel().Data(index, Level).ToInt(&ok)
+	return ok && (lf.chosenLevel == -1 || lf.chosenLevel == level)
+}
+
+// The actual model which contains all logs
 type LogModel struct {
 	core.QAbstractListModel
 
 	_ func() `constructor:"init"`
 
+	_ func(int)           `slot:"changeFilteredLevel,auto"`
+	_ func(int) string    `slot:"getLevelStr,auto"`
+	_ func(string)        `slot:"saveLogs,auto"`
 	_ func(int, []string) `signal:"addLog,auto"`
-	_ func(string)        `signal:"saveLogs,auto"`
+
+	_ *LogModelFiltered `property:"proxy"`
+	_ bool              `property:"includeDebug"`
 
 	roles map[int]*core.QByteArray
 	logs  []logRow
@@ -65,6 +93,11 @@ func (lm *LogModel) init() {
 	lm.ConnectData(lm.data)
 	lm.ConnectRowCount(lm.rowCount)
 	lm.ConnectRoleNames(lm.roleNames)
+	lm.ConnectGetLevelStr(lm.getLevelStr)
+
+	proxy := NewLogModelFiltered(nil)
+	proxy.SetSourceModel(lm)
+	lm.SetProxy(proxy)
 
 	lm.logs = []logRow{}
 }
@@ -98,6 +131,27 @@ func (lm *LogModel) rowCount(parent *core.QModelIndex) int {
 
 func (lm *LogModel) roleNames() map[int]*core.QByteArray {
 	return lm.roles
+}
+
+func (lm *LogModel) changeFilteredLevel(level int) {
+	lm.Proxy().chosenLevel = level
+	lm.Proxy().InvalidateFilter()
+}
+
+func (lm *LogModel) getLevelStr(level int) string {
+	switch level {
+	case int(logrus.ErrorLevel):
+		return "Error"
+	case int(logrus.WarnLevel):
+		return "Warning"
+	case int(logrus.InfoLevel):
+		return "Info"
+	case int(logrus.DebugLevel):
+		return "Debug"
+	case -1:
+		return "All"
+	}
+	return ""
 }
 
 func (lm *LogModel) addLog(level int, message []string) {
