@@ -12,9 +12,6 @@ import (
 	"testing"
 )
 
-const envMetaUrl = "FS_SD_CONNECT_METADATA_API"
-const metaUrl = "http://metadata.csc.fi"
-
 type mockTokenator struct {
 	uToken  string
 	sTokens map[string]sToken
@@ -316,20 +313,18 @@ func Test_SDConnect_FetchTokens(t *testing.T) {
 
 func Test_SDConnect_GetEnvs(t *testing.T) {
 	var tests = []struct {
-		testname            string
-		expectedMetadataURL string
-		expectedDataURL     string
-		expectedError       error
-		mockGetEnv          func(string, bool) (string, error)
-		mockTestURL         func(string) error
+		testname      string
+		expectedURL   string
+		expectedError error
+		mockGetEnv    func(string, bool) (string, error)
+		mockTestURL   func(string) error
 	}{
 		{
-			testname:            "OK",
-			expectedMetadataURL: "https://metadata.csc.fi",
-			expectedDataURL:     "https://data.csc.fi",
-			expectedError:       nil,
+			testname:      "OK",
+			expectedURL:   "https://data.csc.fi",
+			expectedError: nil,
 			mockGetEnv: func(s string, b bool) (string, error) {
-				if s == envMetaUrl {
+				if s != "FS_SD_CONNECT_API" {
 					return "https://metadata.csc.fi", nil
 				} else {
 					return "https://data.csc.fi", nil
@@ -340,61 +335,23 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 			},
 		},
 		{
-			testname:            "FAIL_METADATA_ENV",
-			expectedMetadataURL: "",
-			expectedDataURL:     "",
-			expectedError:       errors.New("some error"),
+			testname:      "FAIL_API_ENV",
+			expectedURL:   "",
+			expectedError: errors.New("some error"),
 			mockGetEnv: func(s string, b bool) (string, error) {
 				return "", errors.New("some error")
 			},
 			mockTestURL: nil,
 		},
 		{
-			testname:            "FAIL_METADATA_VALIDATE",
-			expectedMetadataURL: metaUrl,
-			expectedDataURL:     "",
-			expectedError:       errors.New("Cannot connect to SD Connect metadata API: bad url"),
+			testname:      "FAIL_API_VALIDATE",
+			expectedURL:   "https://metadata.csc.fi",
+			expectedError: errors.New("Cannot connect to SD Connect API: bad url"),
 			mockGetEnv: func(s string, b bool) (string, error) {
-				return metaUrl, nil
+				return "https://metadata.csc.fi", nil
 			},
 			mockTestURL: func(s string) error {
 				return errors.New("bad url")
-			},
-		},
-		{
-			testname:            "FAIL_DATA_ENV",
-			expectedMetadataURL: metaUrl,
-			expectedDataURL:     "",
-			expectedError:       errors.New("some error"),
-			mockGetEnv: func(s string, b bool) (string, error) {
-				if s == envMetaUrl {
-					return metaUrl, nil
-				} else {
-					return "", errors.New("some error")
-				}
-			},
-			mockTestURL: func(s string) error {
-				return nil
-			},
-		},
-		{
-			testname:            "FAIL_DATA_VALIDATE",
-			expectedMetadataURL: metaUrl,
-			expectedDataURL:     "http://data.csc.fi",
-			expectedError:       errors.New("Cannot connect to SD Connect data API: bad url"),
-			mockGetEnv: func(s string, b bool) (string, error) {
-				if s == envMetaUrl {
-					return metaUrl, nil
-				} else {
-					return "http://data.csc.fi", nil
-				}
-			},
-			mockTestURL: func(s string) error {
-				if s == metaUrl {
-					return nil
-				} else {
-					return errors.New("bad url")
-				}
 			},
 		},
 	}
@@ -422,11 +379,8 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 					t.Errorf("Function returned incorrect error\nExpected=%v\nReceived=%v", tt.expectedError, err)
 				}
 			}
-			if sd.metadataURL != tt.expectedMetadataURL {
-				t.Errorf("metadataURL incorrect. Expected=%v, received=%v", tt.expectedMetadataURL, sd.metadataURL)
-			}
-			if sd.dataURL != tt.expectedDataURL {
-				t.Errorf("dataURL incorrect. Expected=%v, received=%v", tt.expectedDataURL, sd.dataURL)
+			if sd.url != tt.expectedURL {
+				t.Errorf("URL incorrect. Expected=%v, received=%v", tt.expectedURL, sd.url)
 			}
 		})
 	}

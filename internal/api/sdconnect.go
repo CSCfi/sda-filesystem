@@ -41,12 +41,11 @@ type connecter struct {
 
 type sdConnectInfo struct {
 	connectable
-	dataURL     string
-	metadataURL string
-	token       string
-	uToken      string
-	sTokens     map[string]sToken
-	projects    []Metadata
+	url      string
+	token    string
+	uToken   string
+	sTokens  map[string]sToken
+	projects []Metadata
 }
 
 // uToken is the unscoped token
@@ -71,7 +70,7 @@ type SpecialHeaders struct {
 func init() {
 	cr := &connecter{tokenable: tokenator{}}
 	sd := &sdConnectInfo{connectable: cr, sTokens: make(map[string]sToken)}
-	cr.url = &sd.metadataURL
+	cr.url = &sd.url
 	possibleRepositories[SDConnect] = sd
 }
 
@@ -168,22 +167,13 @@ func (c *connecter) fetchTokens(skipUnscoped bool, projects []Metadata) (newUTok
 //
 
 func (c *sdConnectInfo) getEnvs() error {
-	api, err := getEnv("FS_SD_CONNECT_METADATA_API", true)
+	api, err := getEnv("FS_SD_CONNECT_API", true)
 	if err != nil {
 		return err
 	}
-	c.metadataURL = strings.TrimRight(api, "/")
-	if err := testURL(c.metadataURL); err != nil {
-		return fmt.Errorf("Cannot connect to %s metadata API: %w", SDConnect, err)
-	}
-
-	api, err = getEnv("FS_SD_CONNECT_DATA_API", true)
-	if err != nil {
-		return err
-	}
-	c.dataURL = strings.TrimRight(api, "/")
-	if err := testURL(c.dataURL); err != nil {
-		return fmt.Errorf("Cannot connect to %s data API: %w", SDConnect, err)
+	c.url = strings.TrimRight(api, "/")
+	if err := testURL(c.url); err != nil {
+		return fmt.Errorf("Cannot connect to %s API: %w", SDConnect, err)
 	}
 	return nil
 }
@@ -199,7 +189,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 
 	var err error
 	c.projects = nil
-	if c.uToken, err = c.getUToken(c.metadataURL); err == nil {
+	if c.uToken, err = c.getUToken(c.url); err == nil {
 		if c.projects, err = c.getProjects(c.uToken); err == nil {
 			if len(c.projects) == 0 {
 				err = fmt.Errorf("No projects found for %s", SDConnect)
@@ -240,7 +230,7 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 
 	token := c.sTokens[nodes[0]]
 	headers := map[string]string{"X-Project-ID": token.ProjectID}
-	path := c.metadataURL + "/project/" + url.PathEscape(nodes[0])
+	path := c.url + "/project/" + url.PathEscape(nodes[0])
 	if len(nodes) == 1 {
 		path += "/containers"
 	} else if len(nodes) == 2 {
@@ -318,7 +308,7 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, 
 	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
 		"X-Project-ID": token.ProjectID}
 
-	path := c.dataURL + "/data"
+	path := c.url + "/data"
 
 	// Request data
 	err := makeRequest(path, token.Token, SDConnect, query, headers, buffer)
