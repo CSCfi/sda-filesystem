@@ -1,11 +1,11 @@
-FROM ubuntu:16.04 as base
+FROM ubuntu:20.04 as base
 
 ENV USER user
 ENV HOME /home/$USER
 ENV GOPATH $HOME/work
 
 RUN apt-get -qq update && apt-get --no-install-recommends -qq -y install ca-certificates curl git
-RUN GO=go1.17.6.linux-amd64.tar.gz && curl -sL --retry 10 --retry-delay 60 -O https://dl.google.com/go/$GO && tar -xzf $GO -C /usr/local
+RUN GO=go1.17.8.linux-amd64.tar.gz && curl -sL --retry 10 --retry-delay 60 -O https://dl.google.com/go/$GO && tar -xzf $GO -C /usr/local
 ENV GO111MODULE auto
 RUN /usr/local/go/bin/go get -tags=no_env github.com/therecipe/qt/cmd/...
 
@@ -19,7 +19,7 @@ RUN apt-get -qq update && apt-get --no-install-recommends -qq -y install binutil
 RUN find /opt/Qt5.13.0/5.13.0/gcc_64 -type f ! -name "*.a" ! -name "*.la" ! -name "*.prl" -name "lib*" -exec strip -s {} \;
 
 
-FROM ubuntu:16.04
+FROM ubuntu:20.04
 LABEL maintainer therecipe
 
 ENV USER user
