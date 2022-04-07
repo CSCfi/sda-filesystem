@@ -71,10 +71,17 @@ func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 }
 
 func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
+	var query map[string]string
+	split := strings.Split(dataset, "://")
+	if len(split) > 1 {
+		query = map[string]string{"scheme": split[0]}
+		dataset = strings.Join(split[1:], "://")
+	}
+
 	// Request files
 	var files []file
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
-	err := makeRequest(path, nil, nil, &files)
+	err := makeRequest(path, query, nil, &files)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
 	}
