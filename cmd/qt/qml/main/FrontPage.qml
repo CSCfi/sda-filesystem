@@ -172,25 +172,43 @@ Page {
                 enabled: !loading && mountText.text != ""
 
                 property var verb: "Create"
+                property bool finished: timerFinished && fuseFinished
+                property bool timerFinished: false
+                property bool fuseFinished: false
+
                 Material.accent: "white"
 
-                onClicked: {
-                    state = "loading"
-                    changeButton.enabled = false
-                    if (verb == "Create") {
-                        QmlBridge.loadFuse()
-                    } else {
-                        QmlBridge.refreshFuse()
-                    }          
-                }
-
-                Connections {
-                    target: QmlBridge
-                    onFuseReady: {
+                onFinishedChanged: {
+                    if (finished) {
                         openButton.enabled = true
                         createButton.state = ""
                         createButton.verb = "Update"
                     }
+                }
+
+                onClicked: {
+                    state = "loading"
+                    changeButton.enabled = false
+                    timerFinished = false
+                    fuseFinished = false
+                    if (verb == "Create") {
+                        QmlBridge.loadFuse()
+                    } else {
+                        QmlBridge.refreshFuse()
+                    }
+                    waitTimer.start()
+                }
+
+                Connections {
+                    target: QmlBridge
+                    onFuseReady: createButton.fuseFinished = true
+                }
+
+                // So that the user has the possibility of seeing the loading happening
+                Timer {
+                    id: waitTimer
+                    repeat: false; running: false
+                    onTriggered: createButton.timerFinished = true
                 }
 
                 states: [
