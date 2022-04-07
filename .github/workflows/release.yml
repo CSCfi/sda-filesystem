@@ -48,7 +48,7 @@ jobs:
             artifact_name: go-fuse
             os_suffix: windows-amd64
             asset_name: go-fuse-cli
-        golang-version: [1.16]
+        golang-version: [1.17]
     
     runs-on: ${{ matrix.os }}
  
@@ -113,7 +113,7 @@ jobs:
             os_folder: windows
             os_suffix: windows-amd64
             asset_name: go-fuse-gui
-        golang-version: [1.16]
+        golang-version: [1.17]
     
     runs-on: ${{ matrix.os }}
  
