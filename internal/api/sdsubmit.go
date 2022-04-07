@@ -25,7 +25,6 @@ type submittable interface {
 
 type submitter struct {
 	lock    sync.RWMutex
-	token   *string
 	fileIDs map[string]string
 }
 
@@ -52,7 +51,6 @@ type file struct {
 func init() {
 	su := &submitter{fileIDs: make(map[string]string)}
 	sd := &sdSubmitInfo{submittable: su}
-	su.token = &sd.token
 	sd.fileIDs = su.fileIDs
 	possibleRepositories[SDSubmit] = sd
 }
@@ -63,7 +61,7 @@ func init() {
 
 func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	var datasets []string
-	err := makeRequest(urlStr+"/metadata/datasets", *s.token, SDSubmit, nil, nil, &datasets)
+	err := makeRequest(urlStr+"/metadata/datasets", nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmit, urlStr, err)
 	}
@@ -76,7 +74,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	// Request files
 	var files []file
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
-	err := makeRequest(path, *s.token, SDSubmit, nil, nil, &files)
+	err := makeRequest(path, nil, nil, &files)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
 	}
@@ -166,10 +164,6 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	return nil
 }
 
-func (s *sdSubmitInfo) getToken() string {
-	return s.token
-}
-
 func (s *sdSubmitInfo) levelCount() int {
 	return 2
 }
@@ -216,5 +210,5 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, e
 
 	// Request data
 	path := s.urls[idx] + "/files/" + s.fileIDs[finalPath]
-	return makeRequest(path, s.token, SDSubmit, query, nil, buffer)
+	return makeRequest(path, query, nil, buffer)
 }

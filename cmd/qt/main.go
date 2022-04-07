@@ -59,7 +59,14 @@ func (qb *QmlBridge) init() {
 }
 
 func (qb *QmlBridge) initializeAPI() {
-	err := api.InitializeCache()
+	err := api.GetCommonEnvs()
+	if err != nil {
+		logs.Error(err)
+		qb.InitError("Required environmental varibles missing")
+		return
+	}
+
+	err = api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
 		qb.InitError("Initializing cache failed")
