@@ -6,8 +6,8 @@ import csc 1.0 as CSC
 
 Page {
     id: page 
-    height: table.height + implicitHeaderHeight + 4 * CSC.Style.padding
-    implicitWidth: table.implicitWidth + 4 * CSC.Style.padding
+    height: table.height + implicitHeaderHeight + 2 * padding
+    implicitWidth: table.implicitWidth + 2 * padding
     padding: 2 * CSC.Style.padding
 
     header: Control {

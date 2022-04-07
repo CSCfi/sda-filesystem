@@ -8,12 +8,14 @@ import csc 1.0 as CSC
 Page {
 	id: page
 	height: content.height + 2 * CSC.Style.padding
+	implicitHeight: height
 	implicitWidth: content.width + 2 * CSC.Style.padding
 	Material.accent: CSC.Style.primaryColor
 
 	Component.onCompleted: implicitHeight = content.height + 2 * CSC.Style.padding
 
 	property bool loggedIn: false
+	property real formHeight: 0
 
 	Column {
 		id: content
@@ -30,7 +32,7 @@ Page {
 		}
 
 		Label {
-			text: "Select one or more services to connect to"
+			text: "Please select the services you would like to access"
 			maximumLineCount: 1
 		}
 
@@ -42,6 +44,9 @@ Page {
 			height: contentHeight
 			width: 450
 			
+			property int loading: 0
+			property bool success: false
+			
 			delegate: CSC.Accordion {
 				id: accordion
 				heading: repository
@@ -50,9 +55,12 @@ Page {
 				enabled: !envsMissing
 				anchors.horizontalCenter: parent.horizontalCenter
 
+				onLoadingChanged: repositoryList.loading += (loading ? 1 : -1)
+				Component.onCompleted: page.formHeight = Math.max(page.formHeight, loader.item.height)
+
 				onSuccessChanged: {
 					if (success) {
-						continueButton.enabled = true
+						repositoryList.success = true
 						loader.item.loading = false
 					}
 				}
@@ -87,9 +95,20 @@ Page {
 		CSC.Button {
 			id: continueButton
 			text: "Continue"
-			enabled: false
+			enabled: repositoryList.loading == 0 && repositoryList.success
 			
-			onClicked: {
+			onEnabledChanged: {
+				if (enabled) {
+					continueButton.forceActiveFocus()
+				}
+			}
+
+			Keys.onReturnPressed: initialize() // Enter key
+			Keys.onEnterPressed: initialize()  // Numpad enter key
+
+			onClicked: initialize()
+
+			function initialize() {
 				QmlBridge.initFuse()
 				page.loggedIn = true
 			}

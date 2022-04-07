@@ -97,24 +97,27 @@ Page {
 	}
 
     ColumnLayout {
-        spacing: CSC.Style.padding
+        spacing: 0
         width: parent.width
 
         Text {
             text: "<h1>1. Choose directory</h1>"
             color: CSC.Style.grey
             maximumLineCount: 1
+            bottomPadding: CSC.Style.padding
         }
 
         Text {
             text: "Choose in which local directory your data will be available"
             color: CSC.Style.grey
-            font.pixelSize: 12
+            font.pixelSize: 13
+            maximumLineCount: 1
+            bottomPadding: CSC.Style.padding
         }
 
         Row {
             spacing: CSC.Style.padding
-            bottomPadding: 2 * CSC.Style.padding
+            bottomPadding: 3 * CSC.Style.padding
 
             Rectangle {
                 radius: 5
@@ -156,6 +159,43 @@ Page {
         Text {
             text: "<h1>2. Mount directory</h1>"
             color: CSC.Style.grey
+            maximumLineCount: 1
+            bottomPadding: CSC.Style.padding
+        }
+
+        CSC.Button {
+            id: createButton
+            text: "Create Data Gateway"
+            enabled: mountText.text != ""
+
+            Material.accent: "white"
+
+            onClicked: {
+                if (state == "") {
+                    state = "loading"
+                    QmlBridge.loadFuse()
+                } else if (state == "finished") {
+                    QmlBridge.openFuse()
+                }
+            }
+
+            Connections {
+                target: QmlBridge
+                onFuseReady: createButton.state = "finished"
+            }
+
+            states: [
+                State {
+                    name: "loading";  
+                    PropertyChanges { target: createButton; text: "Creating"; loading: true }
+                    PropertyChanges { target: changeButton; enabled: false }
+                },
+                State {
+                    name: "finished";
+                    PropertyChanges { target: createButton; text: "Open folder"; enabled: true }
+                    PropertyChanges { target: changeButton; enabled: false }
+                }
+            ]
         }
 
         TextMetrics {
@@ -163,6 +203,21 @@ Page {
             text: "100 %"
             font.pixelSize: 13
             font.weight: Font.Medium
+        }
+
+        Text {
+            id: progressText
+            text: {
+                if (createButton.state == "finished") {
+                    return "Data Gateway complete"
+                } else {
+                    return ProjectModel.loadedProjects + "/" + table.rowCount + " loaded"
+                }
+            }
+            color: CSC.Style.grey
+            font.pixelSize: 15
+            font.weight: Font.DemiBold
+            topPadding: CSC.Style.padding
         }
 
         CSC.Table {
@@ -265,63 +320,13 @@ Page {
                             id: percentValue
                             text: Math.round(parent.value * 100) + " %"
                             color: CSC.Style.grey
+                            maximumLineCount: 1
                             font.pixelSize: 12
                             Layout.minimumWidth: textMetrics100.width
                         }
                     }
                 }
             }
-        }
-
-        Text {
-            text: {
-                if (createButton.state == "loading") {
-                    return ProjectModel.loadedProjects + "/" + table.rowCount + " complete"
-                } else if (createButton.state == "finished") {
-                    return "Data Gateway complete"
-                } else {
-                    return ""
-                }
-            }
-            visible: createButton.state != ""
-            topPadding: 10
-            bottomPadding: 10
-            font.pixelSize: 15
-        }
-
-        CSC.Button {
-            id: createButton
-            text: "Create Data Gateway"
-            enabled: mountText.text != ""
-
-            Material.accent: "white"
-
-            onClicked: {
-                if (state == "") {
-                    state = "loading"
-                    QmlBridge.loadFuse()
-                } else if (state == "finished") {
-                    QmlBridge.openFuse()
-                }
-            }
-
-            Connections {
-                target: QmlBridge
-                onFuseReady: createButton.state = "finished"
-            }
-
-            states: [
-                State {
-                    name: "loading";  
-                    PropertyChanges { target: createButton; text: "Creating"; loading: true }
-                    PropertyChanges { target: changeButton; enabled: false }
-                },
-                State {
-                    name: "finished";
-                    PropertyChanges { target: createButton; text: "Open folder"; enabled: true }
-                    PropertyChanges { target: changeButton; enabled: false }
-                }
-            ]
         }
     }
 }
