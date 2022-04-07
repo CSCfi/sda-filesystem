@@ -166,6 +166,8 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	err := makeRequest(path, nil, headers, &meta)
 	if c.tokenExpired(err) {
 		token = c.sTokens[nodes[0]]
+		headers["X-Project-ID"] = token.ProjectID
+		headers["X-Authorization"] = "Bearer " + token.Token
 		err = makeRequest(path, nil, headers, &meta)
 	}
 	if err != nil {
@@ -237,6 +239,8 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, 
 	err := makeRequest(path, query, headers, buffer)
 	if c.tokenExpired(err) {
 		token = c.sTokens[nodes[0]]
+		headers["X-Project-ID"] = token.ProjectID
+		headers["X-Authorization"] = "Bearer " + token.Token
 		return makeRequest(path, query, headers, buffer)
 	}
 	return err

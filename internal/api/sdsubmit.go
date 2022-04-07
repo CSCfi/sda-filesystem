@@ -30,7 +30,6 @@ type submitter struct {
 
 type sdSubmitInfo struct {
 	submittable
-	token    string
 	urls     []string
 	fileIDs  map[string]string
 	datasets map[string]int
@@ -108,10 +107,6 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 
 func (s *sdSubmitInfo) getEnvs() error {
 	var err error
-	s.token, err = getEnv("SDS_ACCESS_TOKEN", false)
-	if err != nil {
-		return err
-	}
 	urls, err := getEnv("FS_SD_SUBMIT_API", false)
 	if err != nil {
 		return err
