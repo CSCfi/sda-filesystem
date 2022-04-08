@@ -117,6 +117,8 @@ Usage of ./go-fuse:
     	Path to Data Gateway mount point
   -stderrthreshold value
     	logs at or above this threshold go to stderr
+  -update_interval int
+    	An interval in seconds which determines how often Data Gateway will be updated (default 3600)
   -v value
     	log level for V logs
   -vmodule value

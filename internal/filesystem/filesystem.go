@@ -144,6 +144,12 @@ func UnmountFilesystem() {
 	}
 }
 
+func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
+	fs.ino = newFs.ino
+	fs.root = newFs.root
+	fs.openmap = newFs.openmap
+}
+
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
 func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	timestamp := fuse.Now()

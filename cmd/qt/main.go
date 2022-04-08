@@ -35,6 +35,7 @@ type QmlBridge struct {
 	_ func()                        `slot:"initFuse,auto"`
 	_ func()                        `slot:"loadFuse,auto"`
 	_ func()                        `slot:"openFuse,auto"`
+	_ func()                        `slot:"refreshFuse,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
 	_ func()                        `slot:"shutdown,auto"`
 	_ func(idx int)                 `signal:"login401"`
@@ -150,6 +151,18 @@ func (qb *QmlBridge) openFuse() {
 	}
 }
 
+func (qb *QmlBridge) refreshFuse() {
+	go func() {
+		logs.Info("Updating Data Gateway")
+		projectModel.PrepareForRefresh()
+		newFs := filesystem.InitializeFileSystem(projectModel.AddProject)
+		projectModel.DeleteExtraProjects()
+		newFs.PopulateFilesystem(projectModel.AddToCount)
+		qb.fs.RefreshFilesystem(newFs)
+		qb.FuseReady()
+	}()
+}
+
 func (qb *QmlBridge) shutdown() {
 	logs.Info("Shutting down Data Gateway")
 	filesystem.UnmountFilesystem()
@@ -186,7 +199,7 @@ func main() {
 	core.QCoreApplication_SetApplicationName("Data Gateway")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")
-	core.QCoreApplication_SetApplicationVersion("1.1.0")
+	core.QCoreApplication_SetApplicationVersion("1.2.0")
 	core.QCoreApplication_SetAttribute(core.Qt__AA_EnableHighDpiScaling, true)
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)
