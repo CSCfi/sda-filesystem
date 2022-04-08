@@ -79,6 +79,8 @@ func (qb *QmlBridge) initializeAPI() {
 		qb.InitError("Initializing HTTP client failed")
 		return
 	}
+
+	loginModel.checkEnvs()
 }
 
 func (qb *QmlBridge) loginWithToken(idx int) {
@@ -223,6 +225,5 @@ func main() {
 	//fmt.Println(core.QThread_CurrentThread().Pointer())
 
 	qmlBridge.initializeAPI()
-	loginModel.checkEnvs()
 	gui.QGuiApplication_Exec()
 }
