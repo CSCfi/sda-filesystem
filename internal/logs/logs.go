@@ -36,10 +36,6 @@ var SetLevel = func(level string) {
 	log.SetLevel(logrus.InfoLevel)
 }
 
-func GetLevel() string {
-	return log.GetLevel().String()
-}
-
 // Wrapper returns the outermost error in err as a string along with the wrapped error
 func Wrapper(err error) (string, error) {
 	unwrapped := errors.Unwrap(err)
