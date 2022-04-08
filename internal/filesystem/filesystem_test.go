@@ -152,10 +152,23 @@ var testObjects = `{
 					"size": 30,
 					"children": [
 						{
+							"name": "file.c4gh",
+							"nameSafe": "file(1bb764)",
+							"size": 29,
+							"children": null
+						},
+						{
 							"name": "file",
 							"nameSafe": "file",
-							"size": 30,
-							"children": null
+							"size": 1,
+							"children": [
+								{
+									"name": "h%e%ll+o",
+									"nameSafe": "h%e%ll_o",
+									"size": 1,
+									"children": null
+								}
+							]
 						}
 					]
 				},
@@ -228,7 +241,7 @@ func getTestFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
 	fs.root.stat.Mode = fuse.S_IFDIR | sRDONLY
 	fs.root.chld = map[string]*node{}
 	fs.root.stat.Ino = 1
-	fs.openmap = map[uint64]nodeAndPath{}
+	fs.openmap = map[uint64]nodeAndPath{1: {fs.root, []string{"path"}}}
 
 	if sizeUnfinished && nodes.Size < 0 {
 		fs.root.stat.Size = -1
@@ -336,7 +349,7 @@ func TestSetSignalBridge_And_CheckPanic(t *testing.T) {
 	panic("Muahahahaa")
 }
 
-func TestCreateFilesystem(t *testing.T) {
+func TestInitializeFilesystem(t *testing.T) {
 	origFs := getTestFuse(t, true, 1)
 
 	origNewNode := newNode
@@ -381,6 +394,23 @@ func TestCreateFilesystem(t *testing.T) {
 	}
 	if err := isSameFuse(origFs.root, ret.root, "/"); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
+	}
+}
+
+func TestRefreshFilesystem(t *testing.T) {
+	fs := getTestFuse(t, false, 1)
+	newFs := getTestFuse(t, false, 5)
+
+	fs.RefreshFilesystem(newFs)
+
+	if fs.ino != newFs.ino {
+		t.Errorf("Ino was not correct. Expected=%d, received=%d", newFs.ino, fs.ino)
+	}
+	if fs.root != newFs.root {
+		t.Errorf("Root was not correct\nExpected=%v\nReceived=%v", *newFs.root, *fs.root)
+	}
+	if reflect.ValueOf(fs.openmap).Pointer() != reflect.ValueOf(newFs.openmap).Pointer() {
+		t.Errorf("Openmap was not correct\nExpected=%v\nReceived=%v", newFs.openmap, fs.openmap)
 	}
 }
 
@@ -501,6 +531,7 @@ func TestCreateObjects(t *testing.T) {
 	rep := rep1
 	pr := "child_2"
 	cont := "dir"
+	SetSignalBridge(nil)
 
 	newNode = func(ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
 		n := &node{}
@@ -522,7 +553,8 @@ func TestCreateObjects(t *testing.T) {
 		if nodes[1] != cont {
 			t.Fatalf("GetNthLevel() received incorrect container %q, expected %q", rep+"/"+pr+"/"+nodes[1], rep+"/"+pr+"/"+cont)
 		}
-		return []api.Metadata{{Bytes: 30, Name: "dir1/dir+2/dir3.2.1/file"},
+		return []api.Metadata{{Bytes: 29, Name: "dir1/dir+2/dir3.2.1/file.c4gh"},
+			{Bytes: 1, Name: "dir1/dir+2/dir3.2.1/file/h%e%ll+o"},
 			{Bytes: 1, Name: "dir1/dir5/"},
 			{Bytes: 6, Name: "dir1/dir+2/dir3.2.1"},
 			{Bytes: 101, Name: "dir1/dir+2/logs"},

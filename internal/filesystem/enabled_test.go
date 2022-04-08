@@ -395,3 +395,41 @@ func TestRead_Error(t *testing.T) {
 		})
 	}
 }
+
+func TestReaddir(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	node := fs.root.chld["Rep1"]
+	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
+
+	fill := func(name string, stat *fuse.Stat_t, ofst int64) bool {
+		if name == ".." {
+			if stat != nil {
+				t.Errorf("Fill function received incorrect stat for name '..'\nExpected=nil\nReceived=%v", *stat)
+			}
+		} else if name == "." {
+			if stat != &node.stat {
+				t.Errorf("Fill function received incorrect stat for name '.'\nExpected=%v\nReceived=%v", node.stat, *stat)
+			}
+		} else if n, ok := node.chld[name]; ok {
+			if stat != &n.stat {
+				t.Errorf("Fill function received incorrect stat for name %q\nExpected=%v\nReceived=%v", name, node.stat, *stat)
+			}
+		} else {
+			t.Errorf("Invalid name %q", name)
+		}
+		return false
+	}
+
+	errc := fs.Readdir("", fill, 0, node.stat.Ino)
+
+	if errc != 0 {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
+	}
+
+	errc = fs.Readdir("Rep2/dummy", fill, 0, ^uint64(0))
+
+	if errc != -fuse.ENOENT {
+		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
+	}
+}
