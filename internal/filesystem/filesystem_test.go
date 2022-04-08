@@ -107,7 +107,7 @@ var testFuse = `{
 				},
 				{
 					"name": "child+2",
-					"nameSafe": "child_2(1)",
+					"nameSafe": "child_2(3e08d3)",
 					"size": 0,
 					"children": []
 				}
@@ -161,7 +161,7 @@ var testObjects = `{
 				},
 				{
 					"name": "dir3.2.1",
-					"nameSafe": "dir3(1).2.1",
+					"nameSafe": "dir3(fb761a).2.1",
 					"size": 6,
 					"children": null
 				},
@@ -186,13 +186,13 @@ var testObjects = `{
 				},
 				{
 					"name": "another_file.c4gh",
-					"nameSafe": "another_file(1)",
+					"nameSafe": "another_file(63af19)",
 					"size": 13,
 					"children": null
 				},
 				{
 					"name": "another+file.c4gh",
-					"nameSafe": "another_file(2)",
+					"nameSafe": "another_file(07fed4)",
 					"size": 27,
 					"children": null
 				}
@@ -617,9 +617,9 @@ func TestRemoveInvalidChars(t *testing.T) {
 	var tests = []struct {
 		original, modified string
 	}{
-		{"b.a:d!s/t_r@i+n|g", "b.a.d.s_t_r_i_n_g"},
-		{"qwerty__\"###hello<html>$$money$$", "qwerty__.___hello.html.__money__"},
-		{"%_csc::>d>p>%%'hello'", "__csc...d.p.__.hello."},
+		{"b.a:d!s/t_r@i+n|g", "b.a_d_s_t_r_i_n_g"},
+		{"qwerty__\"###hello<html>$$money$$", "qwerty______hello_html___money__"},
+		{"%_csc::>d>p>%%'hello'", "__csc___d_p____hello_"},
 	}
 
 	for i, tt := range tests {
