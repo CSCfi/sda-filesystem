@@ -71,6 +71,7 @@ func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 
 func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
 	var query map[string]string
+	origDataset := dataset
 	split := strings.Split(dataset, "://")
 	if len(split) > 1 {
 		query = map[string]string{"scheme": split[0]}
@@ -92,7 +93,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 			metadata = append(metadata, md)
 
 			s.lock.Lock()
-			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
+			s.fileIDs[origDataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
 			s.lock.Unlock()
 		}
 	}
@@ -208,9 +209,7 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, e
 		"endCoordinate":   strconv.FormatInt(end, 10),
 	}
 
-	finalPath := nodes[0] + "_" + nodes[1]
-
 	// Request data
-	path := s.urls[idx] + "/files/" + s.fileIDs[finalPath]
+	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+nodes[1]]
 	return makeRequest(path, query, nil, buffer)
 }

@@ -80,7 +80,9 @@ func (qb *QmlBridge) initializeAPI() {
 		return
 	}
 
-	loginModel.checkEnvs()
+	if noneAvailable := loginModel.checkEnvs(); noneAvailable {
+		qb.InitError("No services available")
+	}
 }
 
 func (qb *QmlBridge) loginWithToken(idx int) {
