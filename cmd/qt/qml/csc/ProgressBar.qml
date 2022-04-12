@@ -1,6 +1,6 @@
 import QtQuick 2.13
 import QtQuick.Controls 2.13
-import csc 1.0 as CSC
+import csc 1.2 as CSC
 
 ProgressBar {
     id: control
