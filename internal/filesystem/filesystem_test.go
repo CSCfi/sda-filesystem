@@ -401,7 +401,12 @@ func TestRefreshFilesystem(t *testing.T) {
 	fs := getTestFuse(t, false, 1)
 	newFs := getTestFuse(t, false, 5)
 
+	origClearCache := api.ClearCache
+	api.ClearCache = func() {}
+
 	fs.RefreshFilesystem(newFs)
+
+	api.ClearCache = origClearCache
 
 	if fs.ino != newFs.ino {
 		t.Errorf("Ino was not correct. Expected=%d, received=%d", newFs.ino, fs.ino)
