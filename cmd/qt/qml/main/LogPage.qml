@@ -142,22 +142,34 @@ Page {
             Menu {
                 id: menu
                 y: parent.height
+                width: 0
 
                 Material.accent: CSC.Style.primaryColor
 
                 Repeater {
                     model: LogModel.includeDebug ? levels.concat(LogLevel.Debug) : levels
                 
-                    property var levels: [-1, LogLevel.Error, LogLevel.Warning, LogLevel.Info] 
+                    property var levels: [LogLevel.Error, LogLevel.Warning, LogLevel.Info] 
 
                     MenuItem { 
+                        id: menuItem
                         text: LogModel.getLevelStr(modelData)
-                        onTriggered: LogModel.changeFilteredLevel(modelData)
+                        topPadding: 7
+                        bottomPadding: 7
+
+                        contentItem: CheckBox {
+                            text: menuItem.text
+                            checked: true
+                            padding: 0
+
+                            onCheckedChanged: LogModel.toggleFilteredLevel(modelData, checked)
+                            Component.onCompleted: menu.width = Math.max(menu.width, implicitContentWidth + implicitIndicatorWidth + 2 * menuItem.padding)
+                        }
                     }
                 }
 
                 background: Rectangle {
-                    implicitWidth: firstTitle.width + 2 * CSC.Style.padding
+                    implicitWidth: menu.width
                     color: "white"
                     border.width: 1
                     border.color: CSC.Style.lightGrey

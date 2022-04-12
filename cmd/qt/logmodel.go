@@ -44,19 +44,23 @@ type LogModelFiltered struct {
 
 	_ func() `constructor:"init"`
 
-	chosenLevel int
+	chosenLevels map[int]bool
 }
 
 func (lf *LogModelFiltered) init() {
 	lf.ConnectFilterAcceptsRow(lf.filterAcceptsRow)
-	lf.chosenLevel = -1
+	lf.chosenLevels = make(map[int]bool)
+	lf.chosenLevels[int(logrus.ErrorLevel)] = true
+	lf.chosenLevels[int(logrus.WarnLevel)] = true
+	lf.chosenLevels[int(logrus.InfoLevel)] = true
+	lf.chosenLevels[int(logrus.DebugLevel)] = true
 }
 
 func (lf *LogModelFiltered) filterAcceptsRow(sourceRow int, sourceParent *core.QModelIndex) bool {
 	var ok bool
 	index := lf.SourceModel().Index(sourceRow, 0, sourceParent)
 	level := lf.SourceModel().Data(index, Level).ToInt(&ok)
-	return ok && (lf.chosenLevel == -1 || lf.chosenLevel == level)
+	return ok && lf.chosenLevels[level]
 }
 
 // The actual model which contains all logs
@@ -65,7 +69,7 @@ type LogModel struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(int)           `slot:"changeFilteredLevel,auto"`
+	_ func(int, bool)     `slot:"toggleFilteredLevel,auto"`
 	_ func(int) string    `slot:"getLevelStr,auto"`
 	_ func(string)        `slot:"saveLogs,auto"`
 	_ func(int, []string) `signal:"addLog,auto"`
@@ -133,8 +137,8 @@ func (lm *LogModel) roleNames() map[int]*core.QByteArray {
 	return lm.roles
 }
 
-func (lm *LogModel) changeFilteredLevel(level int) {
-	lm.Proxy().chosenLevel = level
+func (lm *LogModel) toggleFilteredLevel(level int, visible bool) {
+	lm.Proxy().chosenLevels[level] = visible
 	lm.Proxy().InvalidateFilter()
 }
 

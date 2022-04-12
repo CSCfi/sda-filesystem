@@ -38,7 +38,7 @@ Page {
 			text: "Data Gateway gives you secure access to your data. Please select the services you would like to access."
 			wrapMode: Text.Wrap
 			width: repositoryList.width
-			lineHeight: 1.1
+			lineHeight: 1.2
 		}
 
 		ListView {
