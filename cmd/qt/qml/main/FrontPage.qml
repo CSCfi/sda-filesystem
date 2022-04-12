@@ -157,7 +157,7 @@ Page {
         }
 
         Text {
-            text: "<h1>2. Mount directory</h1>"
+            text: "<h1>2. Create secure access to data</h1>"
             color: CSC.Style.grey
             maximumLineCount: 1
             bottomPadding: CSC.Style.padding
@@ -168,7 +168,7 @@ Page {
 
             CSC.Button {
                 id: createButton
-                text: verb + " Data Gateway"
+                text: verb
                 enabled: !loading && mountText.text != ""
 
                 property var verb: "Create"

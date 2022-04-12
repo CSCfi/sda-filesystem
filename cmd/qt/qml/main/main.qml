@@ -54,7 +54,7 @@ ApplicationWindow {
             }
 
             TabBar {
-				id: tabBar
+                id: tabBar
                 spacing: CSC.Style.padding
                 contentHeight: height
                 Layout.fillHeight: true
@@ -92,7 +92,7 @@ ApplicationWindow {
 
             ToolButton {
                 id: signout
-                text: "Sign out"
+                text: "Disconnect"
                 enabled: stack.state == "loggedIn"
                 opacity: enabled ? 1 : 0
                 icon.source: "qrc:/qml/images/box-arrow-right.svg"
@@ -153,6 +153,7 @@ ApplicationWindow {
 
             LoginPage {
                 id: login
+                focus: visible
                 anchors.horizontalCenter: parent.horizontalCenter
 
                 onLoggedInChanged: {
@@ -182,6 +183,7 @@ ApplicationWindow {
 
             LogPage {
                 id: logs
+                focus: visible
                 width: parent.width
             }
         }
@@ -194,6 +196,7 @@ ApplicationWindow {
 
             FrontPage {
                 id: front
+                focus: visible
                 width: parent.width
             }
         }

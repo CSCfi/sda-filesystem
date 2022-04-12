@@ -25,6 +25,11 @@ ColumnLayout {
         }
     }
 
+    function hide() {
+        extraContent.visible = false
+        accordion.open = false
+    }
+
     Rectangle {
         id: bkg
         color: backgroundColor

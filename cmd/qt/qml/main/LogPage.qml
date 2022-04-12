@@ -63,6 +63,7 @@ Page {
         modelSource: LogModel.proxy
         delegateSource: logLine
         objectName: "logs"
+        focus: true
 
         footer: Rectangle {
             height: 50

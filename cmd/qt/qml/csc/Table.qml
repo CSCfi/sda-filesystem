@@ -21,6 +21,9 @@ ListView {
     property int page: 1
     property int maxPages: Math.ceil(rowCount / amountVisible)
 
+    Keys.onRightPressed: headerItem.changePageRight()
+    Keys.onLeftPressed: headerItem.changePageLeft()
+
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
 
@@ -60,7 +63,15 @@ ListView {
             text: "99999"
             visible: false
             enabled: false
-        } 
+        }
+
+        function changePageLeft() {
+            pageLeft.clicked()
+        }
+
+        function changePageRight() {
+            pageRight.clicked()
+        }
 
         Row {
             id: leftRow
