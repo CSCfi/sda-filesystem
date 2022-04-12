@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Adjusting to changes in the SD Connect and SD Submit APIs
+
 ## [v1.1.0] - 2022-03-28
 
 ### Changed
-
 Renamed:
 - `SD-Submit` to `SD Apply` in the UI and logs
 - `SD-Connect` to `SD Connect` in the UI and logs
