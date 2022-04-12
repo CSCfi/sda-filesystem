@@ -12,185 +12,21 @@ import (
 	"testing"
 )
 
-const envMetaUrl = "FS_SD_CONNECT_METADATA_API"
-const metaUrl = "http://metadata.csc.fi"
-
-type mockTokenator struct {
-	uToken  string
-	sTokens map[string]sToken
-}
-
-func (t *mockTokenator) getUToken(string) (string, error) {
-	if t.uToken == "" {
-		return "", errors.New("uToken error")
-	}
-	return t.uToken, nil
-}
-
-func (t *mockTokenator) getSToken(string, pr string) (sToken, error) {
-	if token, ok := t.sTokens[pr]; !ok {
-		return sToken{}, errors.New("sToken not found")
-	} else if token == (sToken{}) {
-		return sToken{}, errors.New("sToken error")
-	}
-	return t.sTokens[pr], nil
-}
-
-func (t *mockTokenator) keys() (ret []Metadata) {
-	for key := range t.sTokens {
-		ret = append(ret, Metadata{Name: key})
-	}
-	return
-}
-
 type mockConnecter struct {
-	tokenable
-	uToken      string
-	sTokenKey   string
-	sTokenValue sToken
+	sTokens     map[string]sToken
 	projects    []Metadata
 	projectsErr error
 }
 
-func (c *mockConnecter) getProjects(string) ([]Metadata, error) {
-	if c.uToken == "" {
+func (c *mockConnecter) getProjects(string, string) ([]Metadata, error) {
+	if c.projectsErr != nil {
 		return nil, fmt.Errorf("getProjects error: %w", c.projectsErr)
 	}
 	return c.projects, nil
 }
 
-func (c *mockConnecter) fetchTokens(bool, []Metadata) (string, map[string]sToken) {
-	m := make(map[string]sToken)
-	m[c.sTokenKey] = c.sTokenValue
-	return c.uToken, m
-}
-
-func Test_SDConnect_GetUToken(t *testing.T) {
-	var tests = []struct {
-		testname, url, expectedToken string
-	}{
-		{"OK_1", "github.com", "myveryowntoken"},
-		{"OK_2", "google.com", "9765rty5678"},
-	}
-
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
-				if url != tt.url+"/token" {
-					return fmt.Errorf("makeRequest() was called with incorrect URL. Expected=%s, received=%s", tt.url+"/token", url)
-				}
-
-				switch v := ret.(type) {
-				case *uToken:
-					*v = uToken{tt.expectedToken}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *UToken", reflect.TypeOf(v))
-				}
-			}
-
-			tr := tokenator{}
-			token, err := tr.getUToken(tt.url)
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if tt.expectedToken != token {
-				t.Errorf("Unscoped token is incorrect. Expected=%s, received=%s", tt.expectedToken, token)
-			}
-		})
-	}
-}
-
-func Test_SDConnect_GetUToken_Error(t *testing.T) {
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
-		return errExpected
-	}
-
-	tr := tokenator{}
-	token, err := tr.getUToken("")
-
-	if err == nil {
-		t.Error("Function should have returned error")
-	} else if !errors.Is(err, errExpected) {
-		t.Errorf("Function returned incorrect error: %s", err.Error())
-	}
-
-	if token != "" {
-		t.Errorf("Unscoped token should have been empty, received=%s", token)
-	}
-}
-
-func Test_SDConnect_GetSToken(t *testing.T) {
-	var tests = []struct {
-		testname, project, url, expectedToken, expectedID string
-	}{
-		{"OK_1", "project007", "google.com", "myveryowntoken", "jbowegxf72nfbof"},
-		{"OK_2", "projectID", "github.com", "9765rty5678", "ug8392nzdipqz9210z"},
-	}
-
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
-				if url != tt.url+"/token" {
-					return fmt.Errorf("makeRequest() was called with incorrect url. Expected=%s, reveived=%s", tt.url+"/token", url)
-				}
-				if query["project"] != tt.project {
-					return fmt.Errorf("makeRequest() was called with incorrect query. Expected key 'project' to have value %s, received=%s",
-						tt.project, query["project"])
-				}
-
-				switch v := ret.(type) {
-				case *sToken:
-					*v = sToken{tt.expectedToken, tt.expectedID}
-					return nil
-				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
-				}
-			}
-
-			tr := tokenator{}
-			token, err := tr.getSToken(tt.url, tt.project)
-
-			if err != nil {
-				t.Errorf("Unexpected error: %s", err.Error())
-			} else if tt.expectedToken != token.Token {
-				t.Errorf("Scoped token is incorrect. Expected=%s, received=%q", tt.expectedToken, token.Token)
-			} else if tt.expectedID != token.ProjectID {
-				t.Errorf("Project ID is incorrect. Expected=%s, received=%s", tt.expectedID, token.ProjectID)
-			}
-		})
-	}
-}
-
-func Test_SDConnect_GetSToken_Error(t *testing.T) {
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-
-	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
-		return errExpected
-	}
-
-	tr := tokenator{}
-	token, err := tr.getSToken("", "")
-
-	if err == nil {
-		t.Error("Function should have returned error")
-	} else if !errors.Is(err, errExpected) {
-		t.Errorf("Function returned incorrect error: %s", err.Error())
-	}
-
-	if token != (sToken{}) {
-		t.Errorf("Scoped token should have been empty, received=%s", token)
-	}
+func (c *mockConnecter) getSTokens([]Metadata, string, string) map[string]sToken {
+	return c.sTokens
 }
 
 func Test_SDConnect_GetProjects(t *testing.T) {
@@ -216,12 +52,9 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
-				if url != tt.url+"/projects" {
-					return fmt.Errorf("makeRequest() was called with incorrect url. Expected=%s, received=%s", tt.url+"/projects", url)
-				}
-				if token != tt.token {
-					return fmt.Errorf("makeRequest() was called with incorrect token. Expected=%s, received=%s", tt.token, token)
+			makeRequest = func(url string, query map[string]string, headers map[string]string, ret interface{}) error {
+				if token, ok := headers["X-Authorization"]; !ok || token != "Basic "+tt.token {
+					return fmt.Errorf("Incorrect header 'X-Authorization'\nExpected=%s\nReceived=%s", "Bearer "+tt.token, token)
 				}
 
 				switch v := ret.(type) {
@@ -233,8 +66,8 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 				}
 			}
 
-			c := connecter{url: &tt.url}
-			projects, err := c.getProjects(tt.token)
+			c := connecter{}
+			projects, err := c.getProjects("https://data.csc.fi", tt.token)
 
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
@@ -249,13 +82,12 @@ func Test_SDConnect_GetProjects_Error(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
-	makeRequest = func(url string, token string, repository string, query map[string]string, headers map[string]string, ret interface{}) error {
+	makeRequest = func(url string, query map[string]string, headers map[string]string, ret interface{}) error {
 		return errExpected
 	}
 
-	dummy := ""
-	c := connecter{url: &dummy}
-	projects, err := c.getProjects("")
+	c := connecter{}
+	projects, err := c.getProjects("url", "token")
 
 	if err == nil {
 		t.Error("Function should have returned error")
@@ -268,46 +100,52 @@ func Test_SDConnect_GetProjects_Error(t *testing.T) {
 	}
 }
 
-func Test_SDConnect_FetchTokens(t *testing.T) {
+func Test_SDConnect_GetSTokens(t *testing.T) {
 	var tests = []struct {
-		testname, uToken, mockUToken string
-		skip                         bool
-		sTokens, mockSTokens         map[string]sToken
+		testname string
+		projects []Metadata
+		sTokens  map[string]sToken
 	}{
 		{
-			"OK_1", "unscoped token", "unscoped token", false,
-			map[string]sToken{"project1": {"vhjk", "cud7"}, "project2": {"d6l", "88x6l"}},
+			"OK_1", []Metadata{{56, "project1"}, {67, "project2"}},
 			map[string]sToken{"project1": {"vhjk", "cud7"}, "project2": {"d6l", "88x6l"}},
 		},
 		{
-			"OK_2", "", "garbage", true,
-			map[string]sToken{"pr1568": {"6rxy", "7cli87t"}, "pr2097": {"7cek", "25c8"}},
+			"OK_2", []Metadata{{23, "pr1568"}, {90, "pr2097"}},
 			map[string]sToken{"pr1568": {"6rxy", "7cli87t"}, "pr2097": {"7cek", "25c8"}},
 		},
 		{
-			"FAIL_UTOKEN", "", "", false,
-			map[string]sToken{},
-			map[string]sToken{"project1": {"5xe7k", "6xwei"}, "project2": {"5xw46", "4wx6"}},
-		},
-		{
-			"FAIL_STOKENS", "utoken", "utoken", false,
+			"FAIL_STOKENS", []Metadata{{496, "pr152"}, {271, "pr375"}, {12, "pr225"}},
 			map[string]sToken{"pr225": {"8vgicö", "xfd6"}},
-			map[string]sToken{"pr152": {}, "pr375": {}, "pr225": {"8vgicö", "xfd6"}},
 		},
 	}
 
-	dummy := ""
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			mockT := &mockTokenator{uToken: tt.mockUToken, sTokens: tt.mockSTokens}
-			c := connecter{tokenable: mockT, url: &dummy}
+			makeRequest = func(url string, query map[string]string, headers map[string]string, ret interface{}) error {
+				if token, ok := headers["X-Authorization"]; !ok || token != "Basic token" {
+					return fmt.Errorf("Real error ccurred")
+				}
+				if _, ok := tt.sTokens[query["project"]]; !ok {
+					return fmt.Errorf("Error occurred")
+				}
 
-			newUToken, newSTokens := c.fetchTokens(tt.skip, mockT.keys())
+				switch v := ret.(type) {
+				case *sToken:
+					*v = tt.sTokens[query["project"]]
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
+				}
+			}
 
-			if newUToken != tt.uToken {
-				t.Errorf("uToken incorrect. Expected=%s, received=%s", tt.uToken, newUToken)
-			} else if !reflect.DeepEqual(newSTokens, tt.sTokens) {
+			c := connecter{}
+			newSTokens := c.getSTokens(tt.projects, "url", "token")
+
+			if !reflect.DeepEqual(newSTokens, tt.sTokens) {
 				t.Errorf("sTokens incorrect.\nExpected=%s\nReceived=%s", tt.sTokens, newSTokens)
 			}
 		})
@@ -316,20 +154,18 @@ func Test_SDConnect_FetchTokens(t *testing.T) {
 
 func Test_SDConnect_GetEnvs(t *testing.T) {
 	var tests = []struct {
-		testname            string
-		expectedMetadataURL string
-		expectedDataURL     string
-		expectedError       error
-		mockGetEnv          func(string, bool) (string, error)
-		mockTestURL         func(string) error
+		testname      string
+		expectedURL   string
+		expectedError error
+		mockGetEnv    func(string, bool) (string, error)
+		mockTestURL   func(string) error
 	}{
 		{
-			testname:            "OK",
-			expectedMetadataURL: "https://metadata.csc.fi",
-			expectedDataURL:     "https://data.csc.fi",
-			expectedError:       nil,
+			testname:      "OK",
+			expectedURL:   "https://data.csc.fi",
+			expectedError: nil,
 			mockGetEnv: func(s string, b bool) (string, error) {
-				if s == envMetaUrl {
+				if s != "FS_SD_CONNECT_API" {
 					return "https://metadata.csc.fi", nil
 				} else {
 					return "https://data.csc.fi", nil
@@ -340,61 +176,23 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 			},
 		},
 		{
-			testname:            "FAIL_METADATA_ENV",
-			expectedMetadataURL: "",
-			expectedDataURL:     "",
-			expectedError:       errors.New("some error"),
+			testname:      "FAIL_API_ENV",
+			expectedURL:   "",
+			expectedError: errors.New("some error"),
 			mockGetEnv: func(s string, b bool) (string, error) {
 				return "", errors.New("some error")
 			},
 			mockTestURL: nil,
 		},
 		{
-			testname:            "FAIL_METADATA_VALIDATE",
-			expectedMetadataURL: metaUrl,
-			expectedDataURL:     "",
-			expectedError:       errors.New("Cannot connect to SD Connect metadata API: bad url"),
+			testname:      "FAIL_API_VALIDATE",
+			expectedURL:   "https://metadata.csc.fi",
+			expectedError: errors.New("Cannot connect to SD Connect API: bad url"),
 			mockGetEnv: func(s string, b bool) (string, error) {
-				return metaUrl, nil
+				return "https://metadata.csc.fi", nil
 			},
 			mockTestURL: func(s string) error {
 				return errors.New("bad url")
-			},
-		},
-		{
-			testname:            "FAIL_DATA_ENV",
-			expectedMetadataURL: metaUrl,
-			expectedDataURL:     "",
-			expectedError:       errors.New("some error"),
-			mockGetEnv: func(s string, b bool) (string, error) {
-				if s == envMetaUrl {
-					return metaUrl, nil
-				} else {
-					return "", errors.New("some error")
-				}
-			},
-			mockTestURL: func(s string) error {
-				return nil
-			},
-		},
-		{
-			testname:            "FAIL_DATA_VALIDATE",
-			expectedMetadataURL: metaUrl,
-			expectedDataURL:     "http://data.csc.fi",
-			expectedError:       errors.New("Cannot connect to SD Connect data API: bad url"),
-			mockGetEnv: func(s string, b bool) (string, error) {
-				if s == envMetaUrl {
-					return metaUrl, nil
-				} else {
-					return "http://data.csc.fi", nil
-				}
-			},
-			mockTestURL: func(s string) error {
-				if s == metaUrl {
-					return nil
-				} else {
-					return errors.New("bad url")
-				}
 			},
 		},
 	}
@@ -422,11 +220,8 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 					t.Errorf("Function returned incorrect error\nExpected=%v\nReceived=%v", tt.expectedError, err)
 				}
 			}
-			if sd.metadataURL != tt.expectedMetadataURL {
-				t.Errorf("metadataURL incorrect. Expected=%v, received=%v", tt.expectedMetadataURL, sd.metadataURL)
-			}
-			if sd.dataURL != tt.expectedDataURL {
-				t.Errorf("dataURL incorrect. Expected=%v, received=%v", tt.expectedDataURL, sd.dataURL)
+			if sd.url != tt.expectedURL {
+				t.Errorf("URL incorrect. Expected=%v, received=%v", tt.expectedURL, sd.url)
 			}
 		})
 	}
@@ -434,9 +229,7 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 
 func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	projects := []Metadata{{56, "pr1"}, {45, "pr56"}, {8, "pr88"}}
-	mockT := &mockTokenator{uToken: "uToken"}
-	mockC := &mockConnecter{tokenable: mockT, uToken: "uToken", sTokenKey: "s1", sTokenValue: sToken{"sToken", "proj1"},
-		projects: projects}
+	mockC := &mockConnecter{sTokens: map[string]sToken{"s1": {"sToken", "proj1"}}, projects: projects}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	err := sd.validateLogin("user", "pass")
@@ -445,9 +238,6 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	}
 	if sd.token != "dXNlcjpwYXNz" {
 		t.Errorf("Token incorrect. Expected=dXNlcjpwYXNz, received=%s", sd.token)
-	}
-	if sd.uToken != "uToken" {
-		t.Errorf("uToken incorrect. Expected=uToken, received=%s", sd.uToken)
 	}
 	if st := sd.sTokens["s1"].Token; st != "sToken" {
 		t.Errorf("sToken incorrect for project 's1'. Expected=sToken, received=%s", st)
@@ -460,23 +250,8 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	}
 }
 
-func Test_SDConnect_ValidateLogin_Fail_GetUToken(t *testing.T) {
-	mockT := &mockTokenator{uToken: ""}
-	mockC := &mockConnecter{tokenable: mockT}
-	sd := &sdConnectInfo{connectable: mockC}
-
-	expectedError := "Error occurred for SD Connect"
-	err := sd.validateLogin("user", "pass")
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
-		}
-	}
-}
-
 func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
-	mockT := &mockTokenator{uToken: "token"}
-	mockC := &mockConnecter{tokenable: mockT, uToken: ""}
+	mockC := &mockConnecter{projectsErr: errors.New("Error occurred")}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "Error occurred for SD Connect"
@@ -489,8 +264,7 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 }
 
 func Test_SDConnect_ValidateLogin_No_Projects(t *testing.T) {
-	mockT := &mockTokenator{uToken: "token"}
-	mockC := &mockConnecter{tokenable: mockT, uToken: "token", projects: nil}
+	mockC := &mockConnecter{projects: nil}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "No projects found for SD Connect"
@@ -503,8 +277,7 @@ func Test_SDConnect_ValidateLogin_No_Projects(t *testing.T) {
 }
 
 func Test_SDConnect_ValidateLogin_401_Error(t *testing.T) {
-	mockT := &mockTokenator{uToken: "token456"}
-	mockC := &mockConnecter{tokenable: mockT, projectsErr: &RequestError{StatusCode: 401}}
+	mockC := &mockConnecter{projectsErr: &RequestError{StatusCode: 401}}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "getProjects error: API responded with status 401 Unauthorized"
@@ -517,8 +290,7 @@ func Test_SDConnect_ValidateLogin_401_Error(t *testing.T) {
 }
 
 func Test_SDConnect_ValidateLogin_500_Error(t *testing.T) {
-	mockT := &mockTokenator{uToken: "token456"}
-	mockC := &mockConnecter{tokenable: mockT, projectsErr: &RequestError{StatusCode: 500}}
+	mockC := &mockConnecter{projectsErr: &RequestError{StatusCode: 500}}
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "SD Connect is not available, please contact CSC servicedesk"
@@ -558,13 +330,6 @@ func Test_SDConnect_LevelCount(t *testing.T) {
 	sd := sdConnectInfo{}
 	if lc := sd.levelCount(); lc != 3 {
 		t.Errorf("Function failed, expected=3, received=%d", lc)
-	}
-}
-
-func Test_SDConnect_GetToken(t *testing.T) {
-	sd := sdConnectInfo{token: "token"}
-	if sdt := sd.getToken(); sdt != "token" {
-		t.Errorf("Function failed, expected=token, received=%s", sdt)
 	}
 }
 
@@ -615,7 +380,7 @@ func Test_SDConnect_GetNthLevel_Fail_Request(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 		return errors.New("some error")
 	}
 	sd := &sdConnectInfo{}
@@ -632,7 +397,7 @@ func Test_SDConnect_GetNthLevel_Pass_1Node(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy1"}]`))).Decode(ret)
 		return nil
 	}
@@ -641,7 +406,7 @@ func Test_SDConnect_GetNthLevel_Pass_1Node(t *testing.T) {
 	// Test
 	meta, err := sd.getNthLevel("fspath", "1")
 	if err != nil {
-		t.Errorf("Function failed, expected no error, received=%v", err)
+		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
 	if meta[0].Bytes != 100 {
 		t.Errorf("Function failed, expected=%d, received=%d", 100, meta[0].Bytes)
@@ -655,7 +420,7 @@ func Test_SDConnect_GetNthLevel_Pass_2Node(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy2"}]`))).Decode(ret)
 		return nil
 	}
@@ -678,15 +443,14 @@ func Test_SDConnect_GetNthLevel_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
-		if token == "expiredToken" {
-			return &RequestError{http.StatusUnauthorized}
-		} else {
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
 			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy3"}]`))).Decode(ret)
 			return nil
 		}
+		return &RequestError{http.StatusUnauthorized}
 	}
-	mockC := &mockConnecter{sTokenKey: "project", sTokenValue: sToken{"freshToken", "project"}}
+	mockC := &mockConnecter{sTokens: map[string]sToken{"project": {"freshToken", "projectID"}}}
 	sd := &sdConnectInfo{
 		connectable: mockC,
 		sTokens:     map[string]sToken{"project": {"expiredToken", "project"}},
@@ -696,7 +460,10 @@ func Test_SDConnect_GetNthLevel_Pass_TokenExpired(t *testing.T) {
 	// Test
 	meta, err := sd.getNthLevel("sdconnect", "project", "container")
 	if err != nil {
-		t.Errorf("Function failed, expected no error, received=%v", err)
+		t.Fatalf("Function failed, expected no error, received=%v", err)
+	}
+	if len(meta) == 0 {
+		t.Fatalf("Function failed, returned metadata empty")
 	}
 	if meta[0].Bytes != 100 {
 		t.Errorf("Function failed, expected=%d, received=%d", 100, meta[0].Bytes)
@@ -711,13 +478,13 @@ func Test_SDConnect_GetNthLevel_Fail_TokenExpired(t *testing.T) {
 	expectedError := "Failed to retrieve metadata for sdconnect: API responded with status 401 Unauthorized"
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 		return &RequestError{http.StatusUnauthorized}
 	}
-	mockC := &mockConnecter{sTokenKey: "project", sTokenValue: sToken{"freshToken", "project"}}
+	mockC := &mockConnecter{sTokens: map[string]sToken{"project": {"freshToken", "projectID"}}}
 	sd := &sdConnectInfo{
 		connectable: mockC,
-		sTokens:     map[string]sToken{"project": {"expiredToken", "project"}},
+		sTokens:     map[string]sToken{"project": {"expiredToken", "projectID"}},
 		projects:    []Metadata{},
 	}
 
@@ -754,7 +521,7 @@ func Test_SDConnect_UpdateAttributes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+			makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 				switch v := ret.(type) {
 				case *SpecialHeaders:
 					v.Decrypted = tt.decrypted
@@ -806,7 +573,7 @@ func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+			makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 				return tt.requestErr
 			}
 
@@ -831,15 +598,15 @@ func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
 func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 	// Mock
 	expectedBody := []byte("hellothere")
-	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Project-ID": "project"}
+	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Authorization": "Bearer token", "X-Project-ID": "project"}
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
-		_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 		// Test that headers were computed properly
 		if !reflect.DeepEqual(headers, expectedHeaders) {
 			t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
 		}
+		_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
 		return nil
 	}
 	sd := &sdConnectInfo{sTokens: map[string]sToken{"project": {"token", "project"}}}
@@ -849,7 +616,7 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 	err := sd.downloadData([]string{"project", "container", "object"}, buf, 0, 10)
 
 	if err != nil {
-		t.Errorf("Function failed, expected no error, received=%v", err)
+		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
 	if !bytes.Equal(buf, expectedBody) {
 		t.Errorf("Function failed, expected=%s, received=%s", string(expectedBody), string(buf))
@@ -859,25 +626,24 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	expectedBody := []byte("hellothere")
-	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Project-ID": "project"}
+	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Authorization": "Bearer freshToken", "X-Project-ID": "projectID"}
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
-		if token == "expiredToken" {
-			return &RequestError{http.StatusUnauthorized}
-		} else {
-			_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
+	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
 			// Test that headers were computed properly
 			if !reflect.DeepEqual(headers, expectedHeaders) {
-				t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
+				t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedHeaders, headers)
 			}
+			_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
 			return nil
 		}
+		return &RequestError{http.StatusUnauthorized}
 	}
-	mockC := &mockConnecter{sTokenKey: "project", sTokenValue: sToken{"freshToken", "project"}}
+	mockC := &mockConnecter{sTokens: map[string]sToken{"project": {"freshToken", "projectID"}}}
 	sd := &sdConnectInfo{
 		connectable: mockC,
-		sTokens:     map[string]sToken{"project": {"expiredToken", "project"}},
+		sTokens:     map[string]sToken{"project": {"expiredToken", "projectID"}},
 		projects:    []Metadata{},
 	}
 
@@ -886,7 +652,7 @@ func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 	err := sd.downloadData([]string{"project", "container", "object"}, buf, 0, 10)
 
 	if err != nil {
-		t.Errorf("Function failed, expected no error, received=%v", err)
+		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
 	if !bytes.Equal(buf, expectedBody) {
 		t.Errorf("Function failed, expected=%s, received=%s", string(expectedBody), string(buf))

@@ -39,6 +39,7 @@ type httpInfo struct {
 	requestTimeout int
 	httpRetry      int
 	certPath       string
+	sdsToken       string
 	client         *http.Client
 	repositories   map[string]fuseInfo
 }
@@ -49,7 +50,6 @@ type fuseInfo interface {
 	getLoginMethod() LoginMethod
 	validateLogin(...string) error
 	levelCount() int
-	getToken() string
 	getNthLevel(string, ...string) ([]Metadata, error)
 	updateAttributes([]string, string, interface{}) error
 	downloadData([]string, interface{}, int64, int64) error
@@ -68,10 +68,6 @@ type RequestError struct {
 
 func (re *RequestError) Error() string {
 	return fmt.Sprintf("API responded with status %d %s", re.StatusCode, http.StatusText(re.StatusCode))
-}
-
-func init() {
-	hi.certPath, _ = getEnv("FS_CERTS", false)
 }
 
 // GetAllPossibleRepositories returns the names of every possible repository.
@@ -132,6 +128,18 @@ var validURL = func(env string) error {
 	}
 	if u.Scheme != "https" {
 		return fmt.Errorf("Environment variable %s does not have scheme 'https'", env)
+	}
+	return nil
+}
+
+// GetCommonEnvs gets the environmental varibles that are needed for all repositories
+// This may need to be changed if new repositories are added
+func GetCommonEnvs() (err error) {
+	if hi.certPath, err = getEnv("FS_CERTS", false); err != nil {
+		return err
+	}
+	if hi.sdsToken, err = getEnv("SDS_ACCESS_TOKEN", false); err != nil {
+		return err
 	}
 	return nil
 }
@@ -214,7 +222,7 @@ var LevelCount = func(rep string) int {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-var makeRequest = func(url, token, repository string, query, headers map[string]string, ret interface{}) error {
+var makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
 	var response *http.Response
 
 	// Build HTTP request
@@ -232,11 +240,7 @@ var makeRequest = func(url, token, repository string, query, headers map[string]
 
 	// Place mandatory headers
 	request.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
-	} else {
-		request.Header.Set("Authorization", "Basic "+hi.repositories[repository].getToken())
-	}
+	request.Header.Set("Authorization", "Bearer "+hi.sdsToken)
 
 	// Place additional headers if any are available
 	for k, v := range headers {

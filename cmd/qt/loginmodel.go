@@ -109,13 +109,19 @@ func (lm *LoginModel) setLoggedIn(idx int, value bool) {
 	lm.DataChanged(index, index, []int{LoggedIn})
 }
 
-func (lm *LoginModel) checkEnvs() {
+func (lm *LoginModel) checkEnvs() bool {
+	noneAvailable := true
+
 	for i := range lm.logins {
 		if err := api.GetEnvs(lm.logins[i].repository); err != nil {
 			logs.Error(err)
 			lm.logins[i].envsMissing = true
 			var index = lm.Index(i, 0, core.NewQModelIndex())
 			lm.DataChanged(index, index, []int{EnvsMissing})
+		} else {
+			noneAvailable = false
 		}
 	}
+
+	return noneAvailable
 }

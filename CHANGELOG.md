@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Adjusting to changes in the SD Connect and SD Submit APIs
 - small updates to UI
 
 ### Added

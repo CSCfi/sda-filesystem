@@ -60,7 +60,14 @@ func (qb *QmlBridge) init() {
 }
 
 func (qb *QmlBridge) initializeAPI() {
-	err := api.InitializeCache()
+	err := api.GetCommonEnvs()
+	if err != nil {
+		logs.Error(err)
+		qb.InitError("Required environmental varibles missing")
+		return
+	}
+
+	err = api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
 		qb.InitError("Initializing cache failed")
@@ -72,6 +79,10 @@ func (qb *QmlBridge) initializeAPI() {
 		logs.Error(err)
 		qb.InitError("Initializing HTTP client failed")
 		return
+	}
+
+	if noneAvailable := loginModel.checkEnvs(); noneAvailable {
+		qb.InitError("No services available")
 	}
 }
 
@@ -229,6 +240,5 @@ func main() {
 	//fmt.Println(core.QThread_CurrentThread().Pointer())
 
 	qmlBridge.initializeAPI()
-	loginModel.checkEnvs()
 	gui.QGuiApplication_Exec()
 }

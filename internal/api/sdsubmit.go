@@ -25,13 +25,11 @@ type submittable interface {
 
 type submitter struct {
 	lock    sync.RWMutex
-	token   *string
 	fileIDs map[string]string
 }
 
 type sdSubmitInfo struct {
 	submittable
-	token    string
 	urls     []string
 	fileIDs  map[string]string
 	datasets map[string]int
@@ -52,7 +50,6 @@ type file struct {
 func init() {
 	su := &submitter{fileIDs: make(map[string]string)}
 	sd := &sdSubmitInfo{submittable: su}
-	su.token = &sd.token
 	sd.fileIDs = su.fileIDs
 	possibleRepositories[SDSubmit] = sd
 }
@@ -63,7 +60,7 @@ func init() {
 
 func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	var datasets []string
-	err := makeRequest(urlStr+"/metadata/datasets", *s.token, SDSubmit, nil, nil, &datasets)
+	err := makeRequest(urlStr+"/metadata/datasets", nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmit, urlStr, err)
 	}
@@ -73,10 +70,18 @@ func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 }
 
 func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
+	var query map[string]string
+	origDataset := dataset
+	split := strings.Split(dataset, "://")
+	if len(split) > 1 {
+		query = map[string]string{"scheme": split[0]}
+		dataset = strings.Join(split[1:], "://")
+	}
+
 	// Request files
 	var files []file
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
-	err := makeRequest(path, *s.token, SDSubmit, nil, nil, &files)
+	err := makeRequest(path, query, nil, &files)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
 	}
@@ -88,7 +93,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 			metadata = append(metadata, md)
 
 			s.lock.Lock()
-			s.fileIDs[dataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
+			s.fileIDs[origDataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
 			s.lock.Unlock()
 		}
 	}
@@ -103,10 +108,6 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 
 func (s *sdSubmitInfo) getEnvs() error {
 	var err error
-	s.token, err = getEnv("SDS_ACCESS_TOKEN", false)
-	if err != nil {
-		return err
-	}
 	urls, err := getEnv("FS_SD_SUBMIT_API", false)
 	if err != nil {
 		return err
@@ -166,10 +167,6 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	return nil
 }
 
-func (s *sdSubmitInfo) getToken() string {
-	return s.token
-}
-
 func (s *sdSubmitInfo) levelCount() int {
 	return 2
 }
@@ -212,9 +209,7 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, e
 		"endCoordinate":   strconv.FormatInt(end, 10),
 	}
 
-	finalPath := nodes[0] + "_" + nodes[1]
-
 	// Request data
-	path := s.urls[idx] + "/files/" + s.fileIDs[finalPath]
-	return makeRequest(path, s.token, SDSubmit, query, nil, buffer)
+	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+nodes[1]]
+	return makeRequest(path, query, nil, buffer)
 }

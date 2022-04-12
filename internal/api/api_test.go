@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,8 +49,6 @@ type mockRepository struct {
 }
 
 func (r *mockRepository) getEnvs() error { return r.envError }
-
-func (r *mockRepository) getToken() string { return "" }
 
 func (r *mockRepository) downloadData(nodes []string, buf interface{}, start, end int64) error {
 	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
@@ -199,6 +198,53 @@ func TestValidURL(t *testing.T) {
 	err = validURL("https://csc.fi")
 	if err != nil {
 		t.Errorf("Function received unexpected error: %s", err.Error())
+	}
+}
+
+func TestGetCommonEnv(t *testing.T) {
+	var tests = []struct {
+		testname     string
+		certs, token string
+	}{
+		{"OK_1", "cert.pem", "token628"},
+		{"FAIL_CERTS", "", "token"},
+		{"FAIL_SDS_TOKEN", "ca.pem", ""},
+	}
+
+	origGetEnv := getEnv
+	defer func() { getEnv = origGetEnv }()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			getEnv = func(name string, verifyURL bool) (string, error) {
+				if name == "FS_CERTS" {
+					if tt.certs == "" {
+						return "", errExpected
+					}
+					return tt.certs, nil
+				}
+				if tt.token == "" {
+					return "", errExpected
+				}
+				return tt.token, nil
+			}
+
+			err := GetCommonEnvs()
+
+			if strings.HasPrefix(tt.testname, "OK") {
+				if err != nil {
+					t.Errorf("Unexpected error: %s", err.Error())
+				} else if tt.certs != hi.certPath {
+					t.Errorf("Incorrect certificate path. Expected=%s, received=%s", tt.certs, hi.certPath)
+				} else if tt.token != hi.sdsToken {
+					t.Errorf("Incorrect SDS access token. Expected=%s, received=%s", tt.token, hi.sdsToken)
+				}
+			} else if err == nil {
+				t.Errorf("Function should have returned error")
+			} else if err.Error() != errExpected.Error() {
+				t.Errorf("Incorrect return value\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
+			}
+		})
 	}
 }
 
@@ -489,15 +535,15 @@ func TestMakeRequest(t *testing.T) {
 			switch v := tt.expectedBody.(type) {
 			case SpecialHeaders:
 				var headers SpecialHeaders
-				err = makeRequest(server.URL, "token", "", tt.query, tt.headers, &headers)
+				err = makeRequest(server.URL, tt.query, tt.headers, &headers)
 				ret = headers
 			case []byte:
 				buf := make([]byte, len(v))
-				err = makeRequest(server.URL, "token", "mock", tt.query, tt.headers, buf)
+				err = makeRequest(server.URL, tt.query, tt.headers, buf)
 				ret = buf
 			default:
 				var objects []Metadata
-				err = makeRequest(server.URL, "", "mock", tt.query, tt.headers, &objects)
+				err = makeRequest(server.URL, tt.query, tt.headers, &objects)
 				ret = objects
 			}
 
@@ -523,7 +569,7 @@ func TestMakeRequest_NewRequest_Error(t *testing.T) {
 	buf[0] = 0x7f
 	errText := fmt.Sprintf("parse %q: net/url: invalid control character in URL", string(buf))
 
-	if err := makeRequest(string(buf), "token", "mock", nil, nil, buf); err == nil {
+	if err := makeRequest(string(buf), nil, nil, buf); err == nil {
 		t.Error("Function did not return error with invalid URL")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())

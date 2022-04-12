@@ -231,7 +231,11 @@ func shutdown() <-chan bool {
 }
 
 func main() {
-	err := api.InitializeCache()
+	err := api.GetCommonEnvs()
+	if err != nil {
+		logs.Fatal(err)
+	}
+	err = api.InitializeCache()
 	if err != nil {
 		logs.Fatal(err)
 	}
