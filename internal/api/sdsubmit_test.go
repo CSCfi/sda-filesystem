@@ -194,7 +194,7 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 	if meta[0].Name != testFile[0].DisplayFileName {
 		t.Errorf("Function failed, expected=%s, received=%s", testFile[0].DisplayFileName, meta[0].Name)
 	}
-	if s.fileIDs["dataset1_file1.txt"] != "file1" {
+	if s.fileIDs["https://dataset1_file1.txt"] != "file1" {
 		t.Errorf("Function failed, expected=%s, received=%s", "file1", s.fileIDs["dataset1_file1.txt"])
 	}
 }
