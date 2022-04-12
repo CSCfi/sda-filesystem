@@ -22,23 +22,12 @@ Binaries are built on each release for all supported Operating Systems.
 Go version 1.17
 
 Set these environment variables before running the application:
-- SD Connect: `FS_SD_CONNECT_METADATA_API` - a metadata API for building the directories, files and their associated information (size, name etc.); `FS_SD_CONNECT_DATA_API` - an API for downloading files;
-- SD Apply/SD Submit: `FS_SD_SUBMIT_API` – a comma-separated list of APIs; `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD Submit download API;
-- `FS_CERTS` is required by SD Connect and SD Submit if self signed certificates are used on the APIs.
+- `FS_SD_CONNECT_API` - API for SD-Connect
+- `FS_SD_SUBMIT_API` – a comma-separated list of APIs for SD Apply/SD Submit
+- `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD APIs
+- `FS_CERTS` is the path to a file that contains certificates required by SD Connect and SD Apply/SD Submit
 
-For test environment use:
-
-```
-export FS_SD_CONNECT_METADATA_API=https://connect-metadata-api-test.sd.csc.fi           
-export FS_SD_CONNECT_DATA_API=https://connect-data-api-test.sd.csc.fi
-export FS_SD_SUBMIT_API=https://test.sd.csc.fi/
-
-# Connection requires a certificate only if using untrusted (e.g. self-signed) certificates
-# if signed by a trusted CA, this is not needed
-# FS_CERTS should be the path to the file that contains the necessary certificates
-# For example:
-export FS_CERTS=cert.pem
-```
+For test environment use follow instructions at https://gitlab.ci.csc.fi/sds-dev/local-proxy
 
 ## Graphical User Interface
 
