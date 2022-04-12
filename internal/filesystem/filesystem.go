@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/url"
 	"path"
@@ -144,6 +145,12 @@ func UnmountFilesystem() {
 	}
 }
 
+func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
+	fs.ino = newFs.ino
+	fs.root = newFs.root
+	fs.openmap = newFs.openmap
+}
+
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
 func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	timestamp := fuse.Now()
@@ -230,8 +237,8 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 
 var removeInvalidChars = func(str string) string {
 	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
-		"_", "|", "_", "@", "_", ":", ".", "&", ".", "!", ".", "?", ".",
-		"<", ".", ">", ".", "'", ".", "\"", "."}
+		"_", "|", "_", "@", "_", ":", "_", "&", "_", "!", "_", "?", "_",
+		"<", "_", ">", "_", "'", "_", "\"", "_"}
 
 	// Remove characters which may interfere with filesystem structure
 	r := strings.NewReplacer(forReplacer...)
@@ -363,33 +370,44 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 	possibleTwin := prnt.chld[name]
 
 	// A folder or a file with the same name already exists
+	newName, origName := "", meta.Name
 	if possibleTwin != nil {
-		// Create a unique suffix for file/folder
-		parts := strings.SplitN(name, ".", 2)
-		i := 1
-		for {
-			beforeDot := parts[0]
-			parts[0] = fmt.Sprintf("%s(%d)", parts[0], i)
-			newName := strings.Join(parts, ".")
-			parts[0] = beforeDot
-			if _, ok := prnt.chld[newName]; !ok {
-				// Change name of node (whichever is possibly a file)
-				if dir && (fuse.S_IFREG == possibleTwin.stat.Mode&fuse.S_IFMT) {
-					prnt.chld[newName] = possibleTwin
-					logs.Warningf("File %s under directory %s has had its name changed to %s", possibleTwin.originalName, prntPath, newName)
-				} else {
-					name = newName
-				}
-				break
-			}
-			i++
+		// Create a unique suffix for file/folder and change name of node (whichever is possibly a file)
+		changeOtherNode := dir && (fuse.S_IFREG == possibleTwin.stat.Mode&fuse.S_IFMT)
+		changeDir := dir && (fuse.S_IFREG != possibleTwin.stat.Mode&fuse.S_IFMT)
+
+		if changeOtherNode {
+			origName = possibleTwin.originalName
+		}
+		sum := fmt.Sprintf("%x", sha256.Sum256([]byte(origName)))[0:6]
+
+		if changeDir {
+			newName = fmt.Sprintf("%s(%s)", name, sum)
+		} else {
+			parts := strings.SplitN(name, ".", 2)
+			parts[0] = fmt.Sprintf("%s(%s)", parts[0], sum)
+			newName = strings.Join(parts, ".")
+		}
+
+		if changeOtherNode {
+			prnt.chld[newName] = possibleTwin
+		} else {
+			name = newName
 		}
 	}
 
+	// Because cli logs cannot print name out correctly without this fix
+	if signalBridge == nil {
+		origName = strings.ReplaceAll(origName, "%", "%%")
+	}
+
 	if dir && name != meta.Name {
-		logs.Warningf("Directory %s under directory %s has had its name changed to %s", meta.Name, prntPath, name)
-	} else if !dir && name != strings.TrimSuffix(meta.Name, ".c4gh") {
-		logs.Warningf("File %s under directory %s has had its name changed to %s", meta.Name, prntPath, name)
+		logs.Warningf("Directory %s under directory %s has had its name changed to %s", origName, prntPath, name)
+	} else if (!dir && name != strings.TrimSuffix(meta.Name, ".c4gh")) || newName != "" {
+		if newName == "" {
+			newName = name
+		}
+		logs.Warningf("File %s under directory %s has had its name changed to %s", origName, prntPath, newName)
 	}
 
 	fs.inoLock.Lock()
