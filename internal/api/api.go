@@ -366,3 +366,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 	logs.Debugf("Retrieved file %s from cache, with coordinates [%d, %d)", path, start, end)
 	return ret[ofst:endofst], nil
 }
+
+var ClearCache = func() {
+	downloadCache.Clear()
+}
