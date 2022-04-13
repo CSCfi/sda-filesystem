@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - User is able to filter logs in the UI
-- Filesystem can be updated after mount
+- Filesystem can be updated after mount. Cache is cleared when updating
 
 ## [v1.1.0] - 2022-03-28
 
