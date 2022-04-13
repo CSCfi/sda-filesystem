@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
@@ -52,6 +51,20 @@ func (r *stdinReader) getState() (err error) {
 
 func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
+}
+
+func userChooseUpdate(lr loginReader) {
+	scanner := bufio.NewScanner(lr.getStream())
+	var answer string
+
+	for !strings.EqualFold(answer, "update") {
+		if scanner.Scan() {
+			answer = scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			logs.Errorf("Could not read input: %w", err)
+		}
+	}
 }
 
 var askForLogin = func(lr loginReader) (string, string, error) {
@@ -260,24 +273,19 @@ func main() {
 	fs := filesystem.InitializeFileSystem(nil)
 	fs.PopulateFilesystem(nil)
 
-	ticker := time.NewTicker(time.Duration(tickerInterval) * time.Second)
-	quit := make(chan bool)
 	go func() {
 		for {
-			select {
-			case <-quit:
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				logs.Info("Updating Data Gateway")
-				newFs := filesystem.InitializeFileSystem(nil)
-				newFs.PopulateFilesystem(nil)
-				fs.RefreshFilesystem(newFs)
+			userChooseUpdate(&stdinReader{})
+			if fs.FilesOpen() {
+				logs.Info("You have files open and thus updating is not possible. Close files and try again.")
+				continue
 			}
+			newFs := filesystem.InitializeFileSystem(nil)
+			newFs.PopulateFilesystem(nil)
+			fs.RefreshFilesystem(newFs)
 		}
 	}()
 
 	filesystem.MountFilesystem(fs, mount)
-	quit <- true
 	<-done
 }

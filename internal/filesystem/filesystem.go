@@ -151,6 +151,15 @@ func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
 	fs.openmap = newFs.openmap
 }
 
+func (fs *Fuse) FilesOpen() bool {
+	for _, n := range fs.openmap {
+		if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
+			return true
+		}
+	}
+	return false
+}
+
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
 func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	timestamp := fuse.Now()
