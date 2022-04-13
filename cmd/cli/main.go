@@ -21,7 +21,7 @@ import (
 )
 
 var repository, mount, logLevel string
-var requestTimeout, tickerInterval int
+var requestTimeout int
 
 type loginReader interface {
 	readPassword() (string, error)
