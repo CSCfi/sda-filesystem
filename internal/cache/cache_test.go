@@ -99,3 +99,30 @@ func TestDel(t *testing.T) {
 		t.Fatalf("Item was not deleted from cache")
 	}
 }
+
+func TestClear(t *testing.T) {
+	c, err := NewRistrettoCache()
+	if err != nil {
+		t.Fatalf("Creating cache failed: %s", err.Error())
+	}
+	if c == nil {
+		t.Fatal("Cache is nil")
+	}
+
+	c.Set("key", "I am information", -1)
+	c.Set("key2", "More information", -1)
+	c.Set("key3", "very secret info", -1)
+
+	time.Sleep(wait)
+	c.Clear()
+
+	if value, ok := c.Get("key"); ok {
+		t.Errorf("Key 'key' with value %q was not cleared from cache", value)
+	}
+	if value, ok := c.Get("key2"); ok {
+		t.Errorf("Key 'key2' with value %q was not cleared from cache", value)
+	}
+	if value, ok := c.Get("key3"); ok {
+		t.Errorf("Key 'key3' with value %q was not cleared from cache", value)
+	}
+}

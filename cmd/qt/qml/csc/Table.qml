@@ -5,7 +5,7 @@ import QtQml.Models 2.13
 import QtQuick.Controls.Material 2.12
 import Qt.labs.qmlmodels 1.0
 import QtQuick.Dialogs 1.3
-import csc 1.0 as CSC
+import csc 1.2 as CSC
 
 ListView {
     id: listView
@@ -20,6 +20,9 @@ ListView {
     property int amountVisible: 5
     property int page: 1
     property int maxPages: Math.ceil(rowCount / amountVisible)
+
+    Keys.onRightPressed: headerItem.changePageRight()
+    Keys.onLeftPressed: headerItem.changePageLeft()
 
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
@@ -60,7 +63,15 @@ ListView {
             text: "99999"
             visible: false
             enabled: false
-        } 
+        }
+
+        function changePageLeft() {
+            pageLeft.clicked()
+        }
+
+        function changePageRight() {
+            pageRight.clicked()
+        }
 
         Row {
             id: leftRow

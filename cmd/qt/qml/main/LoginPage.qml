@@ -3,7 +3,7 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQml 2.13
-import csc 1.0 as CSC
+import csc 1.2 as CSC
 
 Page {
 	id: page
@@ -17,6 +17,9 @@ Page {
 	property bool loggedIn: false
 	property real formHeight: 0
 
+	Keys.onReturnPressed: continueButton.clicked() // Enter key
+	Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
+
 	Column {
 		id: content
 		spacing: CSC.Style.padding
@@ -26,14 +29,16 @@ Page {
 		leftPadding: 2 * CSC.Style.padding
 
 		Label {
-			text: "<h1>Data Gateway</h1>"
+			text: "<h1>Log in to Data Gateway</h1>"
 			color: CSC.Style.primaryColor
 			maximumLineCount: 1
 		}
 
 		Label {
-			text: "Please select the services you would like to access"
-			maximumLineCount: 1
+			text: "Data Gateway gives you secure access to your data. Please select the services you would like to access."
+			wrapMode: Text.Wrap
+			width: repositoryList.width
+			lineHeight: 1.2
 		}
 
 		ListView {
@@ -43,6 +48,7 @@ Page {
 			boundsBehavior: Flickable.StopAtBounds
 			height: contentHeight
 			width: 450
+			focus: true
 			
 			property int loading: 0
 			property bool success: false
@@ -55,6 +61,8 @@ Page {
 				enabled: !envsMissing
 				anchors.horizontalCenter: parent.horizontalCenter
 
+				property bool current: ListView.isCurrentItem
+
 				onLoadingChanged: repositoryList.loading += (loading ? 1 : -1)
 				Component.onCompleted: page.formHeight = Math.max(page.formHeight, loader.item.height)
 
@@ -62,6 +70,18 @@ Page {
 					if (success) {
 						repositoryList.success = true
 						loader.item.loading = false
+					}
+				}
+
+				onOpenChanged: {
+					if (open && method == LoginMethod.Password) {
+						repositoryList.currentIndex = index
+					}
+				}
+ 
+				onCurrentChanged: {
+					if (!current) {
+						accordion.hide()
 					}
 				}
 
@@ -78,6 +98,7 @@ Page {
 
 				Loader {
 					id: loader
+					focus: accordion.open && method == LoginMethod.Password
 					width: parent.width - 2 * CSC.Style.padding
 					sourceComponent: (method == LoginMethod.Password) ? passwordComponent : tokenComponent
 					anchors.horizontalCenter: parent.horizontalCenter
@@ -96,19 +117,8 @@ Page {
 			id: continueButton
 			text: "Continue"
 			enabled: repositoryList.loading == 0 && repositoryList.success
-			
-			onEnabledChanged: {
-				if (enabled) {
-					continueButton.forceActiveFocus()
-				}
-			}
 
-			Keys.onReturnPressed: initialize() // Enter key
-			Keys.onEnterPressed: initialize()  // Numpad enter key
-
-			onClicked: initialize()
-
-			function initialize() {
+			onClicked: {
 				QmlBridge.initFuse()
 				page.loggedIn = true
 			}
@@ -157,14 +167,8 @@ Page {
 			property bool open
 			property bool loading: false
 
-			onOpenChanged: {
-				if (open) {
-					usernameField.forceActiveFocus()
-				}
-			}
-
 			Keys.onReturnPressed: loginButton.clicked() // Enter key
-	    	Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
+			Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
 
 			Connections {
 				target: QmlBridge
@@ -175,10 +179,8 @@ Page {
 						form.loading = false
 
 						if (usernameField.text != "") {
+							passwordField.focus = true
 							passwordField.selectAll()
-							passwordField.forceActiveFocus()
-						} else {
-							usernameField.forceActiveFocus()
 						}
 					}
 				}
@@ -192,6 +194,7 @@ Page {
 
 			CSC.TextField {
 				id: usernameField
+				focus: true
 				placeholderText: "Username"
 				Layout.fillWidth: true
 			}
@@ -201,6 +204,7 @@ Page {
 				placeholderText: "Password"
 				errorText: "Please enter valid password"
 				echoMode: TextInput.Password
+				activeFocusOnTab: true
 				Layout.fillWidth: true
 			}
 

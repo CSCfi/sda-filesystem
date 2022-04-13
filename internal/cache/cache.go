@@ -23,6 +23,7 @@ type Cacheable interface {
 	Get(string) (interface{}, bool)
 	Set(string, interface{}, time.Duration) bool
 	Del(string)
+	Clear()
 }
 
 // Because otherwise we cannot mock cache for tests
@@ -65,4 +66,8 @@ func (s *storage) Set(key string, value interface{}, ttl time.Duration) bool {
 // Del deletes item with key "key" from cache
 func (s *storage) Del(key string) {
 	s.cache.Del(key)
+}
+
+func (s *storage) Clear() {
+	s.cache.Clear()
 }

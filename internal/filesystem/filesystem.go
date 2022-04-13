@@ -146,6 +146,7 @@ func UnmountFilesystem() {
 }
 
 func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
+	api.ClearCache()
 	fs.ino = newFs.ino
 	fs.root = newFs.root
 	fs.openmap = newFs.openmap

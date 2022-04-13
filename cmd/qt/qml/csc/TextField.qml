@@ -1,7 +1,7 @@
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick 2.13
-import csc 1.0 as CSC
+import csc 1.2 as CSC
 
 TextField {
     id: textfield
