@@ -228,7 +228,6 @@ func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
-	flag.IntVar(&tickerInterval, "update_interval", 3600, "An interval in seconds which determines how often Data Gateway will be updated")
 }
 
 func shutdown() <-chan bool {
@@ -277,7 +276,7 @@ func main() {
 		for {
 			userChooseUpdate(&stdinReader{})
 			if fs.FilesOpen() {
-				logs.Info("You have files open and thus updating is not possible. Close files and try again.")
+				logs.Warningf("You have files in use and thus updating is not possible")
 				continue
 			}
 			newFs := filesystem.InitializeFileSystem(nil)

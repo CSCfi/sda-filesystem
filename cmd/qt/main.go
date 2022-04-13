@@ -35,7 +35,7 @@ type QmlBridge struct {
 	_ func()                        `slot:"initFuse,auto"`
 	_ func()                        `slot:"loadFuse,auto"`
 	_ func()                        `slot:"openFuse,auto"`
-	_ func()                        `slot:"refreshFuse,auto"`
+	_ func() string                 `slot:"refreshFuse,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
 	_ func()                        `slot:"shutdown,auto"`
 	_ func(idx int)                 `signal:"login401"`
@@ -162,7 +162,10 @@ func (qb *QmlBridge) openFuse() {
 	}
 }
 
-func (qb *QmlBridge) refreshFuse() {
+func (qb *QmlBridge) refreshFuse() string {
+	if qb.fs.FilesOpen() {
+		return "You have files in use and thus updating is not possible"
+	}
 	go func() {
 		logs.Info("Updating Data Gateway")
 		projectModel.PrepareForRefresh()
@@ -172,6 +175,7 @@ func (qb *QmlBridge) refreshFuse() {
 		qb.fs.RefreshFilesystem(newFs)
 		qb.FuseReady()
 	}()
+	return ""
 }
 
 func (qb *QmlBridge) shutdown() {
