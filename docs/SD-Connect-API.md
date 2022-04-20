@@ -190,6 +190,3 @@ Using `Bearer` authorisation scheme may be faster, as it skips a token request t
 Authorization: Bearer <scoped token>
 X-Project-ID: <project ID, e.g. abc123>
 ```
-
-## API Diagram
-![](api.png)
