@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
@@ -22,7 +21,7 @@ import (
 )
 
 var repository, mount, logLevel string
-var requestTimeout, tickerInterval int
+var requestTimeout int
 
 type loginReader interface {
 	readPassword() (string, error)
@@ -52,6 +51,20 @@ func (r *stdinReader) getState() (err error) {
 
 func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
+}
+
+func userChooseUpdate(lr loginReader) {
+	scanner := bufio.NewScanner(lr.getStream())
+	var answer string
+
+	for !strings.EqualFold(answer, "update") {
+		if scanner.Scan() {
+			answer = scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			logs.Errorf("Could not read input: %w", err)
+		}
+	}
 }
 
 var askForLogin = func(lr loginReader) (string, string, error) {
@@ -215,7 +228,6 @@ func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
-	flag.IntVar(&tickerInterval, "update_interval", 3600, "An interval in seconds which determines how often Data Gateway will be updated")
 }
 
 func shutdown() <-chan bool {
@@ -260,24 +272,19 @@ func main() {
 	fs := filesystem.InitializeFileSystem(nil)
 	fs.PopulateFilesystem(nil)
 
-	ticker := time.NewTicker(time.Duration(tickerInterval) * time.Second)
-	quit := make(chan bool)
 	go func() {
 		for {
-			select {
-			case <-quit:
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				logs.Info("Updating Data Gateway")
-				newFs := filesystem.InitializeFileSystem(nil)
-				newFs.PopulateFilesystem(nil)
-				fs.RefreshFilesystem(newFs)
+			userChooseUpdate(&stdinReader{})
+			if fs.FilesOpen() {
+				logs.Warningf("You have files in use and thus updating is not possible")
+				continue
 			}
+			newFs := filesystem.InitializeFileSystem(nil)
+			newFs.PopulateFilesystem(nil)
+			fs.RefreshFilesystem(newFs)
 		}
 	}()
 
 	filesystem.MountFilesystem(fs, mount)
-	quit <- true
 	<-done
 }

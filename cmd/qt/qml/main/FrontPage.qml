@@ -194,7 +194,13 @@ Page {
                     if (verb == "Create") {
                         QmlBridge.loadFuse()
                     } else {
-                        QmlBridge.refreshFuse()
+                        var message = QmlBridge.refreshFuse()
+                        if (message != "") {
+                            createButton.state = ""
+                            popup.errorMessage = message
+                            popup.open()
+                            return
+                        }
                     }
                     waitTimer.start()
                 }
