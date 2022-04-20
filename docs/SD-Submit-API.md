@@ -17,7 +17,7 @@ The API is structured into:
 - file download [files](#file-download)
 
 ### Authenticated Session
-The client can establish a session to skip time-costly visa validations for further requests. Session is based on the `sda_session_key` cookie returned by the server, which should be returned in later requests.
+The client can establish a session to skip time-costly visa validations for further requests. Session is based on the `sda_session_key` cookie returned by the server, which should be returned in later requests. This is done automatically with a cookie jar.
 
 ## Datasets
 
@@ -41,6 +41,12 @@ GET /metadata/datasets
 Files contained by a dataset are listed using the `datasetName` from `/metadata/datasets`.
 ```
 GET /metadata/datasets/{datasetName}/files
+```
+
+#### Optional Scheme Parameter
+If a dataset name is in URI format, e.g. `https://repository.org/dataset`, the scheme `https` can be split with `://` and attached to a `scheme` query parameter.
+```
+GET /metadata/datasets/repository.org/dataset/files?scheme=https
 ```
 
 ### Response
