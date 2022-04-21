@@ -35,7 +35,7 @@ func (c *mockCache) Get(key string) (interface{}, bool) {
 	return nil, false
 }
 
-func (c *mockCache) Set(key string, value interface{}, ttl time.Duration) bool {
+func (c *mockCache) Set(key string, value interface{}, cost int64, ttl time.Duration) bool {
 	c.key = key
 	c.data = value.([]byte)
 	return true
@@ -589,7 +589,7 @@ func TestDownloadData_FoundCache(t *testing.T) {
 
 	// Save some data to cache
 	expectedData := []byte("hellothere")
-	downloadCache.Set("sdconnect_project_container_object_0", expectedData, time.Minute*1)
+	downloadCache.Set("sdconnect_project_container_object_0", expectedData, int64(len(expectedData)), time.Minute*1)
 
 	// Invoke function
 	data, err := DownloadData(
