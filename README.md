@@ -114,6 +114,9 @@ Usage of ./go-fuse:
 ```
 Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both 'SD Connect' and 'SD Apply'.
 
+## Troubleshooting
+See [troubleshooting](docs/troubleshooting.md) for fixes to known issues.
+
 ## License
 
 Data Gateway is released under `MIT`, see [LICENSE](LICENSE).
