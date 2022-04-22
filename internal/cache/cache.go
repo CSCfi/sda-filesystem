@@ -21,7 +21,7 @@ type Ristretto struct {
 // Cacheable includes all the functions a struct must implement in order for it to be embedded in Ristretto
 type Cacheable interface {
 	Get(string) (interface{}, bool)
-	Set(string, interface{}, time.Duration) bool
+	Set(string, interface{}, int64, time.Duration) bool
 	Del(string)
 	Clear()
 }
@@ -37,9 +37,19 @@ var NewRistrettoCache = func() (*Ristretto, error) {
 	onceCache.Do(func() {
 		var ristrettoCache *ristretto.Cache
 		ristrettoCache, err = ristretto.NewCache(&ristretto.Config{
-			NumCounters: 1e8,     // Num keys to track frequency of (100M).
-			MaxCost:     2 << 30, // Maximum cost of cache (2GB).
-			BufferItems: 64,      // Number of keys per Get buffer.
+			// Maximum number of items in cache
+			// A recommended number is expected maximum times 10
+			// so 30 * 10 = 300
+			NumCounters: 300,
+			// Maximum size of cache
+			// Maximum chunk size that is requested is 32MiB.
+			// 1GiB cache can fit 32 items of size 32MiB each
+			// or more items if smaller than 32MiB, as long as
+			// there are not more than 300 items.
+			// Runtime seems to allocate roughly double the size of max cache size,
+			// so this now allocates ~2GiB of memory during runtime.
+			MaxCost:     1 << 30, // 1GiB
+			BufferItems: 64,
 		})
 
 		if err == nil {
@@ -56,11 +66,11 @@ func (s *storage) Get(key string) (interface{}, bool) {
 }
 
 // Set stores data to cache with specific key and ttl. If ttl == -1, RistrettoCacheTTL will be used.
-func (s *storage) Set(key string, value interface{}, ttl time.Duration) bool {
+func (s *storage) Set(key string, value interface{}, cost int64, ttl time.Duration) bool {
 	if ttl == -1 {
 		ttl = RistrettoCacheTTL
 	}
-	return s.cache.SetWithTTL(key, value, 1, ttl)
+	return s.cache.SetWithTTL(key, value, cost, ttl)
 }
 
 // Del deletes item with key "key" from cache

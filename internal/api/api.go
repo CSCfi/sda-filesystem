@@ -350,7 +350,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
 		}
 
-		downloadCache.Set(cacheKey, buf, time.Minute*60)
+		downloadCache.Set(cacheKey, buf, int64(len(buf)), time.Minute*60)
 		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chStart, chEnd)
 
 		if endofst > int64(len(buf)) {
