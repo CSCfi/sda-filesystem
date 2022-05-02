@@ -163,7 +163,7 @@ func (qb *QmlBridge) openFuse() {
 }
 
 func (qb *QmlBridge) refreshFuse() string {
-	if qb.fs.FilesOpen() {
+	if qb.fs.FilesOpen(qb.MountPoint()) {
 		return "You have files in use and thus updating is not possible"
 	}
 	go func() {

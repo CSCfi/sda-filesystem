@@ -26,9 +26,14 @@ func TestOpen(t *testing.T) {
 		{"NOT_FILE", "Rep1/child_1/dir_", nil, -fuse.EISDIR},
 	}
 
+	origIsValidOpen := isValidOpen
 	origUpdateAttributes := api.UpdateAttributes
-	defer func() { api.UpdateAttributes = origUpdateAttributes }()
+	defer func() {
+		isValidOpen = origIsValidOpen
+		api.UpdateAttributes = origUpdateAttributes
+	}()
 
+	isValidOpen = func() bool { return true }
 	api.UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
 		return &api.RequestError{StatusCode: 404}
 	}
@@ -74,8 +79,14 @@ func TestOpen_Decryption_Check(t *testing.T) {
 		},
 	}
 
+	origIsValidOpen := isValidOpen
 	origUpdateAttributes := api.UpdateAttributes
-	defer func() { api.UpdateAttributes = origUpdateAttributes }()
+	defer func() {
+		isValidOpen = origIsValidOpen
+		api.UpdateAttributes = origUpdateAttributes
+	}()
+
+	isValidOpen = func() bool { return true }
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
@@ -134,8 +145,14 @@ func TestOpen_Decryption_Check_Error(t *testing.T) {
 		},
 	}
 
+	origIsValidOpen := isValidOpen
 	origUpdateAttributes := api.UpdateAttributes
-	defer func() { api.UpdateAttributes = origUpdateAttributes }()
+	defer func() {
+		isValidOpen = origIsValidOpen
+		api.UpdateAttributes = origUpdateAttributes
+	}()
+
+	isValidOpen = func() bool { return true }
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
