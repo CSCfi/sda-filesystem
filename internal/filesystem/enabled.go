@@ -73,6 +73,7 @@ var isValidOpen = func() bool {
 		if res, err := task.Output(); err == nil {
 			parts := strings.Fields(string(res))
 			if parts[0] == "explorer.exe" {
+				logs.Debug("Explorer trying to create thumbnails")
 				return false
 			}
 		}
