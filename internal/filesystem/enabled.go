@@ -68,7 +68,8 @@ var isValidOpen = func() bool {
 		}
 	case "windows":
 		_, _, pid := fuse.Getcontext()
-		task := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/fo", "table", "/nh")
+		filter := fmt.Sprintf("PID eq %d", pid)
+		task := exec.Command("tasklist", "/FI", filter, "/fo", "table", "/nh")
 		if res, err := task.Output(); err == nil {
 			parts := strings.Fields(string(res))
 			if parts[0] == "explorer.exe" {
