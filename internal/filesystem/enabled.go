@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -63,6 +64,15 @@ var isValidOpen = func() bool {
 					logs.Debug("Finder trying to create thumbnails")
 					return false
 				}
+			}
+		}
+	case "windows":
+		_, _, pid := fuse.Getcontext()
+		task := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/fo", "table", "/nh")
+		if res, err := task.Output(); err == nil {
+			parts := strings.Fields(string(res))
+			if parts[0] == "explorer.exe" {
+				return false
 			}
 		}
 	}
