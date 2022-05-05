@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"net/url"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -152,10 +153,18 @@ func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
 	fs.openmap = newFs.openmap
 }
 
-func (fs *Fuse) FilesOpen() bool {
-	for _, n := range fs.openmap {
-		if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
+func (fs *Fuse) FilesOpen(mount string) bool {
+	switch runtime.GOOS {
+	case "linux":
+		_, err := exec.Command("fuser", "-m", mount).Output()
+		if err == nil {
 			return true
+		}
+	default:
+		for _, n := range fs.openmap {
+			if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
+				return true
+			}
 		}
 	}
 	return false

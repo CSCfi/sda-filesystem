@@ -275,7 +275,7 @@ func main() {
 	go func() {
 		for {
 			userChooseUpdate(&stdinReader{})
-			if fs.FilesOpen() {
+			if fs.FilesOpen(mount) {
 				logs.Warningf("You have files in use and thus updating is not possible")
 				continue
 			}

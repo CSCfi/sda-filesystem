@@ -2,7 +2,12 @@ package filesystem
 
 import (
 	"errors"
+	"fmt"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
@@ -14,6 +19,10 @@ import (
 func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening file ", filepath.FromSlash(path))
+
+	if !isValidOpen() {
+		return -fuse.ECANCELED, ^uint64(0)
+	}
 
 	errc, fh = fs.openNode(path, false)
 	if errc != 0 {
@@ -39,6 +48,37 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 		n.node.decryptionChecked = true
 	}
 	return
+}
+
+var isValidOpen = func() bool {
+	switch runtime.GOOS {
+	case "darwin":
+		grep := exec.Command("pgrep", "-f", "QuickLook")
+		if res, err := grep.Output(); err == nil {
+			pids := strings.Split(string(res), "\n")
+			_, _, pid := fuse.Getcontext()
+
+			for i := range pids {
+				pidInt, err := strconv.Atoi(pids[i])
+				if err == nil && pidInt == pid {
+					logs.Debug("Finder trying to create thumbnails")
+					return false
+				}
+			}
+		}
+	case "windows":
+		_, _, pid := fuse.Getcontext()
+		filter := fmt.Sprintf("PID eq %d", pid)
+		task := exec.Command("tasklist", "/FI", filter, "/fo", "table", "/nh")
+		if res, err := task.Output(); err == nil {
+			parts := strings.Fields(string(res))
+			if parts[0] == "explorer.exe" {
+				logs.Debug("Explorer trying to create thumbnails")
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Opendir opens a directory.
