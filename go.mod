@@ -6,9 +6,9 @@ require (
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/therecipe/qt v0.0.0-20200904063919-c0c124a5770d
-	golang.org/x/sys v0.0.0-20211102061401-a2f17f7b995c
+	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )
 
@@ -19,5 +19,4 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20190411002643-bd77b112433e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.7.1 // indirect
-	github.com/therecipe/qt/internal/binding/files/docs/5.13.0 v0.0.0-20200904063919-c0c124a5770d // indirect
 )
