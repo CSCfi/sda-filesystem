@@ -7,3 +7,4 @@ ProgressBar 1.2 ProgressBar.qml
 Accordion 1.2 Accordion.qml
 Toggle 1.2 Toggle.qml
 Table 1.2 Table.qml
+ProgressTracker 1.2 ProgressTracker.qml

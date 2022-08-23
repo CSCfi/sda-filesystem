@@ -55,7 +55,7 @@ Page {
 				checked: true
 				text: "Yes, save logs to file"
 
-				Material.accent: CSC.Style.primaryColor //red
+				Material.accent: CSC.Style.primaryColor
 			}
 
 			Row {
@@ -96,273 +96,292 @@ Page {
 		}
 	}
 
-    ColumnLayout {
-        spacing: 0
-        width: parent.width
+    header: CSC.ProgressTracker {
+        id: tracker
+        progressIndex: stack.currentIndex
+    }
 
-        Text {
-            text: "<h1>1. Choose directory</h1>"
-            color: CSC.Style.grey
-            maximumLineCount: 1
-            bottomPadding: CSC.Style.padding
-        }
+    contentItem: StackLayout {
+        id: stack
+        currentIndex: 0
 
-        Text {
-            text: "Choose in which local directory your data will be available"
-            color: CSC.Style.grey
-            font.pixelSize: 13
-            maximumLineCount: 1
-            bottomPadding: CSC.Style.padding
-        }
-
-        Row {
+        ColumnLayout {
             spacing: CSC.Style.padding
-            bottomPadding: 3 * CSC.Style.padding
+            focus: visible
 
-            Rectangle {
-                radius: 5
-                border.width: 1
-                border.color: CSC.Style.grey
-                width: 350
-                height: childrenRect.height
-                anchors.verticalCenter: changeButton.verticalCenter
+            Keys.onReturnPressed: continueButton.clicked() // Enter key
+            Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
 
-                Flickable {
-                    clip: true
-                    width: parent.width
-                    height: mountText.height
-                    contentWidth: mountText.width
-                    boundsBehavior: Flickable.StopAtBounds
+            Text {
+                text: "<h1>Choose directory</h1>"
+                color: CSC.Style.grey
+                maximumLineCount: 1
+            }
 
-                    ScrollBar.horizontal: ScrollBar { interactive: false }
-                    
-                    Text {
-                        id: mountText
-                        text: QmlBridge.mountPoint
-                        font.pixelSize: 15
-                        verticalAlignment: Text.AlignVCenter
-                        maximumLineCount: 1
-                        padding: 10
+            Text {
+                text: "Choose in which local directory your data will be available"
+                color: CSC.Style.grey
+                font.pixelSize: 13
+                maximumLineCount: 1
+            }
+
+            Row {
+                spacing: CSC.Style.padding
+
+                Rectangle {
+                    radius: 5
+                    border.width: 1
+                    border.color: CSC.Style.grey
+                    width: 350
+                    height: childrenRect.height
+                    anchors.verticalCenter: changeButton.verticalCenter
+
+                    Flickable {
+                        clip: true
+                        width: parent.width
+                        height: mountText.height
+                        contentWidth: mountText.width
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        ScrollBar.horizontal: ScrollBar { interactive: false }
+                        
+                        Text {
+                            id: mountText
+                            text: QmlBridge.mountPoint
+                            font.pixelSize: 15
+                            verticalAlignment: Text.AlignVCenter
+                            maximumLineCount: 1
+                            padding: 10
+                        }
                     }
+                }
+
+                CSC.Button {
+                    id: changeButton
+                    text: "Change"
+                    outlined: true
+
+                    onClicked: { popup.close(); dialogCreate.visible = true }
                 }
             }
 
             CSC.Button {
-                id: changeButton
-                text: "Change"
-                outlined: true
-
-                onClicked: { popup.close(); dialogCreate.visible = true }
+                id: continueButton
+                text: "Continue"
+                onClicked: { stack.currentIndex = 1; QmlBridge.loadFuse() }
             }
-        }
+        }      
 
-        Text {
-            text: "<h1>2. Create secure access to data</h1>"
-            color: CSC.Style.grey
-            maximumLineCount: 1
-            bottomPadding: CSC.Style.padding
-        }
-
-        RowLayout {
+        ColumnLayout {
+            id: accessLayout
             spacing: CSC.Style.padding
+            focus: visible
 
-            CSC.Button {
-                id: createButton
-                text: verb
-                enabled: !loading && mountText.text != ""
+            Keys.onReturnPressed: openButton.clicked() // Enter key
+            Keys.onEnterPressed: openButton.clicked()  // Numpad enter key
 
-                property var verb: "Create"
-                property bool finished: timerFinished && fuseFinished
-                property bool timerFinished: false
-                property bool fuseFinished: false
+            Text {
+                id: headerText
+                text: "<h1>Preparing access</h1>"
+                color: CSC.Style.grey
+                maximumLineCount: 1
+            }
 
-                Material.accent: "white"
+            RowLayout {
+                id: buttonRow
+                spacing: CSC.Style.padding
+                visible: false
 
-                onFinishedChanged: {
-                    if (finished) {
-                        openButton.enabled = true
-                        createButton.state = ""
-                        createButton.verb = "Update"
-                    }
+                CSC.Button {
+                    id: openButton
+                    text: "Open folder" 
+
+                    onClicked: QmlBridge.openFuse()
                 }
 
-                onClicked: {
-                    state = "loading"
-                    changeButton.enabled = false
-                    timerFinished = false
-                    fuseFinished = false
-                    if (verb == "Create") {
-                        QmlBridge.loadFuse()
-                    } else {
+                CSC.Button {
+                    id: refreshButton
+                    text: "Refresh"
+                    outlined: true
+
+                    Material.accent: "white"
+
+                    onClicked: {
+                        state = "loading"
                         var message = QmlBridge.refreshFuse()
                         if (message != "") {
                             createButton.state = ""
                             popup.errorMessage = message
                             popup.open()
-                            return
-                        }
-                    }
-                    waitTimer.start()
-                }
-
-                Connections {
-                    target: QmlBridge
-                    onFuseReady: createButton.fuseFinished = true
-                }
-
-                // So that the user has the possibility of seeing the loading happening
-                Timer {
-                    id: waitTimer
-                    repeat: false; running: false
-                    onTriggered: createButton.timerFinished = true
-                }
-
-                states: [
-                    State {
-                        name: "loading";  
-                        PropertyChanges { target: createButton; text: verb.slice(0, -1) + "ing"; loading: true }
-                    }
-                ]
-            }
-
-            CSC.Button {
-                id: openButton
-                text: "Open folder" 
-                enabled: false
-
-                onClicked: QmlBridge.openFuse()
-            }
-        }
-
-        TextMetrics {
-            id: textMetrics100
-            text: "100 %"
-            font.pixelSize: 13
-            font.weight: Font.Medium
-        }
-
-        Text {
-            id: progressText
-            text: {
-                if (createButton.state == "finished") {
-                    return "Data Gateway complete"
-                } else {
-                    return ProjectModel.loadedProjects + "/" + table.rowCount + " loaded"
-                }
-            }
-            color: CSC.Style.grey
-            font.pixelSize: 15
-            font.weight: Font.DemiBold
-            topPadding: CSC.Style.padding
-        }
-
-        CSC.Table {
-            id: table
-            modelSource: ProjectModel
-            delegateSource: projectLine
-            objectName: "projects"
-            Layout.fillWidth: true
-
-            property real maxProjectNameWidth: 0
-
-            footer: Rectangle {
-                height: 50
-                width: table.width
-                border.width: 1
-                border.color: CSC.Style.lightGrey
-
-                RowLayout {
-                    spacing: 30
-                    anchors.fill: parent
-                    anchors.leftMargin: CSC.Style.padding
-                    anchors.rightMargin: CSC.Style.padding
-
-                    Text {
-                        id: levelText
-                        text: "Name"
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        Layout.fillWidth: true
-                    }
-
-                    Text {
-                        text: "Location"
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        visible: parent.width - table.maxProjectNameWidth > width + messageLabel.width + 2 * parent.spacing
-                        Layout.preferredWidth: 150
-                    }
-
-                    Text {
-                        id: messageLabel
-                        text: "Progress"
-                        font: textMetrics100.font
-                        Layout.maximumWidth: 200
-                        Layout.minimumWidth: 200
-                    }
-                }
-            }
-        }
-
-        Component {
-            id: projectLine
-
-            Rectangle {
-                height: 60
-                width: table.width
-                border.width: 1
-                border.color: CSC.Style.lightGrey
-
-                RowLayout {
-                    spacing: 30
-                    anchors.fill: parent
-                    anchors.leftMargin: CSC.Style.padding
-                    anchors.rightMargin: CSC.Style.padding
-
-                    Text {
-                        text: projectName
-                        font.pixelSize: 15
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-
-                        Component.onCompleted: {
-                            if (implicitWidth > table.maxProjectNameWidth) {
-                                table.maxProjectNameWidth = implicitWidth
-                            }
                         }
                     }
 
-                    Text {
-                        text: repositoryName
-                        font.pixelSize: 15
-                        visible: parent.width - table.maxProjectNameWidth > width + loadingStatus.width + 2 * parent.spacing
-                        Layout.preferredWidth: 150
+                    Connections {
+                        target: QmlBridge
+                        onFuseReady: refreshButton.state = ""
                     }
+
+                    states: [
+                        State {
+                            name: "loading";  
+                            PropertyChanges { target: refreshButton; enabled: false }
+                            PropertyChanges { target: openButton; enabled: false }
+                        }
+                    ]
+                }
+            }
+
+            ColumnLayout {
+                spacing: 0.5 * CSC.Style.padding
+
+                Text {
+                    id: infoText
+                    text: "Please wait, this might take a few minutes."
+                    color: CSC.Style.grey
+                    font.pixelSize: 13
+                    maximumLineCount: 1
+                }
+
+                CSC.ProgressBar {
+                    id: progressbar
+                    value: ProjectModel.loadedContainers / ProjectModel.allContainers
+                    Layout.fillWidth: true
+                }
+
+                Text {
+                    text: Math.floor(progressbar.value * 100) + "% complete"
+                    color: CSC.Style.grey
+                    font.pixelSize: 13
+                    maximumLineCount: 1
+                }
+            }
+
+            CSC.Table {
+                id: table
+                modelSource: ProjectModel
+                delegateSource: projectLine
+                objectName: "projects"
+                Layout.fillWidth: true
+
+                property real maxProjectNameWidth: 0
+
+                footer: Rectangle {
+                    height: 50
+                    width: table.width
+                    border.width: 1
+                    border.color: CSC.Style.lightGrey
 
                     RowLayout {
-                        id: loadingStatus
-                        Layout.maximumWidth: 200
-                        Layout.minimumWidth: 200
+                        spacing: 30
+                        anchors.fill: parent
+                        anchors.leftMargin: CSC.Style.padding
+                        anchors.rightMargin: CSC.Style.padding
 
-                        property real value: (allContainers == -1) ? 0 : (allContainers == 0) ? 1 : loadedContainers / allContainers
-
-                        CSC.ProgressBar {
-                            id: progressbar
-                            value: parent.value
+                        Text {
+                            id: levelText
+                            text: "Name"
+                            font.pixelSize: 13
+                            font.weight: Font.Medium
                             Layout.fillWidth: true
                         }
 
                         Text {
-                            id: percentValue
-                            text: Math.floor(parent.value * 100) + " %"
-                            color: CSC.Style.grey
-                            maximumLineCount: 1
-                            font.pixelSize: 12
-                            Layout.minimumWidth: textMetrics100.width
+                            text: "Location"
+                            font.pixelSize: 13
+                            font.weight: Font.Medium
+                            visible: parent.width - table.maxProjectNameWidth > width + messageLabel.width + 2 * parent.spacing
+                            Layout.preferredWidth: 150
+                        }
+
+                        Text {
+                            id: messageLabel
+                            text: "Progress"
+                            font: textMetrics100.font
+                            Layout.maximumWidth: 200
+                            Layout.minimumWidth: 200
                         }
                     }
                 }
             }
+
+            Connections {
+                target: QmlBridge
+                onFuseReady: {
+                    accessLayout.state = "finished"
+                    tracker.progressIndex = 3
+                    headerText.text = "<h1>Access ready</h1>"
+                    infoText.text = "Data Gateway is ready to use"
+                    buttonRow.visible = true
+                }
+            }
         }
+    }  
+
+    TextMetrics {
+        id: textMetrics100
+        text: "100 %"
+        font.pixelSize: 13
+        font.weight: Font.Medium
     }
+
+    Component {
+        id: projectLine
+
+        Rectangle {
+            height: 60
+            width: table.width
+            border.width: 1
+            border.color: CSC.Style.lightGrey
+
+            RowLayout {
+                spacing: 30
+                anchors.fill: parent
+                anchors.leftMargin: CSC.Style.padding
+                anchors.rightMargin: CSC.Style.padding
+
+                Text {
+                    text: projectName
+                    font.pixelSize: 15
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+
+                    Component.onCompleted: {
+                        if (implicitWidth > table.maxProjectNameWidth) {
+                            table.maxProjectNameWidth = implicitWidth
+                        }
+                    }
+                }
+
+                Text {
+                    text: repositoryName
+                    font.pixelSize: 15
+                    visible: parent.width - table.maxProjectNameWidth > width + loadingStatus.width + 2 * parent.spacing
+                    Layout.preferredWidth: 150
+                }
+
+                RowLayout {
+                    id: loadingStatus
+                    Layout.maximumWidth: 200
+                    Layout.minimumWidth: 200
+
+                    property real value: (allContainers == -1) ? 0 : (allContainers == 0) ? 1 : loadedContainers / allContainers
+
+                    CSC.ProgressBar {
+                        id: progressbar
+                        value: parent.value
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        id: percentValue
+                        text: Math.floor(parent.value * 100) + "%"
+                        //color: CSC.Style.grey
+                        maximumLineCount: 1
+                        font.pixelSize: 12
+                        Layout.minimumWidth: textMetrics100.width
+                    }
+                }
+            }
+        }
+    }  
 }

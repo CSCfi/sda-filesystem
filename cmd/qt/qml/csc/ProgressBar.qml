@@ -4,10 +4,10 @@ import csc 1.2 as CSC
 
 ProgressBar {
     id: control
-    padding: 2
+    padding: 3
 
     background: Rectangle {
-        implicitHeight: 12
+        implicitHeight: 15
         color: CSC.Style.lightGrey
         radius: 5
     }

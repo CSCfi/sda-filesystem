@@ -66,7 +66,7 @@ ApplicationWindow {
                 }
 
                 Repeater {
-                    model: ["Home", "Logs"]
+                    model: ["Access", "Logs"]
 
                     TabButton {
                         id: tabButton
@@ -92,7 +92,7 @@ ApplicationWindow {
 
             ToolButton {
                 id: signout
-                text: "Disconnect"
+                text: "Disconnect and Sign Out"
                 enabled: stack.state == "loggedIn"
                 opacity: enabled ? 1 : 0
                 icon.source: "qrc:/qml/images/box-arrow-right.svg"
