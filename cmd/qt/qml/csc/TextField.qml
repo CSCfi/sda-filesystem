@@ -43,7 +43,7 @@ TextField {
             }
         }
 
-        Text {
+        Label {
             text: errorText
             color: CSC.Style.grey
             height: contentHeight

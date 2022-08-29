@@ -16,7 +16,9 @@ ApplicationWindow {
     height: minimumHeight + login.formHeight
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
-    
+
+    //onActiveFocusItemChanged: print("activeFocusItem", activeFocusItem)
+
     Material.background: "white"
     
     // Ensures fuse unmounts when application terminates
@@ -42,8 +44,8 @@ ApplicationWindow {
                     Layout.preferredHeight: 40
                 }
 
-                Text {
-                    text: "<h3>Sensitive Data Services</h3>"
+                Label {
+                    text: "<h4>Sensitive Data Services</h4>"
                     color: CSC.Style.grey
                     maximumLineCount: 1
                 }
@@ -66,7 +68,8 @@ ApplicationWindow {
                 }
 
                 Repeater {
-                    model: ["Access", "Logs"]
+                    id: repeater
+                    model: ["Login", "Logs"]
 
                     TabButton {
                         id: tabButton
@@ -74,7 +77,7 @@ ApplicationWindow {
                         width: implicitWidth
                         height: tabBar.height
 
-                        contentItem: Text {
+                        contentItem: Label {
                             text: tabButton.text
                             font: tabButton.font
                             color: CSC.Style.primaryColor
@@ -158,6 +161,7 @@ ApplicationWindow {
 
                 onLoggedInChanged: {
                     if (loggedIn) {
+                        repeater.model = ["Access", "Export", "Logs"]
                         stack.state = "loggedIn"
                         window.flags = window.flags & ~Qt.WindowCloseButtonHint
                         window.width = Math.min(1200, 0.75 * Screen.desktopAvailableWidth)
@@ -181,8 +185,21 @@ ApplicationWindow {
 
             ScrollBar.vertical: ScrollBar { }
 
-            LogPage {
+            LogsPage {
                 id: logs
+                focus: visible
+                width: parent.width
+            }
+        }
+
+        Flickable {
+            interactive: contentHeight > height
+            contentHeight: exp.height
+
+            ScrollBar.vertical: ScrollBar { }
+
+            ExportPage {
+                id: exp
                 focus: visible
                 width: parent.width
             }
@@ -206,7 +223,7 @@ ApplicationWindow {
                 name: "loggedIn"
                 PropertyChanges {
                     target: stack
-                    currentIndex: 2 - tabBar.currentIndex
+                    currentIndex: 3 - tabBar.currentIndex
                 }
             }
         ]

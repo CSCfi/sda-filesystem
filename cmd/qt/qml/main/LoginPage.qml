@@ -39,6 +39,8 @@ Page {
 			wrapMode: Text.Wrap
 			width: repositoryList.width
 			lineHeight: 1.2
+			color: CSC.Style.grey
+			font.pixelSize: 14
 		}
 
 		ListView {
@@ -119,8 +121,10 @@ Page {
 			enabled: repositoryList.loading == 0 && repositoryList.success
 
 			onClicked: {
-				QmlBridge.initFuse()
-				page.loggedIn = true
+				if (enabled) {
+					QmlBridge.initFuse()
+					page.loggedIn = true
+				}
 			}
 		}
 	}
@@ -186,10 +190,11 @@ Page {
 				}
 			}
 
-			Text {
+			Label {
 				text: "Please log in with your CSC credentials"
 				topPadding: 10
-				font.pixelSize: 12
+				color: CSC.Style.grey
+				font.pixelSize: 13
 			}
 
 			CSC.TextField {

@@ -9,6 +9,8 @@ Page {
     id: page
     padding: 2 * CSC.Style.padding
 
+    Material.foreground: CSC.Style.grey
+
     FileDialog {
         id: dialogCreate
         title: "Choose or create a folder"
@@ -99,6 +101,7 @@ Page {
     header: CSC.ProgressTracker {
         id: tracker
         progressIndex: stack.currentIndex
+        model: ["Choose directory", "Prepare access", "Access ready"]
     }
 
     contentItem: StackLayout {
@@ -112,17 +115,15 @@ Page {
             Keys.onReturnPressed: continueButton.clicked() // Enter key
             Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
 
-            Text {
+            Label {
                 text: "<h1>Choose directory</h1>"
-                color: CSC.Style.grey
                 maximumLineCount: 1
             }
 
-            Text {
+            Label {
                 text: "Choose in which local directory your data will be available"
-                color: CSC.Style.grey
-                font.pixelSize: 13
                 maximumLineCount: 1
+                font.pixelSize: 14
             }
 
             Row {
@@ -145,7 +146,7 @@ Page {
 
                         ScrollBar.horizontal: ScrollBar { interactive: false }
                         
-                        Text {
+                        Label {
                             id: mountText
                             text: QmlBridge.mountPoint
                             font.pixelSize: 15
@@ -177,13 +178,9 @@ Page {
             spacing: CSC.Style.padding
             focus: visible
 
-            Keys.onReturnPressed: openButton.clicked() // Enter key
-            Keys.onEnterPressed: openButton.clicked()  // Numpad enter key
-
-            Text {
+            Label {
                 id: headerText
                 text: "<h1>Preparing access</h1>"
-                color: CSC.Style.grey
                 maximumLineCount: 1
             }
 
@@ -195,6 +192,9 @@ Page {
                 CSC.Button {
                     id: openButton
                     text: "Open folder" 
+
+                    Keys.onReturnPressed: openButton.clicked() // Enter key
+                    Keys.onEnterPressed: openButton.clicked()  // Numpad enter key
 
                     onClicked: QmlBridge.openFuse()
                 }
@@ -234,12 +234,11 @@ Page {
             ColumnLayout {
                 spacing: 0.5 * CSC.Style.padding
 
-                Text {
+                Label {
                     id: infoText
                     text: "Please wait, this might take a few minutes."
-                    color: CSC.Style.grey
-                    font.pixelSize: 13
                     maximumLineCount: 1
+                    font.pixelSize: 14
                 }
 
                 CSC.ProgressBar {
@@ -248,11 +247,10 @@ Page {
                     Layout.fillWidth: true
                 }
 
-                Text {
+                Label {
                     text: Math.floor(progressbar.value * 100) + "% complete"
-                    color: CSC.Style.grey
-                    font.pixelSize: 13
                     maximumLineCount: 1
+                    font.pixelSize: 14
                 }
             }
 
@@ -277,26 +275,27 @@ Page {
                         anchors.leftMargin: CSC.Style.padding
                         anchors.rightMargin: CSC.Style.padding
 
-                        Text {
+                        Label {
                             id: levelText
                             text: "Name"
                             font.pixelSize: 13
-                            font.weight: Font.Medium
+                            font.weight: Font.DemiBold
                             Layout.fillWidth: true
                         }
 
-                        Text {
+                        Label {
                             text: "Location"
                             font.pixelSize: 13
-                            font.weight: Font.Medium
+                            font.weight: Font.DemiBold
                             visible: parent.width - table.maxProjectNameWidth > width + messageLabel.width + 2 * parent.spacing
                             Layout.preferredWidth: 150
                         }
 
-                        Text {
+                        Label {
                             id: messageLabel
                             text: "Progress"
-                            font: textMetrics100.font
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
                             Layout.maximumWidth: 200
                             Layout.minimumWidth: 200
                         }
@@ -321,7 +320,6 @@ Page {
         id: textMetrics100
         text: "100 %"
         font.pixelSize: 13
-        font.weight: Font.Medium
     }
 
     Component {
@@ -339,7 +337,7 @@ Page {
                 anchors.leftMargin: CSC.Style.padding
                 anchors.rightMargin: CSC.Style.padding
 
-                Text {
+                Label {
                     text: projectName
                     font.pixelSize: 15
                     elide: Text.ElideRight
@@ -352,7 +350,7 @@ Page {
                     }
                 }
 
-                Text {
+                Label {
                     text: repositoryName
                     font.pixelSize: 15
                     visible: parent.width - table.maxProjectNameWidth > width + loadingStatus.width + 2 * parent.spacing
@@ -372,12 +370,11 @@ Page {
                         Layout.fillWidth: true
                     }
 
-                    Text {
+                    Label {
                         id: percentValue
                         text: Math.floor(parent.value * 100) + "%"
-                        //color: CSC.Style.grey
                         maximumLineCount: 1
-                        font.pixelSize: 12
+                        font.pixelSize: 13
                         Layout.minimumWidth: textMetrics100.width
                     }
                 }

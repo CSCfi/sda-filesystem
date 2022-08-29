@@ -53,12 +53,14 @@ Popup {
                 }
             }
 
-            Text {
+            Label {
                 id: errorText
                 text: popup.errorMessage
+                color: CSC.Style.grey
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
                 font.pixelSize: 15
+                font.weight: Font.Medium
                 Layout.fillWidth: true
             }
         }

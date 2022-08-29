@@ -10,13 +10,14 @@ Control {
     topPadding: 2 * CSC.Style.padding
 
     property int progressIndex: 0
+    property var model: []
 
     contentItem: RowLayout {
         spacing: 0
 
         Repeater {
             id: repeater
-            model: ["Choose directory", "Prepare access", "Access ready"]
+            model: tracker.model
 
             property real textMaxWidth: 0
 
@@ -73,10 +74,11 @@ Control {
                     }
                 }
 
-                Text {
+                Label {
                     id: info
                     text: modelData
                     color: (index <= tracker.progressIndex) ? CSC.Style.primaryColor : CSC.Style.grey
+                    font.pixelSize: 12
                     anchors.top: circle.bottom
                     anchors.topMargin: 8
                     anchors.horizontalCenter: circle.horizontalCenter

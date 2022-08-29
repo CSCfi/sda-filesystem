@@ -14,6 +14,8 @@ ListView {
     interactive: false
     verticalLayoutDirection: ListView.BottomToTop
 
+    Material.foreground: CSC.Style.grey
+
     property variant modelSource
     property Component delegateSource
     property int rowCount: visualModel.items.count
@@ -21,8 +23,16 @@ ListView {
     property int page: 1
     property int maxPages: Math.ceil(rowCount / amountVisible)
 
-    Keys.onRightPressed: headerItem.changePageRight()
-    Keys.onLeftPressed: headerItem.changePageLeft()
+    Keys.onRightPressed: {
+        if (listView.rowCount != 0) {
+            headerItem.changePageRight()
+        }
+    }
+    Keys.onLeftPressed: {
+        if (listView.rowCount != 0) {
+            headerItem.changePageLeft()
+        }
+    }
 
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
@@ -49,7 +59,7 @@ ListView {
         border.width: 1
         border.color: CSC.Style.lightGrey
 
-        Text {
+        Label {
             text: "No " + listView.objectName + " available"
             visible: listView.rowCount == 0
             verticalAlignment: Text.AlignVCenter
@@ -79,14 +89,12 @@ ListView {
             visible: listView.rowCount > 0
             height: parent.height
 
-            Material.foreground: CSC.Style.primaryColor
-
             RowLayout {
                 id: pageCount
                 spacing: 10
                 height: parent.height
 
-                Text {
+                Label {
                     text: "Items per page: "
                     leftPadding: CSC.Style.padding
                     font.pixelSize: 12
@@ -101,6 +109,8 @@ ListView {
                     icon.height: 20
                     LayoutMirroring.enabled: true
                     Layout.fillHeight: true
+
+                    Material.foreground: CSC.Style.primaryColor
 
                     Component.onCompleted: Layout.preferredWidth = 1.5 * implicitWidth
 
@@ -120,12 +130,11 @@ ListView {
 
                     Menu {
                         id: menu
-                        margins: down ? 0 : -1
 
                         property bool down: true
 
                         onAboutToShow: {
-                            if (mapToGlobal(0, height).y > window.height) {
+                            if (mapToItem(null, 0, height).y > window.height) {
                                 down = false
                                 y = -height
                             } else {
@@ -172,7 +181,7 @@ ListView {
                 }
             }
 
-            Text {
+            Label {
                 text: firstIdx + " - " + lastIdx + " of " + listView.rowCount + " items"
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
@@ -196,7 +205,7 @@ ListView {
             height: parent.height
             anchors.right: parent.right
 
-            Text {
+            Label {
                 id: whichPageText
                 text: listView.page + " of " + listView.maxPages + " pages"
                 height: parent.height
@@ -284,6 +293,7 @@ ListView {
                     }
                     height: pageList.height
                     width: Math.max(height, implicitWidth)
+                    font.weight: Font.DemiBold
                     icon.source: (text == "") ? "qrc:/qml/images/three-dots.svg" : ""
 
                     Material.foreground: parseInt(text, 10) != listView.page ? CSC.Style.grey : CSC.Style.primaryColor

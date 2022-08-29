@@ -6,9 +6,12 @@ import csc 1.2 as CSC
 
 Page {
     id: page 
-    height: table.height + implicitHeaderHeight + 2 * padding
-    implicitWidth: table.implicitWidth + 2 * padding
-    padding: 2 * CSC.Style.padding
+    height: table.height + implicitHeaderHeight + 3 * CSC.Style.padding
+    implicitWidth: table.implicitWidth + rightPadding + leftPadding
+    topPadding: CSC.Style.padding
+    bottomPadding: 2 * CSC.Style.padding
+    rightPadding: 2 * CSC.Style.padding
+    leftPadding: 2 * CSC.Style.padding
 
     header: Control {
         topPadding: 2 * CSC.Style.padding
@@ -83,10 +86,10 @@ Page {
                     Layout.preferredWidth: textMetricsLevel.width + 30
                     Layout.fillHeight: true
 
-                    Text {
+                    Label {
                         text: "Level"
                         font.pixelSize: 13
-                        font.weight: Font.Medium
+                        font.weight: Font.DemiBold
                     }
 
                     RoundButton {
@@ -123,18 +126,18 @@ Page {
                     }
                 }
 
-                Text {
+                Label {
                     text: "Date and Time"
                     font.pixelSize: 13
-                    font.weight: Font.Medium
+                    font.weight: Font.DemiBold
                     Layout.preferredWidth: textMetricsDate.width
                 }
 
-                Text {
+                Label {
                     id: messageLabel
                     text: "Message"
                     font.pixelSize: 13
-                    font.weight: Font.Medium
+                    font.weight: Font.DemiBold
                     Layout.fillWidth: true
                 }
             }
@@ -157,10 +160,13 @@ Page {
                         topPadding: 7
                         bottomPadding: 7
 
+                        Material.foreground: CSC.Style.grey
+
                         contentItem: CheckBox {
                             text: menuItem.text
                             checked: true
                             padding: 0
+                            font.weight: Font.DemiBold
 
                             onCheckedChanged: LogModel.toggleFilteredLevel(modelData, checked)
                             Component.onCompleted: menu.width = Math.max(menu.width, implicitContentWidth + implicitIndicatorWidth + 2 * menuItem.padding)
@@ -238,13 +244,13 @@ Page {
                     }
                 }
 
-                Text {
+                Label {
                     text: timestamp
                     font: textMetricsDate.font
                     Layout.preferredWidth: textMetricsDate.width
                 }
 
-                Text {
+                Label {
                     id: messageLabel
                     text: message[0]
                     wrapMode: Text.Wrap

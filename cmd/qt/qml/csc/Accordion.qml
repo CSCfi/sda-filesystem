@@ -44,7 +44,7 @@ ColumnLayout {
             anchors.leftMargin: CSC.Style.padding
             anchors.rightMargin: CSC.Style.padding
 
-            Text {
+            Label {
                 text: heading
                 color: textColor
                 maximumLineCount: 1
