@@ -17,10 +17,12 @@ ApplicationWindow {
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
 
+    Material.background: "white"
+
+    property bool loggedIn: stack.state == "loggedIn"
+    
     //onActiveFocusItemChanged: print("activeFocusItem", activeFocusItem)
 
-    Material.background: "white"
-    
     // Ensures fuse unmounts when application terminates
 	onClosing: QmlBridge.shutdown()
 
@@ -136,7 +138,7 @@ ApplicationWindow {
 		target: QmlBridge
 		onInitError: {
 			login.enabled = false
-			popup.errorMessage = message + ". Check logs for further details and rerun the application"
+			popup.errorMessage = message + ". Check logs for further details and rerun the application."
             popup.closePolicy = Popup.NoAutoClose
             popup.modal = false
 			popup.open()

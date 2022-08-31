@@ -40,6 +40,7 @@ type httpInfo struct {
 	httpRetry      int
 	certPath       string
 	sdsToken       string
+	userinfoURL    string
 	client         *http.Client
 	repositories   map[string]fuseInfo
 }
@@ -141,6 +142,9 @@ func GetCommonEnvs() (err error) {
 	if hi.sdsToken, err = getEnv("SDS_ACCESS_TOKEN", false); err != nil {
 		return err
 	}
+	if hi.userinfoURL, err = getEnv("USERINFO_ENDPOINT", true); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -203,6 +207,10 @@ var testURL = func(url string) error {
 	}
 	response.Body.Close()
 	return nil
+}
+
+var IsProjectManager = func() bool {
+	return false
 }
 
 // GetLoginMethod returns the login method of repository 'rep'

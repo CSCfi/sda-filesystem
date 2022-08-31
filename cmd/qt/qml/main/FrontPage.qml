@@ -121,7 +121,7 @@ Page {
             }
 
             Label {
-                text: "Choose in which local directory your data will be available"
+                text: "Choose in which local directory your data will be available."
                 maximumLineCount: 1
                 font.pixelSize: 14
             }
@@ -243,7 +243,7 @@ Page {
 
                 CSC.ProgressBar {
                     id: progressbar
-                    value: ProjectModel.loadedContainers / ProjectModel.allContainers
+                    value: (ProjectModel.allContainers <= 0) ? 0 : ProjectModel.loadedContainers / ProjectModel.allContainers
                     Layout.fillWidth: true
                 }
 
@@ -309,7 +309,7 @@ Page {
                     accessLayout.state = "finished"
                     tracker.progressIndex = 3
                     headerText.text = "<h1>Access ready</h1>"
-                    infoText.text = "Data Gateway is ready to use"
+                    infoText.text = "Data Gateway is ready to be used."
                     buttonRow.visible = true
                 }
             }

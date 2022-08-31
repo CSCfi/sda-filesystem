@@ -36,8 +36,13 @@ type LoginModel struct {
 
 	_ func() `constructor:"init"`
 
-	roles  map[int]*core.QByteArray
-	logins []loginRow
+	_ bool `property:"loggedInToSDConnect"`
+	_ int  `property:"connectIdx"`
+
+	roles      map[int]*core.QByteArray
+	logins     []loginRow
+	sdConnect  bool
+	connectIdx int
 }
 
 type loginRow struct {
@@ -55,6 +60,8 @@ func (lm *LoginModel) init() {
 		EnvsMissing: core.NewQByteArray2("envsMissing", -1),
 	}
 
+	lm.SetLoggedInToSDConnect(false)
+
 	lm.ConnectData(lm.data)
 	lm.ConnectRowCount(lm.rowCount)
 	lm.ConnectRoleNames(lm.roleNames)
@@ -63,6 +70,9 @@ func (lm *LoginModel) init() {
 	sort.Strings(reps)
 	for i := len(reps) - 1; i >= 0; i-- {
 		lm.logins = append(lm.logins, loginRow{repository: reps[i], method: int(api.GetLoginMethod(reps[i]))})
+		if reps[i] == api.SDConnect {
+			lm.SetConnectIdx(len(lm.logins) - 1)
+		}
 	}
 }
 
@@ -107,6 +117,10 @@ func (lm *LoginModel) setLoggedIn(idx int, value bool) {
 	lm.logins[idx].loggedIn = value
 	var index = lm.Index(idx, 0, core.NewQModelIndex())
 	lm.DataChanged(index, index, []int{LoggedIn})
+
+	if lm.getRepository(idx) == api.SDConnect {
+		lm.SetLoggedInToSDConnect(true)
+	}
 }
 
 func (lm *LoginModel) checkEnvs() bool {

@@ -36,6 +36,7 @@ type QmlBridge struct {
 	_ func()                        `slot:"loadFuse,auto"`
 	_ func()                        `slot:"openFuse,auto"`
 	_ func() string                 `slot:"refreshFuse,auto"`
+	_ func(string) bool             `slot:"isFile,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
 	_ func()                        `slot:"shutdown,auto"`
 	_ func(idx int)                 `signal:"login401"`
@@ -45,6 +46,7 @@ type QmlBridge struct {
 	_ func()                        `signal:"panic"`
 
 	_ string `property:"mountPoint"`
+	_ bool   `property:"isProjectManager"`
 
 	fs *filesystem.Fuse
 }
@@ -83,7 +85,10 @@ func (qb *QmlBridge) initializeAPI() {
 
 	if noneAvailable := loginModel.checkEnvs(); noneAvailable {
 		qb.InitError("No services available")
+		return
 	}
+
+	qb.SetIsProjectManager(api.IsProjectManager())
 }
 
 func (qb *QmlBridge) loginWithToken(idx int) {
@@ -178,9 +183,8 @@ func (qb *QmlBridge) refreshFuse() string {
 	return ""
 }
 
-func (qb *QmlBridge) shutdown() {
-	logs.Info("Shutting down Data Gateway")
-	filesystem.UnmountFilesystem()
+func (qb *QmlBridge) isFile(url string) bool {
+	return true
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
@@ -196,6 +200,11 @@ func (qb *QmlBridge) changeMountPoint(url string) string {
 	logs.Infof("Data Gateway will be mounted at %s", mount)
 	qb.SetMountPoint(mount)
 	return ""
+}
+
+func (qb *QmlBridge) shutdown() {
+	logs.Info("Shutting down Data Gateway")
+	filesystem.UnmountFilesystem()
 }
 
 func init() {

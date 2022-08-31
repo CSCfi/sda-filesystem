@@ -89,9 +89,11 @@ Page {
 
 				Connections {
 					target: QmlBridge
+					enabled: !window.loggedIn
 					onLoginError: {
 						if (index == idx) {
 							loader.item.loading = false
+							loader.item.enabled = true
 							popup.errorMessage = message
 							popup.open()
 						}
@@ -147,6 +149,7 @@ Page {
 
 			Connections {
 				target: QmlBridge
+				enabled: !window.loggedIn
 				onLogin401: {
 					if (idx == empty.index) {
 						loading = false
@@ -176,6 +179,7 @@ Page {
 
 			Connections {
 				target: QmlBridge
+				enabled: !window.loggedIn
 				onLogin401: {
 					if (idx == form.index) {
 						passwordField.errorVisible = true

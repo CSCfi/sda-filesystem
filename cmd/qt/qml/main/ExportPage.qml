@@ -14,20 +14,123 @@ Page {
     Material.foreground: CSC.Style.grey
 
     FileDialog {
+        id: dialogSelect
+        title: "Select file to export"
+        folder: shortcuts.home
+        selectExisting: true
+        selectFolder: false
+
+        onAccepted: { 
+            console.log(dialogSelect.fileUrl)
+        }
     }
 
     header: CSC.ProgressTracker {
         id: tracker
-        progressIndex: stack.currentIndex
+        visible: stack.currentIndex >= 2
+        progressIndex: stack.currentIndex - 2
         model: ["Choose directory", "Export files", "Export complete"]
     }
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: 0
+        currentIndex: !QmlBridge.IsProjectManager ? 0 : (LoginModel.loggedInToSDConnect ? 2 : 1)
 
         ColumnLayout {
             spacing: CSC.Style.padding
+
+            Label {
+                text: "<h1>Export is not possible</h1>"
+                maximumLineCount: 1
+            }
+
+            Label {
+                text: "Your need to be project manager to export files."
+                font.pixelSize: 13
+            }
+        }
+
+        ColumnLayout {
+            id: loginColumn
+            spacing: CSC.Style.padding
+            focus: visible
+
+            Keys.onReturnPressed: loginButton.clicked() // Enter key
+            Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
+
+            Label {
+                text: "<h1>Please log in</h1>"
+                maximumLineCount: 1
+                color: CSC.Style.grey
+            }
+
+            Label {
+                text: "You need to be logged in to the service using your CSC credentials to export files."
+                font.pixelSize: 14
+                color: CSC.Style.grey
+            }
+
+            /*Label {
+                text: "Please log in with your CSC credentials"
+                maximumLineCount: 1
+                font.pixelSize: 13
+            }*/
+
+            CSC.TextField {
+                id: usernameField
+                focus: true
+                placeholderText: "Username"
+                Layout.preferredWidth: 350
+			}
+
+			CSC.TextField {
+                id: passwordField
+                placeholderText: "Password"
+                errorText: "Please enter valid password"
+                echoMode: TextInput.Password
+                activeFocusOnTab: true
+                extraPadding: true
+                Layout.preferredWidth: 350
+			}
+
+            CSC.Button {
+				id: loginButton
+				text: "Login"
+
+                Connections {
+                    target: QmlBridge
+                    enabled: window.loggedIn
+                    onLogin401: {
+                        passwordField.errorVisible = true
+                        loginColumn.enabled = true
+                        loginButton.loading = false
+
+                        if (usernameField.text != "") {
+                            passwordField.focus = true
+                            passwordField.selectAll()
+                        }
+                    }
+                    onLoginError: {
+                        loginButton.loading = false
+                        loginColumn.enabled = true
+                        popup.errorMessage = message
+                        popup.open()
+					}
+                }
+
+				onClicked: {
+					popup.close()
+					loginColumn.enabled = false
+					loginButton.loading = true
+					passwordField.errorVisible = false
+					QmlBridge.loginWithPassword(LoginModel.connectIdx, usernameField.text, passwordField.text)
+				}
+			}
+        }
+
+        ColumnLayout {
+            spacing: CSC.Style.padding
+            focus: visible
 
             Keys.onReturnPressed: continueButton.clicked() // Enter key
             Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
@@ -54,12 +157,13 @@ Page {
                 id: continueButton
                 text: "Continue"
                 enabled: nameField.text != ""
-                onClicked: { stack.currentIndex = 1 }
+                onClicked: { stack.currentIndex = stack.currentIndex + 1 }
             }
         }
 
         ColumnLayout {
             spacing: CSC.Style.padding
+            focus: visible
 
             DropArea {
                 id: dropArea;
@@ -70,12 +174,14 @@ Page {
                     id: shape
                     anchors.fill: parent
 
+                    property real lineAlpha: 0.5
+
                     ShapePath {
                         fillColor: "transparent"
                         strokeWidth: 3
-                        strokeColor: CSC.Style.primaryColor
+                        strokeColor: Qt.rgba(CSC.Style.primaryColor.r, CSC.Style.primaryColor.g, CSC.Style.primaryColor.b, shape.lineAlpha)
                         strokeStyle: ShapePath.DashLine
-                        dashPattern: [ 1, 4 ]
+                        dashPattern: [ 1, 3 ]
                         startX: 0; startY: 0
                         PathLine { x: shape.width; y: 0 }
                         PathLine { x: shape.width; y: shape.height }
@@ -107,30 +213,52 @@ Page {
                             text: "Select file"
                             outlined: true
 
-                            onClicked: {
-                                
-                            }
+                            onClicked: dialogSelect.visible = true
                         }
                     }
 
                     Label {
-                        text: "If you wish to export multiple files, please create a tar/zip file" 
+                        text: "If you wish to export multiple files, please create a tar/zip file." 
                         font.pixelSize: 14
                         anchors.horizontalCenter: dragRow.horizontalCenter
                     }
                 }
 
-                onEntered: {
-                }
+                onEntered: shape.dashlineAlpha = 1.0
+                onExited: shape.dashlineAlpha = 0.5
 
                 onDropped: {
+                    if (!drag.hasUrls) {
+                        popup.errorMessage = "Dropped item was not a file"
+						popup.open()
+                        return
+                    }
+                    
+                    for (var i = 0; i < drag.urls.length; i++) {
+                        console.log(drag.urls[i])
+                        /*if (QmlBridge.isFile(drag.urls[i])) {
+
+                        }*/
+                    }
                 }
             }
 
-            CSC.Button {
-                id: exportButton
-                text: "Export"
-                enabled: false
+            Row {
+                spacing: CSC.Style.padding
+
+                CSC.Button {
+                    text: "Export"
+                    enabled: false
+
+                    onClicked: { }
+                }
+
+                CSC.Button {
+                    text: "Cancel"
+                    outlined: true
+
+                    onClicked: stack.currentIndex = 0
+                }
             }
         }
     }

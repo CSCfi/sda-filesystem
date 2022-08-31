@@ -105,6 +105,11 @@ func (pm *ProjectModel) addProject(rep, pr string) {
 }
 
 func (pm *ProjectModel) addToCount(rep, pr string, count int) {
+	if rep == "" {
+		pm.SetAllContainers(pm.AllContainers() * -1)
+		return
+	}
+
 	row := pm.nameToIndex[rep+"/"+pr]
 	var project = &pm.projects[row]
 	var index = pm.Index(row, 0, core.NewQModelIndex())
@@ -115,7 +120,11 @@ func (pm *ProjectModel) addToCount(rep, pr string, count int) {
 		pm.DataChanged(index, index, []int{LoadedContainers})
 	} else {
 		project.allContainers = count
-		pm.SetAllContainers(pm.AllContainers() + count)
+		pm.SetAllContainers(pm.AllContainers() - count)
+		if count == 0 {
+			pm.SetAllContainers(pm.AllContainers() - 1)
+			pm.SetLoadedContainers(pm.LoadedContainers() + 1)
+		}
 		pm.DataChanged(index, index, []int{AllContainers})
 	}
 }
