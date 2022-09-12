@@ -36,6 +36,12 @@ ListView {
 
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
+    onMaxPagesChanged: {
+        if (page > maxPages) {
+            var topLog = (listView.maxPages - 1) * listView.amountVisible
+            listView.page = Math.floor(topLog / listView.amountVisible) + 1
+        }
+    }
 
     function selectVisible() {
         if (visibleItems.count > 0) {
@@ -189,13 +195,7 @@ ListView {
                 opacity: (rightRow.x + whichPageText.width - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
 
                 property int firstIdx: (listView.page - 1) * listView.amountVisible + 1
-                property int lastIdx: {
-                    if (listView.rowCount < listView.amountVisible) {
-                        return listView.rowCount
-                    } else {
-                        return firstIdx + listView.amountVisible - 1
-                    }
-                }
+                property int lastIdx: Math.min(firstIdx + listView.amountVisible - 1, listView.rowCount)
             }
         }
 

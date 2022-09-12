@@ -34,7 +34,7 @@ Page {
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: !QmlBridge.IsProjectManager ? 0 : (LoginModel.loggedInToSDConnect ? 2 : 1)
+        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : QmlBridge.IsProjectManager ? 2 : 0
 
         ColumnLayout {
             spacing: CSC.Style.padding
@@ -53,7 +53,6 @@ Page {
         ColumnLayout {
             id: loginColumn
             spacing: CSC.Style.padding
-            focus: visible
 
             Keys.onReturnPressed: loginButton.clicked() // Enter key
             Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
@@ -130,7 +129,6 @@ Page {
 
         ColumnLayout {
             spacing: CSC.Style.padding
-            focus: visible
 
             Keys.onReturnPressed: continueButton.clicked() // Enter key
             Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
@@ -163,7 +161,6 @@ Page {
 
         ColumnLayout {
             spacing: CSC.Style.padding
-            focus: visible
 
             DropArea {
                 id: dropArea;

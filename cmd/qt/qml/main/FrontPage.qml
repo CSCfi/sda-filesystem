@@ -178,6 +178,9 @@ Page {
             spacing: CSC.Style.padding
             focus: visible
 
+            Keys.onReturnPressed: openButton.clicked() // Enter key
+            Keys.onEnterPressed: openButton.clicked()  // Numpad enter key
+
             Label {
                 id: headerText
                 text: "<h1>Preparing access</h1>"
@@ -192,9 +195,6 @@ Page {
                 CSC.Button {
                     id: openButton
                     text: "Open folder" 
-
-                    Keys.onReturnPressed: openButton.clicked() // Enter key
-                    Keys.onEnterPressed: openButton.clicked()  // Numpad enter key
 
                     onClicked: QmlBridge.openFuse()
                 }

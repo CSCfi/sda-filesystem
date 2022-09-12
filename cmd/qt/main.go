@@ -54,6 +54,7 @@ type QmlBridge struct {
 func (qb *QmlBridge) init() {
 	mount, err := mountpoint.DefaultMountPoint()
 	qb.SetMountPoint(mount)
+	qb.SetIsProjectManager(false)
 	if err != nil {
 		logs.Warning(err)
 	}
@@ -85,10 +86,7 @@ func (qb *QmlBridge) initializeAPI() {
 
 	if noneAvailable := loginModel.checkEnvs(); noneAvailable {
 		qb.InitError("No services available")
-		return
 	}
-
-	qb.SetIsProjectManager(api.IsProjectManager())
 }
 
 func (qb *QmlBridge) loginWithToken(idx int) {
@@ -119,6 +117,15 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 
 	loginModel.setLoggedIn(idx, true)
 	logs.Info(rep, " login successful")
+
+	if rep == api.SDConnect {
+		isManager, err := api.IsProjectManager()
+		if err != nil {
+			logs.Errorf("Resolving project manager status failed: %w", err)
+			return
+		}
+		qb.SetIsProjectManager(isManager)
+	}
 }
 
 func (qb *QmlBridge) initFuse() {

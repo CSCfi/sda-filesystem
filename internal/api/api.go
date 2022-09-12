@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -209,8 +210,45 @@ var testURL = func(url string) error {
 	return nil
 }
 
-var IsProjectManager = func() bool {
-	return false
+var IsProjectManager = func() (bool, error) {
+	var data map[string]interface{}
+	var rep fuseInfo
+
+	for key, value := range hi.repositories {
+		if key == SDConnect {
+			rep = value
+		}
+	}
+
+	if rep == nil {
+		return false, nil
+	}
+
+	if err := makeRequest(hi.userinfoURL, nil, nil, &data); err != nil {
+		var re *RequestError
+		if errors.As(err, &re) && re.StatusCode == 400 {
+			return false, fmt.Errorf("Invalid token")
+		} else {
+			return false, err
+		}
+	}
+
+	if projectsPI, ok := data["projectPI"].([]string); !ok {
+		return false, fmt.Errorf("Response body did not contain key 'projectPI'")
+	} else {
+		pr, _ := rep.getNthLevel(SDConnect, SDConnect)
+
+		if len(pr) != 1 { // each VM should have only one project
+			return false, nil
+		}
+
+		for i := range projectsPI {
+			if projectsPI[i] == strings.TrimPrefix(pr[0].Name, "project_") {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 }
 
 // GetLoginMethod returns the login method of repository 'rep'
