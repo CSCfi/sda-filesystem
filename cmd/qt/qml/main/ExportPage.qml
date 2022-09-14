@@ -50,117 +50,134 @@ Page {
             }
         }
 
-        ColumnLayout {
-            id: loginColumn
-            spacing: CSC.Style.padding
+        FocusScope {
+            x: childrenRect.x
+            y: childrenRect.y
+            width: childrenRect.width
+            height: childrenRect.height
+            focus: visible
 
-            Keys.onReturnPressed: loginButton.clicked() // Enter key
-            Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
+            ColumnLayout {
+                id: loginColumn
+                spacing: CSC.Style.padding
 
-            Label {
-                text: "<h1>Please log in</h1>"
-                maximumLineCount: 1
-                color: CSC.Style.grey
-            }
+                Keys.onReturnPressed: loginButton.clicked() // Enter key
+                Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
 
-            Label {
-                text: "You need to be logged in to the service using your CSC credentials to export files."
-                font.pixelSize: 14
-                color: CSC.Style.grey
-            }
-
-            /*Label {
-                text: "Please log in with your CSC credentials"
-                maximumLineCount: 1
-                font.pixelSize: 13
-            }*/
-
-            CSC.TextField {
-                id: usernameField
-                focus: true
-                placeholderText: "Username"
-                Layout.preferredWidth: 350
-			}
-
-			CSC.TextField {
-                id: passwordField
-                placeholderText: "Password"
-                errorText: "Please enter valid password"
-                echoMode: TextInput.Password
-                activeFocusOnTab: true
-                extraPadding: true
-                Layout.preferredWidth: 350
-			}
-
-            CSC.Button {
-				id: loginButton
-				text: "Login"
-
-                Connections {
-                    target: QmlBridge
-                    enabled: window.loggedIn
-                    onLogin401: {
-                        passwordField.errorVisible = true
-                        loginColumn.enabled = true
-                        loginButton.loading = false
-
-                        if (usernameField.text != "") {
-                            passwordField.focus = true
-                            passwordField.selectAll()
-                        }
-                    }
-                    onLoginError: {
-                        loginButton.loading = false
-                        loginColumn.enabled = true
-                        popup.errorMessage = message
-                        popup.open()
-					}
+                Label {
+                    text: "<h1>Please log in</h1>"
+                    maximumLineCount: 1
+                    color: CSC.Style.grey
                 }
 
-				onClicked: {
-					popup.close()
-					loginColumn.enabled = false
-					loginButton.loading = true
-					passwordField.errorVisible = false
-					QmlBridge.loginWithPassword(LoginModel.connectIdx, usernameField.text, passwordField.text)
-				}
-			}
+                Label {
+                    text: "You need to be logged in to the service using your CSC credentials to export files."
+                    font.pixelSize: 14
+                    color: CSC.Style.grey
+                }
+
+                /*Label {
+                    text: "Please log in with your CSC credentials"
+                    maximumLineCount: 1
+                    font.pixelSize: 13
+                }*/
+
+                CSC.TextField {
+                    id: usernameField
+                    focus: true
+                    placeholderText: "Username"
+                    Layout.preferredWidth: 350
+                }
+
+                CSC.TextField {
+                    id: passwordField
+                    placeholderText: "Password"
+                    errorText: "Please enter valid password"
+                    echoMode: TextInput.Password
+                    activeFocusOnTab: true
+                    extraPadding: true
+                    Layout.preferredWidth: 350
+                }
+
+                CSC.Button {
+                    id: loginButton
+                    text: "Login"
+
+                    Connections {
+                        target: QmlBridge
+                        enabled: window.loggedIn
+                        onLogin401: {
+                            passwordField.errorVisible = true
+                            loginColumn.enabled = true
+                            loginButton.loading = false
+
+                            if (usernameField.text != "") {
+                                passwordField.focus = true
+                                passwordField.selectAll()
+                            }
+                        }
+                        onLoginError: {
+                            loginButton.loading = false
+                            loginColumn.enabled = true
+                            popup.errorMessage = message
+                            popup.open()
+                        }
+                    }
+
+                    onClicked: {
+                        popup.close()
+                        loginColumn.enabled = false
+                        loginButton.loading = true
+                        passwordField.errorVisible = false
+                        QmlBridge.loginWithPassword(LoginModel.connectIdx, usernameField.text, passwordField.text)
+                    }
+                }
+            }
+        }
+
+        FocusScope {
+            x: childrenRect.x
+            y: childrenRect.y
+            width: childrenRect.width
+            height: childrenRect.height
+            focus: visible
+            
+            ColumnLayout {
+                spacing: CSC.Style.padding
+
+                Keys.onReturnPressed: continueButton.clicked() // Enter key
+                Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
+
+                Label {
+                    text: "<h1>Select a destination folder for your export</h1>"
+                    maximumLineCount: 1
+                }
+
+                Label {
+                    text: "Your export will be sent to SD Connect. Please note that the folder name cannot be modified afterwards."
+                    maximumLineCount: 1
+                    font.pixelSize: 13
+                }
+
+                CSC.TextField {
+                    id: nameField
+                    placeholderText: "Folder name"
+                    focus: true
+                    Layout.preferredWidth: 350
+                }
+
+                CSC.Button {
+                    id: continueButton
+                    text: "Continue"
+                    enabled: nameField.text != ""
+                    onClicked: { stack.currentIndex = stack.currentIndex + 1 }
+                }
+            }
         }
 
         ColumnLayout {
             spacing: CSC.Style.padding
-
-            Keys.onReturnPressed: continueButton.clicked() // Enter key
-            Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
-
-            Label {
-                text: "<h1>Select a destination folder for your export</h1>"
-                maximumLineCount: 1
-            }
-
-            Label {
-                text: "Your export will be sent to SD Connect. Please note that the folder name cannot be modified afterwards."
-                maximumLineCount: 1
-                font.pixelSize: 13
-            }
-
-            CSC.TextField {
-				id: nameField
-				placeholderText: "Folder name"
-				focus: true
-				Layout.preferredWidth: 350
-			}
-
-            CSC.Button {
-                id: continueButton
-                text: "Continue"
-                enabled: nameField.text != ""
-                onClicked: { stack.currentIndex = stack.currentIndex + 1 }
-            }
-        }
-
-        ColumnLayout {
-            spacing: CSC.Style.padding
+            focus: visible
 
             DropArea {
                 id: dropArea
