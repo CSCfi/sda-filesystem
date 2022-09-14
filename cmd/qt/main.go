@@ -115,17 +115,24 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 		return
 	}
 
-	loginModel.setLoggedIn(idx, true)
-	logs.Info(rep, " login successful")
-
 	if rep == api.SDConnect {
 		isManager, err := api.IsProjectManager()
+
 		if err != nil {
 			logs.Errorf("Resolving project manager status failed: %w", err)
-			return
+		} else {
+			qb.SetIsProjectManager(isManager)
+
+			if isManager {
+				logs.Info("You are the project manager")
+			} else {
+				logs.Info("You are not the project manager")
+			}
 		}
-		qb.SetIsProjectManager(isManager)
 	}
+
+	loginModel.setLoggedIn(idx, true)
+	logs.Info(rep, " login successful")
 }
 
 func (qb *QmlBridge) initFuse() {

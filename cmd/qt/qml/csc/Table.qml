@@ -24,12 +24,12 @@ ListView {
     property int maxPages: Math.ceil(rowCount / amountVisible)
 
     Keys.onRightPressed: {
-        if (listView.rowCount != 0) {
+        if (rowCount != 0) {
             headerItem.changePageRight()
         }
     }
     Keys.onLeftPressed: {
-        if (listView.rowCount != 0) {
+        if (rowCount != 0) {
             headerItem.changePageLeft()
         }
     }
@@ -37,7 +37,7 @@ ListView {
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
     onMaxPagesChanged: {
-        if (page > maxPages) {
+        if (rowCount != 0 && page > maxPages) {
             var topLog = (listView.maxPages - 1) * listView.amountVisible
             listView.page = Math.floor(topLog / listView.amountVisible) + 1
         }

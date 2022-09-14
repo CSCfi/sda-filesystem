@@ -211,17 +211,21 @@ var testURL = func(url string) error {
 }
 
 var IsProjectManager = func() (bool, error) {
-	var data map[string]interface{}
-	var rep fuseInfo
+	errStr := "Could not determine to which project this Desktop belongs"
 
-	for key, value := range hi.repositories {
-		if key == SDConnect {
-			rep = value
-		}
+	file, err := os.ReadFile("/etc/pam_userinfo/config.json")
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", errStr, err)
 	}
 
-	if rep == nil {
-		return false, nil
+	var data map[string]interface{}
+	if err = json.Unmarshal(file, &data); err != nil {
+		return false, fmt.Errorf("%s: %w", errStr, err)
+	}
+
+	pr, ok := data["login_aud"]
+	if !ok {
+		return false, fmt.Errorf("%s: %w", errStr, errors.New("Config file did not contain key 'login_aud'"))
 	}
 
 	if err := makeRequest(hi.userinfoURL, nil, nil, &data); err != nil {
@@ -233,17 +237,12 @@ var IsProjectManager = func() (bool, error) {
 		}
 	}
 
-	if projectsPI, ok := data["projectPI"].([]string); !ok {
+	if projectPI, ok := data["projectPI"]; !ok {
 		return false, fmt.Errorf("Response body did not contain key 'projectPI'")
 	} else {
-		pr, _ := rep.getNthLevel(SDConnect, SDConnect)
-
-		if len(pr) != 1 { // each VM should have only one project
-			return false, nil
-		}
-
-		for i := range projectsPI {
-			if projectsPI[i] == strings.TrimPrefix(pr[0].Name, "project_") {
+		projects := strings.Split(fmt.Sprintf("%v", projectPI), " ")
+		for i := range projects {
+			if projects[i] == fmt.Sprintf("%v", pr) {
 				return true, nil
 			}
 		}

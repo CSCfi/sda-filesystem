@@ -34,7 +34,7 @@ Page {
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : QmlBridge.IsProjectManager ? 2 : 0
+        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : (QmlBridge.isProjectManager ? 2 : 0)
 
         ColumnLayout {
             spacing: CSC.Style.padding
@@ -163,7 +163,7 @@ Page {
             spacing: CSC.Style.padding
 
             DropArea {
-                id: dropArea;
+                id: dropArea
                 Layout.preferredHeight: dragColumn.height
                 Layout.fillWidth: true
 
@@ -171,12 +171,10 @@ Page {
                     id: shape
                     anchors.fill: parent
 
-                    property real lineAlpha: 0.5
-
                     ShapePath {
                         fillColor: "transparent"
                         strokeWidth: 3
-                        strokeColor: Qt.rgba(CSC.Style.primaryColor.r, CSC.Style.primaryColor.g, CSC.Style.primaryColor.b, shape.lineAlpha)
+                        strokeColor: dropArea.containsDrag ? CSC.Style.primaryColor : Qt.rgba(CSC.Style.primaryColor.r, CSC.Style.primaryColor.g, CSC.Style.primaryColor.b, 0.5)
                         strokeStyle: ShapePath.DashLine
                         dashPattern: [ 1, 3 ]
                         startX: 0; startY: 0
@@ -221,18 +219,15 @@ Page {
                     }
                 }
 
-                onEntered: shape.dashlineAlpha = 1.0
-                onExited: shape.dashlineAlpha = 0.5
-
                 onDropped: {
-                    if (!drag.hasUrls) {
+                    if (!drop.hasUrls) {
                         popup.errorMessage = "Dropped item was not a file"
 						popup.open()
                         return
                     }
                     
-                    for (var i = 0; i < drag.urls.length; i++) {
-                        console.log(drag.urls[i])
+                    for (var i = 0; i < drop.urls.length; i++) {
+                        console.log(drop.urls[i])
                         /*if (QmlBridge.isFile(drag.urls[i])) {
 
                         }*/
@@ -254,7 +249,7 @@ Page {
                     text: "Cancel"
                     outlined: true
 
-                    onClicked: stack.currentIndex = 0
+                    onClicked: { stack.currentIndex = stack.currentIndex - 1 }
                 }
             }
         }
