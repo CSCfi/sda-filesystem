@@ -13,7 +13,7 @@ jobs:
       id: ${{ steps.create_release.outputs.id }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set output tag name
         id: vars
         run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
@@ -54,7 +54,7 @@ jobs:
  
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Golang ${{ matrix.golang-version }}
         uses: actions/setup-go@v2
         with:
@@ -119,7 +119,7 @@ jobs:
  
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Golang ${{ matrix.golang-version }}
         uses: actions/setup-go@v2
         with:
