@@ -56,7 +56,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Set up Golang ${{ matrix.golang-version }}
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.golang-version }}
       - name: Install macOS dependencies
@@ -121,7 +121,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Set up Golang ${{ matrix.golang-version }}
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.golang-version }}
       - name: Install macOS dependencies
