@@ -36,7 +36,7 @@ jobs:
           qtdeploy build desktop cmd/qt/
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v2.5.2
+        uses: golangci/golangci-lint-action@v3.2.0
         with:
           version: v1.45
           args: -E gosec,goconst,nestif,bodyclose,rowserrcheck --skip-files cmd/qt/moc.go  --timeout=10m
