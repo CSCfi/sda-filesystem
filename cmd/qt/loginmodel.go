@@ -39,10 +39,8 @@ type LoginModel struct {
 	_ bool `property:"loggedInToSDConnect"`
 	_ int  `property:"connectIdx"`
 
-	roles      map[int]*core.QByteArray
-	logins     []loginRow
-	sdConnect  bool
-	connectIdx int
+	roles  map[int]*core.QByteArray
+	logins []loginRow
 }
 
 type loginRow struct {
