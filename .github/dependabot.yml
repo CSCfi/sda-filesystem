@@ -4,9 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    labels:
+      - "go dependencies"
     open-pull-requests-limit: 10
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    labels:
+      - "github actions"
     open-pull-requests-limit: 10
