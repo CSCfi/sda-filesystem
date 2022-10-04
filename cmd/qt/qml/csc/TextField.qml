@@ -5,15 +5,16 @@ import csc 1.2 as CSC
 
 TextField {
     id: textfield
-    topPadding: 8
+    topPadding: 10
     leftPadding: topPadding
     rightPadding: topPadding
-    bottomPadding: (extraPadding || errorVisible) ? topPadding + bottomInset : topPadding
-    bottomInset: (extraPadding || errorVisible) ? errorRow.height : 0
+    bottomPadding: extraPadding ? topPadding + bottomInset : topPadding
+    bottomInset: extraPadding ? errorRow.height : 0
     selectByMouse: true
     mouseSelectionMode: TextInput.SelectWords
 
     property string errorText
+    property string titleText
     property bool errorVisible: false
     property bool extraPadding: false
 
@@ -24,10 +25,42 @@ TextField {
         radius: 5
     }
 
+    transitions: Transition {
+        AnchorAnimation { duration: 300; easing.type: Easing.OutQuart }
+        NumberAnimation { duration: 300; properties: "width,font.pixelSize"; easing.type: Easing.OutQuart }
+    }
+
+    states: State {
+        name: "writing"; when: textfield.activeFocus || textfield.text != ""
+        AnchorChanges { target: title; anchors.verticalCenter: textfield.top }
+        PropertyChanges { target: title; font.pixelSize: 10 }
+        PropertyChanges { target: pane; width: title.width }
+    }
+
+    Pane {
+        id: pane
+        width: 0
+        height: title.contentHeight
+        anchors.verticalCenter: parent.top
+        anchors.left: parent.left
+        anchors.leftMargin: textfield.leftPadding - title.leftPadding
+    }
+
+    Label {
+        id: title
+        text: textfield.titleText
+        color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
+        leftPadding: 3
+        rightPadding: 3
+        font.pixelSize: 0.5 * parent.height
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: pane.left
+    }
+
     RowLayout {
         id: errorRow
         visible: errorVisible
-        anchors.bottom: parent.bottom
+        anchors.top: parent.bottom
 
         RoundButton {
             id: error401

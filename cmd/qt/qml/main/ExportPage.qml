@@ -85,13 +85,13 @@ Page {
                 CSC.TextField {
                     id: usernameField
                     focus: true
-                    placeholderText: "Username"
+                    titleText: "Username"
                     Layout.preferredWidth: 350
                 }
 
                 CSC.TextField {
                     id: passwordField
-                    placeholderText: "Password"
+                    titleText: "Password"
                     errorText: "Please enter valid password"
                     echoMode: TextInput.Password
                     activeFocusOnTab: true
@@ -158,7 +158,7 @@ Page {
 
                 CSC.TextField {
                     id: nameField
-                    placeholderText: "Folder name"
+                    titleText: "Folder name"
                     focus: true
                     Layout.preferredWidth: 350
                 }

@@ -205,13 +205,13 @@ Page {
             CSC.TextField {
                 id: usernameField
                 focus: true
-                placeholderText: "Username"
+                titleText: "Username"
                 Layout.fillWidth: true
             }
 
             CSC.TextField {
                 id: passwordField
-                placeholderText: "Password"
+                titleText: "Password"
                 errorText: "Please enter valid password"
                 echoMode: TextInput.Password
                 activeFocusOnTab: true
