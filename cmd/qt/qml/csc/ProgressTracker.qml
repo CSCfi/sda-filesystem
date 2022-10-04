@@ -23,6 +23,7 @@ Control {
 
             Control {
                 implicitHeight: childrenRect.height
+                padding: 0
                 Layout.preferredWidth: (index == 0) ? circle.width : -1
                 Layout.fillWidth: (index == 0) ? false : true
 
@@ -51,7 +52,7 @@ Control {
                         width: height
                         radius: 0.5 * height
                         color: CSC.Style.primaryColor
-                        visible: (info.color == CSC.Style.grey) ? false : true
+                        visible: (index == tracker.progressIndex) ? true : false
                         anchors.margins: 4
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter

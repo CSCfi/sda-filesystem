@@ -24,7 +24,7 @@ Page {
 		id: content
 		spacing: CSC.Style.padding
 		height: childrenRect.height + topPadding
-		width: childrenRect.width + leftPadding
+		width: repositoryList.width + leftPadding
 		topPadding: 2 * CSC.Style.padding
 		leftPadding: 2 * CSC.Style.padding
 
@@ -121,6 +121,7 @@ Page {
 			id: continueButton
 			text: "Continue"
 			enabled: repositoryList.loading == 0 && repositoryList.success
+			anchors.right: repositoryList.right
 
 			onClicked: {
 				if (enabled) {
@@ -223,6 +224,7 @@ Page {
 				outlined: true
 				topPadding: 10
 				bottomPadding: 10
+				Layout.alignment: Qt.AlignRight
 
 				onClicked: {
 					popup.close()

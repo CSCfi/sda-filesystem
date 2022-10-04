@@ -11,7 +11,7 @@ ApplicationWindow {
     id: window
     title: "Data Gateway"
     visible: true
-    minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
+    minimumWidth: Math.max(header.implicitWidth, logs.implicitWidth)
     minimumHeight: header.implicitHeight + login.implicitHeight
     height: minimumHeight + login.formHeight
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
@@ -97,7 +97,7 @@ ApplicationWindow {
 
             ToolButton {
                 id: signout
-                text: "Disconnect and Sign Out"
+                text: "Disconnect and sign out"
                 enabled: stack.state == "loggedIn"
                 opacity: enabled ? 1 : 0
                 icon.source: "qrc:/qml/images/box-arrow-right.svg"

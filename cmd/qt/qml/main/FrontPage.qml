@@ -27,12 +27,12 @@ Page {
     }
 
     Connections {
-		target: QmlBridge
+        target: QmlBridge
         onPanic: {
             popupPanic.closePolicy = Popup.NoAutoClose // User must choose ignore or quit
             popupPanic.open()
         }
-	}
+    }
 
     Connections {
         target: dialogSave
@@ -46,57 +46,57 @@ Page {
     }
 
     CSC.Popup {
-		id: popupPanic
-		errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
+        id: popupPanic
+        errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
         
-		ColumnLayout {
-			width: parent.width
+        ColumnLayout {
+            width: parent.width
 
-			CheckBox {
-				id: logCheck
-				checked: true
-				text: "Yes, save logs to file"
+            CheckBox {
+                id: logCheck
+                checked: true
+                text: "Yes, save logs to file"
 
-				Material.accent: CSC.Style.primaryColor
-			}
+                Material.accent: CSC.Style.primaryColor
+            }
 
-			Row {
-				spacing: CSC.Style.padding
-				Layout.alignment: Qt.AlignRight
+            Row {
+                spacing: CSC.Style.padding
+                Layout.alignment: Qt.AlignRight
 
-				CSC.Button {
-					id: ignoreButton
-					text: "Ignore"
-					outlined: true
-					checkable: true
+                CSC.Button {
+                    id: ignoreButton
+                    text: "Ignore"
+                    outlined: true
+                    checkable: true
                     //mainColor: CSC.Style.red
 
-					onClicked: {
-						if (logCheck.checked) {
-							dialogSave.visible = true
-						} else {
-							popupPanic.close()
-						}
-					}
-				}
+                    onClicked: {
+                        if (logCheck.checked) {
+                            dialogSave.visible = true
+                        } else {
+                            popupPanic.close()
+                        }
+                    }
+                }
 
-				CSC.Button {
-					id: quitButton
-					text: "Quit"
-					checkable: true
+                CSC.Button {
+                    id: quitButton
+                    text: "Quit"
+                    checkable: true
                     //mainColor: CSC.Style.red
-					
-					onClicked: {
-						if (logCheck.checked) {
-							dialogSave.visible = true
-						} else {
-							close()
-						}
-					}
-				}
-			}
-		}
-	}
+                    
+                    onClicked: {
+                        if (logCheck.checked) {
+                            dialogSave.visible = true
+                        } else {
+                            close()
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     header: CSC.ProgressTracker {
         id: tracker
@@ -111,6 +111,7 @@ Page {
         ColumnLayout {
             spacing: CSC.Style.padding
             focus: visible
+            Layout.preferredWidth: stack.width
 
             Keys.onReturnPressed: continueButton.clicked() // Enter key
             Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
@@ -169,6 +170,8 @@ Page {
             CSC.Button {
                 id: continueButton
                 text: "Continue"
+                Layout.alignment: Qt.AlignRight
+
                 onClicked: { stack.currentIndex = 1; QmlBridge.loadFuse() }
             }
         }      
@@ -191,13 +194,6 @@ Page {
                 id: buttonRow
                 spacing: CSC.Style.padding
                 visible: false
-
-                CSC.Button {
-                    id: openButton
-                    text: "Open folder" 
-
-                    onClicked: QmlBridge.openFuse()
-                }
 
                 CSC.Button {
                     id: refreshButton
@@ -229,6 +225,17 @@ Page {
                         }
                     ]
                 }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                CSC.Button {
+                    id: openButton
+                    text: "Open folder" 
+
+                    onClicked: QmlBridge.openFuse()
+                }
             }
 
             ColumnLayout {
@@ -257,50 +264,10 @@ Page {
             CSC.Table {
                 id: table
                 modelSource: ProjectModel
-                delegateSource: projectLine
+                contentSource: projectLine
+                footerSource: footerLine
                 objectName: "projects"
                 Layout.fillWidth: true
-
-                property real maxProjectNameWidth: 0
-
-                footer: Rectangle {
-                    height: 50
-                    width: table.width
-                    border.width: 1
-                    border.color: CSC.Style.lightGrey
-
-                    RowLayout {
-                        spacing: 30
-                        anchors.fill: parent
-                        anchors.leftMargin: CSC.Style.padding
-                        anchors.rightMargin: CSC.Style.padding
-
-                        Label {
-                            id: levelText
-                            text: "Name"
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                            Layout.fillWidth: true
-                        }
-
-                        Label {
-                            text: "Location"
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                            visible: parent.width - table.maxProjectNameWidth > width + messageLabel.width + 2 * parent.spacing
-                            Layout.preferredWidth: 150
-                        }
-
-                        Label {
-                            id: messageLabel
-                            text: "Progress"
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                            Layout.maximumWidth: 200
-                            Layout.minimumWidth: 200
-                        }
-                    }
-                }
             }
 
             Connections {
@@ -323,60 +290,66 @@ Page {
     }
 
     Component {
+        id: footerLine
+
+        RowLayout {
+            Label {
+                text: "Name"
+                Layout.fillWidth: true
+            }
+
+            Label {
+                text: "Location"
+                Layout.preferredWidth: 150
+            }
+
+            Label {
+                text: "Progress"
+                Layout.maximumWidth: 200
+                Layout.minimumWidth: 200
+            }            
+        }
+    }
+
+    Component {
         id: projectLine
 
-        Rectangle {
-            height: 60
-            width: table.width
-            border.width: 1
-            border.color: CSC.Style.lightGrey
+        RowLayout {
+            property string projectName: modelData ? modelData.projectName : ""
+            property string repositoryName: modelData ? modelData.repositoryName : ""
+            property int allContainers: modelData ? modelData.allContainers : -1
+            property int loadedContainers: modelData ? modelData.loadedContainers : 0
+
+            Label {
+                text: projectName
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+
+            Label {
+                text: repositoryName
+                Layout.preferredWidth: 150
+            }
 
             RowLayout {
-                spacing: 30
-                anchors.fill: parent
-                anchors.leftMargin: CSC.Style.padding
-                anchors.rightMargin: CSC.Style.padding
+                id: loadingStatus
+                Layout.maximumWidth: 200
+                Layout.minimumWidth: 200
 
-                Label {
-                    text: projectName
-                    font.pixelSize: 15
-                    elide: Text.ElideRight
+                property real value: (allContainers == -1) ? 0 : (allContainers == 0) ? 1 : loadedContainers / allContainers
+
+                CSC.ProgressBar {
+                    id: progressbar
+                    value: parent.value
                     Layout.fillWidth: true
-
-                    Component.onCompleted: {
-                        if (implicitWidth > table.maxProjectNameWidth) {
-                            table.maxProjectNameWidth = implicitWidth
-                        }
-                    }
                 }
 
                 Label {
-                    text: repositoryName
-                    font.pixelSize: 15
-                    visible: parent.width - table.maxProjectNameWidth > width + loadingStatus.width + 2 * parent.spacing
-                    Layout.preferredWidth: 150
-                }
-
-                RowLayout {
-                    id: loadingStatus
-                    Layout.maximumWidth: 200
-                    Layout.minimumWidth: 200
-
-                    property real value: (allContainers == -1) ? 0 : (allContainers == 0) ? 1 : loadedContainers / allContainers
-
-                    CSC.ProgressBar {
-                        id: progressbar
-                        value: parent.value
-                        Layout.fillWidth: true
-                    }
-
-                    Label {
-                        id: percentValue
-                        text: Math.floor(parent.value * 100) + "%"
-                        maximumLineCount: 1
-                        font.pixelSize: 13
-                        Layout.minimumWidth: textMetrics100.width
-                    }
+                    id: percentValue
+                    text: Math.floor(parent.value * 100) + "%"
+                    maximumLineCount: 1
+                    font.pixelSize: 13
+                    Layout.minimumWidth: textMetrics100.width
                 }
             }
         }

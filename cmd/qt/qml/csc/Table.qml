@@ -15,13 +15,20 @@ ListView {
     verticalLayoutDirection: ListView.BottomToTop
 
     Material.foreground: CSC.Style.grey
+    
+    property Component contentSource
+    property Component footerSource
+    property var modelSource
 
-    property variant modelSource
-    property Component delegateSource
-    property int rowCount: visualModel.items.count
+    readonly property int rowCount: visualModel.items.count
     property int amountVisible: 5
     property int page: 1
     property int maxPages: Math.ceil(rowCount / amountVisible)
+    property bool hiddenHeader: false
+
+    property font contentFont: Qt.font({
+        pixelSize: 15
+    })
 
     Keys.onRightPressed: {
         if (rowCount != 0) {
@@ -58,9 +65,31 @@ ListView {
         }
     }
 
-    header: Rectangle {
-        height: 40
+    footer: Frame {
+        height: 50
         width: listView.width
+        leftPadding: CSC.Style.padding
+        rightPadding: CSC.Style.padding
+        font.weight: Font.DemiBold
+        font.pixelSize: 13
+
+        background: Rectangle {
+            border.width: 1
+            border.color: CSC.Style.lightGrey
+        }
+
+        Loader { 
+            sourceComponent: listView.footerSource
+            anchors.fill: parent
+
+            onLoaded: item.spacing = 30
+        }
+    }
+
+    header: Rectangle {
+        width: listView.width
+        height: !listView.hiddenHeader ? 40 : 0
+        visible: !listView.hiddenHeader
         implicitWidth: pageCount.width + 10 * modelButton.implicitWidth
         border.width: 1
         border.color: CSC.Style.lightGrey
@@ -342,8 +371,35 @@ ListView {
     model: DelegateModel {
         id: visualModel
         model: listView.modelSource
-        delegate: listView.delegateSource
         filterOnGroup: "visibleItems"
+
+        delegate: Frame {
+            height: Math.max(loader.height, 60)
+            width: listView.width
+            font: listView.contentFont
+            leftPadding: CSC.Style.padding
+            rightPadding: CSC.Style.padding
+            topPadding: 0
+            bottomPadding: 0
+
+            background: Rectangle {
+                border.width: 1
+                border.color: CSC.Style.lightGrey
+            }
+
+            Loader {
+                id: loader
+                sourceComponent: listView.contentSource 
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                property var modelData: model
+
+                onLoaded: item.spacing = 30
+            }
+        }
+        
         groups: [
             DelegateModelGroup {
                 id: visibleItems

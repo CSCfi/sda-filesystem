@@ -13,6 +13,8 @@ Page {
     Material.accent: CSC.Style.primaryColor
     Material.foreground: CSC.Style.grey
 
+    property bool chosen: false
+
     FileDialog {
         id: dialogSelect
         title: "Select file to export"
@@ -20,8 +22,10 @@ Page {
         selectExisting: true
         selectFolder: false
 
-        onAccepted: { 
-            console.log(dialogSelect.fileUrl)
+        onAccepted: {
+            page.chosen = true
+            exportModel.setProperty(0, "name", dialogSelect.fileUrl.toString())
+            exportModel.setProperty(0, "bucket", nameField.text)
         }
     }
 
@@ -34,7 +38,7 @@ Page {
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : (QmlBridge.isProjectManager ? 2 : 0)
+        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : (!QmlBridge.isProjectManager ? 2 : 0)
 
         ColumnLayout {
             spacing: CSC.Style.padding
@@ -51,10 +55,6 @@ Page {
         }
 
         FocusScope {
-            x: childrenRect.x
-            y: childrenRect.y
-            width: childrenRect.width
-            height: childrenRect.height
             focus: visible
 
             ColumnLayout {
@@ -136,14 +136,11 @@ Page {
         }
 
         FocusScope {
-            x: childrenRect.x
-            y: childrenRect.y
-            width: childrenRect.width
-            height: childrenRect.height
             focus: visible
             
             ColumnLayout {
                 spacing: CSC.Style.padding
+                width: stack.width
 
                 Keys.onReturnPressed: continueButton.clicked() // Enter key
                 Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
@@ -170,6 +167,8 @@ Page {
                     id: continueButton
                     text: "Continue"
                     enabled: nameField.text != ""
+                    Layout.alignment: Qt.AlignRight
+
                     onClicked: { stack.currentIndex = stack.currentIndex + 1 }
                 }
             }
@@ -181,6 +180,7 @@ Page {
 
             DropArea {
                 id: dropArea
+                visible: !table.visible
                 Layout.preferredHeight: dragColumn.height
                 Layout.fillWidth: true
 
@@ -242,31 +242,120 @@ Page {
 						popup.open()
                         return
                     }
-                    
-                    for (var i = 0; i < drop.urls.length; i++) {
-                        console.log(drop.urls[i])
-                        /*if (QmlBridge.isFile(drag.urls[i])) {
 
-                        }*/
+                    if (drop.urls.length != 1) {
+                        popup.errorMessage = "Dropped too many items"
+                        popup.open()
+                        return
+                    }
+                    
+                    console.log(drop.urls[0])
+                    /*if (QmlBridge.isFile(drag.urls[0])) {
+                        page.fileName = drop.urls[0]
+                    }*/
+                }
+            }
+
+            CSC.Table {
+                id: table
+                visible: page.chosen
+                hiddenHeader: true
+                objectName: "files"
+                Layout.fillWidth: true
+
+                contentSource: fileLine
+                footerSource: footerLine
+                modelSource: ListModel {
+                    id: exportModel
+
+                    ListElement {
+                        name: ""
+                        bucket: ""
                     }
                 }
             }
 
-            Row {
+            RowLayout {
                 spacing: CSC.Style.padding
-
-                CSC.Button {
-                    text: "Export"
-                    enabled: false
-
-                    onClicked: { }
-                }
 
                 CSC.Button {
                     text: "Cancel"
                     outlined: true
 
-                    onClicked: { stack.currentIndex = stack.currentIndex - 1 }
+                    onClicked: { 
+                        stack.currentIndex = stack.currentIndex - 1
+                        page.chosen = false
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                CSC.Button {
+                    text: "Export"
+                    enabled: page.chosen
+
+                    //onClicked: { QmlBridge.ExportFile(page.file) }
+                }
+            }
+        }
+    }
+
+    TextMetrics {
+        id: textMetricsRemove
+        text: "Remove"
+        font.underline: true
+        font.pixelSize: 14
+        font.weight: Font.DemiBold
+    }
+
+    Component {
+        id: footerLine
+
+        RowLayout {
+            Label {
+                text: "Name"
+                Layout.preferredWidth: parent.width * 0.5
+            }
+
+            Label {
+                text: "Target Folder"
+                Layout.fillWidth: true
+            }
+        }
+    }
+
+    Component {
+        id: fileLine
+
+        RowLayout {
+            property string name: modelData ? modelData.name : ""
+            property string bucket: modelData ? modelData.bucket : ""
+
+            Label {
+                text: name
+                elide: Text.ElideRight
+                Layout.preferredWidth: parent.width * 0.5
+            }
+
+            Label {
+                text: bucket
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+
+            Label {
+                text: textMetricsRemove.text
+                font: textMetricsRemove.font
+                color: CSC.Style.primaryColor                    
+                
+                MouseArea {
+                    hoverEnabled: true
+                    cursorShape: containsMouse ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    anchors.fill: parent
+
+                    onClicked: page.chosen = false
                 }
             }
         }
