@@ -25,7 +25,6 @@ Page {
         onAccepted: {
             page.chosen = true
             exportModel.setProperty(0, "name", dialogSelect.fileUrl.toString())
-            exportModel.setProperty(0, "bucket", nameField.text)
         }
     }
 
@@ -75,12 +74,6 @@ Page {
                     font.pixelSize: 14
                     color: CSC.Style.grey
                 }
-
-                /*Label {
-                    text: "Please log in with your CSC credentials"
-                    maximumLineCount: 1
-                    font.pixelSize: 13
-                }*/
 
                 CSC.TextField {
                     id: usernameField
@@ -160,7 +153,7 @@ Page {
                     id: nameField
                     titleText: "Folder name"
                     focus: true
-                    Layout.preferredWidth: 350
+                    Layout.preferredWidth: 400
                 }
 
                 CSC.Button {
@@ -169,7 +162,10 @@ Page {
                     enabled: nameField.text != ""
                     Layout.alignment: Qt.AlignRight
 
-                    onClicked: { stack.currentIndex = stack.currentIndex + 1 }
+                    onClicked: { 
+                        exportModel.setProperty(0, "bucket", nameField.text)
+                        stack.currentIndex = stack.currentIndex + 1 
+                    }
                 }
             }
         }
@@ -249,10 +245,13 @@ Page {
                         return
                     }
                     
-                    console.log(drop.urls[0])
-                    /*if (QmlBridge.isFile(drag.urls[0])) {
-                        page.fileName = drop.urls[0]
-                    }*/
+                    if (QmlBridge.isFile(drop.urls[0])) {
+                        page.chosen = true
+                        exportModel.setProperty(0, "name", drop.urls[0])
+                    } else {
+                        popup.errorMessage = "Dropped item was not a file"
+                        popup.open()
+                    }
                 }
             }
 
@@ -296,7 +295,7 @@ Page {
                     text: "Export"
                     enabled: page.chosen
 
-                    //onClicked: { QmlBridge.ExportFile(page.file) }
+                    onClicked: { QmlBridge.exportFile(exportModel.get(0).bucket, exportModel.get(0).name) }
                 }
             }
         }
@@ -315,7 +314,7 @@ Page {
 
         RowLayout {
             Label {
-                text: "Name"
+                text: "File Name"
                 Layout.preferredWidth: parent.width * 0.5
             }
 
@@ -334,7 +333,7 @@ Page {
             property string bucket: modelData ? modelData.bucket : ""
 
             Label {
-                text: name
+                text: name.split('/').reverse()[0]
                 elide: Text.ElideRight
                 Layout.preferredWidth: parent.width * 0.5
             }

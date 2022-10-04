@@ -37,6 +37,7 @@ type QmlBridge struct {
 	_ func()                        `slot:"openFuse,auto"`
 	_ func() string                 `slot:"refreshFuse,auto"`
 	_ func(string) bool             `slot:"isFile,auto"`
+	_ func(string, string)          `slot:"exportFile,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
 	_ func()                        `slot:"shutdown,auto"`
 	_ func(idx int)                 `signal:"login401"`
@@ -198,7 +199,12 @@ func (qb *QmlBridge) refreshFuse() string {
 }
 
 func (qb *QmlBridge) isFile(url string) bool {
-	return true
+	return core.NewQUrl3(url, 0).IsLocalFile()
+}
+
+func (qb *QmlBridge) exportFile(folder, url string) {
+	file := core.NewQUrl3(url, 0).ToLocalFile()
+	api.ExportFile(folder, file)
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {

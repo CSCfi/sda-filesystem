@@ -415,3 +415,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 var ClearCache = func() {
 	downloadCache.Clear()
 }
+
+var ExportFile = func(folder, file string) {
+
+}
