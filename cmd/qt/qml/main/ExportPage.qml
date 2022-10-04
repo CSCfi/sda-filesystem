@@ -38,7 +38,7 @@ Page {
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : (!QmlBridge.isProjectManager ? 2 : 0)
+        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : (QmlBridge.isProjectManager ? 2 : 0)
 
         ColumnLayout {
             spacing: CSC.Style.padding
@@ -239,7 +239,7 @@ Page {
                 onDropped: {
                     if (!drop.hasUrls) {
                         popup.errorMessage = "Dropped item was not a file"
-						popup.open()
+                        popup.open()
                         return
                     }
 

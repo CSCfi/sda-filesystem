@@ -19,199 +19,199 @@ import (
 )
 
 var testFuse = `{
-	"name": "",
-	"nameSafe": "",
-	"size": -421,
+    "name": "",
+    "nameSafe": "",
+    "size": -421,
     "children": [
-		{
-			"name": "Rep1",
-			"nameSafe": "Rep1",
-			"size": -416,
-			"children": [
-				{
-					"name": "child+1",
-					"nameSafe": "child_1",
-					"size": -200,
-					"children": [
-						{
-							"name": "kansio",
-							"nameSafe": "kansio",
-							"size": -88,
-							"children": [
-								{
-									"name": "file_1",
-									"nameSafe": "file_1",
-									"size": 23,
-									"children": null
-								},
-								{
-									"name": "file_2",
-									"nameSafe": "file_2",
-									"size": 45,
-									"children": null
-								},
-								{
-									"name": "file_3",
-									"nameSafe": "file_3",
-									"size": 20,
-									"children": null
-								}
-							]
-						},
-						{
-							"name": "dir+",
-							"nameSafe": "dir_",
-							"size": 112,
-							"children": [
-								{
-									"name": "folder",
-									"nameSafe": "folder",
-									"size": 112,
-									"children": []
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "child_2",
-					"nameSafe": "child_2",
-					"size": -216,
-					"children": [
-						{
-							"name": "dir",
-							"nameSafe": "dir",
-							"size": 151,
-							"children": []
-						},
-						{
-							"name": "+folder",
-							"nameSafe": "_folder",
-							"size": 65,
-							"children": [
-								{
-									"name": "file_1",
-									"nameSafe": "file_1",
-									"size": 3,
-									"children": null
-								},
-								{
-									"name": "test",
-									"nameSafe": "test",
-									"size": 62,
-									"children": null
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "child+2",
-					"nameSafe": "child_2(3e08d3)",
-					"size": 0,
-					"children": []
-				}
-			]
-		},
-		{
-			"name": "Rep2",
-			"nameSafe": "Rep2",
-			"size": -5,
-			"children": [
-				{
-					"name": "https://example.com",
-					"nameSafe": "example.com",
-					"size": 5,
-					"children": [
-						{
-							"name": "tiedosto",
-							"nameSafe": "tiedosto",
-							"size": 5,
-							"children": null
-						}
-					]
-				}
-			]
-		}
-	]
+        {
+            "name": "Rep1",
+            "nameSafe": "Rep1",
+            "size": -416,
+            "children": [
+                {
+                    "name": "child+1",
+                    "nameSafe": "child_1",
+                    "size": -200,
+                    "children": [
+                        {
+                            "name": "kansio",
+                            "nameSafe": "kansio",
+                            "size": -88,
+                            "children": [
+                                {
+                                    "name": "file_1",
+                                    "nameSafe": "file_1",
+                                    "size": 23,
+                                    "children": null
+                                },
+                                {
+                                    "name": "file_2",
+                                    "nameSafe": "file_2",
+                                    "size": 45,
+                                    "children": null
+                                },
+                                {
+                                    "name": "file_3",
+                                    "nameSafe": "file_3",
+                                    "size": 20,
+                                    "children": null
+                                }
+                            ]
+                        },
+                        {
+                            "name": "dir+",
+                            "nameSafe": "dir_",
+                            "size": 112,
+                            "children": [
+                                {
+                                    "name": "folder",
+                                    "nameSafe": "folder",
+                                    "size": 112,
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "child_2",
+                    "nameSafe": "child_2",
+                    "size": -216,
+                    "children": [
+                        {
+                            "name": "dir",
+                            "nameSafe": "dir",
+                            "size": 151,
+                            "children": []
+                        },
+                        {
+                            "name": "+folder",
+                            "nameSafe": "_folder",
+                            "size": 65,
+                            "children": [
+                                {
+                                    "name": "file_1",
+                                    "nameSafe": "file_1",
+                                    "size": 3,
+                                    "children": null
+                                },
+                                {
+                                    "name": "test",
+                                    "nameSafe": "test",
+                                    "size": 62,
+                                    "children": null
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "child+2",
+                    "nameSafe": "child_2(3e08d3)",
+                    "size": 0,
+                    "children": []
+                }
+            ]
+        },
+        {
+            "name": "Rep2",
+            "nameSafe": "Rep2",
+            "size": -5,
+            "children": [
+                {
+                    "name": "https://example.com",
+                    "nameSafe": "example.com",
+                    "size": 5,
+                    "children": [
+                        {
+                            "name": "tiedosto",
+                            "nameSafe": "tiedosto",
+                            "size": 5,
+                            "children": null
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }`
 
 var testObjects = `{
-	"name": "dir1",
-	"nameSafe": "dir1",
-	"size": 187,
-	"children": [
-		{
-			"name": "dir+2",
-			"nameSafe": "dir_2",
-			"size": 137,
-			"children": [
-				{
-					"name": "dir3.2.1",
-					"nameSafe": "dir3.2.1",
-					"size": 30,
-					"children": [
-						{
-							"name": "file.c4gh",
-							"nameSafe": "file(1bb764)",
-							"size": 29,
-							"children": null
-						},
-						{
-							"name": "file",
-							"nameSafe": "file",
-							"size": 1,
-							"children": [
-								{
-									"name": "h%e%ll+o",
-									"nameSafe": "h%e%ll_o",
-									"size": 1,
-									"children": null
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "dir3.2.1",
-					"nameSafe": "dir3(fb761a).2.1",
-					"size": 6,
-					"children": null
-				},
-				{
-					"name": "logs",
-					"nameSafe": "logs",
-					"size": 101,
-					"children": null
-				}
-			]
-		},
-		{
-			"name": "dir4",
-			"nameSafe": "dir4",
-			"size": 50,
-			"children": [
-				{
-					"name": "another_file",
-					"nameSafe": "another_file",
-					"size": 10,
-					"children": null
-				},
-				{
-					"name": "another_file.c4gh",
-					"nameSafe": "another_file(63af19)",
-					"size": 13,
-					"children": null
-				},
-				{
-					"name": "another+file.c4gh",
-					"nameSafe": "another_file(07fed4)",
-					"size": 27,
-					"children": null
-				}
-			]
-		}
-	]
+    "name": "dir1",
+    "nameSafe": "dir1",
+    "size": 187,
+    "children": [
+        {
+            "name": "dir+2",
+            "nameSafe": "dir_2",
+            "size": 137,
+            "children": [
+                {
+                    "name": "dir3.2.1",
+                    "nameSafe": "dir3.2.1",
+                    "size": 30,
+                    "children": [
+                        {
+                            "name": "file.c4gh",
+                            "nameSafe": "file(1bb764)",
+                            "size": 29,
+                            "children": null
+                        },
+                        {
+                            "name": "file",
+                            "nameSafe": "file",
+                            "size": 1,
+                            "children": [
+                                {
+                                    "name": "h%e%ll+o",
+                                    "nameSafe": "h%e%ll_o",
+                                    "size": 1,
+                                    "children": null
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "dir3.2.1",
+                    "nameSafe": "dir3(fb761a).2.1",
+                    "size": 6,
+                    "children": null
+                },
+                {
+                    "name": "logs",
+                    "nameSafe": "logs",
+                    "size": 101,
+                    "children": null
+                }
+            ]
+        },
+        {
+            "name": "dir4",
+            "nameSafe": "dir4",
+            "size": 50,
+            "children": [
+                {
+                    "name": "another_file",
+                    "nameSafe": "another_file",
+                    "size": 10,
+                    "children": null
+                },
+                {
+                    "name": "another_file.c4gh",
+                    "nameSafe": "another_file(63af19)",
+                    "size": 13,
+                    "children": null
+                },
+                {
+                    "name": "another+file.c4gh",
+                    "nameSafe": "another_file(07fed4)",
+                    "size": 27,
+                    "children": null
+                }
+            ]
+        }
+    ]
 }`
 
 const rep1 = "Rep1"

@@ -24,7 +24,7 @@ ApplicationWindow {
     //onActiveFocusItemChanged: print("activeFocusItem", activeFocusItem)
 
     // Ensures fuse unmounts when application terminates
-	onClosing: QmlBridge.shutdown()
+    onClosing: QmlBridge.shutdown()
 
     header: ToolBar {
         leftPadding: CSC.Style.padding
@@ -89,7 +89,7 @@ ApplicationWindow {
                         }
                     }
                 }
-			}
+            }
 
             Rectangle {
                 Layout.fillWidth: true
@@ -125,25 +125,25 @@ ApplicationWindow {
         selectFolder: false
         defaultSuffix: "log"
 
-		signal ready
+        signal ready
 
         onAccepted: { LogModel.saveLogs(dialogSave.fileUrl); ready() }
     }
 
     CSC.Popup {
-		id: popup
-	}
+        id: popup
+    }
 
     Connections {
-		target: QmlBridge
-		onInitError: {
-			login.enabled = false
-			popup.errorMessage = message + ". Check logs for further details and rerun the application."
+        target: QmlBridge
+        onInitError: {
+            login.enabled = false
+            popup.errorMessage = message + ". Check logs for further details and rerun the application."
             popup.closePolicy = Popup.NoAutoClose
             popup.modal = false
-			popup.open()
-		}
-	}
+            popup.open()
+        }
+    }
 
     StackLayout {
         id: stack
