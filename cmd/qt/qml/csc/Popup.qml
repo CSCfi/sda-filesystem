@@ -43,10 +43,10 @@ Popup {
                 icon.width: diameter
                 icon.height: diameter
                 enabled: false
-                Layout.preferredWidth: 3 * diameter
+                Layout.preferredWidth: 2.5 * diameter
                 Layout.alignment: Qt.AlignVCenter
 
-                property real diameter: CSC.Style.padding
+                property real diameter: 25
 
                 background: Rectangle {
                     color: "transparent"

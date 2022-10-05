@@ -26,6 +26,11 @@ ApplicationWindow {
     // Ensures fuse unmounts when application terminates
     onClosing: QmlBridge.shutdown()
 
+    Component.onCompleted: {
+        x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - window.width)
+        y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - window.height)
+    }
+
     header: ToolBar {
         leftPadding: CSC.Style.padding
         rightPadding: CSC.Style.padding
@@ -47,7 +52,7 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "<h4>Sensitive Data Services</h4>"
+                    text: "<h4>Data Gateway</h4>"
                     color: CSC.Style.grey
                     maximumLineCount: 1
                 }
@@ -78,6 +83,7 @@ ApplicationWindow {
                         text: modelData
                         width: implicitWidth
                         height: tabBar.height
+                        font.weight: Font.DemiBold
 
                         contentItem: Label {
                             text: tabButton.text
@@ -100,6 +106,7 @@ ApplicationWindow {
                 text: "Disconnect and sign out"
                 enabled: stack.state == "loggedIn"
                 opacity: enabled ? 1 : 0
+                font.weight: Font.DemiBold
                 icon.source: "qrc:/qml/images/box-arrow-right.svg"
                 LayoutMirroring.enabled: true
                 Layout.fillHeight: true
@@ -166,16 +173,6 @@ ApplicationWindow {
                         repeater.model = ["Access", "Export", "Logs"]
                         stack.state = "loggedIn"
                         window.flags = window.flags & ~Qt.WindowCloseButtonHint
-                        window.width = Math.min(1200, 0.75 * Screen.desktopAvailableWidth)
-                        if (window.width < window.minimumWidth) {
-                            window.width = Screen.desktopAvailableWidth
-                        }
-                        window.height = Math.min(800, 0.75 * Screen.desktopAvailableHeight)
-                        if (window.height < window.minimumHeight) {
-                            window.height = Screen.desktopAvailableHeight
-                        }
-                        window.x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - window.width)
-                        window.y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - window.height)
                     }
                 }
             }

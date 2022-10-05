@@ -67,10 +67,9 @@ TextField {
             padding: 0
             icon.source: "qrc:/qml/images/x-circle-fill.svg"
             icon.color: CSC.Style.red
-            icon.width: 15
-            icon.height: 15
+            icon.width: 18
+            icon.height: 18
             enabled: false
-            Layout.alignment: Qt.AlignVCenter
 
             background: Rectangle {
                 color: "transparent"

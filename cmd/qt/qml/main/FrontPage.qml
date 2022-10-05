@@ -134,7 +134,7 @@ Page {
                     radius: 5
                     border.width: 1
                     border.color: CSC.Style.grey
-                    width: 350
+                    width: 400
                     height: childrenRect.height
                     anchors.verticalCenter: changeButton.verticalCenter
 
@@ -194,6 +194,7 @@ Page {
                 id: buttonRow
                 spacing: CSC.Style.padding
                 visible: false
+                Layout.alignment: Qt.AlignRight
 
                 CSC.Button {
                     id: refreshButton
@@ -222,12 +223,9 @@ Page {
                             name: "loading";  
                             PropertyChanges { target: refreshButton; enabled: false }
                             PropertyChanges { target: openButton; enabled: false }
+                            PropertyChanges { target: infoText; text: "Data Gateway is being refreshed" }
                         }
                     ]
-                }
-
-                Item {
-                    Layout.fillWidth: true
                 }
 
                 CSC.Button {
@@ -273,7 +271,6 @@ Page {
             Connections {
                 target: QmlBridge
                 onFuseReady: {
-                    accessLayout.state = "finished"
                     tracker.progressIndex = 3
                     headerText.text = "<h1>Access ready</h1>"
                     infoText.text = "Data Gateway is ready to be used."

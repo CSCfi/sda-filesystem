@@ -31,6 +31,7 @@ Page {
             ToolButton {
                 id: exportButton
                 text: "Export detailed logs"
+                font.weight: Font.DemiBold
                 icon.source: "qrc:/qml/images/download.svg"
                 Layout.alignment: Qt.AlignRight
 
@@ -51,7 +52,7 @@ Page {
         id: textMetricsLevel
         text: "Warning"
         font.pixelSize: 13
-        font.weight: Font.Medium
+        font.weight: Font.DemiBold
     }
 
     TextMetrics {
@@ -115,7 +116,7 @@ Page {
 
         RowLayout {
             RowLayout {
-                spacing: 10
+                spacing: 0
                 Layout.preferredWidth: textMetricsLevel.width + 30
                 Layout.fillHeight: true
 
@@ -125,17 +126,13 @@ Page {
 
                 RoundButton {
                     id: filterLevel
-                    padding: 7
-                    topInset: 0
-                    bottomInset: 0
-                    rightInset: 0
-                    leftInset: 0
+                    padding: 10
                     flat: true
                     checkable: true
                     icon.source: "qrc:/qml/images/filter.svg"
                     icon.color: checked ? CSC.Style.primaryColor : CSC.Style.grey
-                    icon.height: 12
-                    icon.width: 18
+                    icon.height: 25
+                    icon.width: 25
 
                     onCheckedChanged: menu.visible = checked
 

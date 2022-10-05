@@ -70,6 +70,8 @@ ListView {
         width: listView.width
         leftPadding: CSC.Style.padding
         rightPadding: CSC.Style.padding
+        topPadding: 0
+        bottomPadding: 0
         font.weight: Font.DemiBold
         font.pixelSize: 13
 
@@ -126,33 +128,30 @@ ListView {
 
             RowLayout {
                 id: pageCount
-                spacing: 10
+                spacing: 0
                 height: parent.height
 
                 Label {
-                    text: "Items per page: "
+                    text: "Items per page:"
                     leftPadding: CSC.Style.padding
                     font.pixelSize: 12
                 }
 
                 ToolButton {
                     id: perPage
-                    text: listView.amountVisible + "  "
-                    font.pixelSize: 15
                     icon.source: menu.visible ? "qrc:/qml/images/chevron-up.svg" : "qrc:/qml/images/chevron-down.svg"
-                    icon.width: 20
-                    icon.height: 20
-                    LayoutMirroring.enabled: true
+                    icon.width: 30
+                    icon.height: 30
+                    rightPadding: CSC.Style.padding
                     Layout.fillHeight: true
 
                     Material.foreground: CSC.Style.primaryColor
 
-                    Component.onCompleted: Layout.preferredWidth = 1.5 * implicitWidth
+                    Component.onCompleted: leftPadding = 2 * amountLabel.width + CSC.Style.padding
+                    onClicked: menu.visible = !menu.visible
 
                     background: Rectangle {
-                        border.width: 1
-                        border.color: CSC.Style.lightGrey
-                        color: parent.hovered ? CSC.Style.lightGrey : "white"
+                        color: "transparent"
                     }
 
                     MouseArea {
@@ -161,7 +160,15 @@ ListView {
                         anchors.fill: parent
                     }
 
-                    onClicked: menu.visible = !menu.visible
+                    Label {
+                        id: amountLabel
+                        text: listView.amountVisible
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        anchors.left: parent.left
+                        anchors.leftMargin: CSC.Style.padding
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
 
                     Menu {
                         id: menu
@@ -196,6 +203,7 @@ ListView {
                             model: 4
                             MenuItem {
                                 text: amount //Array.from(Array(4), (_,i)=> 5 + 5 * i)
+                                leftPadding: CSC.Style.padding
 
                                 property int amount
                                 
@@ -213,6 +221,12 @@ ListView {
                             }
                         }
                     }
+                }
+
+                Rectangle { 
+                    color: CSC.Style.grey
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: parent.height * 0.5 
                 }
             }
 
