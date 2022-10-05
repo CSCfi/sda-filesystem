@@ -88,7 +88,6 @@ Page {
                     errorText: "Please enter valid password"
                     echoMode: TextInput.Password
                     activeFocusOnTab: true
-                    extraPadding: true
                     Layout.preferredWidth: 350
                 }
 

@@ -8,15 +8,14 @@ TextField {
     topPadding: 10
     leftPadding: topPadding
     rightPadding: topPadding
-    bottomPadding: extraPadding ? topPadding + bottomInset : topPadding
-    bottomInset: extraPadding ? errorRow.height : 0
+    bottomPadding: topPadding
+    bottomInset: 0
     selectByMouse: true
     mouseSelectionMode: TextInput.SelectWords
 
     property string errorText
     property string titleText
     property bool errorVisible: false
-    property bool extraPadding: false
 
     background: Rectangle {
         id: bg
@@ -52,7 +51,7 @@ TextField {
         color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
         leftPadding: 3
         rightPadding: 3
-        font.pixelSize: 0.5 * parent.height
+        font.pixelSize: 0.5 * (parent.height - 2 * parent.padding)
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: pane.left
     }

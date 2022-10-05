@@ -13,6 +13,7 @@ ApplicationWindow {
     visible: true
     minimumWidth: Math.max(header.implicitWidth, logs.implicitWidth)
     minimumHeight: header.implicitHeight + login.implicitHeight
+    width: minimumWidth
     height: minimumHeight + login.formHeight
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
@@ -27,8 +28,8 @@ ApplicationWindow {
     onClosing: QmlBridge.shutdown()
 
     Component.onCompleted: {
-        x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - window.width)
-        y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - window.height)
+        x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - width)
+        y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - height)
     }
 
     header: ToolBar {
