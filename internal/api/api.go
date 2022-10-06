@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -12,10 +13,13 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-logfmt/logfmt"
 
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
@@ -24,6 +28,7 @@ import (
 const chunkSize = 1 << 25
 
 var hi = httpInfo{requestTimeout: 20, httpRetry: 3, repositories: make(map[string]fuseInfo)}
+var airlock = airlockInfo{name: "airlock-client"}
 var possibleRepositories = make(map[string]fuseInfo)
 var downloadCache *cache.Ristretto
 
@@ -44,6 +49,12 @@ type httpInfo struct {
 	userinfoURL    string
 	client         *http.Client
 	repositories   map[string]fuseInfo
+}
+
+type airlockInfo struct {
+	name     string
+	username string
+	password string
 }
 
 // If you wish to add a new repository, it must implement the following functions
@@ -416,6 +427,39 @@ var ClearCache = func() {
 	downloadCache.Clear()
 }
 
-var ExportFile = func(folder, file string) {
+var SetAirlockName = func(name string) {
+	airlock.name = name
+}
 
+var SetCredentials = func(uname, pwd string) {
+	airlock.username = uname
+	airlock.password = pwd
+}
+
+var ExportFile = func(folder, file string) error {
+	pwdArg := fmt.Sprintf("-password=%s", airlock.password)
+	cmd := exec.Command(airlock.name, "-force", "-quiet", pwdArg, airlock.username, folder, file)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	if err != nil {
+		d := logfmt.NewDecoder(strings.NewReader(stderr.String()))
+		if d.ScanRecord() {
+			for d.ScanKeyval() {
+				if string(d.Key()) == "msg" {
+					return fmt.Errorf(string(d.Key()))
+				}
+			}
+		}
+		for d.ScanRecord() {
+		}
+		if d.Err() != nil {
+			return fmt.Errorf("Failed to parse error from airlock: %w", d.Err())
+		}
+		return fmt.Errorf("Airlock error had unusual format: %s", stderr.String())
+	}
+
+	return nil
 }

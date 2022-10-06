@@ -37,7 +37,7 @@ type QmlBridge struct {
 	_ func()                        `slot:"openFuse,auto"`
 	_ func() string                 `slot:"refreshFuse,auto"`
 	_ func(string) bool             `slot:"isFile,auto"`
-	_ func(string, string)          `slot:"exportFile,auto"`
+	_ func(string, string) string   `slot:"exportFile,auto"`
 	_ func(string) string           `slot:"changeMountPoint,auto"`
 	_ func()                        `slot:"shutdown,auto"`
 	_ func(idx int)                 `signal:"login401"`
@@ -117,6 +117,7 @@ func (qb *QmlBridge) login(idx int, auth ...string) {
 	}
 
 	if rep == api.SDConnect {
+		api.SetCredentials(auth[0], auth[1])
 		isManager, err := api.IsProjectManager()
 
 		if err != nil {
@@ -202,9 +203,13 @@ func (qb *QmlBridge) isFile(url string) bool {
 	return core.NewQUrl3(url, 0).IsLocalFile()
 }
 
-func (qb *QmlBridge) exportFile(folder, url string) {
+func (qb *QmlBridge) exportFile(folder, url string) string {
 	file := core.NewQUrl3(url, 0).ToLocalFile()
-	api.ExportFile(folder, file)
+	if err := api.ExportFile(folder, file); err != nil {
+		logs.Error(err)
+		return err.Error()
+	}
+	return ""
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
@@ -229,12 +234,19 @@ func (qb *QmlBridge) shutdown() {
 
 func init() {
 	debug := flag.Bool("debug", false, "print debug logs")
+	airlock := flag.String("airlock", "", "name of airlock executable")
 	flag.Parse()
+
 	if *debug {
 		logs.SetLevel("debug")
 	} else {
 		logs.SetLevel("info")
 	}
+
+	if *airlock != "" {
+		api.SetAirlockName(*airlock)
+	}
+
 	logs.SetSignal(logModel.AddLog)
 	logModel.SetIncludeDebug(*debug)
 }
