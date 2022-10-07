@@ -51,7 +51,7 @@ type SpecialHeaders struct {
 func init() {
 	cr := &connecter{}
 	sd := &sdConnectInfo{connectable: cr, sTokens: make(map[string]sToken)}
-	possibleRepositories[SDConnect] = sd
+	allRepositories[SDConnect] = sd
 }
 
 //
@@ -108,10 +108,6 @@ func (c *sdConnectInfo) getEnvs() error {
 	return nil
 }
 
-func (c *sdConnectInfo) getLoginMethod() LoginMethod {
-	return Password
-}
-
 func (c *sdConnectInfo) validateLogin(auth ...string) error {
 	if len(auth) == 2 {
 		c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
@@ -121,9 +117,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 	c.projects = nil
 	if c.projects, err = c.getProjects(c.url, c.token); err == nil {
 		if len(c.projects) == 0 {
-			err = fmt.Errorf("No projects found for %s", SDConnect)
-			logs.Error(err)
-			return err
+			return fmt.Errorf("No projects found for %s", SDConnect)
 		}
 		logs.Infof("Retrieved %d %s project(s)", len(c.projects), SDConnect)
 		c.sTokens = c.getSTokens(c.projects, c.url, c.token)
@@ -132,14 +126,12 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 
 	var re *RequestError
 	if errors.As(err, &re) && re.StatusCode == 401 {
-		return err
+		return fmt.Errorf("%s login failed: %w", SDConnect, err)
 	}
-
-	logs.Error(err)
 	if errors.As(err, &re) && re.StatusCode == 500 {
-		return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDConnect)
+		return fmt.Errorf("%s is not available, please contact CSC servicedesk: %w", SDConnect, err)
 	}
-	return fmt.Errorf("Error occurred for %s", SDConnect)
+	return fmt.Errorf("Error occurred for %s: %w", SDConnect, err)
 }
 
 func (c *sdConnectInfo) levelCount() int {

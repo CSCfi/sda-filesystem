@@ -51,7 +51,7 @@ func init() {
 	su := &submitter{fileIDs: make(map[string]string)}
 	sd := &sdSubmitInfo{submittable: su}
 	sd.fileIDs = su.fileIDs
-	possibleRepositories[SDSubmit] = sd
+	allRepositories[SDSubmit] = sd
 }
 
 //
@@ -125,10 +125,6 @@ func (s *sdSubmitInfo) getEnvs() error {
 	return nil
 }
 
-func (s *sdSubmitInfo) getLoginMethod() LoginMethod {
-	return Token
-}
-
 func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	s.datasets = make(map[string]int)
 	count, count500 := 0, 0
@@ -138,7 +134,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && re.StatusCode == 401 {
-				return err
+				return fmt.Errorf("%s authorization failed: %w", SDSubmit, err)
 			}
 
 			if errors.As(err, &re) && re.StatusCode == 500 {

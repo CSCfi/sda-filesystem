@@ -29,16 +29,8 @@ const chunkSize = 1 << 25
 
 var hi = httpInfo{requestTimeout: 20, httpRetry: 3, repositories: make(map[string]fuseInfo)}
 var airlock = airlockInfo{name: "airlock-client"}
-var possibleRepositories = make(map[string]fuseInfo)
+var allRepositories = make(map[string]fuseInfo)
 var downloadCache *cache.Ristretto
-
-// LoginMethod is an enum that main will use to know which login method to use
-type LoginMethod int
-
-const (
-	Password LoginMethod = iota
-	Token
-)
 
 // httpInfo contains all necessary variables used during HTTP requests
 type httpInfo struct {
@@ -60,7 +52,6 @@ type airlockInfo struct {
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
-	getLoginMethod() LoginMethod
 	validateLogin(...string) error
 	levelCount() int
 	getNthLevel(string, ...string) ([]Metadata, error)
@@ -83,11 +74,11 @@ func (re *RequestError) Error() string {
 	return fmt.Sprintf("API responded with status %d %s", re.StatusCode, http.StatusText(re.StatusCode))
 }
 
-// GetAllPossibleRepositories returns the names of every possible repository.
-// Every repository needs to add itself to the possibleRepositories map in an init function
-var GetAllPossibleRepositories = func() []string {
+// GetAllRepositories returns the names of every possible repository.
+// Every repository needs to add itself to the allRepositories map in an init function
+var GetAllRepositories = func() []string {
 	var names []string
-	for key := range possibleRepositories {
+	for key := range allRepositories {
 		names = append(names, key)
 	}
 	return names
@@ -102,16 +93,6 @@ var GetEnabledRepositories = func() []string {
 	return names
 }
 
-// AddRepository adds a repository to hi.repositories
-var AddRepository = func(r string) {
-	hi.repositories[r] = possibleRepositories[r]
-}
-
-// RemoveRepository removes a repository from hi.repositories
-var RemoveRepository = func(r string) {
-	delete(hi.repositories, r)
-}
-
 // SetRequestTimeout redefines hi.requestTimeout
 var SetRequestTimeout = func(timeout int) {
 	hi.requestTimeout = timeout
@@ -119,7 +100,7 @@ var SetRequestTimeout = func(timeout int) {
 
 // GetEnvs gets the environment variables for repository 'r'
 var GetEnvs = func(r string) error {
-	return possibleRepositories[r].getEnvs()
+	return allRepositories[r].getEnvs()
 }
 
 // getEnv looks up environment variable given in 'name'
@@ -261,15 +242,22 @@ var IsProjectManager = func() (bool, error) {
 	}
 }
 
-// GetLoginMethod returns the login method of repository 'rep'
-var GetLoginMethod = func(rep string) LoginMethod {
-	return possibleRepositories[rep].getLoginMethod()
-}
+// ValidateLogin checks if user is able to log in with given input
+var ValidateLogin = func(username, password string) (bool, error) {
+	err := allRepositories[SDConnect].validateLogin(username, password)
+	if err != nil {
+		return false, err
+	}
+	hi.repositories[SDConnect] = allRepositories[SDConnect]
+	airlock.username = username
+	airlock.password = password
 
-// ValidateLogin checks if user is able to log in with given input to repository 'rep'
-// The returned error contains ONLY the text that will be shown in an UI error popup, UNLESS the error contains status 401
-var ValidateLogin = func(rep string, auth ...string) error {
-	return hi.repositories[rep].validateLogin(auth...)
+	// SDSubmit not necessary if it is unavailable
+	err = allRepositories[SDSubmit].validateLogin()
+	if err == nil {
+		hi.repositories[SDSubmit] = allRepositories[SDSubmit]
+	}
+	return true, err
 }
 
 // LevelCount returns the amount of levels repository 'rep' has
@@ -429,11 +417,6 @@ var ClearCache = func() {
 
 var SetAirlockName = func(name string) {
 	airlock.name = name
-}
-
-var SetCredentials = func(uname, pwd string) {
-	airlock.username = uname
-	airlock.password = pwd
 }
 
 var ExportFile = func(folder, file string) error {

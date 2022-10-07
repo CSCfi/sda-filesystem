@@ -8,14 +8,15 @@ TextField {
     topPadding: 10
     leftPadding: topPadding
     rightPadding: topPadding
-    bottomPadding: topPadding
-    bottomInset: 0
+    bottomPadding: extraPadding ? topPadding + bottomInset : topPadding
+    bottomInset: extraPadding ? errorRow.height : 0
     selectByMouse: true
     mouseSelectionMode: TextInput.SelectWords
 
     property string errorText
     property string titleText
     property bool errorVisible: false
+    property bool extraPadding: errorText != ""
 
     background: Rectangle {
         id: bg
@@ -32,7 +33,7 @@ TextField {
     states: State {
         name: "writing"; when: textfield.activeFocus || textfield.text != ""
         AnchorChanges { target: title; anchors.verticalCenter: textfield.top }
-        PropertyChanges { target: title; font.pixelSize: 10 }
+        PropertyChanges { target: title; font.pixelSize: 10; anchors.verticalCenterOffset: 0 }
         PropertyChanges { target: pane; width: title.width }
     }
 
@@ -51,15 +52,16 @@ TextField {
         color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
         leftPadding: 3
         rightPadding: 3
-        font.pixelSize: 0.5 * (parent.height - 2 * parent.padding)
+        font.pixelSize: 0.5 * (parent.height - (errorText != "" ? errorRow.height : 0))
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: errorText != "" ? -0.5 * errorRow.height : 0
         anchors.left: pane.left
     }
 
     RowLayout {
         id: errorRow
         visible: errorVisible
-        anchors.top: parent.bottom
+        anchors.bottom: parent.bottom
 
         RoundButton {
             id: error401

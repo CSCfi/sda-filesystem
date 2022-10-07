@@ -37,7 +37,7 @@ Page {
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: !LoginModel.loggedInToSDConnect ? 1 : (QmlBridge.isProjectManager ? 2 : 0)
+        currentIndex: QmlBridge.isProjectManager ? 1 : 0
 
         ColumnLayout {
             spacing: CSC.Style.padding
@@ -50,80 +50,6 @@ Page {
             Label {
                 text: "Your need to be project manager to export files."
                 font.pixelSize: 13
-            }
-        }
-
-        FocusScope {
-            focus: visible
-
-            ColumnLayout {
-                id: loginColumn
-                spacing: CSC.Style.padding
-
-                Keys.onReturnPressed: loginButton.clicked() // Enter key
-                Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
-
-                Label {
-                    text: "<h1>Please log in</h1>"
-                    maximumLineCount: 1
-                    color: CSC.Style.grey
-                }
-
-                Label {
-                    text: "You need to be logged in to the service using your CSC credentials to export files."
-                    font.pixelSize: 14
-                    color: CSC.Style.grey
-                }
-
-                CSC.TextField {
-                    id: usernameField
-                    focus: true
-                    titleText: "Username"
-                    Layout.preferredWidth: 350
-                }
-
-                CSC.TextField {
-                    id: passwordField
-                    titleText: "Password"
-                    errorText: "Please enter valid password"
-                    echoMode: TextInput.Password
-                    activeFocusOnTab: true
-                    Layout.preferredWidth: 350
-                }
-
-                CSC.Button {
-                    id: loginButton
-                    text: "Login"
-
-                    Connections {
-                        target: QmlBridge
-                        enabled: window.loggedIn
-                        onLogin401: {
-                            passwordField.errorVisible = true
-                            loginColumn.enabled = true
-                            loginButton.loading = false
-
-                            if (usernameField.text != "") {
-                                passwordField.focus = true
-                                passwordField.selectAll()
-                            }
-                        }
-                        onLoginError: {
-                            loginButton.loading = false
-                            loginColumn.enabled = true
-                            popup.errorMessage = message
-                            popup.open()
-                        }
-                    }
-
-                    onClicked: {
-                        popup.close()
-                        loginColumn.enabled = false
-                        loginButton.loading = true
-                        passwordField.errorVisible = false
-                        QmlBridge.loginWithPassword(LoginModel.connectIdx, usernameField.text, passwordField.text)
-                    }
-                }
             }
         }
 

@@ -88,34 +88,8 @@ var askForLogin = func(lr loginReader) (string, string, error) {
 	return username, password, nil
 }
 
-var droppedRepository = func(lr loginReader, rep string) bool {
-	for {
-		fmt.Print("Do you wish to try again? (yes/no) ")
-		scanner := bufio.NewScanner(lr.getStream())
-
-		var answer string
-		if scanner.Scan() {
-			answer = scanner.Text()
-		}
-		if err := scanner.Err(); err != nil {
-			logs.Errorf("Could not read input, dropping repository %s: %w", rep, err)
-			break
-		}
-
-		if strings.EqualFold(answer, "yes") || strings.EqualFold(answer, "y") {
-			return false
-		} else if strings.EqualFold(answer, "no") || strings.EqualFold(answer, "n") {
-			logs.Info("User chose to drop repository ", rep)
-			break
-		}
-	}
-
-	api.RemoveRepository(rep)
-	return true
-}
-
-// login asks for a username and a password for repository 'rep'
-var login = func(lr loginReader, rep string) error {
+// login asks for CSC username and password
+var login = func(lr loginReader) error {
 	// Get the state of the terminal before running the password prompt
 	err := lr.getState()
 	if err != nil {
@@ -135,7 +109,7 @@ var login = func(lr loginReader, rep string) error {
 		os.Exit(1)
 	}()
 
-	fmt.Printf("Log in to %s\n", rep)
+	fmt.Printf("Log in with your CSC credentials\n")
 
 	for {
 		username, password, err := askForLogin(lr)
@@ -143,66 +117,25 @@ var login = func(lr loginReader, rep string) error {
 			return err
 		}
 
-		err = api.ValidateLogin(rep, username, password)
+		success, err := api.ValidateLogin(username, password)
 		if err == nil {
+			return nil
+		}
+		if success {
+			logs.Error(err)
 			return nil
 		}
 
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			logs.Errorf("Incorrect username or password")
-			if droppedRepository(lr, rep) {
-				return nil
-			}
 		} else {
-			return fmt.Errorf("Failed to log in")
-		}
-	}
-}
-
-// loginToAll goes through all enabled repositories and logs into each of them
-func loginToAll() {
-	for _, rep := range api.GetEnabledRepositories() {
-		var err error
-		if api.GetLoginMethod(rep) == api.Password {
-			err = login(&stdinReader{}, rep)
-		} else if api.GetLoginMethod(rep) == api.Token {
-			err = api.ValidateLogin(rep)
-		} else {
-			logs.Warningf("No login function designated for %s", rep)
-			continue
-		}
-		if err != nil {
-			api.RemoveRepository(rep)
-			logs.Errorf("Dropping repository %s: %w", rep, err)
+			return err
 		}
 	}
 }
 
 func processFlags() error {
-	repOptions := api.GetAllPossibleRepositories()
-
-	found := false
-	for _, op := range repOptions {
-		if strings.EqualFold(repository, op) || strings.EqualFold(repository, "all") {
-			found = true
-			if err := api.GetEnvs(op); err != nil {
-				return err
-			}
-			api.AddRepository(op)
-		}
-	}
-
-	if !found {
-		logs.Warningf("Flag -enable=%s not supported, switching to default -enable=all", repository)
-		for _, op := range repOptions {
-			if err := api.GetEnvs(op); err != nil {
-				return err
-			}
-			api.AddRepository(op)
-		}
-	}
-
 	if mount == "" {
 		defaultMount, err := mountpoint.DefaultMountPoint()
 		if err != nil {
@@ -220,11 +153,6 @@ func processFlags() error {
 }
 
 func init() {
-	repOptions := api.GetAllPossibleRepositories()
-
-	flag.StringVar(&repository, "enable", "all",
-		fmt.Sprintf("Choose which repositories you wish include in Data Gateway. Possible values: {%s,all}",
-			strings.Join(repOptions, ",")))
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
@@ -262,10 +190,9 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	loginToAll()
-
-	if len(api.GetEnabledRepositories()) == 0 {
-		logs.Fatal("No repositories found. Data Gateway not created")
+	err = login(&stdinReader{})
+	if err != nil {
+		logs.Fatal(err)
 	}
 
 	done := shutdown()

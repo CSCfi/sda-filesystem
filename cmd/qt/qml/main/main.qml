@@ -14,13 +14,11 @@ ApplicationWindow {
     minimumWidth: Math.max(header.implicitWidth, logs.implicitWidth)
     minimumHeight: header.implicitHeight + login.implicitHeight
     width: minimumWidth
-    height: minimumHeight + login.formHeight
+    height: minimumHeight
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
 
     Material.background: "white"
-
-    property bool loggedIn: stack.state == "loggedIn"
     
     //onActiveFocusItemChanged: print("activeFocusItem", activeFocusItem)
 
@@ -133,13 +131,72 @@ ApplicationWindow {
         selectFolder: false
         defaultSuffix: "log"
 
-        signal ready
+        onAccepted: { 
+            LogModel.saveLogs(dialogSave.fileUrl)
 
-        onAccepted: { LogModel.saveLogs(dialogSave.fileUrl); ready() }
+            if (ignoreButton.checked) {
+                popupPanic.close()
+            } else if (quitButton.checked) {
+                close()
+            }
+        }
     }
 
     CSC.Popup {
         id: popup
+    }
+
+    CSC.Popup {
+        id: popupPanic
+        errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
+        
+        ColumnLayout {
+            width: parent.width
+
+            CheckBox {
+                id: logCheck
+                checked: true
+                text: "Yes, save logs to file"
+
+                Material.accent: CSC.Style.primaryColor
+            }
+
+            Row {
+                spacing: CSC.Style.padding
+                Layout.alignment: Qt.AlignRight
+
+                CSC.Button {
+                    id: ignoreButton
+                    text: "Ignore"
+                    outlined: true
+                    checkable: true
+                    //mainColor: CSC.Style.red
+
+                    onClicked: {
+                        if (logCheck.checked) {
+                            dialogSave.visible = true
+                        } else {
+                            popupPanic.close()
+                        }
+                    }
+                }
+
+                CSC.Button {
+                    id: quitButton
+                    text: "Quit"
+                    checkable: true
+                    //mainColor: CSC.Style.red
+                    
+                    onClicked: {
+                        if (logCheck.checked) {
+                            dialogSave.visible = true
+                        } else {
+                            close()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Connections {
@@ -150,6 +207,21 @@ ApplicationWindow {
             popup.closePolicy = Popup.NoAutoClose
             popup.modal = false
             popup.open()
+        }
+        onPopupError: {
+            popup.errorMessage = message
+            popup.open()
+        }
+        onPanic: {
+            popupPanic.closePolicy = Popup.NoAutoClose // User must choose ignore or quit
+            popupPanic.open()
+        }
+        onLoggedInChanged: {
+            if (QmlBridge.loggedIn) {
+                repeater.model = ["Access", "Export", "Logs"]
+                stack.state = "loggedIn"
+                window.flags = window.flags & ~Qt.WindowCloseButtonHint
+            }
         }
     }
 
@@ -168,14 +240,6 @@ ApplicationWindow {
                 id: login
                 focus: visible
                 anchors.horizontalCenter: parent.horizontalCenter
-
-                onLoggedInChanged: {
-                    if (loggedIn) {
-                        repeater.model = ["Access", "Export", "Logs"]
-                        stack.state = "loggedIn"
-                        window.flags = window.flags & ~Qt.WindowCloseButtonHint
-                    }
-                }
             }
         }
         
@@ -207,12 +271,12 @@ ApplicationWindow {
 
         Flickable {
             interactive: contentHeight > height
-            contentHeight: front.height
+            contentHeight: access.height
 
             ScrollBar.vertical: ScrollBar { }
 
-            FrontPage {
-                id: front
+            AccessPage {
+                id: access
                 focus: visible
                 width: parent.width
             }

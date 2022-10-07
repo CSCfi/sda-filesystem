@@ -22,7 +22,6 @@ import (
 
 var projectModel = NewProjectModel(nil)
 var logModel = NewLogModel(nil)
-var loginModel = NewLoginModel(nil)
 
 // QmlBridge is the link between QML and Go
 type QmlBridge struct {
@@ -30,23 +29,22 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(int)                     `slot:"loginWithToken,auto"`
-	_ func(int, string, string)     `slot:"loginWithPassword,auto"`
-	_ func()                        `slot:"initFuse,auto"`
-	_ func()                        `slot:"loadFuse,auto"`
-	_ func()                        `slot:"openFuse,auto"`
-	_ func() string                 `slot:"refreshFuse,auto"`
-	_ func(string) bool             `slot:"isFile,auto"`
-	_ func(string, string) string   `slot:"exportFile,auto"`
-	_ func(string) string           `slot:"changeMountPoint,auto"`
-	_ func()                        `slot:"shutdown,auto"`
-	_ func(idx int)                 `signal:"login401"`
-	_ func(idx int, message string) `signal:"loginError"`
-	_ func(message string)          `signal:"initError"`
-	_ func()                        `signal:"fuseReady"`
-	_ func()                        `signal:"panic"`
+	_ func(string, string)        `slot:"login,auto"`
+	_ func()                      `slot:"loadFuse,auto"`
+	_ func()                      `slot:"openFuse,auto"`
+	_ func() string               `slot:"refreshFuse,auto"`
+	_ func(string) bool           `slot:"isFile,auto"`
+	_ func(string, string) string `slot:"exportFile,auto"`
+	_ func(string) string         `slot:"changeMountPoint,auto"`
+	_ func()                      `slot:"shutdown,auto"`
+	_ func()                      `signal:"loginFail"`
+	_ func(message string)        `signal:"popupError"`
+	_ func(message string)        `signal:"initError"`
+	_ func()                      `signal:"fuseReady"`
+	_ func()                      `signal:"panic"`
 
 	_ string `property:"mountPoint"`
+	_ bool   `property:"loggedIn"`
 	_ bool   `property:"isProjectManager"`
 
 	fs *filesystem.Fuse
@@ -55,11 +53,21 @@ type QmlBridge struct {
 func (qb *QmlBridge) init() {
 	mount, err := mountpoint.DefaultMountPoint()
 	qb.SetMountPoint(mount)
-	qb.SetIsProjectManager(false)
 	if err != nil {
 		logs.Warning(err)
 	}
 
+	isManager, err := api.IsProjectManager()
+	qb.SetIsProjectManager(isManager)
+	if err != nil {
+		logs.Errorf("Resolving project manager status failed: %w", err)
+	} else if isManager {
+		logs.Info("You are the project manager")
+	} else {
+		logs.Info("You are not the project manager")
+	}
+
+	qb.SetLoggedIn(false)
 	filesystem.SetSignalBridge(qb.Panic)
 }
 
@@ -85,60 +93,38 @@ func (qb *QmlBridge) initializeAPI() {
 		return
 	}
 
-	if noneAvailable := loginModel.checkEnvs(); noneAvailable {
+	noneAvailable := true
+	for _, rep := range api.GetAllRepositories() {
+		if err := api.GetEnvs(rep); err != nil {
+			logs.Error(err)
+		} else {
+			noneAvailable = false
+		}
+	}
+
+	if noneAvailable {
 		qb.InitError("No services available")
 	}
 }
 
-func (qb *QmlBridge) loginWithToken(idx int) {
-	go qb.login(idx)
-}
-
-func (qb *QmlBridge) loginWithPassword(idx int, username, password string) {
-	go qb.login(idx, username, password)
-}
-
-func (qb *QmlBridge) login(idx int, auth ...string) {
-	rep := loginModel.getRepository(idx)
-	api.AddRepository(rep)
-
-	if err := api.ValidateLogin(rep, auth...); err != nil {
-		api.RemoveRepository(rep)
-
+func (qb *QmlBridge) login(username, password string) {
+	success, err := api.ValidateLogin(username, password)
+	if err != nil {
+		logs.Error(err)
+	}
+	if !success {
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
-			logs.Error(err)
-			qb.Login401(idx)
-			return
+			qb.LoginFail()
+		} else {
+			qb.PopupError(err.Error())
 		}
-
-		qb.LoginError(idx, err.Error())
 		return
 	}
 
-	if rep == api.SDConnect {
-		api.SetCredentials(auth[0], auth[1])
-		isManager, err := api.IsProjectManager()
-
-		if err != nil {
-			logs.Errorf("Resolving project manager status failed: %w", err)
-		} else {
-			qb.SetIsProjectManager(isManager)
-
-			if isManager {
-				logs.Info("You are the project manager")
-			} else {
-				logs.Info("You are not the project manager")
-			}
-		}
-	}
-
-	loginModel.setLoggedIn(idx, true)
-	logs.Info(rep, " login successful")
-}
-
-func (qb *QmlBridge) initFuse() {
+	logs.Info("Login successful")
 	qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
+	qb.SetLoggedIn(true)
 }
 
 func (qb *QmlBridge) loadFuse() {
@@ -274,10 +260,8 @@ func main() {
 	app.RootContext().SetContextProperty("QmlBridge", qmlBridge)
 	app.RootContext().SetContextProperty("ProjectModel", projectModel)
 	app.RootContext().SetContextProperty("LogModel", logModel)
-	app.RootContext().SetContextProperty("LoginModel", loginModel)
 
 	app.RootContext().SetContextProperty("LogLevel", NewLogLevel(nil))
-	app.RootContext().SetContextProperty("LoginMethod", NewLoginMethod(nil))
 
 	app.AddImportPath("qrc:/qml/")
 	app.Load(core.NewQUrl3("qrc:/qml/main/main.qml", 0))
