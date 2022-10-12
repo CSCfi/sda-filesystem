@@ -57,16 +57,6 @@ func (qb *QmlBridge) init() {
 		logs.Warning(err)
 	}
 
-	isManager, err := api.IsProjectManager()
-	qb.SetIsProjectManager(isManager)
-	if err != nil {
-		logs.Errorf("Resolving project manager status failed: %w", err)
-	} else if isManager {
-		logs.Info("You are the project manager")
-	} else {
-		logs.Info("You are not the project manager")
-	}
-
 	qb.SetLoggedIn(false)
 	filesystem.SetSignalBridge(qb.Panic)
 }
@@ -104,6 +94,16 @@ func (qb *QmlBridge) initializeAPI() {
 
 	if noneAvailable {
 		qb.InitError("No services available")
+	}
+
+	isManager, err := api.IsProjectManager()
+	qb.SetIsProjectManager(isManager)
+	if err != nil {
+		logs.Errorf("Resolving project manager status failed: %w", err)
+	} else if isManager {
+		logs.Info("You are the project manager")
+	} else {
+		logs.Info("You are not the project manager")
 	}
 }
 
