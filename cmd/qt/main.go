@@ -108,23 +108,26 @@ func (qb *QmlBridge) initializeAPI() {
 }
 
 func (qb *QmlBridge) login(username, password string) {
-	success, err := api.ValidateLogin(username, password)
-	if err != nil {
-		logs.Error(err)
-	}
-	if !success {
-		var re *api.RequestError
-		if errors.As(err, &re) && re.StatusCode == 401 {
-			qb.LoginFail()
-		} else {
-			qb.PopupError(err.Error())
+	go func() {
+		success, err := api.ValidateLogin(username, password)
+		if err != nil {
+			logs.Error(err)
 		}
-		return
-	}
+		if !success {
+			var re *api.RequestError
+			if errors.As(err, &re) && re.StatusCode == 401 {
+				qb.LoginFail()
+			} else {
+				message, _ := logs.Wrapper(err)
+				qb.PopupError(message)
+			}
+			return
+		}
 
-	logs.Info("Login successful")
-	qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
-	qb.SetLoggedIn(true)
+		logs.Info("Login successful")
+		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
+		qb.SetLoggedIn(true)
+	}()
 }
 
 func (qb *QmlBridge) loadFuse() {

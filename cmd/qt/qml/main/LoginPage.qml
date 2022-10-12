@@ -23,12 +23,28 @@ Page {
         target: QmlBridge
         onLoginFail: {
             passwordField.errorVisible = true
-            content.enabled = true
-
-            if (usernameField.text != "") {
-                passwordField.focus = true
-                passwordField.selectAll()
+            retryLogin()
+        }
+        onPopupError: {
+            if (!QmlBridge.loggedIn) {
+                retryLogin()
             }
+        }
+        onLoggedInChanged: {
+            if (QmlBridge.loggedIn) {
+                loginButton.loading = false
+            }
+        }
+    }
+
+    function retryLogin() {
+        loginButton.loading = false
+        usernameField.enabled = true
+        passwordField.enabled = true
+
+        if (usernameField.text != "") {
+            passwordField.focus = true
+            passwordField.selectAll()
         }
     }
 
@@ -82,8 +98,10 @@ Page {
 
             onClicked: {
                 popup.close()
-                content.enabled = false
+                usernameField.enabled = false
+                passwordField.enabled = false
                 passwordField.errorVisible = false
+                loading = true
                 QmlBridge.login(usernameField.text, passwordField.text)
             }
         }
