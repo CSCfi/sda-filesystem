@@ -98,9 +98,10 @@ Page {
             CSC.Button {
                 id: continueButton
                 text: "Continue"
+                enabled: QmlBridge.mountPoint != ""
                 Layout.alignment: Qt.AlignRight
 
-                onClicked: { stack.currentIndex = 1; QmlBridge.loadFuse() }
+                onClicked: if (enabled) { stack.currentIndex = 1; QmlBridge.loadFuse() }
             }
         }      
 
@@ -160,7 +161,7 @@ Page {
                     id: openButton
                     text: "Open folder" 
 
-                    onClicked: QmlBridge.openFuse()
+                    onClicked: if (enabled) { QmlBridge.openFuse() }
                 }
             }
 

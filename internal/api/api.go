@@ -420,12 +420,17 @@ var SetAirlockName = func(name string) {
 }
 
 var ExportFile = func(folder, file string) error {
+	_, err := exec.LookPath(airlock.name)
+	if err != nil {
+		return fmt.Errorf("No Airlock found")
+	}
+
 	pwdArg := fmt.Sprintf("-password=%s", airlock.password)
 	cmd := exec.Command(airlock.name, "-force", "-quiet", pwdArg, airlock.username, folder, file)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 
 	if err != nil {
 		d := logfmt.NewDecoder(strings.NewReader(stderr.String()))
@@ -439,7 +444,7 @@ var ExportFile = func(folder, file string) error {
 		for d.ScanRecord() {
 		}
 		if d.Err() != nil {
-			return fmt.Errorf("Failed to parse error from airlock: %w", d.Err())
+			return fmt.Errorf("Failed to parse error from Airlock: %w", d.Err())
 		}
 		return fmt.Errorf("Airlock error had unusual format: %s", stderr.String())
 	}

@@ -30,24 +30,18 @@ ListView {
         pixelSize: 15
     })
 
-    Keys.onRightPressed: {
-        if (rowCount != 0) {
-            headerItem.changePageRight()
-        }
+    Keys.onRightPressed: if (rowCount != 0) {
+        headerItem.changePageRight()
     }
-    Keys.onLeftPressed: {
-        if (rowCount != 0) {
-            headerItem.changePageLeft()
-        }
+    Keys.onLeftPressed: if (rowCount != 0) {
+        headerItem.changePageLeft()
     }
 
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
-    onMaxPagesChanged: {
-        if (rowCount != 0 && page > maxPages) {
-            var topLog = (listView.maxPages - 1) * listView.amountVisible
-            listView.page = Math.floor(topLog / listView.amountVisible) + 1
-        }
+    onMaxPagesChanged: if (rowCount != 0 && page > maxPages) {
+        var topLog = (listView.maxPages - 1) * listView.amountVisible
+        listView.page = Math.floor(topLog / listView.amountVisible) + 1
     }
 
     function selectVisible() {
@@ -175,21 +169,17 @@ ListView {
 
                         property bool down: true
 
-                        onAboutToShow: {
-                            if (mapToItem(null, 0, height).y > window.height) {
-                                down = false
-                                y = -height
-                            } else {
-                                down = true
-                                y = parent.height - 1
-                            }
+                        onAboutToShow: if (mapToItem(null, 0, height).y > window.height) {
+                            down = false
+                            y = -height
+                        } else {
+                            down = true
+                            y = parent.height - 1
                         }
 
-                        onYChanged: {
-                            if (down && visible && y < parent.height - 1) {
-                                down = false
-                                y = -height
-                            }
+                        onYChanged: if (down && visible && y < parent.height - 1) {
+                            down = false
+                            y = -height
                         }
 
                         background: Rectangle {
@@ -341,14 +331,12 @@ ListView {
 
                     Material.foreground: parseInt(text, 10) != listView.page ? CSC.Style.grey : CSC.Style.primaryColor
 
-                    onClicked: {
-                        if (text == "") {
-                            var high = parseInt(pageList.itemAtIndex(index + 1).text)
-                            var low = parseInt(pageList.itemAtIndex(index - 1).text)
-                            listView.page = Math.floor((high + low) / 2)
-                        } else {
-                            listView.page =  parseInt(text, 10)
-                        }
+                    onClicked: if (text == "") {
+                        var high = parseInt(pageList.itemAtIndex(index + 1).text)
+                        var low = parseInt(pageList.itemAtIndex(index - 1).text)
+                        listView.page = Math.floor((high + low) / 2)
+                    } else {
+                        listView.page =  parseInt(text, 10)
                     }
 
                     MouseArea {

@@ -25,15 +25,11 @@ Page {
             passwordField.errorVisible = true
             retryLogin()
         }
-        onPopupError: {
-            if (!QmlBridge.loggedIn) {
-                retryLogin()
-            }
+        onPopupError: if (!QmlBridge.loggedIn) {
+            retryLogin()
         }
-        onLoggedInChanged: {
-            if (QmlBridge.loggedIn) {
-                loginButton.loading = false
-            }
+        onLoggedInChanged: if (QmlBridge.loggedIn) {
+            loginButton.loading = false
         }
     }
 

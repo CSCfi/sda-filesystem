@@ -29,19 +29,19 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(string, string)        `slot:"login,auto"`
-	_ func()                      `slot:"loadFuse,auto"`
-	_ func()                      `slot:"openFuse,auto"`
-	_ func() string               `slot:"refreshFuse,auto"`
-	_ func(string) bool           `slot:"isFile,auto"`
-	_ func(string, string) string `slot:"exportFile,auto"`
-	_ func(string) string         `slot:"changeMountPoint,auto"`
-	_ func()                      `slot:"shutdown,auto"`
-	_ func()                      `signal:"loginFail"`
-	_ func(message string)        `signal:"popupError"`
-	_ func(message string)        `signal:"initError"`
-	_ func()                      `signal:"fuseReady"`
-	_ func()                      `signal:"panic"`
+	_ func(string, string) `slot:"login,auto"`
+	_ func()               `slot:"loadFuse,auto"`
+	_ func()               `slot:"openFuse,auto"`
+	_ func() string        `slot:"refreshFuse,auto"`
+	_ func(string) bool    `slot:"isFile,auto"`
+	_ func(string, string) `slot:"exportFile,auto"`
+	_ func(string) string  `slot:"changeMountPoint,auto"`
+	_ func()               `slot:"shutdown,auto"`
+	_ func()               `signal:"loginFail"`
+	_ func(message string) `signal:"popupError"`
+	_ func(message string) `signal:"initError"`
+	_ func()               `signal:"fuseReady"`
+	_ func()               `signal:"panic"`
 
 	_ string `property:"mountPoint"`
 	_ bool   `property:"loggedIn"`
@@ -179,6 +179,7 @@ func (qb *QmlBridge) refreshFuse() string {
 	go func() {
 		logs.Info("Updating Data Gateway")
 		projectModel.PrepareForRefresh()
+		time.Sleep(200 * time.Millisecond)
 		newFs := filesystem.InitializeFileSystem(projectModel.AddProject)
 		projectModel.DeleteExtraProjects()
 		newFs.PopulateFilesystem(projectModel.AddToCount)
@@ -192,13 +193,16 @@ func (qb *QmlBridge) isFile(url string) bool {
 	return core.NewQUrl3(url, 0).IsLocalFile()
 }
 
-func (qb *QmlBridge) exportFile(folder, url string) string {
-	file := core.NewQUrl3(url, 0).ToLocalFile()
-	if err := api.ExportFile(folder, file); err != nil {
-		logs.Error(err)
-		return err.Error()
-	}
-	return ""
+func (qb *QmlBridge) exportFile(folder, url string) {
+	go func() {
+		time.Sleep(2000 * time.Millisecond)
+		file := core.NewQUrl3(url, 0).ToLocalFile()
+		if err := api.ExportFile(folder, file); err != nil {
+			logs.Error(err)
+			message, _ := logs.Wrapper(err)
+			qb.PopupError(message)
+		}
+	}()
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
