@@ -54,7 +54,7 @@ Page {
 
     contentItem: StackLayout {
         id: stack
-        currentIndex: !QmlBridge.isProjectManager ? 1 : 0
+        currentIndex: QmlBridge.isProjectManager ? 1 : 0
 
         ColumnLayout {
             spacing: CSC.Style.padding

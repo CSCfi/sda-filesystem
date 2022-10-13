@@ -195,7 +195,7 @@ func (qb *QmlBridge) isFile(url string) bool {
 
 func (qb *QmlBridge) exportFile(folder, url string) {
 	go func() {
-		time.Sleep(2000 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 		file := core.NewQUrl3(url, 0).ToLocalFile()
 		if err := api.ExportFile(folder, file); err != nil {
 			logs.Error(err)
