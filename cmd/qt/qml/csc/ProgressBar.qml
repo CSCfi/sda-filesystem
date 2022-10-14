@@ -45,17 +45,11 @@ ProgressBar {
             anchors.margins: parent.border.width
 
             Timer {
-                interval: 1000
+                interval: 2000
                 running: bar.indeterminate && bar.visible
                 repeat: true
                 triggeredOnStart: true
-                onTriggered: {
-                    if (rect.state == "left") {
-                        rect.state = "right"
-                    } else {
-                        rect.state = "left"
-                    }
-                }
+                onTriggered: rect.state = "right"
             }
 
             states: [
@@ -71,7 +65,13 @@ ProgressBar {
 
             transitions: Transition {
                 to: "right"
-                AnchorAnimation { duration: 1000 }
+                AnchorAnimation { duration: 1500 }
+
+                onRunningChanged: {
+                    if (rect.state == "right" && !running) {
+                        rect.state = "left"     
+                    }
+                }
             }
         }
     }

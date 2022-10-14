@@ -52,7 +52,7 @@ TextField {
         color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
         leftPadding: 3
         rightPadding: 3
-        font.pixelSize: 0.5 * (parent.height - (errorText != "" ? errorRow.height : 0))
+        font.pixelSize: 0.4 * (parent.height - (errorText != "" ? errorRow.height : 0))
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: errorText != "" ? -0.5 * errorRow.height : 0
         anchors.left: pane.left

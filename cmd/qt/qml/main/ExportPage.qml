@@ -30,7 +30,9 @@ Page {
 
     Connections {
         target: QmlBridge
-        onPopupError: if (stack.currentIndex == 3) {
+        onExportFinished: if (success) {
+            stack.currentIndex = 4
+        } else {
             stack.currentIndex = 2
         }
     }
@@ -47,9 +49,9 @@ Page {
 
     header: CSC.ProgressTracker {
         id: tracker
-        visible: stack.currentIndex >= 2
-        progressIndex: stack.currentIndex - 2
-        model: ["Choose directory", "Export files", "Export complete"]
+        visible: stack.currentIndex >= 1
+        progressIndex: stack.currentIndex - 1
+        model: ["Choose folder", "Export files", "Export complete"]
     }
 
     contentItem: StackLayout {
@@ -86,9 +88,11 @@ Page {
                 }
 
                 Label {
-                    text: "Your export will be sent to SD Connect. Please note that the folder name cannot be modified afterwards."
-                    maximumLineCount: 1
+                    text: "Your export will be sent to SD Connect. If folder does not already exist in SD Connect, it will be created. Please note that the folder name cannot be modified afterwards."
+                    wrapMode: Text.Wrap
+                    lineHeight: 1.2
                     font.pixelSize: 13
+                    Layout.maximumWidth: parent.width
                 }
 
                 CSC.TextField {
@@ -278,6 +282,36 @@ Page {
                 contentSource: fileLine
                 footerSource: footerLine
                 modelSource: exportModel
+            }
+        }
+
+        FocusScope {
+            focus: visible
+
+            ColumnLayout {
+                spacing: CSC.Style.padding
+                width: stack.width
+
+                Keys.onReturnPressed: newButton.clicked() // Enter key
+                Keys.onEnterPressed: newButton.clicked()  // Numpad enter key
+
+                Label {
+                    text: "<h1>Export complete</h1>"
+                    maximumLineCount: 1
+                }
+
+                Label {
+                    text: "The file has been uploaded to SD Connect. You can now close or minimise the window to continue working."
+                    font.pixelSize: 13
+                }
+
+                CSC.Button {
+                    id: newButton
+                    text: "New export"
+                    Layout.alignment: Qt.AlignRight
+
+                    onClicked: { nameField.text = ""; stack.currentIndex = 1 }
+                }
             }
         }
     }

@@ -437,7 +437,7 @@ var ExportFile = func(folder, file string) error {
 		if d.ScanRecord() {
 			for d.ScanKeyval() {
 				if string(d.Key()) == "msg" {
-					return fmt.Errorf(string(d.Key()))
+					return fmt.Errorf(string(d.Value()))
 				}
 			}
 		}

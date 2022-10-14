@@ -41,6 +41,7 @@ type QmlBridge struct {
 	_ func(message string) `signal:"popupError"`
 	_ func(message string) `signal:"initError"`
 	_ func()               `signal:"fuseReady"`
+	_ func(success bool)   `signal:"exportFinished"`
 	_ func()               `signal:"panic"`
 
 	_ string `property:"mountPoint"`
@@ -197,11 +198,13 @@ func (qb *QmlBridge) exportFile(folder, url string) {
 	go func() {
 		time.Sleep(1000 * time.Millisecond)
 		file := core.NewQUrl3(url, 0).ToLocalFile()
-		if err := api.ExportFile(folder, file); err != nil {
+		err := api.ExportFile(folder, file)
+		if err != nil {
 			logs.Error(err)
 			message, _ := logs.Wrapper(err)
 			qb.PopupError(message)
 		}
+		qb.ExportFinished(err == nil)
 	}()
 }
 
