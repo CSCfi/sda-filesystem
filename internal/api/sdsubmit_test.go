@@ -311,21 +311,13 @@ func Test_SDSubmit_GetEnvs_Pass(t *testing.T) {
 	}
 }
 
-func Test_SDSubmit_LoginMethod(t *testing.T) {
-	s := &sdSubmitInfo{}
-	loginMethod := s.getLoginMethod()
-	if loginMethod != 1 {
-		t.Errorf("Function failed\nExpected=%d\nReceived=%d", 1, loginMethod)
-	}
-}
-
 func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 	// Mock
 	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusUnauthorized}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "API responded with status 401 Unauthorized"
+	expectedError := "SD Apply authorization failed: API responded with status 401 Unauthorized"
 	err := s.validateLogin()
 
 	if err != nil {

@@ -254,7 +254,7 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 	mockC := &mockConnecter{projectsErr: errors.New("Error occurred")}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "Error occurred for SD Connect"
+	expectedError := "Error occurred for SD Connect: getProjects error: Error occurred"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
@@ -280,7 +280,7 @@ func Test_SDConnect_ValidateLogin_401_Error(t *testing.T) {
 	mockC := &mockConnecter{projectsErr: &RequestError{StatusCode: 401}}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "getProjects error: API responded with status 401 Unauthorized"
+	expectedError := "SD Connect login failed: getProjects error: API responded with status 401 Unauthorized"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
@@ -293,7 +293,7 @@ func Test_SDConnect_ValidateLogin_500_Error(t *testing.T) {
 	mockC := &mockConnecter{projectsErr: &RequestError{StatusCode: 500}}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "SD Connect is not available, please contact CSC servicedesk"
+	expectedError := "SD Connect is not available, please contact CSC servicedesk: getProjects error: API responded with status 500 Internal Server Error"
 	err := sd.validateLogin("user", "pass")
 	if err != nil {
 		if err.Error() != expectedError {
@@ -315,14 +315,6 @@ func Test_SDConnect_GetNthLevel_Projects(t *testing.T) {
 		t.Errorf("Function returned error: %s", err.Error())
 	} else if !reflect.DeepEqual(meta, projects) {
 		t.Errorf("Returned incorrect metadata. Expected=%v, received=%v", projects, meta)
-	}
-}
-
-func Test_SDConnect_GetLoginMethod(t *testing.T) {
-	sd := &sdConnectInfo{}
-	loginMethod := sd.getLoginMethod()
-	if loginMethod != 0 {
-		t.Errorf("Function failed expected=%d, received=%d", 0, loginMethod)
 	}
 }
 

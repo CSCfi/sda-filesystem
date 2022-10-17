@@ -20,7 +20,7 @@ import (
 	"golang.org/x/term"
 )
 
-var repository, mount, logLevel string
+var mount, logLevel string
 var requestTimeout int
 
 type loginReader interface {
@@ -122,7 +122,7 @@ var login = func(lr loginReader) error {
 			return nil
 		}
 		if success {
-			logs.Error(err)
+			logs.Error(err) // If SD Submit authorization fails
 			return nil
 		}
 

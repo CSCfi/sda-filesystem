@@ -45,6 +45,7 @@ type httpInfo struct {
 
 type airlockInfo struct {
 	name     string
+	project  string
 	username string
 	password string
 }
@@ -235,6 +236,7 @@ var IsProjectManager = func() (bool, error) {
 		projects := strings.Split(fmt.Sprintf("%v", projectPI), " ")
 		for i := range projects {
 			if projects[i] == fmt.Sprintf("%v", pr) {
+				airlock.project = fmt.Sprintf("project_%v", pr)
 				return true, nil
 			}
 		}
@@ -426,7 +428,7 @@ var ExportFile = func(folder, file string) error {
 	}
 
 	pwdArg := fmt.Sprintf("-password=%s", airlock.password)
-	cmd := exec.Command(airlock.name, "-force", "-quiet", pwdArg, airlock.username, folder, file)
+	cmd := exec.Command(airlock.name, "-force", "-quiet", pwdArg, airlock.username, folder, file) // #nosec (this will be changed anyway in next pr)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
