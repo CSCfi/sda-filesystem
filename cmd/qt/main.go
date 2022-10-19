@@ -44,9 +44,10 @@ type QmlBridge struct {
 	_ func(success bool)   `signal:"exportFinished"`
 	_ func()               `signal:"panic"`
 
-	_ string `property:"mountPoint"`
-	_ bool   `property:"loggedIn"`
-	_ bool   `property:"isProjectManager"`
+	_ []string `property:"buckets"`
+	_ string   `property:"mountPoint"`
+	_ bool     `property:"loggedIn"`
+	_ bool     `property:"isProjectManager"`
 
 	fs *filesystem.Fuse
 }
@@ -96,16 +97,6 @@ func (qb *QmlBridge) initializeAPI() {
 	if noneAvailable {
 		qb.InitError("No services available")
 	}
-
-	isManager, err := api.IsProjectManager()
-	qb.SetIsProjectManager(isManager)
-	if err != nil {
-		logs.Errorf("Resolving project manager status failed: %w", err)
-	} else if isManager {
-		logs.Info("You are the project manager")
-	} else {
-		logs.Info("You are not the project manager")
-	}
 }
 
 func (qb *QmlBridge) login(username, password string) {
@@ -125,8 +116,20 @@ func (qb *QmlBridge) login(username, password string) {
 			return
 		}
 
-		logs.Info("Login successful")
+		isManager, err := api.IsProjectManager()
+		qb.SetIsProjectManager(isManager)
+		if err != nil {
+			logs.Errorf("Resolving project manager status failed: %w", err)
+		} else if isManager {
+			logs.Info("You are the project manager")
+		} else {
+			logs.Info("You are not the project manager")
+		}
+
 		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
+		qb.updateBuckets()
+
+		logs.Info("Login successful")
 		qb.SetLoggedIn(true)
 	}()
 }
@@ -185,6 +188,7 @@ func (qb *QmlBridge) refreshFuse() string {
 		projectModel.DeleteExtraProjects()
 		newFs.PopulateFilesystem(projectModel.AddToCount)
 		qb.fs.RefreshFilesystem(newFs)
+		qb.updateBuckets()
 		qb.FuseReady()
 	}()
 	return ""
@@ -206,6 +210,16 @@ func (qb *QmlBridge) exportFile(folder, url string) {
 		}
 		qb.ExportFinished(err == nil)
 	}()
+}
+
+func (qb *QmlBridge) updateBuckets() {
+	if qb.IsProjectManager() {
+		if containers, err := api.GetContainers(); err != nil {
+			logs.Error(err)
+		} else {
+			qb.SetBuckets(containers)
+		}
+	}
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {

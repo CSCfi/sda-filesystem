@@ -362,6 +362,22 @@ var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, 
 	return hi.repositories[rep].getNthLevel(filepath.FromSlash(fsPath), nodes...)
 }
 
+var GetContainers = func() ([]string, error) {
+	if airlock.project != "" {
+		meta, err := GetNthLevel(SDConnect, SDConnect+"/"+airlock.project, airlock.project)
+		if err != nil {
+			return nil, fmt.Errorf("Could not get containers for combo box: %w", err)
+		}
+
+		containers := make([]string, len(meta))
+		for i := range meta {
+			containers[i] = meta[i].Name
+		}
+		return containers, nil
+	}
+	return nil, nil
+}
+
 // UpdateAttributes modifies attributes of node in 'fsPath'.
 // 'nodes' contains the original names of each node in 'fsPath'
 var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {

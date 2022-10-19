@@ -82,7 +82,7 @@ Page {
         CSC.TextField {
             id: passwordField
             titleText: "Password"
-            errorText: "Please enter valid password"
+            errorText: "Please enter valid username and password"
             echoMode: TextInput.Password
             activeFocusOnTab: true
             width: 400

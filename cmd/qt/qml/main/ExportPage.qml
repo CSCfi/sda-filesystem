@@ -9,6 +9,7 @@ import csc 1.2 as CSC
 Page {
     id: page
     padding: 2 * CSC.Style.padding
+    contentHeight: stack.height
     
     Material.accent: CSC.Style.primaryColor
     Material.foreground: CSC.Style.grey
@@ -51,11 +52,12 @@ Page {
         id: tracker
         visible: stack.currentIndex >= 1
         progressIndex: stack.currentIndex - 1
-        model: ["Choose folder", "Export files", "Export complete"]
+        model: ["Choose directory", "Export files", "Export complete"]
     }
 
-    contentItem: StackLayout {
+    StackLayout {
         id: stack
+        height: children[currentIndex].height
         currentIndex: QmlBridge.isProjectManager ? 1 : 0
 
         ColumnLayout {
@@ -68,12 +70,14 @@ Page {
 
             Label {
                 text: "Your need to be project manager to export files."
-                font.pixelSize: 13
+                font.pixelSize: 14
             }
         }
 
         FocusScope {
-            focus: visible
+            focus: visible 
+            height: childrenRect.height
+            width: childrenRect.width
             
             ColumnLayout {
                 spacing: CSC.Style.padding
@@ -91,15 +95,81 @@ Page {
                     text: "Your export will be sent to SD Connect. If folder does not already exist in SD Connect, it will be created. Please note that the folder name cannot be modified afterwards."
                     wrapMode: Text.Wrap
                     lineHeight: 1.2
-                    font.pixelSize: 13
+                    font.pixelSize: 14
                     Layout.maximumWidth: parent.width
                 }
 
                 CSC.TextField {
                     id: nameField
                     titleText: "Folder name"
-                    focus: true
-                    Layout.preferredWidth: 400
+                    implicitWidth: 400
+
+                    property string compareText: ""
+                    property real spaceLeft
+
+                    onVisibleChanged: spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y - this.height })
+
+                    onFocusChanged: if (focus) {
+                        popupBuckets.open()
+                    }
+
+                    onTextChanged: {
+                        if (focus) {
+                            compareText = text
+                        }
+                        if (text != "") {
+                            popupBuckets.open()
+                        }
+                    }
+
+                    Popup {
+                        id: popupBuckets
+                        y: parent.height
+                        width: parent.width
+                        implicitHeight: Math.min(parent.spaceLeft - CSC.Style.padding, contentItem.implicitHeight)
+                        padding: 0
+                        closePolicy: Popup.NoAutoClose
+
+                        Material.elevation: bucketsList.implicitHeight > 0 ? 6 : 0
+
+                        contentItem: ListView {
+                            id: bucketsList
+                            clip: true
+                            implicitHeight: contentHeight
+                            currentIndex: 0
+                            model: ["one", "two", "three", "dour"]
+
+                            delegate: ItemDelegate {
+                                height: modelData.includes(nameField.compareText) ? Math.max(50, implicitHeight) : 0
+                                width: nameField.width
+                                highlighted: bucketsList.currentIndex === index
+
+                                onClicked: {
+                                    bucketsList.currentIndex = index
+                                    nameField.focus = false
+                                    nameField.text = modelData
+                                    popupBuckets.close()
+                                }
+
+                                contentItem: Label {
+                                    text: modelData
+                                    color: CSC.Style.grey
+                                    font.pixelSize: 15
+                                    font.weight: Font.Medium 
+                                    wrapMode: Text.Wrap
+                                    visible: parent.height > 0
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+                                background: Rectangle {
+                                    anchors.fill: parent
+                                    color: (parent.hovered || parent.highlighted) ? CSC.Style.lightBlue : "transparent"
+                                }
+                            }
+
+                            ScrollIndicator.vertical: ScrollIndicator { }
+                        }
+                    }
                 }
 
                 CSC.Button {
@@ -118,6 +188,8 @@ Page {
 
         FocusScope {
             focus: visible
+            height: childrenRect.height
+            width: childrenRect.width
 
             ColumnLayout {
                 spacing: CSC.Style.padding
@@ -287,6 +359,8 @@ Page {
 
         FocusScope {
             focus: visible
+            height: childrenRect.height
+            width: childrenRect.width
 
             ColumnLayout {
                 spacing: CSC.Style.padding
@@ -302,7 +376,7 @@ Page {
 
                 Label {
                     text: "The file has been uploaded to SD Connect. You can now close or minimise the window to continue working."
-                    font.pixelSize: 13
+                    font.pixelSize: 14
                 }
 
                 CSC.Button {

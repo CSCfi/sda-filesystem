@@ -8,6 +8,7 @@ import csc 1.2 as CSC
 Page {
     id: page
     padding: 2 * CSC.Style.padding
+    contentHeight: stack.height
 
     Material.foreground: CSC.Style.grey
 
@@ -32,9 +33,10 @@ Page {
         model: ["Choose directory", "Prepare access", "Access ready"]
     }
 
-    contentItem: StackLayout {
+    StackLayout {
         id: stack
         currentIndex: 0
+        height: children[currentIndex].height
 
         ColumnLayout {
             spacing: CSC.Style.padding
@@ -274,7 +276,7 @@ Page {
                     id: percentValue
                     text: Math.floor(parent.value * 100) + "%"
                     maximumLineCount: 1
-                    font.pixelSize: 13
+                    font: textMetrics100.font
                     Layout.minimumWidth: textMetrics100.width
                 }
             }
