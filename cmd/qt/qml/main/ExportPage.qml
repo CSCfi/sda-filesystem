@@ -80,6 +80,7 @@ Page {
             width: childrenRect.width
             
             ColumnLayout {
+                id: folderColumn
                 spacing: CSC.Style.padding
                 width: stack.width
 
@@ -137,7 +138,7 @@ Page {
                             clip: true
                             implicitHeight: contentHeight
                             currentIndex: 0
-                            model: ["one", "two", "three", "dour"]
+                            model: QmlBridge.buckets
 
                             delegate: ItemDelegate {
                                 height: modelData.includes(nameField.compareText) ? Math.max(50, implicitHeight) : 0
@@ -147,6 +148,7 @@ Page {
                                 onClicked: {
                                     bucketsList.currentIndex = index
                                     nameField.focus = false
+                                    folderColumn.focus = true
                                     nameField.text = modelData
                                     popupBuckets.close()
                                 }
@@ -179,6 +181,7 @@ Page {
                     Layout.alignment: Qt.AlignRight
 
                     onClicked: if (enabled) { 
+                        popupBuckets.close()
                         exportModel.setProperty(0, "bucket", nameField.text)
                         stack.currentIndex = stack.currentIndex + 1 
                     }
