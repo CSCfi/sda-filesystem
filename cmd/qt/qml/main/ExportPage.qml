@@ -388,7 +388,11 @@ Page {
                     text: "New export"
                     Layout.alignment: Qt.AlignRight
 
-                    onClicked: { nameField.text = ""; stack.currentIndex = 1 }
+                    onClicked: { 
+                        nameField.text = ""
+                        exportModel.setProperty(0, "modifiable", true)
+                        stack.currentIndex = 1 
+                    }
                 }
             }
         }
