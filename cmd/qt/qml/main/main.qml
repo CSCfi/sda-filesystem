@@ -216,12 +216,10 @@ ApplicationWindow {
             popupPanic.closePolicy = Popup.NoAutoClose // User must choose ignore or quit
             popupPanic.open()
         }
-        onLoggedInChanged: {
-            if (QmlBridge.loggedIn) {
-                repeater.model = ["Access", "Export", "Logs"]
-                stack.state = "loggedIn"
-                window.flags = window.flags & ~Qt.WindowCloseButtonHint
-            }
+        onLoggedInChanged: if (QmlBridge.loggedIn) {
+            repeater.model = ["Access", "Export", "Logs"]
+            stack.state = "loggedIn"
+            window.flags = window.flags & ~Qt.WindowCloseButtonHint
         }
     }
 

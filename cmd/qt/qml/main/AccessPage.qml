@@ -35,6 +35,7 @@ Page {
 
     StackLayout {
         id: stack
+        width: parent.width
         currentIndex: 0
         height: children[currentIndex].height
 

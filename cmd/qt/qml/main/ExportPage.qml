@@ -57,6 +57,7 @@ Page {
 
     StackLayout {
         id: stack
+        width: parent.width
         height: children[currentIndex].height
         currentIndex: QmlBridge.isProjectManager ? 1 : 0
 
