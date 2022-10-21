@@ -1,7 +1,6 @@
 package mountpoint
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func TestCheckMountPoint(t *testing.T) {
-	node, err := ioutil.TempDir("", "dir")
+	node, err := os.MkdirTemp("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
@@ -38,7 +37,7 @@ func TestCheckMountPoint(t *testing.T) {
 }
 
 func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
-	node, err := ioutil.TempDir("", "dir")
+	node, err := os.MkdirTemp("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
