@@ -190,6 +190,12 @@ func main() {
 		logs.Fatal(err)
 	}
 
+	for _, rep := range api.GetAllRepositories() {
+		if err := api.GetEnvs(rep); err != nil {
+			logs.Fatal(err)
+		}
+	}
+
 	err = login(&stdinReader{})
 	if err != nil {
 		logs.Fatal(err)
