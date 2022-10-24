@@ -233,6 +233,10 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	}
 
 	wg.Wait()
+	if send != nil {
+		send("", "", 0) // So that progressbar knows when to start to show progress
+	}
+
 	jobs := make(chan containerInfo, numJobs)
 
 	for w := 1; w <= numRoutines; w++ {

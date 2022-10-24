@@ -43,22 +43,24 @@ Popup {
                 icon.width: diameter
                 icon.height: diameter
                 enabled: false
-                Layout.preferredWidth: 3 * diameter
+                Layout.preferredWidth: 2.5 * diameter
                 Layout.alignment: Qt.AlignVCenter
 
-                property real diameter: CSC.Style.padding
+                property real diameter: 25
 
                 background: Rectangle {
                     color: "transparent"
                 }
             }
 
-            Text {
+            Label {
                 id: errorText
                 text: popup.errorMessage
+                color: CSC.Style.grey
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
                 font.pixelSize: 15
+                font.weight: Font.Medium
                 Layout.fillWidth: true
             }
         }

@@ -17,12 +17,10 @@ ColumnLayout {
 
     default property alias content: extraContent.data
 
-    onSuccessChanged: {
-        if (success) {
-            toggle.state = "done"
-            area.enabled = false
-            extraContent.visible = false
-        }
+    onSuccessChanged: if (success) {
+        toggle.state = "done"
+        area.enabled = false
+        extraContent.visible = false
     }
 
     function hide() {
@@ -44,7 +42,7 @@ ColumnLayout {
             anchors.leftMargin: CSC.Style.padding
             anchors.rightMargin: CSC.Style.padding
 
-            Text {
+            Label {
                 text: heading
                 color: textColor
                 maximumLineCount: 1

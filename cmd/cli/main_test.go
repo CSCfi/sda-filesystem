@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"testing"
 
 	"sda-filesystem/internal/api"
@@ -123,91 +122,17 @@ func TestAskForLogin(t *testing.T) {
 	}
 }
 
-func TestDroppedRepository(t *testing.T) {
-	var tests = []struct {
-		testname string
-		input    []string
-		drop     bool
-		err      error
-	}{
-		{
-			testname: "OK_NO_1",
-			input:    []string{"no"},
-			drop:     true,
-		},
-		{
-			testname: "OK_NO_2",
-			input:    []string{"on", "n"},
-			drop:     true,
-		},
-		{
-			testname: "OK_YES_1",
-			input:    []string{"yes"},
-		},
-		{
-			testname: "OK_YES_2",
-			input:    []string{"mmm", "y"},
-		},
-		{
-			testname: "FAIL_SCANNER",
-			input:    []string{"yes"},
-			drop:     true,
-			err:      errors.New("Stream error occurred"),
-		},
-	}
-
-	origRemoveRepository := api.RemoveRepository
-	defer func() { api.RemoveRepository = origRemoveRepository }()
-
-	var removed bool
-	api.RemoveRepository = func(r string) {
-		removed = true
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			removed = false
-
-			// Ignore prints to stdout
-			null, _ := os.Open(os.DevNull)
-			sout := os.Stdout
-			os.Stdout = null
-
-			r := newTestReader(tt.input, "", tt.err, nil)
-			dropped := droppedRepository(r, "Test Repository")
-
-			os.Stdout = sout
-			null.Close()
-
-			if tt.drop {
-				if !removed {
-					t.Errorf("Function should have called api.RemoveRepository()")
-				} else if !dropped {
-					t.Errorf("Function should have returned 'true'")
-				}
-			} else {
-				if removed {
-					t.Errorf("Function should not have called api.RemoveRepository()")
-				} else if dropped {
-					t.Errorf("Function should have returned 'false'")
-				}
-			}
-		})
-	}
-}
-
 func TestLogin(t *testing.T) {
 	var count int
 	var tests = []struct {
 		testname          string
 		readerError       error
-		dropped           bool
 		errorText         string
 		mockAskForLogin   func(loginReader) (string, string, error)
-		mockValidateLogin func(string, ...string) error
+		mockValidateLogin func(string, string) (bool, error)
 	}{
 		{
-			"OK", nil, false, "",
+			"OK", nil, "",
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
 					return "", "", fmt.Errorf("Function did not approve login during first loop")
@@ -215,32 +140,39 @@ func TestLogin(t *testing.T) {
 				count++
 				return "dumbledore", "345fgj78", nil
 			},
-			func(rep string, auth ...string) error {
+			func(uname, pwd string) (bool, error) {
 				username, password := "dumbledore", "345fgj78"
-				if auth[0] != username {
-					return fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, auth[0])
+				if uname != username {
+					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
 				}
-				if auth[1] != password {
-					return fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, auth[1])
+				if pwd != password {
+					return false, fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, pwd)
 				}
-				return nil
+				return true, nil
 			},
 		},
 		{
-			"OK_DROPPED", nil, true, "",
+			"OK_VALIDATE_ERROR", nil, "",
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
-					return "", "", fmt.Errorf("Function did not return during first loop")
+					return "", "", fmt.Errorf("Function did not approve login during first loop")
 				}
 				count++
-				return "", "", nil
+				return "sandman", "89bf5cifu6vo", nil
 			},
-			func(rep string, auth ...string) error {
-				return &api.RequestError{StatusCode: 401}
+			func(uname, pwd string) (bool, error) {
+				username, password := "sandman", "89bf5cifu6vo" // #nosec G101
+				if uname != username {
+					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
+				}
+				if pwd != password {
+					return false, fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, pwd)
+				}
+				return true, errExpected
 			},
 		},
 		{
-			"OK_401_ONCE", nil, false, "",
+			"OK_401_ONCE", nil, "",
 			func(lr loginReader) (string, string, error) {
 				usernames, passwords := []string{"Smith", "Doris"}, []string{"hwd82bkwe", "pwd"}
 				if count > 1 {
@@ -249,35 +181,34 @@ func TestLogin(t *testing.T) {
 				count++
 				return usernames[count-1], passwords[count-1], nil
 			},
-			func(rep string, auth ...string) error {
-				if auth[0] == "Doris" && auth[1] == "pwd" {
-					return nil
+			func(uname, pwd string) (bool, error) {
+				if uname == "Doris" && pwd == "pwd" {
+					return true, nil
 				}
-				return &api.RequestError{StatusCode: 401}
+				return false, &api.RequestError{StatusCode: 401}
 			},
 		},
 		{
-			"FAIL_STATE", errExpected, false,
+			"FAIL_STATE", errExpected,
 			"Failed to get terminal state: " + errExpected.Error(),
 			func(lr loginReader) (string, string, error) {
 				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
-			func(rep string, auth ...string) error {
-				return fmt.Errorf("Function should not have called api.ValidateLogin()")
+			func(uname, pwd string) (bool, error) {
+				return false, fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
 		{
-			"FAIL_ASK", nil, false, errExpected.Error(),
+			"FAIL_ASK", nil, errExpected.Error(),
 			func(lr loginReader) (string, string, error) {
 				return "", "", errExpected
 			},
-			func(rep string, auth ...string) error {
-				return fmt.Errorf("Function should not have called api.ValidateLogin()")
+			func(uname, pwd string) (bool, error) {
+				return false, fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
 		{
-			"FAIL_VALIDATE", nil, false,
-			"Failed to log in",
+			"FAIL_VALIDATE", nil, errExpected.Error(),
 			func(lr loginReader) (string, string, error) {
 				if count > 0 {
 					return "", "", fmt.Errorf("Function in infinite loop")
@@ -285,20 +216,18 @@ func TestLogin(t *testing.T) {
 				count++
 				return "", "", nil
 			},
-			func(rep string, auth ...string) error {
-				return errExpected
+			func(uname, pwd string) (bool, error) {
+				return false, errExpected
 			},
 		},
 	}
 
 	origAskForLogin := askForLogin
 	origValidateLogin := api.ValidateLogin
-	origDroppedRepository := droppedRepository
 
 	defer func() {
 		askForLogin = origAskForLogin
 		api.ValidateLogin = origValidateLogin
-		droppedRepository = origDroppedRepository
 	}()
 
 	for _, tt := range tests {
@@ -306,9 +235,6 @@ func TestLogin(t *testing.T) {
 			count = 0
 			askForLogin = tt.mockAskForLogin
 			api.ValidateLogin = tt.mockValidateLogin
-			droppedRepository = func(lr loginReader, rep string) bool {
-				return tt.dropped
-			}
 
 			// Ignore prints to stdout
 			null, _ := os.Open(os.DevNull)
@@ -316,7 +242,7 @@ func TestLogin(t *testing.T) {
 			os.Stdout = null
 
 			r := newTestReader([]string{""}, "", nil, tt.readerError)
-			err := login(r, "Test Repository")
+			err := login(r)
 
 			os.Stdout = sout
 			null.Close()
@@ -334,118 +260,34 @@ func TestLogin(t *testing.T) {
 	}
 }
 
-func TestLoginToAll(t *testing.T) {
-	var tests = []struct {
-		testname              string
-		reps, removedReps     []string
-		errLogin, errValidate error
-		loginMethods          map[string]api.LoginMethod
-	}{
-		{
-			"OK", []string{"Rep45", "Rep0"}, []string{}, nil, nil,
-			map[string]api.LoginMethod{"Rep45": api.Token, "Rep0": api.Password},
-		},
-		{
-			"FAIL_PASSWORD", []string{"Rep5", "Rep8", "Rep89"}, []string{"Rep5", "Rep8", "Rep89"},
-			fmt.Errorf("Error occurred"), nil,
-			map[string]api.LoginMethod{"Rep5": api.Password, "Rep8": api.Password, "Rep89": api.Password},
-		},
-		{
-			"FAIL_TOKEN", []string{"Rep4", "Rep78"}, []string{"Rep4", "Rep78"},
-			nil, fmt.Errorf("Error occurred"),
-			map[string]api.LoginMethod{"Rep4": api.Token, "Rep78": api.Token},
-		},
-		{
-			"FAIL_MIXED", []string{"Rep50", "Rep8", "Rep9"}, []string{"Rep8"},
-			nil, fmt.Errorf("Error occurred"),
-			map[string]api.LoginMethod{"Rep50": api.Password, "Rep8": api.Token, "Rep9": 3},
-		},
-	}
-
-	origGetEnabledRepositories := api.GetEnabledRepositories
-	origGetLoginMethod := api.GetLoginMethod
-	origLogin := login
-	origValidateLogin := api.ValidateLogin
-	origRemoveRepository := api.RemoveRepository
-
-	defer func() {
-		api.GetEnabledRepositories = origGetEnabledRepositories
-		api.GetLoginMethod = origGetLoginMethod
-		login = origLogin
-		api.ValidateLogin = origValidateLogin
-		api.RemoveRepository = origRemoveRepository
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			api.GetEnabledRepositories = func() []string {
-				return tt.reps
-			}
-			api.GetLoginMethod = func(rep string) api.LoginMethod {
-				return tt.loginMethods[rep]
-			}
-			login = func(lr loginReader, rep string) error {
-				return tt.errLogin
-			}
-			api.ValidateLogin = func(rep string, auth ...string) error {
-				return tt.errValidate
-			}
-			removed := []string{}
-			api.RemoveRepository = func(r string) {
-				removed = append(removed, r)
-			}
-
-			loginToAll()
-
-			if !reflect.DeepEqual(tt.removedReps, removed) {
-				t.Errorf("Incorrect repositories removed\nExpected %v\nReceived %v", tt.removedReps, removed)
-			}
-		})
-	}
-}
-
 func TestProcessFlags(t *testing.T) {
-	repositories := []string{"Rep1", "Rep2", "Rep3"}
 	defaultMount := "default_dir"
 
 	var tests = []struct {
-		testname, repository, mount, logLevel string
-		finalReps                             []string
-		timeout                               int
+		testname, mount, logLevel string
+		timeout                   int
 	}{
-		{"OK_1", "Rep2", "/hello", "debug", []string{"Rep2"}, 45},
-		{"OK_2", "all", "/goodbye", "warning", repositories, 87},
-		{"OK_3", "wrong_repository", "/hi/hello", "error", repositories, 2},
-		{"OK_4", "Rep3", "", "info", []string{"Rep3"}, 20},
+		{"OK_1", "/hello", "debug", 45},
+		{"OK_2", "/goodbye", "warning", 87},
+		{"OK_3", "/hi/hello", "error", 2},
+		{"OK_4", "", "info", 20},
 	}
 
-	origGetAllPossibleRepositories := api.GetAllPossibleRepositories
-	origAddRepository := api.AddRepository
 	origDefaultMountPoint := mountpoint.DefaultMountPoint
 	origCheckMountPoint := mountpoint.CheckMountPoint
 	origSetRequestTimeout := api.SetRequestTimeout
 	origSetLevel := logs.SetLevel
 
 	defer func() {
-		api.GetAllPossibleRepositories = origGetAllPossibleRepositories
-		api.AddRepository = origAddRepository
 		mountpoint.DefaultMountPoint = origDefaultMountPoint
 		mountpoint.CheckMountPoint = origCheckMountPoint
 		api.SetRequestTimeout = origSetRequestTimeout
 		logs.SetLevel = origSetLevel
 	}()
 
-	var reps []string
 	var testTimeout int
 	var testLevel, testMount string
 
-	api.GetAllPossibleRepositories = func() []string {
-		return repositories
-	}
-	api.AddRepository = func(r string) {
-		reps = append(reps, r)
-	}
-	api.GetEnvs = func(r string) error { return nil }
 	mountpoint.DefaultMountPoint = func() (string, error) {
 		return defaultMount, nil
 	}
@@ -463,11 +305,9 @@ func TestProcessFlags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			mount = tt.mount
-			repository = tt.repository
 			logLevel = tt.logLevel
 			requestTimeout = tt.timeout
 
-			reps = []string{}
 			testTimeout = 0
 			testLevel, testMount = "", ""
 
@@ -483,8 +323,6 @@ func TestProcessFlags(t *testing.T) {
 				t.Errorf("Expected default mount point %s, received=%s", defaultMount, mount)
 			} else if tt.mount != testMount {
 				t.Errorf("CheckMountPoint() received incorrect mount point. Expected=%s, received=%s", tt.mount, testMount)
-			} else if !reflect.DeepEqual(reps, tt.finalReps) {
-				t.Errorf("Function did not add repositories correctly\nExpected=%v\nReceived=%v", tt.finalReps, reps)
 			}
 		})
 	}
@@ -492,46 +330,32 @@ func TestProcessFlags(t *testing.T) {
 
 func TestProcessFlags_Error(t *testing.T) {
 	var tests = []struct {
-		testname, repository, mount                     string
-		addRepError, checkMountError, defaultMountError error
+		testname, repository, mount        string
+		checkMountError, defaultMountError error
 	}{
-		{"FAIL_ADD_REPOSITORY_1", "Rep1", "mount", errExpected, nil, nil},
-		{"FAIL_ADD_REPOSITORY_2", "Rep4", "mount", errExpected, nil, nil},
-		{"FAIL_DEFAULT_MOUNT", "misc", "", nil, nil, errExpected},
-		{"FAIL_CHECK_MOUNT", "all", "/bad/directory", nil, errExpected, nil},
+		{"FAIL_DEFAULT_MOUNT", "misc", "", nil, errExpected},
+		{"FAIL_CHECK_MOUNT", "all", "/bad/directory", errExpected, nil},
 	}
 
-	origGetAllPossibleRepositories := api.GetAllPossibleRepositories
-	origAddRepository := api.AddRepository
 	origDefaultMountPoint := mountpoint.DefaultMountPoint
 	origCheckMountPoint := mountpoint.CheckMountPoint
 	origSetRequestTimeout := api.SetRequestTimeout
 	origSetLevel := logs.SetLevel
 
 	defer func() {
-		api.GetAllPossibleRepositories = origGetAllPossibleRepositories
-		api.AddRepository = origAddRepository
 		mountpoint.DefaultMountPoint = origDefaultMountPoint
 		mountpoint.CheckMountPoint = origCheckMountPoint
 		api.SetRequestTimeout = origSetRequestTimeout
 		logs.SetLevel = origSetLevel
 	}()
 
-	api.GetAllPossibleRepositories = func() []string {
-		return []string{"Rep1", "Rep2", "Rep3"}
-	}
-	api.AddRepository = func(r string) {}
 	api.SetRequestTimeout = func(timeout int) {}
 	logs.SetLevel = func(level string) {}
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			mount = tt.mount
-			repository = tt.repository
 
-			api.GetEnvs = func(r string) error {
-				return tt.addRepError
-			}
 			mountpoint.DefaultMountPoint = func() (string, error) {
 				return "", tt.defaultMountError
 			}

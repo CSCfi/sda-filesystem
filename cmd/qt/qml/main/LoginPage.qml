@@ -6,223 +6,100 @@ import QtQml 2.13
 import csc 1.2 as CSC
 
 Page {
-	id: page
-	height: content.height + 2 * CSC.Style.padding
-	implicitHeight: height
-	implicitWidth: content.width + 2 * CSC.Style.padding
-	Material.accent: CSC.Style.primaryColor
+    id: page
+    height: content.height + 2 * CSC.Style.padding
+    implicitHeight: height
+    implicitWidth: content.width + 2 * CSC.Style.padding
+    
+    Material.accent: CSC.Style.primaryColor
+    Material.foreground: CSC.Style.grey
 
-	Component.onCompleted: implicitHeight = content.height + 2 * CSC.Style.padding
+    Component.onCompleted: implicitHeight = content.height + 2 * CSC.Style.padding
 
-	property bool loggedIn: false
-	property real formHeight: 0
+    Keys.onReturnPressed: loginButton.clicked() // Enter key
+    Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
 
-	Keys.onReturnPressed: continueButton.clicked() // Enter key
-	Keys.onEnterPressed: continueButton.clicked()  // Numpad enter key
+    Connections {
+        target: QmlBridge
+        onLoginFail: {
+            passwordField.errorVisible = true
+            retryLogin()
+        }
+        onPopupError: if (!QmlBridge.loggedIn) {
+            retryLogin()
+        }
+        onLoggedInChanged: if (QmlBridge.loggedIn) {
+            loginButton.loading = false
+        }
+    }
 
-	Column {
-		id: content
-		spacing: CSC.Style.padding
-		height: childrenRect.height + topPadding
-		width: childrenRect.width + leftPadding
-		topPadding: 2 * CSC.Style.padding
-		leftPadding: 2 * CSC.Style.padding
+    function retryLogin() {
+        loginButton.loading = false
+        usernameField.enabled = true
+        passwordField.enabled = true
 
-		Label {
-			text: "<h1>Log in to Data Gateway</h1>"
-			color: CSC.Style.primaryColor
-			maximumLineCount: 1
-		}
+        if (usernameField.text != "") {
+            passwordField.focus = true
+            passwordField.selectAll()
+        }
+    }
 
-		Label {
-			text: "Data Gateway gives you secure access to your data. Please select the services you would like to access."
-			wrapMode: Text.Wrap
-			width: repositoryList.width
-			lineHeight: 1.2
-		}
+    Column {
+        id: content
+        spacing: CSC.Style.padding
+        height: childrenRect.height + topPadding
+        width: childrenRect.width + leftPadding
+        topPadding: 2 * CSC.Style.padding
+        leftPadding: 2 * CSC.Style.padding
 
-		ListView {
-			id: repositoryList
-			model: LoginModel
-			spacing: 0.5 * CSC.Style.padding
-			boundsBehavior: Flickable.StopAtBounds
-			height: contentHeight
-			width: 450
-			focus: true
-			
-			property int loading: 0
-			property bool success: false
-			
-			delegate: CSC.Accordion {
-				id: accordion
-				heading: repository
-				width: repositoryList.width
-				success: loggedIn
-				enabled: !envsMissing
-				anchors.horizontalCenter: parent.horizontalCenter
+        Label {
+            text: "<h1>Log in to Data Gateway</h1>"
+            color: CSC.Style.primaryColor
+            maximumLineCount: 1
+        }
 
-				property bool current: ListView.isCurrentItem
+        Label {
+            text: "Data Gateway gives you secure access to your data."
+            lineHeight: 1.2
+            font.pixelSize: 14
+            maximumLineCount: 1
+        }
 
-				onLoadingChanged: repositoryList.loading += (loading ? 1 : -1)
-				Component.onCompleted: page.formHeight = Math.max(page.formHeight, loader.item.height)
+        Label {
+            text: "Please log in with your CSC credentials."
+            topPadding: 10
+            font.pixelSize: 13
+            maximumLineCount: 1
+        }
 
-				onSuccessChanged: {
-					if (success) {
-						repositoryList.success = true
-						loader.item.loading = false
-					}
-				}
+        CSC.TextField {
+            id: usernameField
+            focus: true
+            titleText: "Username"
+            width: 400
+        }
 
-				onOpenChanged: {
-					if (open && method == LoginMethod.Password) {
-						repositoryList.currentIndex = index
-					}
-				}
- 
-				onCurrentChanged: {
-					if (!current) {
-						accordion.hide()
-					}
-				}
+        CSC.TextField {
+            id: passwordField
+            titleText: "Password"
+            errorText: "Please enter valid username and password"
+            echoMode: TextInput.Password
+            activeFocusOnTab: true
+            width: 400
+        }
 
-				Connections {
-					target: QmlBridge
-					onLoginError: {
-						if (index == idx) {
-							loader.item.loading = false
-							popup.errorMessage = message
-							popup.open()
-						}
-					}
-				}
+        CSC.Button {
+            id: loginButton
+            text: "Login"
 
-				Loader {
-					id: loader
-					focus: accordion.open && method == LoginMethod.Password
-					width: parent.width - 2 * CSC.Style.padding
-					sourceComponent: (method == LoginMethod.Password) ? passwordComponent : tokenComponent
-					anchors.horizontalCenter: parent.horizontalCenter
-
-					onLoaded: {
-						loader.item.index = index
-						loader.item.repository = repository
-						loader.item.open = Qt.binding(function() { return accordion.open })
-						accordion.loading = Qt.binding(function() { return loader.item.loading })
-					}
-				}
-			}
-		}
-
-		CSC.Button {
-			id: continueButton
-			text: "Continue"
-			enabled: repositoryList.loading == 0 && repositoryList.success
-
-			onClicked: {
-				QmlBridge.initFuse()
-				page.loggedIn = true
-			}
-		}
-	}
-
-	Component {
-		id: tokenComponent
-
-		Item {
-			id: empty 
-
-			property int index
-			property string repository
-			property bool open
-			property bool loading: false
-
-			onOpenChanged: {
-				loading = true
-				QmlBridge.loginWithToken(index)
-			}
-
-			Connections {
-				target: QmlBridge
-				onLogin401: {
-					if (idx == empty.index) {
-						loading = false
-						popup.errorMessage = repository + " authorization failed"
-						popup.open()
-					}
-				}
-			}
-		}
-	}
-	
-	Component {
-		id: passwordComponent
-
-		ColumnLayout {
-			id: form
-			width: parent.width
-			spacing: 0.5 * CSC.Style.padding
-
-			property int index
-			property string repository
-			property bool open
-			property bool loading: false
-
-			Keys.onReturnPressed: loginButton.clicked() // Enter key
-			Keys.onEnterPressed: loginButton.clicked()  // Numpad enter key
-
-			Connections {
-				target: QmlBridge
-				onLogin401: {
-					if (idx == form.index) {
-						passwordField.errorVisible = true
-						form.enabled = true
-						form.loading = false
-
-						if (usernameField.text != "") {
-							passwordField.focus = true
-							passwordField.selectAll()
-						}
-					}
-				}
-			}
-
-			Text {
-				text: "Please log in with your CSC credentials"
-				topPadding: 10
-				font.pixelSize: 12
-			}
-
-			CSC.TextField {
-				id: usernameField
-				focus: true
-				placeholderText: "Username"
-				Layout.fillWidth: true
-			}
-
-			CSC.TextField {
-				id: passwordField
-				placeholderText: "Password"
-				errorText: "Please enter valid password"
-				echoMode: TextInput.Password
-				activeFocusOnTab: true
-				Layout.fillWidth: true
-			}
-
-			CSC.Button {
-				id: loginButton
-				text: "Login"
-				outlined: true
-				topPadding: 10
-				bottomPadding: 10
-
-				onClicked: {
-					popup.close()
-					form.enabled = false
-					form.loading = true
-					passwordField.errorVisible = false
-					QmlBridge.loginWithPassword(form.index, usernameField.text, passwordField.text)
-				}
-			}
-		}			
-	}
+            onClicked: {
+                popup.close()
+                usernameField.enabled = false
+                passwordField.enabled = false
+                passwordField.errorVisible = false
+                loading = true
+                QmlBridge.login(usernameField.text, passwordField.text)
+            }
+        }
+    }
 }

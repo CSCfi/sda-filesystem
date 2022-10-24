@@ -14,18 +14,35 @@ ListView {
     interactive: false
     verticalLayoutDirection: ListView.BottomToTop
 
-    property variant modelSource
-    property Component delegateSource
-    property int rowCount: visualModel.items.count
+    Material.foreground: CSC.Style.grey
+    
+    property Component contentSource
+    property Component footerSource
+    property var modelSource
+
+    readonly property int rowCount: visualModel.items.count
     property int amountVisible: 5
     property int page: 1
     property int maxPages: Math.ceil(rowCount / amountVisible)
+    property bool hiddenHeader: false
 
-    Keys.onRightPressed: headerItem.changePageRight()
-    Keys.onLeftPressed: headerItem.changePageLeft()
+    property font contentFont: Qt.font({
+        pixelSize: 15
+    })
+
+    Keys.onRightPressed: if (rowCount != 0) {
+        headerItem.changePageRight()
+    }
+    Keys.onLeftPressed: if (rowCount != 0) {
+        headerItem.changePageLeft()
+    }
 
     onPageChanged: selectVisible()
     onRowCountChanged: selectVisible()
+    onMaxPagesChanged: if (rowCount != 0 && page > maxPages) {
+        var topLog = (listView.maxPages - 1) * listView.amountVisible
+        listView.page = Math.floor(topLog / listView.amountVisible) + 1
+    }
 
     function selectVisible() {
         if (visibleItems.count > 0) {
@@ -42,14 +59,38 @@ ListView {
         }
     }
 
-    header: Rectangle {
-        height: 40
+    footer: Frame {
+        height: 50
         width: listView.width
+        leftPadding: CSC.Style.padding
+        rightPadding: CSC.Style.padding
+        topPadding: 0
+        bottomPadding: 0
+        font.weight: Font.DemiBold
+        font.pixelSize: 13
+
+        background: Rectangle {
+            border.width: 1
+            border.color: CSC.Style.lightGrey
+        }
+
+        Loader { 
+            sourceComponent: listView.footerSource
+            anchors.fill: parent
+
+            onLoaded: item.spacing = 30
+        }
+    }
+
+    header: Rectangle {
+        width: listView.width
+        height: !listView.hiddenHeader ? 40 : 0
+        visible: !listView.hiddenHeader
         implicitWidth: pageCount.width + 10 * modelButton.implicitWidth
         border.width: 1
         border.color: CSC.Style.lightGrey
 
-        Text {
+        Label {
             text: "No " + listView.objectName + " available"
             visible: listView.rowCount == 0
             verticalAlignment: Text.AlignVCenter
@@ -79,35 +120,32 @@ ListView {
             visible: listView.rowCount > 0
             height: parent.height
 
-            Material.foreground: CSC.Style.primaryColor
-
             RowLayout {
                 id: pageCount
-                spacing: 10
+                spacing: 0
                 height: parent.height
 
-                Text {
-                    text: "Items per page: "
+                Label {
+                    text: "Items per page:"
                     leftPadding: CSC.Style.padding
                     font.pixelSize: 12
                 }
 
                 ToolButton {
                     id: perPage
-                    text: listView.amountVisible + "  "
-                    font.pixelSize: 15
                     icon.source: menu.visible ? "qrc:/qml/images/chevron-up.svg" : "qrc:/qml/images/chevron-down.svg"
-                    icon.width: 20
-                    icon.height: 20
-                    LayoutMirroring.enabled: true
+                    icon.width: 30
+                    icon.height: 30
+                    rightPadding: CSC.Style.padding
                     Layout.fillHeight: true
 
-                    Component.onCompleted: Layout.preferredWidth = 1.5 * implicitWidth
+                    Material.foreground: CSC.Style.primaryColor
+
+                    Component.onCompleted: leftPadding = 2 * amountLabel.width + CSC.Style.padding
+                    onClicked: menu.visible = !menu.visible
 
                     background: Rectangle {
-                        border.width: 1
-                        border.color: CSC.Style.lightGrey
-                        color: parent.hovered ? CSC.Style.lightGrey : "white"
+                        color: "transparent"
                     }
 
                     MouseArea {
@@ -116,29 +154,32 @@ ListView {
                         anchors.fill: parent
                     }
 
-                    onClicked: menu.visible = !menu.visible
+                    Label {
+                        id: amountLabel
+                        text: listView.amountVisible
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        anchors.left: parent.left
+                        anchors.leftMargin: CSC.Style.padding
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
 
                     Menu {
                         id: menu
-                        margins: down ? 0 : -1
 
                         property bool down: true
 
-                        onAboutToShow: {
-                            if (mapToGlobal(0, height).y > window.height) {
-                                down = false
-                                y = -height
-                            } else {
-                                down = true
-                                y = parent.height - 1
-                            }
+                        onAboutToShow: if (mapToItem(null, 0, height).y > window.height) {
+                            down = false
+                            y = -height
+                        } else {
+                            down = true
+                            y = parent.height - 1
                         }
 
-                        onYChanged: {
-                            if (down && visible && y < parent.height - 1) {
-                                down = false
-                                y = -height
-                            }
+                        onYChanged: if (down && visible && y < parent.height - 1) {
+                            down = false
+                            y = -height
                         }
 
                         background: Rectangle {
@@ -152,6 +193,7 @@ ListView {
                             model: 4
                             MenuItem {
                                 text: amount //Array.from(Array(4), (_,i)=> 5 + 5 * i)
+                                leftPadding: CSC.Style.padding
 
                                 property int amount
                                 
@@ -170,9 +212,15 @@ ListView {
                         }
                     }
                 }
+
+                Rectangle { 
+                    color: CSC.Style.grey
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: parent.height * 0.5 
+                }
             }
 
-            Text {
+            Label {
                 text: firstIdx + " - " + lastIdx + " of " + listView.rowCount + " items"
                 height: parent.height
                 verticalAlignment: Text.AlignVCenter
@@ -180,13 +228,7 @@ ListView {
                 opacity: (rightRow.x + whichPageText.width - CSC.Style.padding > leftRow.width) ? 1.0 : 0.0
 
                 property int firstIdx: (listView.page - 1) * listView.amountVisible + 1
-                property int lastIdx: {
-                    if (listView.rowCount < listView.amountVisible) {
-                        return listView.rowCount
-                    } else {
-                        return firstIdx + listView.amountVisible - 1
-                    }
-                }
+                property int lastIdx: Math.min(firstIdx + listView.amountVisible - 1, listView.rowCount)
             }
         }
 
@@ -196,7 +238,7 @@ ListView {
             height: parent.height
             anchors.right: parent.right
 
-            Text {
+            Label {
                 id: whichPageText
                 text: listView.page + " of " + listView.maxPages + " pages"
                 height: parent.height
@@ -284,18 +326,17 @@ ListView {
                     }
                     height: pageList.height
                     width: Math.max(height, implicitWidth)
+                    font.weight: Font.DemiBold
                     icon.source: (text == "") ? "qrc:/qml/images/three-dots.svg" : ""
 
                     Material.foreground: parseInt(text, 10) != listView.page ? CSC.Style.grey : CSC.Style.primaryColor
 
-                    onClicked: {
-                        if (text == "") {
-                            var high = parseInt(pageList.itemAtIndex(index + 1).text)
-                            var low = parseInt(pageList.itemAtIndex(index - 1).text)
-                            listView.page = Math.floor((high + low) / 2)
-                        } else {
-                            listView.page =  parseInt(text, 10)
-                        }
+                    onClicked: if (text == "") {
+                        var high = parseInt(pageList.itemAtIndex(index + 1).text)
+                        var low = parseInt(pageList.itemAtIndex(index - 1).text)
+                        listView.page = Math.floor((high + low) / 2)
+                    } else {
+                        listView.page =  parseInt(text, 10)
                     }
 
                     MouseArea {
@@ -332,8 +373,35 @@ ListView {
     model: DelegateModel {
         id: visualModel
         model: listView.modelSource
-        delegate: listView.delegateSource
         filterOnGroup: "visibleItems"
+
+        delegate: Frame {
+            height: Math.max(loader.height, 60)
+            width: listView.width
+            font: listView.contentFont
+            leftPadding: CSC.Style.padding
+            rightPadding: CSC.Style.padding
+            topPadding: 0
+            bottomPadding: 0
+
+            background: Rectangle {
+                border.width: 1
+                border.color: CSC.Style.lightGrey
+            }
+
+            Loader {
+                id: loader
+                sourceComponent: listView.contentSource 
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                property var modelData: model
+
+                onLoaded: item.spacing = 30
+            }
+        }
+        
         groups: [
             DelegateModelGroup {
                 id: visibleItems

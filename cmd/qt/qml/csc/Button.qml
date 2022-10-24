@@ -14,7 +14,6 @@ Button {
     topInset: 0
     bottomInset: 0
     enabled: !loading
-    implicitWidth: implicitContentWidth + (loading ? height - busy.anchors.margins : 0) + leftPadding + rightPadding
 
     Material.accent: foregroundColor
 
@@ -38,22 +37,18 @@ Button {
     contentItem: Text {
         text: button.text
         font: button.font
-        padding: 0
+        opacity: button.loading ? 0.0 : 1.0
         color: button.enabled ? foregroundColor : disabledForeground
-        horizontalAlignment: loading ? Text.AlignLeft : Text.AlignHCenter
+        horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
 
-    indicator: BusyIndicator {
+    BusyIndicator {
         id: busy
         running: button.loading
-        visible: running
-        padding: 0
-        anchors.top: button.top
-        anchors.bottom: button.bottom
-        anchors.right: button.right
-        anchors.margins: 10
+        anchors.fill: parent
+        anchors.centerIn: parent
     }
 
     MouseArea {

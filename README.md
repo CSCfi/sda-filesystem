@@ -25,7 +25,8 @@ Set these environment variables before running the application:
 - `FS_SD_CONNECT_API` - API for SD-Connect
 - `FS_SD_SUBMIT_API` – a comma-separated list of APIs for SD Apply/SD Submit
 - `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD APIs
-- `FS_CERTS` is the path to a file that contains certificates required by SD Connect and SD Apply/SD Submit
+- `FS_CERTS` - path to a file that contains certificates required by SD Connect, SD Apply/SD Submit, and SDS AAI 
+- `USERINFO_ENDPOINT` - endpoint in SDS AAI that reveals which projects the user is a manager of
 
 For test environment use follow instructions at https://gitlab.ci.csc.fi/sds-dev/local-proxy
 
@@ -90,8 +91,6 @@ Test install.
 Usage of ./go-fuse:
   -alsologtostderr
     	log to standard error as well as files
-  -enable string
-    	Choose which repositories you wish include in Data Gateway. Possible values: {SD Connect,SD Apply,all} (default "all")
   -http_timeout int
     	Number of seconds to wait before timing out an HTTP request (default 20)
   -log_backtrace_at value

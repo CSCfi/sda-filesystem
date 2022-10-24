@@ -72,13 +72,13 @@ func TestRequestError(t *testing.T) {
 	}
 }
 
-func TestGetAllPossibleRepositories(t *testing.T) {
-	origPossibleRepositories := possibleRepositories
-	defer func() { possibleRepositories = origPossibleRepositories }()
+func TestGetAllRepositories(t *testing.T) {
+	origPossibleRepositories := allRepositories
+	defer func() { allRepositories = origPossibleRepositories }()
 
-	possibleRepositories = map[string]fuseInfo{"Pouta": nil, "Pilvi": nil, "Aurinko": nil}
+	allRepositories = map[string]fuseInfo{"Pouta": nil, "Pilvi": nil, "Aurinko": nil}
 	ans := []string{"Aurinko", "Pilvi", "Pouta"}
-	reps := GetAllPossibleRepositories()
+	reps := GetAllRepositories()
 	sort.Strings(reps)
 	if !reflect.DeepEqual(ans, reps) {
 		t.Fatalf("Function returned incorrect value\nExpected=%v\nReceived=%v", ans, reps)
@@ -110,17 +110,17 @@ func TestRequestTimeout(t *testing.T) {
 }
 
 func TestGetEnvs(t *testing.T) {
-	origPossibleRepositories := possibleRepositories
+	origPossibleRepositories := allRepositories
 	origRepositories := hi.repositories
 
 	defer func() {
-		possibleRepositories = origPossibleRepositories
+		allRepositories = origPossibleRepositories
 		hi.repositories = origRepositories
 	}()
 
 	twoRep := &mockRepository{}
 	threeRep := &mockRepository{envError: errExpected}
-	possibleRepositories = map[string]fuseInfo{"One": nil, "Two": twoRep, "Three": threeRep}
+	allRepositories = map[string]fuseInfo{"One": nil, "Two": twoRep, "Three": threeRep}
 	hi.repositories = map[string]fuseInfo{}
 
 	err := GetEnvs("Two")

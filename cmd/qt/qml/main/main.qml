@@ -11,16 +11,24 @@ ApplicationWindow {
     id: window
     title: "Data Gateway"
     visible: true
-    minimumWidth: Math.max(header.implicitWidth, login.implicitWidth, logs.implicitWidth)
+    minimumWidth: Math.max(header.implicitWidth, logs.implicitWidth)
     minimumHeight: header.implicitHeight + login.implicitHeight
-    height: minimumHeight + login.formHeight
+    width: minimumWidth
+    height: minimumHeight
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowFullscreenButtonHint | Qt.WindowCloseButtonHint
     font.capitalization: Font.MixedCase
-    
+
     Material.background: "white"
     
+    //onActiveFocusItemChanged: print("activeFocusItem", activeFocusItem)
+
     // Ensures fuse unmounts when application terminates
-	onClosing: QmlBridge.shutdown()
+    onClosing: QmlBridge.shutdown()
+
+    Component.onCompleted: {
+        x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - width)
+        y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - height)
+    }
 
     header: ToolBar {
         leftPadding: CSC.Style.padding
@@ -42,8 +50,8 @@ ApplicationWindow {
                     Layout.preferredHeight: 40
                 }
 
-                Text {
-                    text: "<h3>Sensitive Data Services</h3>"
+                Label {
+                    text: "<h4>Data Gateway</h4>"
                     color: CSC.Style.grey
                     maximumLineCount: 1
                 }
@@ -66,15 +74,17 @@ ApplicationWindow {
                 }
 
                 Repeater {
-                    model: ["Home", "Logs"]
+                    id: repeater
+                    model: ["Login", "Logs"]
 
                     TabButton {
                         id: tabButton
                         text: modelData
                         width: implicitWidth
                         height: tabBar.height
+                        font.weight: Font.DemiBold
 
-                        contentItem: Text {
+                        contentItem: Label {
                             text: tabButton.text
                             font: tabButton.font
                             color: CSC.Style.primaryColor
@@ -84,7 +94,7 @@ ApplicationWindow {
                         }
                     }
                 }
-			}
+            }
 
             Rectangle {
                 Layout.fillWidth: true
@@ -92,9 +102,10 @@ ApplicationWindow {
 
             ToolButton {
                 id: signout
-                text: "Disconnect"
+                text: "Disconnect and sign out"
                 enabled: stack.state == "loggedIn"
                 opacity: enabled ? 1 : 0
+                font.weight: Font.DemiBold
                 icon.source: "qrc:/qml/images/box-arrow-right.svg"
                 LayoutMirroring.enabled: true
                 Layout.fillHeight: true
@@ -120,25 +131,97 @@ ApplicationWindow {
         selectFolder: false
         defaultSuffix: "log"
 
-		signal ready
+        onAccepted: { 
+            LogModel.saveLogs(dialogSave.fileUrl)
 
-        onAccepted: { LogModel.saveLogs(dialogSave.fileUrl); ready() }
+            if (ignoreButton.checked) {
+                popupPanic.close()
+            } else if (quitButton.checked) {
+                close()
+            }
+        }
     }
 
     CSC.Popup {
-		id: popup
-	}
+        id: popup
+    }
+
+    CSC.Popup {
+        id: popupPanic
+        errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
+        
+        ColumnLayout {
+            width: parent.width
+
+            CheckBox {
+                id: logCheck
+                checked: true
+                text: "Yes, save logs to file"
+
+                Material.accent: CSC.Style.primaryColor
+            }
+
+            Row {
+                spacing: CSC.Style.padding
+                Layout.alignment: Qt.AlignRight
+
+                CSC.Button {
+                    id: ignoreButton
+                    text: "Ignore"
+                    outlined: true
+                    checkable: true
+                    //mainColor: CSC.Style.red
+
+                    onClicked: {
+                        if (logCheck.checked) {
+                            dialogSave.visible = true
+                        } else {
+                            popupPanic.close()
+                        }
+                    }
+                }
+
+                CSC.Button {
+                    id: quitButton
+                    text: "Quit"
+                    checkable: true
+                    //mainColor: CSC.Style.red
+                    
+                    onClicked: {
+                        if (logCheck.checked) {
+                            dialogSave.visible = true
+                        } else {
+                            close()
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Connections {
-		target: QmlBridge
-		onInitError: {
-			login.enabled = false
-			popup.errorMessage = message + ". Check logs for further details and rerun the application"
+        target: QmlBridge
+        onInitError: {
+            login.enabled = false
+            popup.errorMessage = message + ". Check logs for further details and rerun the application."
             popup.closePolicy = Popup.NoAutoClose
             popup.modal = false
-			popup.open()
-		}
-	}
+            popup.open()
+        }
+        onPopupError: {
+            popup.errorMessage = message
+            popup.open()
+        }
+        onPanic: {
+            popupPanic.closePolicy = Popup.NoAutoClose // User must choose ignore or quit
+            popupPanic.open()
+        }
+        onLoggedInChanged: if (QmlBridge.loggedIn) {
+            repeater.model = ["Access", "Export", "Logs"]
+            stack.state = "loggedIn"
+            window.flags = window.flags & ~Qt.WindowCloseButtonHint
+        }
+    }
 
     StackLayout {
         id: stack
@@ -155,23 +238,6 @@ ApplicationWindow {
                 id: login
                 focus: visible
                 anchors.horizontalCenter: parent.horizontalCenter
-
-                onLoggedInChanged: {
-                    if (loggedIn) {
-                        stack.state = "loggedIn"
-                        window.flags = window.flags & ~Qt.WindowCloseButtonHint
-                        window.width = Math.min(1200, 0.75 * Screen.desktopAvailableWidth)
-                        if (window.width < window.minimumWidth) {
-                            window.width = Screen.desktopAvailableWidth
-                        }
-                        window.height = Math.min(800, 0.75 * Screen.desktopAvailableHeight)
-                        if (window.height < window.minimumHeight) {
-                            window.height = Screen.desktopAvailableHeight
-                        }
-                        window.x = Screen.virtualX + 0.5 * (Screen.desktopAvailableWidth - window.width)
-                        window.y = Screen.virtualY + 0.5 * (Screen.desktopAvailableHeight - window.height)
-                    }
-                }
             }
         }
         
@@ -181,7 +247,7 @@ ApplicationWindow {
 
             ScrollBar.vertical: ScrollBar { }
 
-            LogPage {
+            LogsPage {
                 id: logs
                 focus: visible
                 width: parent.width
@@ -190,12 +256,25 @@ ApplicationWindow {
 
         Flickable {
             interactive: contentHeight > height
-            contentHeight: front.height
+            contentHeight: exp.height
 
             ScrollBar.vertical: ScrollBar { }
 
-            FrontPage {
-                id: front
+            ExportPage {
+                id: exp
+                focus: visible
+                width: parent.width
+            }
+        }
+
+        Flickable {
+            interactive: contentHeight > height
+            contentHeight: access.height
+
+            ScrollBar.vertical: ScrollBar { }
+
+            AccessPage {
+                id: access
                 focus: visible
                 width: parent.width
             }
@@ -206,7 +285,7 @@ ApplicationWindow {
                 name: "loggedIn"
                 PropertyChanges {
                     target: stack
-                    currentIndex: 2 - tabBar.currentIndex
+                    currentIndex: 3 - tabBar.currentIndex
                 }
             }
         ]

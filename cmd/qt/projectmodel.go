@@ -23,7 +23,8 @@ type ProjectModel struct {
 	_ func()                    `signal:"prepareForRefresh,auto"`
 	_ func()                    `signal:"deleteExtraProjects,auto"`
 
-	_ int `property:"loadedProjects"`
+	_ int `property:"allContainers"`
+	_ int `property:"loadedContainers"`
 
 	roles       map[int]*core.QByteArray
 	projects    []project
@@ -45,7 +46,8 @@ func (pm *ProjectModel) init() {
 		LoadedContainers: core.NewQByteArray2("loadedContainers", -1),
 		AllContainers:    core.NewQByteArray2("allContainers", -1),
 	}
-	pm.SetLoadedProjects(0)
+	pm.SetLoadedContainers(0)
+	pm.SetAllContainers(0)
 
 	pm.ConnectData(pm.data)
 	pm.ConnectRowCount(pm.rowCount)
@@ -103,20 +105,27 @@ func (pm *ProjectModel) addProject(rep, pr string) {
 }
 
 func (pm *ProjectModel) addToCount(rep, pr string, count int) {
+	if rep == "" {
+		pm.SetAllContainers(pm.AllContainers() * -1)
+		return
+	}
+
 	row := pm.nameToIndex[rep+"/"+pr]
 	var project = &pm.projects[row]
 	var index = pm.Index(row, 0, core.NewQModelIndex())
 
 	if project.allContainers != -1 {
 		project.loadedContainers += count
+		pm.SetLoadedContainers(pm.LoadedContainers() + count)
 		pm.DataChanged(index, index, []int{LoadedContainers})
 	} else {
 		project.allContainers = count
+		pm.SetAllContainers(pm.AllContainers() - count)
+		if count == 0 {
+			pm.SetAllContainers(pm.AllContainers() - 1)
+			pm.SetLoadedContainers(pm.LoadedContainers() + 1)
+		}
 		pm.DataChanged(index, index, []int{AllContainers})
-	}
-
-	if project.loadedContainers == project.allContainers {
-		pm.SetLoadedProjects(pm.LoadedProjects() + 1)
 	}
 }
 
@@ -127,7 +136,8 @@ func (pm *ProjectModel) prepareForRefresh() {
 		pm.projects[i].loadedContainers = 0
 		pm.projects[i].allContainers = -1
 	}
-	pm.SetLoadedProjects(0)
+	pm.SetLoadedContainers(0)
+	pm.SetAllContainers(0)
 	pm.DataChanged(pm.Index(0, 0, core.NewQModelIndex()),
 		pm.Index(len(pm.projects)-1, 0, core.NewQModelIndex()), []int{LoadedContainers})
 	pm.DataChanged(pm.Index(0, 0, core.NewQModelIndex()),
