@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - User no longer chooses which repositories they wish to access, rather Data Gateway tries to access all of them after user has given their CSC credentials.
 - small updates to UI components
+- updated github actions to golang versions 1.18 and 1.19
+- deprecated ioutils in code
 
 ### Added
 - User can export files to SD Connect using the UI if they are the project manager
+
+### Fixed
+-  binary for linux needs to contain libQt5QuickShapes.* added that to the release
 
 ## [v1.2.2] - 2022-05-05
 

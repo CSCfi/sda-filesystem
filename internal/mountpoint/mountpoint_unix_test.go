@@ -1,9 +1,9 @@
+//go:build linux || darwin
 // +build linux darwin
 
 package mountpoint
 
 import (
-	"io/ioutil"
 	"os"
 	"runtime"
 	"testing"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestCheckMountPoint(t *testing.T) {
-	node, err := ioutil.TempDir("", "dir")
+	node, err := os.MkdirTemp("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
@@ -35,7 +35,7 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			node, err := ioutil.TempDir("", tt.name)
+			node, err := os.MkdirTemp("", tt.name)
 
 			if err != nil {
 				t.Errorf("Failed to create folder: %s", err.Error())
@@ -51,7 +51,7 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 }
 
 func TestCheckMountPoint_Not_Dir(t *testing.T) {
-	file, err := ioutil.TempFile("", "file")
+	file, err := os.CreateTemp("", "file")
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
 	}
@@ -63,7 +63,7 @@ func TestCheckMountPoint_Not_Dir(t *testing.T) {
 }
 
 func TestCheckMountPoint_Fail_Stat(t *testing.T) {
-	file, err := ioutil.TempFile("", "file_parent")
+	file, err := os.CreateTemp("", "file_parent")
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
 	}
@@ -75,7 +75,7 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 }
 
 func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
-	node, err := ioutil.TempDir("", "dir")
+	node, err := os.MkdirTemp("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
@@ -89,7 +89,7 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 }
 
 func TestCheckMountPoint_Not_Exist(t *testing.T) {
-	node, err := ioutil.TempDir("", "dir") // get unique folder name
+	node, err := os.MkdirTemp("", "dir") // get unique folder name
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
@@ -104,13 +104,13 @@ func TestCheckMountPoint_Not_Exist(t *testing.T) {
 }
 
 func TestCheckMountPoint_Not_Empty(t *testing.T) {
-	node, err := ioutil.TempDir("", "dir")
+	node, err := os.MkdirTemp("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
 	defer os.RemoveAll(node)
 
-	if file, err := ioutil.TempFile(node, "file"); err != nil {
+	if file, err := os.CreateTemp(node, "file"); err != nil {
 		t.Errorf("Failed to create file %s: %s", file.Name(), err.Error())
 	} else if err = CheckMountPoint(node); err == nil {
 		t.Error("Function should have returned error")
@@ -137,7 +137,7 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not retrieve working directory: %s", err.Error())
 	}
-	node, err := ioutil.TempDir(basepath, "filesystem")
+	node, err := os.MkdirTemp(basepath, "filesystem")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}

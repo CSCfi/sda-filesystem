@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -157,7 +156,7 @@ func InitializeClient() error {
 	// Handle certificates if ones are set
 	caCertPool := x509.NewCertPool()
 	if len(hi.certPath) > 0 {
-		caCert, err := ioutil.ReadFile(hi.certPath)
+		caCert, err := os.ReadFile(hi.certPath)
 		if err != nil {
 			return fmt.Errorf("Reading certificate file failed: %w", err)
 		}

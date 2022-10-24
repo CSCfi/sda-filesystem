@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -291,7 +290,7 @@ func TestInitializeClient(t *testing.T) {
 		hi.certPath = origCertPath
 	}()
 
-	file, err := ioutil.TempFile("", "cert")
+	file, err := os.CreateTemp("", "cert")
 	if err != nil {
 		t.Fatalf("Failed to create file %s", file.Name())
 	}
@@ -313,7 +312,7 @@ func TestInitializeClient_Error(t *testing.T) {
 		hi.certPath = origCertPath
 	}()
 
-	file, err := ioutil.TempFile("", "cert")
+	file, err := os.CreateTemp("", "cert")
 	if err != nil {
 		t.Fatalf("Failed to create file %s", file.Name())
 	}
