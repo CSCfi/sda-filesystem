@@ -14,6 +14,7 @@ import (
 	"github.com/therecipe/qt/qml"
 	"github.com/therecipe/qt/quickcontrols2"
 
+	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
@@ -116,7 +117,7 @@ func (qb *QmlBridge) login(username, password string) {
 			return
 		}
 
-		isManager, err := api.IsProjectManager()
+		isManager, err := airlock.IsProjectManager()
 		qb.SetIsProjectManager(isManager)
 		if err != nil {
 			logs.Errorf("Resolving project manager status failed: %w", err)
@@ -126,9 +127,11 @@ func (qb *QmlBridge) login(username, password string) {
 			logs.Info("You are not the project manager")
 		}
 
-		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
-		qb.updateBuckets()
+		if err = airlock.GetPublicKey(); err != nil {
+			//do smth
+		}
 
+		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
 		logs.Info("Login successful")
 		qb.SetLoggedIn(true)
 	}()
@@ -188,7 +191,6 @@ func (qb *QmlBridge) refreshFuse() string {
 		projectModel.DeleteExtraProjects()
 		newFs.PopulateFilesystem(projectModel.AddToCount)
 		qb.fs.RefreshFilesystem(newFs)
-		qb.updateBuckets()
 		qb.FuseReady()
 	}()
 	return ""
@@ -202,7 +204,7 @@ func (qb *QmlBridge) exportFile(folder, url string) {
 	go func() {
 		time.Sleep(1000 * time.Millisecond)
 		file := core.NewQUrl3(url, 0).ToLocalFile()
-		err := api.ExportFile(folder, file)
+		err := airlock.Upload("", file, folder, "", 4000, true)
 		if err != nil {
 			logs.Error(err)
 			message, _ := logs.Wrapper(err)
@@ -210,16 +212,6 @@ func (qb *QmlBridge) exportFile(folder, url string) {
 		}
 		qb.ExportFinished(err == nil)
 	}()
-}
-
-func (qb *QmlBridge) updateBuckets() {
-	if qb.IsProjectManager() {
-		if containers, err := api.GetContainers(); err != nil {
-			logs.Error(err)
-		} else {
-			qb.SetBuckets(containers)
-		}
-	}
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
@@ -244,17 +236,12 @@ func (qb *QmlBridge) shutdown() {
 
 func init() {
 	debug := flag.Bool("debug", false, "print debug logs")
-	airlock := flag.String("airlock", "", "name of airlock executable")
 	flag.Parse()
 
 	if *debug {
 		logs.SetLevel("debug")
 	} else {
 		logs.SetLevel("info")
-	}
-
-	if *airlock != "" {
-		api.SetAirlockName(*airlock)
 	}
 
 	logs.SetSignal(logModel.AddLog)

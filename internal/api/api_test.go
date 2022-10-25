@@ -160,7 +160,7 @@ func TestGetEnv(t *testing.T) {
 				os.Unsetenv(tt.envName)
 			}
 
-			value, err := getEnv(tt.envName, tt.verifyURL)
+			value, err := GetEnv(tt.envName, tt.verifyURL)
 			os.Unsetenv(tt.envName)
 
 			if tt.errText == "" {
@@ -210,12 +210,12 @@ func TestGetCommonEnv(t *testing.T) {
 		{"FAIL_SDS_TOKEN", "ca.pem", ""},
 	}
 
-	origGetEnv := getEnv
-	defer func() { getEnv = origGetEnv }()
+	origGetEnv := GetEnv
+	defer func() { GetEnv = origGetEnv }()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			getEnv = func(name string, verifyURL bool) (string, error) {
+			GetEnv = func(name string, verifyURL bool) (string, error) {
 				if name == "FS_CERTS" {
 					if tt.certs == "" {
 						return "", errExpected
@@ -534,15 +534,15 @@ func TestMakeRequest(t *testing.T) {
 			switch v := tt.expectedBody.(type) {
 			case SpecialHeaders:
 				var headers SpecialHeaders
-				err = makeRequest(server.URL, tt.query, tt.headers, &headers)
+				err = MakeRequest(server.URL, tt.query, tt.headers, nil, &headers)
 				ret = headers
 			case []byte:
 				buf := make([]byte, len(v))
-				err = makeRequest(server.URL, tt.query, tt.headers, buf)
+				err = MakeRequest(server.URL, tt.query, tt.headers, nil, buf)
 				ret = buf
 			default:
 				var objects []Metadata
-				err = makeRequest(server.URL, tt.query, tt.headers, &objects)
+				err = MakeRequest(server.URL, tt.query, tt.headers, nil, &objects)
 				ret = objects
 			}
 
@@ -568,7 +568,7 @@ func TestMakeRequest_NewRequest_Error(t *testing.T) {
 	buf[0] = 0x7f
 	errText := fmt.Sprintf("parse %q: net/url: invalid control character in URL", string(buf))
 
-	if err := makeRequest(string(buf), nil, nil, buf); err == nil {
+	if err := MakeRequest(string(buf), nil, nil, nil, buf); err == nil {
 		t.Error("Function did not return error with invalid URL")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())

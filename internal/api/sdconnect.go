@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -61,7 +60,7 @@ func init() {
 func (c *connecter) getProjects(url, token string) ([]Metadata, error) {
 	var projects []Metadata
 	headers := map[string]string{"X-Authorization": "Basic " + token}
-	err := makeRequest(url+"/projects", nil, headers, &projects)
+	err := MakeRequest(url+"/projects", nil, headers, nil, &projects)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
 	}
@@ -79,7 +78,7 @@ func (c *connecter) getSTokens(projects []Metadata, url, token string) map[strin
 
 		// Request token
 		token := sToken{}
-		if err := makeRequest(url+"/token", query, headers, &token); err != nil {
+		if err := MakeRequest(url+"/token", query, headers, nil, &token); err != nil {
 			logs.Warningf("Failed to retrieve %s scoped token for %s: %w", SDConnect, projects[i].Name, err)
 			continue
 		}
@@ -97,7 +96,7 @@ func (c *connecter) getSTokens(projects []Metadata, url, token string) map[strin
 //
 
 func (c *sdConnectInfo) getEnvs() error {
-	api, err := getEnv("FS_SD_CONNECT_API", true)
+	api, err := GetEnv("FS_SD_CONNECT_API", true)
 	if err != nil {
 		return err
 	}
@@ -109,8 +108,8 @@ func (c *sdConnectInfo) getEnvs() error {
 }
 
 func (c *sdConnectInfo) validateLogin(auth ...string) error {
-	if len(auth) == 2 {
-		c.token = base64.StdEncoding.EncodeToString([]byte(auth[0] + ":" + auth[1]))
+	if len(auth) >= 1 {
+		c.token = auth[0]
 	}
 
 	var err error
@@ -155,12 +154,12 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	}
 
 	var meta []Metadata
-	err := makeRequest(path, nil, headers, &meta)
+	err := MakeRequest(path, nil, headers, nil, &meta)
 	if c.tokenExpired(err) {
 		token = c.sTokens[nodes[0]]
 		headers["X-Project-ID"] = token.ProjectID
 		headers["X-Authorization"] = "Bearer " + token.Token
-		err = makeRequest(path, nil, headers, &meta)
+		err = MakeRequest(path, nil, headers, nil, &meta)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
@@ -228,12 +227,12 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, 
 	path := c.url + "/data"
 
 	// Request data
-	err := makeRequest(path, query, headers, buffer)
+	err := MakeRequest(path, query, headers, nil, buffer)
 	if c.tokenExpired(err) {
 		token = c.sTokens[nodes[0]]
 		headers["X-Project-ID"] = token.ProjectID
 		headers["X-Authorization"] = "Bearer " + token.Token
-		return makeRequest(path, query, headers, buffer)
+		return MakeRequest(path, query, headers, nil, buffer)
 	}
 	return err
 }
