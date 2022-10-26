@@ -43,7 +43,7 @@ func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return errors.New(constantError)
 	}
 
@@ -64,7 +64,7 @@ func Test_SDSubmit_GetDatasets_Pass(t *testing.T) {
 	expectedBody := []string{"dataset1", "dataset2", "dataset3"}
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`["dataset1","dataset2","dataset3"]`))).Decode(ret)
 		return nil
 	}
@@ -85,7 +85,7 @@ func Test_SDSubmit_GetFiles_Fail(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return errors.New(constantError)
 	}
 
@@ -128,7 +128,7 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 	testFileJSON, _ := json.Marshal(testFile)
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader(testFileJSON)).Decode(ret)
 		return nil
 	}
@@ -169,7 +169,7 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 	testFileJSON, _ := json.Marshal(testFile)
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		path := "url/metadata/datasets/dataset1/files"
 		if url != path {
 			return fmt.Errorf("makeRequest() received incorrect url\nExpected=%s\nReceived=%s", path, url)
@@ -522,7 +522,7 @@ func Test_SDSubmit_DownloadData_Pass(t *testing.T) {
 	expectedData := []byte("hellothere")
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_, _ = io.ReadFull(bytes.NewReader(expectedData), ret.([]byte))
 		return nil
 	}

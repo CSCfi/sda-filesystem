@@ -43,8 +43,8 @@ type fuseInfo interface {
 	validateLogin(...string) error
 	levelCount() int
 	getNthLevel(string, ...string) ([]Metadata, error)
-	updateAttributes([]string, string, interface{}) error
-	downloadData([]string, interface{}, int64, int64) error
+	updateAttributes([]string, string, any) error
+	downloadData([]string, any, int64, int64) error
 }
 
 // Metadata contains node metadata fetched from an api
@@ -218,7 +218,7 @@ var LevelCount = func(rep string) int {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-var MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+var MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 	var response *http.Response
 
 	// Build HTTP request
@@ -309,7 +309,7 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 			return fmt.Errorf("Copying response failed: %w", err)
 		}
 	case *[]byte:
-		if *v, err = ioutil.ReadAll(response.Body); err != nil {
+		if *v, err = io.ReadAll(response.Body); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)
 		}
 	default:
@@ -328,7 +328,7 @@ var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, 
 
 // UpdateAttributes modifies attributes of node in 'fsPath'.
 // 'nodes' contains the original names of each node in 'fsPath'
-var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+var UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
 	return hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
 }
 

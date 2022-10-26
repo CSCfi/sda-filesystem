@@ -52,7 +52,7 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret interface{}) error {
+			MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret any) error {
 				if token, ok := headers["X-Authorization"]; !ok || token != "Basic "+tt.token {
 					return fmt.Errorf("Incorrect header 'X-Authorization'\nExpected=%s\nReceived=%s", "Bearer "+tt.token, token)
 				}
@@ -82,7 +82,7 @@ func Test_SDConnect_GetProjects_Error(t *testing.T) {
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
 
-	MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret any) error {
 		return errExpected
 	}
 
@@ -125,7 +125,7 @@ func Test_SDConnect_GetSTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret interface{}) error {
+			MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret any) error {
 				if token, ok := headers["X-Authorization"]; !ok || token != "Basic token" {
 					return fmt.Errorf("Real error ccurred")
 				}
@@ -372,7 +372,7 @@ func Test_SDConnect_GetNthLevel_Fail_Request(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return errors.New("some error")
 	}
 	sd := &sdConnectInfo{}
@@ -389,7 +389,7 @@ func Test_SDConnect_GetNthLevel_Pass_1Node(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy1"}]`))).Decode(ret)
 		return nil
 	}
@@ -412,7 +412,7 @@ func Test_SDConnect_GetNthLevel_Pass_2Node(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy2"}]`))).Decode(ret)
 		return nil
 	}
@@ -435,7 +435,7 @@ func Test_SDConnect_GetNthLevel_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
 			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy3"}]`))).Decode(ret)
 			return nil
@@ -470,7 +470,7 @@ func Test_SDConnect_GetNthLevel_Fail_TokenExpired(t *testing.T) {
 	expectedError := "Failed to retrieve metadata for sdconnect: API responded with status 401 Unauthorized"
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return &RequestError{http.StatusUnauthorized}
 	}
 	mockC := &mockConnecter{sTokens: map[string]sToken{"project": {"freshToken", "projectID"}}}
@@ -513,7 +513,7 @@ func Test_SDConnect_UpdateAttributes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+			MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 				switch v := ret.(type) {
 				case *SpecialHeaders:
 					v.Decrypted = tt.decrypted
@@ -543,7 +543,7 @@ func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
 		testname, errText string
 		nodes             []string
 		requestErr        error
-		value             interface{}
+		value             any
 	}{
 		{
 			"TOO_FEW_NODES", "Cannot update attributes for path Folder/file",
@@ -565,7 +565,7 @@ func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+			MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 				return tt.requestErr
 			}
 
@@ -593,7 +593,7 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Authorization": "Bearer token", "X-Project-ID": "project"}
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		// Test that headers were computed properly
 		if !reflect.DeepEqual(headers, expectedHeaders) {
 			t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
@@ -621,7 +621,7 @@ func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Authorization": "Bearer freshToken", "X-Project-ID": "projectID"}
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
-	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret interface{}) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
 			// Test that headers were computed properly
 			if !reflect.DeepEqual(headers, expectedHeaders) {

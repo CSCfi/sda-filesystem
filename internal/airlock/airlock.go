@@ -42,7 +42,7 @@ var IsProjectManager = func() (bool, error) {
 		return false, fmt.Errorf("%s: %w", errStr, err)
 	}
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err = json.Unmarshal(file, &data); err != nil {
 		return false, fmt.Errorf("%s: %w", errStr, err)
 	}
@@ -229,8 +229,7 @@ func checkEncryption(filename string) (bool, error) {
 	}
 	defer file.Close()
 
-	var reader io.Reader
-	reader = file
+	var reader io.Reader = file
 	_, err = separateHeader(reader)
 	if err != nil {
 		return false, err

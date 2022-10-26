@@ -179,7 +179,7 @@ func (c *sdConnectInfo) tokenExpired(err error) bool {
 	return false
 }
 
-func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr interface{}) error {
+func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr any) error {
 	if len(nodes) < 3 {
 		return fmt.Errorf("Cannot update attributes for path %s", path)
 	}
@@ -210,7 +210,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr inter
 	return nil
 }
 
-func (c *sdConnectInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
+func (c *sdConnectInfo) downloadData(nodes []string, buffer any, start, end int64) error {
 	// Query params
 	query := map[string]string{
 		"project":   nodes[0],

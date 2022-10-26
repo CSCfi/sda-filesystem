@@ -20,8 +20,8 @@ type Ristretto struct {
 
 // Cacheable includes all the functions a struct must implement in order for it to be embedded in Ristretto
 type Cacheable interface {
-	Get(string) (interface{}, bool)
-	Set(string, interface{}, int64, time.Duration) bool
+	Get(string) (any, bool)
+	Set(string, any, int64, time.Duration) bool
 	Del(string)
 	Clear()
 }
@@ -61,12 +61,12 @@ var NewRistrettoCache = func() (*Ristretto, error) {
 }
 
 // Get returns item behind key "key" and a boolean representing whether the item was found or not
-func (s *storage) Get(key string) (interface{}, bool) {
+func (s *storage) Get(key string) (any, bool) {
 	return s.cache.Get(key)
 }
 
 // Set stores data to cache with specific key and ttl. If ttl == -1, RistrettoCacheTTL will be used.
-func (s *storage) Set(key string, value interface{}, cost int64, ttl time.Duration) bool {
+func (s *storage) Set(key string, value any, cost int64, ttl time.Duration) bool {
 	if ttl == -1 {
 		ttl = RistrettoCacheTTL
 	}

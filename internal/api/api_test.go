@@ -27,14 +27,14 @@ type mockCache struct {
 	key  string
 }
 
-func (c *mockCache) Get(key string) (interface{}, bool) {
+func (c *mockCache) Get(key string) (any, bool) {
 	if c.key == key && c.data != nil {
 		return c.data, true
 	}
 	return nil, false
 }
 
-func (c *mockCache) Set(key string, value interface{}, cost int64, ttl time.Duration) bool {
+func (c *mockCache) Set(key string, value any, cost int64, ttl time.Duration) bool {
 	c.key = key
 	c.data = value.([]byte)
 	return true
@@ -49,7 +49,7 @@ type mockRepository struct {
 
 func (r *mockRepository) getEnvs() error { return r.envError }
 
-func (r *mockRepository) downloadData(nodes []string, buf interface{}, start, end int64) error {
+func (r *mockRepository) downloadData(nodes []string, buf any, start, end int64) error {
 	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
 	return r.mockDownloadDataError
 }
@@ -376,7 +376,7 @@ func TestMakeRequest(t *testing.T) {
 		mockHandlerFunc   func(http.ResponseWriter, *http.Request)
 		query             map[string]string
 		headers           map[string]string
-		expectedBody      interface{}
+		expectedBody      any
 	}{
 		{
 			testname: "OK_HEADERS",
@@ -530,7 +530,7 @@ func TestMakeRequest(t *testing.T) {
 			}
 
 			var err error
-			var ret interface{}
+			var ret any
 			switch v := tt.expectedBody.(type) {
 			case SpecialHeaders:
 				var headers SpecialHeaders

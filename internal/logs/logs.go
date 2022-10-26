@@ -66,7 +66,7 @@ func Error(err error) {
 }
 
 // Errorf logs a message at level "Error" either on the standard logger or in the GUI
-func Errorf(format string, args ...interface{}) {
+func Errorf(format string, args ...any) {
 	err := fmt.Errorf(format, args...)
 	if signal != nil {
 		signal(int(logrus.ErrorLevel), StructureError(err))
@@ -85,7 +85,7 @@ func Warning(err error) {
 }
 
 // Warningf logs a message at level "Warning" either on the standard logger or in the GUI
-var Warningf = func(format string, args ...interface{}) {
+var Warningf = func(format string, args ...any) {
 	err := fmt.Errorf(format, args...)
 	if signal != nil {
 		signal(int(logrus.WarnLevel), StructureError(err))
@@ -95,7 +95,7 @@ var Warningf = func(format string, args ...interface{}) {
 }
 
 // Info logs a message at level "Info" either on the standard logger or in the GUI
-func Info(args ...interface{}) {
+func Info(args ...any) {
 	if signal != nil {
 		signal(int(logrus.InfoLevel), []string{fmt.Sprint(args...)})
 	} else {
@@ -104,7 +104,7 @@ func Info(args ...interface{}) {
 }
 
 // Infof logs a message at level "Info" either on the standard logger or in the GUI
-func Infof(format string, args ...interface{}) {
+func Infof(format string, args ...any) {
 	if signal != nil {
 		signal(int(logrus.InfoLevel), []string{fmt.Sprintf(format, args...)})
 	} else {
@@ -113,7 +113,7 @@ func Infof(format string, args ...interface{}) {
 }
 
 // Debug logs a message at level "Debug" either on the standard logger or in the GUI
-func Debug(args ...interface{}) {
+func Debug(args ...any) {
 	if signal != nil {
 		if log.IsLevelEnabled(logrus.DebugLevel) {
 			signal(int(logrus.DebugLevel), []string{fmt.Sprint(args...)})
@@ -124,7 +124,7 @@ func Debug(args ...interface{}) {
 }
 
 // Debugf logs a message at level "Debug" either on the standard logger or in the GUI
-func Debugf(format string, args ...interface{}) {
+func Debugf(format string, args ...any) {
 	if signal != nil {
 		if log.IsLevelEnabled(logrus.DebugLevel) {
 			signal(int(logrus.DebugLevel), []string{fmt.Sprintf(format, args...)})
