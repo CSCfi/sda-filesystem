@@ -115,7 +115,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 	s.urls = []string{}
 	for i, u := range strings.Split(urls, ",") {
 		if err = validURL(u); err != nil {
-			return err
+			return fmt.Errorf("%s API not a valid URL: %w", SDSubmit, err)
 		}
 		s.urls = append(s.urls, strings.TrimRight(u, "/"))
 		if err := testURL(s.urls[i]); err != nil {

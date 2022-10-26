@@ -31,10 +31,13 @@ Page {
 
     Connections {
         target: QmlBridge
-        onExportFinished: if (success) {
-            stack.currentIndex = 4
-        } else {
-            stack.currentIndex = 2
+        onExportFinished: {
+            exportModel.setProperty(0, "modifiable", true)
+            if (success) {
+                stack.currentIndex = 4
+            } else {
+                stack.currentIndex = 2
+            }
         }
         onPreventExport: {
             stack.currentIndex = 0
@@ -188,6 +191,7 @@ Page {
 
                     onClicked: if (enabled) { 
                         popupBuckets.close()
+                        page.chosen = false
                         exportModel.setProperty(0, "bucket", nameField.text)
                         stack.currentIndex = stack.currentIndex + 1 
                     }
@@ -395,7 +399,6 @@ Page {
 
                     onClicked: { 
                         nameField.text = ""
-                        exportModel.setProperty(0, "modifiable", true)
                         stack.currentIndex = 1 
                     }
                 }

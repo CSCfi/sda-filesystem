@@ -89,7 +89,7 @@ func GetPublicKey() error {
 		return err
 	}
 
-	errStr := "Failed to get public key"
+	errStr := "Failed to get public key for Airlock"
 	url := ai.proxy + "/public-key/crypt4gh.pub"
 	err = api.MakeRequest(url, nil, nil, nil, &public_key_slice)
 	if err != nil {
@@ -103,20 +103,23 @@ func GetPublicKey() error {
 
 	logs.Debugf("Encryption key: %s", public_key_slice)
 	ai.publicKey, err = keys.ReadPublicKey(bytes.NewReader(public_key_slice))
-	return fmt.Errorf("%s: %w", errStr, err)
+	if err != nil {
+		return fmt.Errorf("%s: %w", errStr, err)
+	}
+	return nil
 }
 
 func Upload(original_filename, filename, container, journal_number string,
 	segment_size_mb uint64, force bool) error {
 
 	if encrypted, err := checkEncryption(filename); err != nil {
-		return fmt.Errorf("Failed to check if file is encypted: %w", err)
+		return fmt.Errorf("Failed to check if file %s is encypted: %w", filename, err)
 	} else if encrypted {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
 	} else {
 		original_filename = filename
 		if filename, err = encrypt(filename, force); err != nil {
-			return fmt.Errorf("Failed to encrypt file: %w", err)
+			return fmt.Errorf("Failed to encrypt file %s: %w", filename, err)
 		}
 	}
 
@@ -235,12 +238,8 @@ func checkEncryption(filename string) (bool, error) {
 	}
 	defer file.Close()
 
-	var reader io.Reader = file
-	_, err = headers.ReadHeader(reader)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	_, err = headers.ReadHeader(file)
+	return err == nil, nil
 }
 
 func encrypt(in_filename string, force bool) (string, error) {
@@ -308,10 +307,11 @@ func put(url, container string, segment_nro, segment_total int,
 
 	var bodyBytes []byte
 	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
-		return fmt.Errorf("Failed to upload data: %w", err)
+		if string(bodyBytes) != "" {
+			return fmt.Errorf("Failed to upload data to bucket %s: %w", container, errors.New(string(bodyBytes)))
+		}
+		return fmt.Errorf("Failed to upload data to bucket %s: %w", container, err)
 	}
-	fmt.Print(string(bodyBytes))
-	//fmt.Errorf("Failed to upload data: %w", errors.New(string(bodyBytes)))
 	return nil
 }
 

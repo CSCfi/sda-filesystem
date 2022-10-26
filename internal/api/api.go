@@ -99,18 +99,20 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 		return "", fmt.Errorf("Environment variable %s not set", name)
 	}
 	if verifyURL {
-		return env, validURL(env)
+		if err := validURL(env); err != nil {
+			return "", fmt.Errorf("Environment variable %s not a valid URL: %w", name, err)
+		}
 	}
 	return env, nil
 }
 
-var validURL = func(env string) error {
-	u, err := url.ParseRequestURI(env)
+var validURL = func(value string) error {
+	u, err := url.ParseRequestURI(value)
 	if err != nil {
-		return fmt.Errorf("Environment variable %s is an invalid URL: %w", env, err)
+		return fmt.Errorf("%s is an invalid URL: %w", value, err)
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("Environment variable %s does not have scheme 'https'", env)
+		return fmt.Errorf("%s does not have scheme 'https'", value)
 	}
 	return nil
 }
@@ -236,7 +238,7 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	request = request.WithContext(ctx)
@@ -279,8 +281,10 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent &&
-		response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusAccepted {
+	if body == nil && response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+		return &RequestError{response.StatusCode}
+	}
+	if body != nil && response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusAccepted {
 		return &RequestError{response.StatusCode}
 	}
 
