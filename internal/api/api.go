@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -170,10 +171,7 @@ func InitializeClient() error {
 		return fmt.Errorf("Failed to create a cookie jar: %w", err)
 	}
 
-	timeout := time.Duration(hi.requestTimeout) * time.Second
-
 	hi.client = &http.Client{
-		Timeout:   timeout,
 		Transport: tr,
 		Jar:       jar,
 	}
@@ -223,16 +221,25 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 
 	// Build HTTP request
 	var err error
+	var timeout time.Duration
 	var request *http.Request
+
 	if body != nil {
 		request, err = http.NewRequest("PUT", url, body)
+		timeout = time.Duration(hi.requestTimeout) * time.Second
 	} else {
 		request, err = http.NewRequest("GET", url, nil)
+		timeout = time.Duration(108000) * time.Second
 	}
 
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout*time.Second)
+	defer cancel()
+
+	request.WithContext(ctx)
 
 	// Place query params if they are set
 	q := request.URL.Query()

@@ -93,7 +93,7 @@ func main() {
 	}
 
 	if isManager, err := airlock.IsProjectManager(); err != nil {
-		logs.Fatal(err)
+		logs.Fatalf("Unable to determine project manager status: %s", err.Error())
 	} else if !isManager {
 		logs.Fatal("You cannot use Airlock as you are not the project manager")
 	}
@@ -101,7 +101,7 @@ func main() {
 	fmt.Println("Enter Password: ")
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
-		logs.Fatal(err)
+		logs.Fatalf("Could not read password: %s", err.Error())
 	}
 	password := string(bytePassword)
 
@@ -111,5 +111,8 @@ func main() {
 	}
 
 	logs.Info("\n### UPLOAD ###")
-	airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), *force)
+	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), *force)
+	if err != nil {
+		logs.Fatal(err)
+	}
 }

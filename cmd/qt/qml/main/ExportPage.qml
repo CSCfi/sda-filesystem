@@ -36,6 +36,10 @@ Page {
         } else {
             stack.currentIndex = 2
         }
+        onPreventExport: {
+            stack.currentIndex = 0
+            infoLabel.text = "Something went wrong when initializing Airlock. Check logs for further details."
+        }
     }
 
     ListModel {
@@ -70,6 +74,7 @@ Page {
             }
 
             Label {
+                id: infoLabel
                 text: "Your need to be project manager to export files."
                 font.pixelSize: 14
             }

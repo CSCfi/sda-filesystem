@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +43,7 @@ type QmlBridge struct {
 	_ func(message string) `signal:"popupError"`
 	_ func(message string) `signal:"initError"`
 	_ func()               `signal:"fuseReady"`
+	_ func()               `signal:"preventExport"`
 	_ func(success bool)   `signal:"exportFinished"`
 	_ func()               `signal:"panic"`
 
@@ -121,6 +123,7 @@ func (qb *QmlBridge) login(username, password string) {
 		qb.SetIsProjectManager(isManager)
 		if err != nil {
 			logs.Errorf("Resolving project manager status failed: %w", err)
+			qb.PreventExport()
 		} else if isManager {
 			logs.Info("You are the project manager")
 		} else {
@@ -128,7 +131,8 @@ func (qb *QmlBridge) login(username, password string) {
 		}
 
 		if err = airlock.GetPublicKey(); err != nil {
-			//do smth
+			logs.Error(err)
+			qb.PreventExport()
 		}
 
 		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
@@ -207,8 +211,7 @@ func (qb *QmlBridge) exportFile(folder, url string) {
 		err := airlock.Upload("", file, folder, "", 4000, true)
 		if err != nil {
 			logs.Error(err)
-			message, _ := logs.Wrapper(err)
-			qb.PopupError(message)
+			qb.PopupError(fmt.Sprintf("Exporting file %s failed", file))
 		}
 		qb.ExportFinished(err == nil)
 	}()

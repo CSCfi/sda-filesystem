@@ -3,7 +3,7 @@ package airlock
 import (
 	"bufio"
 	"bytes"
-	"crypto/md5"
+	"crypto/md5" // #nosec (Can't be helped at the moment)
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,8 +23,6 @@ import (
 	"github.com/neicnordic/crypt4gh/model/headers"
 	"github.com/neicnordic/crypt4gh/streaming"
 )
-
-//timeout
 
 var ai airlockInfo = airlockInfo{}
 
@@ -91,10 +89,11 @@ func GetPublicKey() error {
 		return err
 	}
 
+	errStr := "Failed to get public key"
 	url := ai.proxy + "/public-key/crypt4gh.pub"
 	err = api.MakeRequest(url, nil, nil, nil, &public_key_slice)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", errStr, err)
 	}
 
 	if !strings.HasPrefix(string(public_key_slice),
@@ -104,26 +103,26 @@ func GetPublicKey() error {
 
 	logs.Debugf("Encryption key: %s", public_key_slice)
 	ai.publicKey, err = keys.ReadPublicKey(bytes.NewReader(public_key_slice))
-	return err
+	return fmt.Errorf("%s: %w", errStr, err)
 }
 
 func Upload(original_filename, filename, container, journal_number string,
 	segment_size_mb uint64, force bool) error {
 
 	if encrypted, err := checkEncryption(filename); err != nil {
-		return err
+		return fmt.Errorf("Failed to check if file is encypted: %w", err)
 	} else if encrypted {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
 	} else {
 		original_filename = filename
 		if filename, err = encrypt(filename, force); err != nil {
-			return err
+			return fmt.Errorf("Failed to encrypt file: %w", err)
 		}
 	}
 
 	encrypted_checksum, encrypted_file_size, err := getFileDetails(filename)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get details for file %s: %w", filename, err)
 	}
 
 	logs.Debugf("File size %v", encrypted_file_size)
@@ -146,7 +145,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	if original_filename != "" {
 		original_checksum, original_filesize, err := getFileDetails(original_filename)
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to get details for file %s: %w", original_filename, err)
 		}
 
 		query["filesize"] = strconv.FormatInt(original_filesize, 10)
@@ -161,12 +160,15 @@ func Upload(original_filename, filename, container, journal_number string,
 
 	encrypted_file, err := os.Open(filename)
 	if err != nil {
-		return err
+		return fmt.Errorf("Cannot open encypted file: %w", err)
 	}
 
 	// If number of segments is 1, do regular upload, else upload file in segments
 	if segment_nro < 2 {
-		put(url, container, 1, 1, "", encrypted_file, query)
+		err = put(url, container, 1, 1, "", encrypted_file, query)
+		if err != nil {
+			return err
+		}
 	} else {
 		upload_dir := ".segments/" + filename + "/"
 
@@ -180,20 +182,29 @@ func Upload(original_filename, filename, container, journal_number string,
 			logs.Debugf("Segment end %v", segment_end)
 
 			// Move io reader pointer to correct location on orignal file
-			encrypted_file.Seek(segment_start, 0)
+			if _, err = encrypted_file.Seek(segment_start, 0); err != nil {
+				return err
+			}
 
-			logs.Infof("Uploading segment %v/%v\n", i+1, segment_nro)
+			logs.Infof("Uploading segment %v/%v", i+1, segment_nro)
 
 			// Send this_segment_size number of bytes to airlock
-			put(url, container, int(i+1), int(segment_nro),
+			err = put(url, container, int(i+1), int(segment_nro),
 				upload_dir, io.LimitReader(encrypted_file, this_segment_size), query)
+			if err != nil {
+				return err
+			}
 
 		}
 		logs.Info("Uploading manifest file for " + filename + " to container " +
 			container)
 
-		put(url, container, -1, -1, upload_dir, nil, query)
+		err = put(url, container, -1, -1, upload_dir, nil, query)
+		if err != nil {
+			return err
+		}
 	}
+
 	encrypted_file.Close()
 	return nil
 }
@@ -207,7 +218,7 @@ func getFileDetails(filename string) (string, int64, error) {
 	file_info, _ := file.Stat()
 	file_size := file_info.Size()
 
-	hash := md5.New()
+	hash := md5.New() // #nosec
 	_, err = io.Copy(hash, file)
 	if err != nil {
 		return "", 0, err
@@ -215,11 +226,6 @@ func getFileDetails(filename string) (string, int64, error) {
 
 	file.Close()
 	return hex.EncodeToString(hash.Sum(nil)), file_size, nil
-}
-
-var separateHeader = func(reader io.Reader) ([]byte, error) {
-	header, err := headers.ReadHeader(reader)
-	return header, err
 }
 
 func checkEncryption(filename string) (bool, error) {
@@ -230,7 +236,7 @@ func checkEncryption(filename string) (bool, error) {
 	defer file.Close()
 
 	var reader io.Reader = file
-	_, err = separateHeader(reader)
+	_, err = headers.ReadHeader(reader)
 	if err != nil {
 		return false, err
 	}
@@ -238,7 +244,7 @@ func checkEncryption(filename string) (bool, error) {
 }
 
 func encrypt(in_filename string, force bool) (string, error) {
-	logs.Infof("Encrypting file %q", in_filename)
+	logs.Info("Encrypting file ", in_filename)
 
 	out_filename := in_filename + ".c4gh"
 	// Ask user confirmation if output file exists
@@ -281,7 +287,7 @@ func encrypt(in_filename string, force bool) (string, error) {
 		return "", err
 	}
 
-	logs.Info(bytes_written, "bytes encrypted to file:", out_filename, "\n")
+	logs.Info(bytes_written, " bytes encrypted to file ", out_filename)
 	return out_filename, nil
 }
 
@@ -301,20 +307,22 @@ func put(url, container string, segment_nro, segment_total int,
 	}
 
 	var bodyBytes []byte
-	api.MakeRequest(url, query, headers, upload_data, &bodyBytes)
+	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
+		return fmt.Errorf("Failed to upload data: %w", err)
+	}
 	fmt.Print(string(bodyBytes))
 	//fmt.Errorf("Failed to upload data: %w", errors.New(string(bodyBytes)))
 	return nil
 }
 
-func askOverwrite(filename string, message string) error {
+func askOverwrite(filename string, message string) {
 	if _, err := os.Stat(filename); err == nil {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print(message, " [y/N]?")
 
 		response, err := reader.ReadString('\n')
 		if err != nil {
-			return err
+			logs.Fatalf("Could not read response: %s", err.Error())
 		}
 		response = strings.ToLower(strings.TrimSpace(response))
 		if response != "y" && response != "yes" {
@@ -322,5 +330,4 @@ func askOverwrite(filename string, message string) error {
 			os.Exit(0)
 		}
 	}
-	return nil
 }
