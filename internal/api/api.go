@@ -239,7 +239,7 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	ctx, cancel := context.WithTimeout(context.Background(), timeout*time.Second)
 	defer cancel()
 
-	request.WithContext(ctx)
+	request = request.WithContext(ctx)
 
 	// Place query params if they are set
 	q := request.URL.Query()
