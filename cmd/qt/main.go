@@ -230,7 +230,6 @@ func (qb *QmlBridge) checkEncryption(url string) {
 func (qb *QmlBridge) exportFile(folder, origFile, file string) {
 	go func() {
 		time.Sleep(1000 * time.Millisecond)
-		fmt.Println(origFile, file)
 		err := airlock.Upload(origFile, file, folder, "", 4000, origFile != "" && origFile != file)
 		if err != nil {
 			logs.Error(err)

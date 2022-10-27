@@ -10,15 +10,17 @@ Popup {
     y: parent.height - popup.height
     modal: true
     height: contentColumn.implicitHeight + topPadding + bottomPadding
-    topPadding: background.border.width + CSC.Style.padding
-    bottomPadding: background.border.width + CSC.Style.padding
-    leftPadding: background.border.width
-    rightPadding: background.border.width + CSC.Style.padding
+    topPadding: borderWidth + CSC.Style.padding
+    bottomPadding: borderWidth + CSC.Style.padding
+    leftPadding: borderWidth + 0.5 * CSC.Style.padding
+    rightPadding: borderWidth + CSC.Style.padding
     leftMargin: CSC.Style.padding
     rightMargin: CSC.Style.padding
 
     property string errorMessage: ""
+    property string additionalText: ""
     property color mainColor: CSC.Style.red
+    property int borderWidth: 2
 
     default property alias content: extraContent.data
     property alias state: contentColumn.state
@@ -38,12 +40,12 @@ Popup {
             RoundButton {
                 id: errorIcon
                 padding: 0
-                icon.source: "qrc:/qml/images/x-circle-fill.svg"
+                icon.source: popup.mainColor == CSC.Style.red ? "qrc:/qml/images/x-circle-fill.svg" : "qrc:/qml/images/warning_black.svg"
                 icon.color: mainColor
                 icon.width: diameter
                 icon.height: diameter
                 enabled: false
-                Layout.preferredWidth: 2.5 * diameter
+                Layout.preferredWidth: 2 * diameter
                 Layout.alignment: Qt.AlignVCenter
 
                 property real diameter: 25
@@ -59,10 +61,23 @@ Popup {
                 color: CSC.Style.grey
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
-                font.pixelSize: 15
-                font.weight: Font.Medium
+                font.pixelSize: popup.additionalText != "" ? 17 : 15
+                font.weight: popup.additionalText != "" ? Font.Bold : Font.Medium
                 Layout.fillWidth: true
             }
+        }
+
+        Label {
+            text: popup.additionalText
+            color: CSC.Style.grey
+            wrapMode: Text.Wrap
+            visible: popup.additionalText != ""
+            topPadding: 0.5 * CSC.Style.padding
+            bottomPadding: 0.5 * CSC.Style.padding
+            font.pixelSize: 15
+            font.weight: Font.Medium
+            Layout.fillWidth: true
+            Layout.leftMargin: errorIcon.width
         }
 
         Item {
@@ -86,11 +101,28 @@ Popup {
     }
 
     background: Rectangle {
-        border.width: 2
-        border.color: mainColor
+        color: mainColor
+        layer.enabled: true
         implicitWidth: popup.parent.width
         implicitHeight: popup.height
         radius: 8
+
+        Rectangle {
+            width: 0.5 * parent.width
+            height: parent.height
+            color: "white"
+            radius: parent.radius
+            border.color: mainColor
+            border.width: popup.borderWidth
+            anchors.right: parent.right
+        }
+
+        Rectangle {
+            color: "white"
+            width: parent.width - CSC.Style.padding - 2 * popup.borderWidth
+            height: parent.height - 2 * popup.borderWidth
+            anchors.centerIn: parent
+        }
     }
     
     enter: Transition {

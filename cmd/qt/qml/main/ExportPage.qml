@@ -43,11 +43,11 @@ Page {
                 popup.errorMessage = "Failed to check if file is encrypted"
                 popup.open()
             } else if (existing) {
+                popupOverwrite.additionalText = "Airlock wants to create file " + filenameEnc + " but a file of the same name already exists. Overwrite file?"  
                 popupOverwrite.open()
                 exportModel.setProperty(0, "name", filename)
             } else {
                 page.chosen = true
-                console.log(filename, filenameEnc)
                 if (filename != filenameEnc) {
                     exportModel.setProperty(0, "name", filename)
                 } else {
@@ -74,6 +74,7 @@ Page {
         id: popupOverwrite
         errorMessage: "File already exists"
         closePolicy: Popup.NoAutoClose
+        mainColor: CSC.Style.orange
         
         Row {
             spacing: CSC.Style.padding
