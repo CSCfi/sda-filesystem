@@ -67,6 +67,8 @@ ApplicationWindow {
                 contentHeight: height
                 Layout.fillHeight: true
 
+                property bool accessed: false
+
                 Material.accent: CSC.Style.primaryColor
 
                 background: Rectangle {
@@ -82,12 +84,14 @@ ApplicationWindow {
                         text: modelData
                         width: implicitWidth
                         height: tabBar.height
+                        enabled: !QmlBridge.loggedIn || tabBar.accessed || text == "Access" || text == "Logs"
                         font.weight: Font.DemiBold
+
+                        Material.foreground: enabled ? CSC.Style.primaryColor : CSC.Style.lightGrey
 
                         contentItem: Label {
                             text: tabButton.text
                             font: tabButton.font
-                            color: CSC.Style.primaryColor
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             maximumLineCount: 1
@@ -170,7 +174,6 @@ ApplicationWindow {
                     text: "Ignore"
                     outlined: true
                     checkable: true
-                    //mainColor: CSC.Style.red
 
                     onClicked: {
                         if (logCheck.checked) {
@@ -185,7 +188,6 @@ ApplicationWindow {
                     id: quitButton
                     text: "Quit"
                     checkable: true
-                    //mainColor: CSC.Style.red
                     
                     onClicked: {
                         if (logCheck.checked) {
@@ -221,6 +223,7 @@ ApplicationWindow {
             stack.state = "loggedIn"
             window.flags = window.flags & ~Qt.WindowCloseButtonHint
         }
+        onFuseReady: tabBar.accessed = true
     }
 
     StackLayout {

@@ -49,6 +49,7 @@ type QmlBridge struct {
 
 	_ []string `property:"buckets"`
 	_ string   `property:"mountPoint"`
+	_ string   `property:"mountPointProject"`
 	_ bool     `property:"loggedIn"`
 	_ bool     `property:"isProjectManager"`
 
@@ -148,6 +149,8 @@ func (qb *QmlBridge) loadFuse() {
 
 		go func() {
 			time.Sleep(time.Second)
+			project := qb.MountPoint() + "/" + api.SDConnect + "/" + airlock.GetProjectName()
+			qb.SetMountPointProject(core.QUrl_FromLocalFile(project).ToString(core.QUrl__None))
 			qb.FuseReady()
 		}()
 

@@ -122,6 +122,13 @@ Page {
                 maximumLineCount: 1
             }
 
+            Label {
+                text: "If you update the contents of these projects, please refresh access."
+                visible: buttonRow.visible
+                maximumLineCount: 1
+                font.pixelSize: 14
+            }
+
             RowLayout {
                 id: buttonRow
                 spacing: CSC.Style.padding

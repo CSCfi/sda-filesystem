@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Dialogs 1.3
 import QtQuick.Shapes 1.13
+import Qt.labs.folderlistmodel 2.13
 import csc 1.2 as CSC
 
 Page {
@@ -117,10 +118,14 @@ Page {
                     property string compareText: ""
                     property real spaceLeft
 
-                    onVisibleChanged: spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y - this.height })
+                    onVisibleChanged: {
+                        spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y - this.height })
+                    }
 
-                    onFocusChanged: if (focus) {
+                    onActiveFocusChanged: if (activeFocus) {
                         popupBuckets.open()
+                    } else {
+                        popupBuckets.close()
                     }
 
                     onTextChanged: {
@@ -147,10 +152,12 @@ Page {
                             clip: true
                             implicitHeight: contentHeight
                             currentIndex: 0
-                            model: QmlBridge.buckets
+                            model: FolderListModel {
+                                folder: QmlBridge.mountPointProject
+                            }
 
                             delegate: ItemDelegate {
-                                height: modelData.includes(nameField.compareText) ? Math.max(50, implicitHeight) : 0
+                                height: fileName.includes(nameField.compareText) ? Math.max(50, implicitHeight) : 0
                                 width: nameField.width
                                 highlighted: bucketsList.currentIndex === index
 
@@ -158,12 +165,12 @@ Page {
                                     bucketsList.currentIndex = index
                                     nameField.focus = false
                                     folderColumn.focus = true
-                                    nameField.text = modelData
+                                    nameField.text = fileName
                                     popupBuckets.close()
                                 }
 
                                 contentItem: Label {
-                                    text: modelData
+                                    text: fileName
                                     color: CSC.Style.grey
                                     font.pixelSize: 15
                                     font.weight: Font.Medium 

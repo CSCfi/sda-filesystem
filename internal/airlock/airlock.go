@@ -32,6 +32,10 @@ type airlockInfo struct {
 	project   string
 }
 
+var GetProjectName = func() string {
+	return ai.project
+}
+
 var IsProjectManager = func() (bool, error) {
 	errStr := "Could not find user info"
 
