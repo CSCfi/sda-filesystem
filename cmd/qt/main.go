@@ -47,11 +47,10 @@ type QmlBridge struct {
 	_ func(success bool)   `signal:"exportFinished"`
 	_ func()               `signal:"panic"`
 
-	_ []string `property:"buckets"`
-	_ string   `property:"mountPoint"`
-	_ string   `property:"mountPointProject"`
-	_ bool     `property:"loggedIn"`
-	_ bool     `property:"isProjectManager"`
+	_ string `property:"mountPoint"`
+	_ string `property:"mountPointProject"`
+	_ bool   `property:"loggedIn"`
+	_ bool   `property:"isProjectManager"`
 
 	fs *filesystem.Fuse
 }

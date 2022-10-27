@@ -34,11 +34,7 @@ Page {
         target: QmlBridge
         onExportFinished: {
             exportModel.setProperty(0, "modifiable", true)
-            if (success) {
-                stack.currentIndex = 4
-            } else {
-                stack.currentIndex = 2
-            }
+            stack.currentIndex = success ? 4 : 2
         }
         onPreventExport: {
             stack.currentIndex = 0
@@ -116,36 +112,32 @@ Page {
                     implicitWidth: 400
 
                     property string compareText: ""
-                    property real spaceLeft
 
-                    onVisibleChanged: {
-                        spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y - this.height })
-                    }
-
-                    onActiveFocusChanged: if (activeFocus) {
-                        popupBuckets.open()
-                    } else {
-                        popupBuckets.close()
-                    }
-
+                    onActiveFocusChanged: popupBuckets.visible = activeFocus
                     onTextChanged: {
                         if (focus) {
                             compareText = text
                         }
                         if (text != "") {
-                            popupBuckets.open()
+                            popupBuckets.visible = true
                         }
                     }
 
-                    Popup {
+                    Pane {
                         id: popupBuckets
                         y: parent.height
                         width: parent.width
-                        implicitHeight: Math.min(parent.spaceLeft - CSC.Style.padding, contentItem.implicitHeight)
+                        implicitHeight: Math.min(spaceLeft - CSC.Style.padding, contentItem.implicitHeight)
                         padding: 0
-                        closePolicy: Popup.NoAutoClose
+                        visible: false
+
+                        property real spaceLeft
 
                         Material.elevation: bucketsList.implicitHeight > 0 ? 6 : 0
+
+                        onVisibleChanged: {
+                            spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y })
+                        }
 
                         contentItem: ListView {
                             id: bucketsList
@@ -166,7 +158,7 @@ Page {
                                     nameField.focus = false
                                     folderColumn.focus = true
                                     nameField.text = fileName
-                                    popupBuckets.close()
+                                    popupBuckets.visible = false
                                 }
 
                                 contentItem: Label {
@@ -181,7 +173,7 @@ Page {
 
                                 background: Rectangle {
                                     anchors.fill: parent
-                                    color: (parent.hovered || parent.highlighted) ? CSC.Style.lightBlue : "transparent"
+                                    color: parent.hovered ? CSC.Style.lightBlue : "transparent"
                                 }
                             }
 
@@ -197,7 +189,7 @@ Page {
                     Layout.alignment: Qt.AlignRight
 
                     onClicked: if (enabled) { 
-                        popupBuckets.close()
+                        popupBuckets.visible = false
                         page.chosen = false
                         exportModel.setProperty(0, "bucket", nameField.text)
                         stack.currentIndex = stack.currentIndex + 1 

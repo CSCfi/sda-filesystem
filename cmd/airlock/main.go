@@ -13,11 +13,8 @@ import (
 	"golang.org/x/term"
 )
 
-var version = "0.12"
-
 func usage(self_path string) {
 	fmt.Println("")
-	fmt.Println("Airlock version", version)
 	fmt.Println("Usage:")
 	fmt.Println(" ", self_path, "[-segment-size=size_in_mb] "+
 		"[-journal-number=journal_number] [-original-file=unecrypted_filename] "+
