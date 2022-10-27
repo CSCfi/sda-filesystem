@@ -138,9 +138,7 @@ ApplicationWindow {
         onAccepted: { 
             LogModel.saveLogs(dialogSave.fileUrl)
 
-            if (ignoreButton.checked) {
-                popupPanic.close()
-            } else if (quitButton.checked) {
+            if (quitButton.checked) {
                 close()
             }
         }
@@ -154,49 +152,23 @@ ApplicationWindow {
         id: popupPanic
         errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
         
-        ColumnLayout {
-            width: parent.width
+        Row {
+            spacing: CSC.Style.padding
+            anchors.right: parent.right
 
-            CheckBox {
-                id: logCheck
-                checked: true
-                text: "Yes, save logs to file"
+            CSC.Button {
+                text: "Ignore"
+                outlined: true
 
-                Material.accent: CSC.Style.primaryColor
+                onClicked: popupPanic.close()
             }
 
-            Row {
-                spacing: CSC.Style.padding
-                Layout.alignment: Qt.AlignRight
-
-                CSC.Button {
-                    id: ignoreButton
-                    text: "Ignore"
-                    outlined: true
-                    checkable: true
-
-                    onClicked: {
-                        if (logCheck.checked) {
-                            dialogSave.visible = true
-                        } else {
-                            popupPanic.close()
-                        }
-                    }
-                }
-
-                CSC.Button {
-                    id: quitButton
-                    text: "Quit"
-                    checkable: true
-                    
-                    onClicked: {
-                        if (logCheck.checked) {
-                            dialogSave.visible = true
-                        } else {
-                            close()
-                        }
-                    }
-                }
+            CSC.Button {
+                id: quitButton
+                text: "Save logs and quit"
+                checkable: true
+                
+                onClicked: dialogSave.visible = true
             }
         }
     }

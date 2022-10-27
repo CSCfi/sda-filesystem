@@ -1,7 +1,6 @@
 package airlock
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/md5" // #nosec (Can't be helped at the moment)
 	"encoding/hex"
@@ -114,16 +113,11 @@ func GetPublicKey() error {
 }
 
 func Upload(original_filename, filename, container, journal_number string,
-	segment_size_mb uint64, force bool) error {
+	segment_size_mb uint64, performEncryption bool) error {
 
-	if encrypted, err := checkEncryption(filename); err != nil {
-		return fmt.Errorf("Failed to check if file %s is encypted: %w", filename, err)
-	} else if encrypted {
-		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
-	} else {
-		original_filename = filename
-		if filename, err = encrypt(filename, force); err != nil {
-			return fmt.Errorf("Failed to encrypt file %s: %w", filename, err)
+	if performEncryption {
+		if err := encrypt(original_filename, filename); err != nil {
+			return fmt.Errorf("Failed to encrypt file %s: %w", original_filename, err)
 		}
 	}
 
@@ -235,10 +229,10 @@ func getFileDetails(filename string) (string, int64, error) {
 	return hex.EncodeToString(hash.Sum(nil)), file_size, nil
 }
 
-func checkEncryption(filename string) (bool, error) {
+func CheckEncryption(filename string) (bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Failed to check if file %s is encypted: %w", filename, err)
 	}
 	defer file.Close()
 
@@ -246,52 +240,46 @@ func checkEncryption(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-func encrypt(in_filename string, force bool) (string, error) {
+func encrypt(in_filename, out_filename string) error {
 	logs.Info("Encrypting file ", in_filename)
-
-	out_filename := in_filename + ".c4gh"
-	// Ask user confirmation if output file exists
-	if !force {
-		askOverwrite(out_filename, "File "+out_filename+" exists. Overwrite file")
-	}
 
 	in_file, err := os.Open(in_filename)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	out_file, err := os.Create(out_filename)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(out_file, ai.publicKey, nil)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	bytes_written, err := io.Copy(c4gh_writer, in_file)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = in_file.Close()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = c4gh_writer.Close()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = out_file.Close()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	logs.Info(bytes_written, " bytes encrypted to file ", out_filename)
-	return out_filename, nil
+	return nil
 }
 
 func put(url, container string, segment_nro, segment_total int,
@@ -317,21 +305,4 @@ func put(url, container string, segment_nro, segment_total int,
 		return fmt.Errorf("Failed to upload data to bucket %s: %w", container, err)
 	}
 	return nil
-}
-
-func askOverwrite(filename string, message string) {
-	if _, err := os.Stat(filename); err == nil {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print(message, " [y/N]?")
-
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			logs.Fatalf("Could not read response: %s", err.Error())
-		}
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
-			logs.Info("Not overwriting. Exiting.")
-			os.Exit(0)
-		}
-	}
 }

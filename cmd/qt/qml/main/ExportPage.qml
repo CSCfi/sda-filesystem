@@ -24,10 +24,7 @@ Page {
         selectExisting: true
         selectFolder: false
 
-        onAccepted: {
-            page.chosen = true
-            exportModel.setProperty(0, "name", dialogSelect.fileUrl.toString())
-        }
+        onAccepted: QmlBridge.checkEncryption(dialogSelect.fileUrl.toString())
     }
 
     Connections {
@@ -35,10 +32,30 @@ Page {
         onExportFinished: {
             exportModel.setProperty(0, "modifiable", true)
             stack.currentIndex = success ? 4 : 2
+            page.chosen = false
         }
         onPreventExport: {
             stack.currentIndex = 0
             infoLabel.text = "Something went wrong when initializing Airlock. Check logs for further details."
+        }
+        onEncryptionChecked: {
+            if (filename == "") {
+                popup.errorMessage = "Failed to check if file is encrypted"
+                popup.open()
+            } else if (existing) {
+                popupOverwrite.open()
+                exportModel.setProperty(0, "name", filename)
+            } else {
+                page.chosen = true
+                console.log(filename, filenameEnc)
+                if (filename != filenameEnc) {
+                    exportModel.setProperty(0, "name", filename)
+                } else {
+                    exportModel.setProperty(0, "name", "")
+                }
+            }
+
+            exportModel.setProperty(0, "nameEncrypted", filenameEnc)
         }
     }
 
@@ -47,8 +64,37 @@ Page {
 
         ListElement {
             name: ""
+            nameEncrypted: ""
             bucket: ""
             modifiable: true
+        }
+    }
+
+    CSC.Popup {
+        id: popupOverwrite
+        errorMessage: "File already exists"
+        closePolicy: Popup.NoAutoClose
+        
+        Row {
+            spacing: CSC.Style.padding
+            anchors.right: parent.right
+
+            CSC.Button {
+                text: "Cancel"
+                outlined: true
+
+                onClicked: popupOverwrite.close()
+            }
+
+            CSC.Button {
+                id: overwriteButton
+                text: "Overwrite and continue"
+                
+                onClicked: {
+                    page.chosen = true
+                    popupOverwrite.close()
+                }
+            }
         }
     }
 
@@ -149,7 +195,7 @@ Page {
                             }
 
                             delegate: ItemDelegate {
-                                height: fileName.includes(nameField.compareText) ? Math.max(50, implicitHeight) : 0
+                                height: fileName.includes(nameField.compareText) ? Math.max(40, implicitHeight) : 0
                                 width: nameField.width
                                 highlighted: bucketsList.currentIndex === index
 
@@ -190,7 +236,6 @@ Page {
 
                     onClicked: if (enabled) { 
                         popupBuckets.visible = false
-                        page.chosen = false
                         exportModel.setProperty(0, "bucket", nameField.text)
                         stack.currentIndex = stack.currentIndex + 1 
                     }
@@ -281,13 +326,13 @@ Page {
                             return
                         }
                         
-                        if (QmlBridge.isFile(drop.urls[0])) {
-                            page.chosen = true
-                            exportModel.setProperty(0, "name", drop.urls[0])
-                        } else {
+                        if (!QmlBridge.isFile(drop.urls[0])) {
                             popup.errorMessage = "Dropped item was not a file"
                             popup.open()
+                            return
                         }
+
+                        QmlBridge.checkEncryption(drop.urls[0])
                     }
                 }
 
@@ -327,7 +372,7 @@ Page {
                         onClicked: if (enabled) { 
                             exportModel.setProperty(0, "modifiable", false)
                             stack.currentIndex = stack.currentIndex + 1 
-                            QmlBridge.exportFile(exportModel.get(0).bucket, exportModel.get(0).name) 
+                            QmlBridge.exportFile(exportModel.get(0).bucket, exportModel.get(0).name, exportModel.get(0).nameEncrypted) 
                         }
                     }
                 }
@@ -425,12 +470,12 @@ Page {
         id: fileLine
 
         RowLayout {
-            property string name: modelData ? modelData.name : ""
+            property string nameEncrypted: modelData ? modelData.nameEncrypted : ""
             property string bucket: modelData ? modelData.bucket : ""
             property bool modifiable: modelData ? modelData.modifiable : false
 
             Label {
-                text: parent.name.split('/').reverse()[0]
+                text: parent.nameEncrypted.split('/').reverse()[0]
                 elide: Text.ElideRight
                 Layout.preferredWidth: parent.width * 0.4
             }

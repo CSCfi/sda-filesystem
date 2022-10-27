@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 
 	"sda-filesystem/internal/airlock"
@@ -12,6 +14,23 @@ import (
 
 	"golang.org/x/term"
 )
+
+func askOverwrite(filename string, message string) {
+	if _, err := os.Stat(filename); err == nil {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print(message, " [y/N]?")
+
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			logs.Fatalf("Could not read response: %s", err.Error())
+		}
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "y" && response != "yes" {
+			logs.Info("Not overwriting. Exiting.")
+			os.Exit(0)
+		}
+	}
+}
 
 func usage(self_path string) {
 	fmt.Println("")
@@ -107,8 +126,23 @@ func main() {
 		logs.Fatal(err)
 	}
 
+	var encrypted bool
+	if encrypted, err = airlock.CheckEncryption(filename); err != nil {
+		logs.Fatal(err)
+	} else if encrypted {
+		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
+	} else {
+		*original_filename = filename
+		filename = filename + ".c4gh"
+	}
+
+	// Ask user confirmation if output file exists
+	if !*force {
+		askOverwrite(filename, "File "+filename+" exists. Overwrite file")
+	}
+
 	logs.Info("\n### UPLOAD ###")
-	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), *force)
+	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), !encrypted)
 	if err != nil {
 		logs.Fatal(err)
 	}
