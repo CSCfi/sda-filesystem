@@ -766,3 +766,25 @@ func TestLookupNode(t *testing.T) {
 		})
 	}
 }
+
+func TestGetNodeChildren(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	var tests = []struct {
+		path     string
+		children []string
+	}{
+		{"Rep1/child_1", []string{"dir+", "kansio"}},
+		{"Rep1/child_2", []string{"+folder", "dir"}},
+	}
+
+	for i, tt := range tests {
+		testname := fmt.Sprintf("GET_NODE_CHILDREN_%d", i+1)
+		t.Run(testname, func(t *testing.T) {
+			ret := fs.GetNodeChildren(tt.path)
+			if !reflect.DeepEqual(ret, tt.children) {
+				t.Errorf("Path %s returned incorrect children\nExpected %v\nReceived %v", tt.path, tt.children, ret)
+			}
+		})
+	}
+}

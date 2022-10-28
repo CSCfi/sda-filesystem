@@ -221,7 +221,7 @@ func Test_SDSubmit_GetEnvs_Fail_SubmitAPI(t *testing.T) {
 
 func Test_SDSubmit_GetEnvs_Fail_ValidURL(t *testing.T) {
 	// Mock
-	expectedError := constantError
+	expectedError := "SD Apply API not a valid URL: " + constantError
 	origGetEnv := GetEnv
 	origValidURL := validURL
 	defer func() {

@@ -58,6 +58,23 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestOpen_Cancel(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	origIsValidOpen := isValidOpen
+	defer func() { isValidOpen = origIsValidOpen }()
+
+	isValidOpen = func() bool { return false }
+
+	errc, fh := fs.Open("/prevent/this/path/from/opening", 0)
+	if errc != -fuse.ECANCELED {
+		t.Fatalf("Error code incorrect. Expected %d, received %d", -fuse.ECANCELED, errc)
+	}
+	if fh != ^uint64(0) {
+		t.Errorf("File handle incorrect. Expected %d, received %d", ^uint64(0), fh)
+	}
+}
+
 func TestOpen_Decryption_Check(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
 

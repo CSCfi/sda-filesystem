@@ -232,7 +232,7 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	mockC := &mockConnecter{sTokens: map[string]sToken{"s1": {"sToken", "proj1"}}, projects: projects}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	err := sd.validateLogin("user", "pass")
+	err := sd.validateLogin("dXNlcjpwYXNz")
 	if err != nil {
 		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
