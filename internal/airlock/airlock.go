@@ -135,10 +135,13 @@ func Upload(original_filename, filename, container, journal_number string,
 
 	url := ai.proxy + "/airlock"
 
-	logs.Info("Uploading file " + filename + " to container " + container)
+	before, after, _ := strings.Cut(container, "/")
+	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
+	container = before
+	logs.Info("Uploading object " + object + " to container " + container)
 
 	query := map[string]string{
-		"filename":  filepath.Base(filename),
+		"filename":  object,
 		"bucket":    container,
 		"timestamp": time.Now().Format(time.RFC3339),
 	}
@@ -171,7 +174,7 @@ func Upload(original_filename, filename, container, journal_number string,
 			return err
 		}
 	} else {
-		upload_dir := ".segments/" + filename + "/"
+		upload_dir := ".segments/" + object + "/"
 
 		for i := uint64(0); i < segment_nro; i++ {
 			segment_start := int64(float64(i * segment_size))
@@ -197,10 +200,11 @@ func Upload(original_filename, filename, container, journal_number string,
 			}
 
 		}
-		logs.Info("Uploading manifest file for " + filename + " to container " +
+		logs.Info("Uploading manifest file for object " + object + " to container " +
 			container)
 
-		err = put(url, container, -1, -1, upload_dir, nil, query)
+		var empty *os.File = nil
+		err = put(url, container, -1, -1, upload_dir, empty, query)
 		if err != nil {
 			return err
 		}
@@ -236,7 +240,8 @@ func CheckEncryption(filename string) (bool, error) {
 	}
 	defer file.Close()
 
-	_, err = headers.ReadHeader(file)
+	var reader io.Reader = file
+	_, err = headers.ReadHeader(reader)
 	return err == nil, nil
 }
 
@@ -300,9 +305,9 @@ func put(url, container string, segment_nro, segment_total int,
 	var bodyBytes []byte
 	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
 		if string(bodyBytes) != "" {
-			return fmt.Errorf("Failed to upload data to bucket %s: %w", container, errors.New(string(bodyBytes)))
+			return fmt.Errorf("Failed to upload data to container %s: %w", container, errors.New(string(bodyBytes)))
 		}
-		return fmt.Errorf("Failed to upload data to bucket %s: %w", container, err)
+		return fmt.Errorf("Failed to upload data to container %s: %w", container, err)
 	}
 	return nil
 }

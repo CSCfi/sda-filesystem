@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -227,11 +228,15 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	var request *http.Request
 
 	if body != nil {
-		request, err = http.NewRequest("PUT", url, body)
-		timeout = time.Duration(hi.requestTimeout) * time.Second
+		if reflect.ValueOf(body) == reflect.Zero(reflect.TypeOf(body)) {
+			request, err = http.NewRequest("PUT", url, nil)
+		} else {
+			request, err = http.NewRequest("PUT", url, body)
+		}
+		timeout = time.Duration(108000) * time.Second
 	} else {
 		request, err = http.NewRequest("GET", url, nil)
-		timeout = time.Duration(108000) * time.Second
+		timeout = time.Duration(hi.requestTimeout) * time.Second
 	}
 
 	if err != nil {
