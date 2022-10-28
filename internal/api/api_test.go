@@ -378,55 +378,88 @@ func TestTestURL(t *testing.T) {
 	}
 }
 
-func TestValidateLogin(t *testing.T) {
-	var tests = []struct {
-		testname              string
-		errConnect, errSubmit error
-	}{
-		{"OK", nil, nil},
-		{"FAIL_SUBMIT", nil, errExpected},
-		{"FAIL_BOTH", errExpected, errExpected},
-	}
-
+func TestValidateLogin_Success(t *testing.T) {
+	origAllRepositories := allRepositories
 	origRepositories := hi.repositories
-	defer func() { hi.repositories = origRepositories }()
+	defer func() {
+		allRepositories = origAllRepositories
+		hi.repositories = origRepositories
+	}()
 
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			mockRepoC := &mockRepository{loginError: tt.errConnect}
-			mockRepoS := &mockRepository{loginError: tt.errSubmit}
-			allRepositories = map[string]fuseInfo{SDConnect: mockRepoC, SDSubmit: mockRepoS}
-			hi.repositories = make(map[string]fuseInfo)
+	mockRepoC := &mockRepository{}
+	mockRepoS := &mockRepository{}
+	allRepositories = map[string]fuseInfo{SDConnect: mockRepoC, SDSubmit: mockRepoS}
+	hi.repositories = make(map[string]fuseInfo)
 
-			repC := map[string]fuseInfo{SDConnect: mockRepoC}
+	success, err := ValidateLogin("username", "password")
 
-			success, err := ValidateLogin("username", "password")
-			if tt.errConnect == nil {
-				if !success {
-					t.Error("Login should have been successful")
-				} else if tt.errSubmit != nil {
-					if err == nil {
-						t.Errorf("Function did not return error")
-					} else if err.Error() != errExpected.Error() {
-						t.Errorf("Function returned incorrect error\nExpected: %s\nReceived: %s", errExpected.Error(), err.Error())
-					} else if !reflect.DeepEqual(hi.repositories, repC) {
-						t.Errorf("Incorrect enabled repositories\nExpected: %v\nReceived: %v", repC, hi.repositories)
-					}
-				} else if err != nil {
-					t.Errorf("Function returned unexpected error\nExpected: %s\nReceived: %s", errExpected.Error(), err.Error())
-				} else if !reflect.DeepEqual(hi.repositories, allRepositories) {
-					t.Errorf("Incorrect enabled repositories\nExpected: %v\nReceived: %v", allRepositories, hi.repositories)
-				}
-			} else if err == nil {
-				t.Errorf("Function did not return error")
-			} else if err.Error() != errExpected.Error() {
-				t.Errorf("Function returned incorrect error\nExpected: %s\nReceived: %s", errExpected.Error(), err.Error())
-			} else if success {
-				t.Error("Login should not have been successful")
-			} else if len(hi.repositories) > 0 {
-				t.Errorf("There should be no enabled repositories\nContent: %v", hi.repositories)
-			}
-		})
+	if !success {
+		t.Fatal("Login should have been successful")
+	}
+	if err != nil {
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
+	}
+	if !reflect.DeepEqual(hi.repositories, allRepositories) {
+		t.Errorf("Incorrect enabled repositories\nExpected: %v\nReceived: %v", allRepositories, hi.repositories)
+	}
+}
+
+func TestValidateLogin_Submit_Error(t *testing.T) {
+	origAllRepositories := allRepositories
+	origRepositories := hi.repositories
+	defer func() {
+		allRepositories = origAllRepositories
+		hi.repositories = origRepositories
+	}()
+
+	mockRepoC := &mockRepository{}
+	mockRepoS := &mockRepository{loginError: errExpected}
+	allRepositories = map[string]fuseInfo{SDConnect: mockRepoC, SDSubmit: mockRepoS}
+	hi.repositories = make(map[string]fuseInfo)
+	repC := map[string]fuseInfo{SDConnect: mockRepoC}
+
+	success, err := ValidateLogin("username", "password")
+
+	if !success {
+		t.Fatal("Login should have been successful")
+	}
+	if err == nil {
+		t.Fatal("Function did not return error")
+	}
+	if err.Error() != errExpected.Error() {
+		t.Fatalf("Function returned incorrect error\nExpected: %s\nReceived: %s", errExpected.Error(), err.Error())
+	}
+	if !reflect.DeepEqual(hi.repositories, repC) {
+		t.Errorf("Incorrect enabled repositories\nExpected: %v\nReceived: %v", repC, hi.repositories)
+	}
+}
+
+func TestValidateLogin_Fail(t *testing.T) {
+	origAllRepositories := allRepositories
+	origRepositories := hi.repositories
+	defer func() {
+		allRepositories = origAllRepositories
+		hi.repositories = origRepositories
+	}()
+
+	mockRepoC := &mockRepository{loginError: errExpected}
+	mockRepoS := &mockRepository{loginError: errExpected}
+	allRepositories = map[string]fuseInfo{SDConnect: mockRepoC, SDSubmit: mockRepoS}
+	hi.repositories = make(map[string]fuseInfo)
+
+	success, err := ValidateLogin("username", "password")
+
+	if success {
+		t.Fatal("Login should not have been successful")
+	}
+	if err == nil {
+		t.Fatal("Function did not return error")
+	}
+	if err.Error() != errExpected.Error() {
+		t.Fatalf("Function returned incorrect error\nExpected: %s\nReceived: %s", errExpected.Error(), err.Error())
+	}
+	if len(hi.repositories) > 0 {
+		t.Errorf("There should be no enabled repositories\nContent: %v", hi.repositories)
 	}
 }
 
