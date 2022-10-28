@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
@@ -71,6 +73,22 @@ func newTestReader(input []string, password string, sErr error, rErr error) *tes
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
+}
+
+func TestUserChooseUpdate(t *testing.T) {
+	finished := false
+	buf := bytes.NewBufferString("continue\nhello\nupdate")
+
+	go func() {
+		userChooseUpdate(buf)
+		finished = true
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	if !finished {
+		t.Fatal("Function did not read input correctly. Input 'update' did not stop function")
+	}
 }
 
 func TestAskForLogin(t *testing.T) {

@@ -501,6 +501,13 @@ func Test_SDSubmit_GetNthLevel_Default(t *testing.T) {
 	}
 }
 
+func Test_SDSubmit_UpdateAttributes(t *testing.T) {
+	s := &sdSubmitInfo{}
+	if s.updateAttributes(nil, "", nil) != nil {
+		t.Error("Function should have returned 'nil'")
+	}
+}
+
 func Test_SDSubmit_DownloadData_Fail(t *testing.T) {
 	// Mock
 	s := sdSubmitInfo{datasets: map[string]int{"something": 0}}
