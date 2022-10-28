@@ -524,8 +524,8 @@ func (fs *Fuse) GetNodeChildren(path string) []string {
 	n := fs.getNode(path, ^uint64(0))
 	chld := make([]string, len(n.node.chld))
 	i := 0
-	for k := range n.node.chld {
-		chld[i] = k
+	for _, value := range n.node.chld {
+		chld[i] = value.originalName
 		i++
 	}
 	sort.Strings(chld)
