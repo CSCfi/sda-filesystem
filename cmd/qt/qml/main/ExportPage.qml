@@ -4,7 +4,6 @@ import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Dialogs 1.3
 import QtQuick.Shapes 1.13
-import Qt.labs.folderlistmodel 2.13
 import csc 1.2 as CSC
 
 Page {
@@ -191,12 +190,10 @@ Page {
                             clip: true
                             implicitHeight: contentHeight
                             currentIndex: 0
-                            model: FolderListModel {
-                                folder: QmlBridge.mountPointProject
-                            }
+                            model: QmlBridge.buckets
 
                             delegate: ItemDelegate {
-                                height: fileName.includes(nameField.compareText) ? Math.max(40, implicitHeight) : 0
+                                height: modelData.includes(nameField.compareText) ? Math.max(40, implicitHeight) : 0
                                 width: nameField.width
                                 highlighted: bucketsList.currentIndex === index
 
@@ -204,12 +201,12 @@ Page {
                                     bucketsList.currentIndex = index
                                     nameField.focus = false
                                     folderColumn.focus = true
-                                    nameField.text = fileName
+                                    nameField.text = modelData
                                     popupBuckets.visible = false
                                 }
 
                                 contentItem: Label {
-                                    text: fileName
+                                    text: modelData
                                     color: CSC.Style.grey
                                     font.pixelSize: 15
                                     font.weight: Font.Medium 

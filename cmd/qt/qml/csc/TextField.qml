@@ -12,15 +12,12 @@ TextField {
     bottomPadding: extraPadding ? topPadding + bottomInset : topPadding
     bottomInset: extraPadding ? errorRow.height : 0
     selectByMouse: true
-    color: enabled ? CSC.Style.grey : title.color
     mouseSelectionMode: TextInput.SelectWords
 
     property string errorText
     property string titleText
     property bool errorVisible: false
     property bool extraPadding: errorText != ""
-
-    Material.foreground: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
 
     background: Rectangle {
         id: bg
@@ -59,6 +56,8 @@ TextField {
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: errorText != "" ? -0.5 * errorRow.height : 0
         anchors.left: pane.left
+
+        Material.foreground: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
     }
 
     RowLayout {

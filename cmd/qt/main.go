@@ -49,10 +49,10 @@ type QmlBridge struct {
 	_ func(success bool)                                       `signal:"exportFinished"`
 	_ func()                                                   `signal:"panic"`
 
-	_ string `property:"mountPoint"`
-	_ string `property:"mountPointProject"`
-	_ bool   `property:"loggedIn"`
-	_ bool   `property:"isProjectManager"`
+	_ []string `property:"buckets"`
+	_ string   `property:"mountPoint"`
+	_ bool     `property:"loggedIn"`
+	_ bool     `property:"isProjectManager"`
 
 	fs *filesystem.Fuse
 }
@@ -150,8 +150,7 @@ func (qb *QmlBridge) loadFuse() {
 
 		go func() {
 			time.Sleep(time.Second)
-			project := qb.MountPoint() + "/" + api.SDConnect + "/" + airlock.GetProjectName()
-			qb.SetMountPointProject(core.QUrl_FromLocalFile(project).ToString(core.QUrl__None))
+			qb.SetBuckets(qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName()))
 			qb.FuseReady()
 		}()
 
@@ -199,6 +198,7 @@ func (qb *QmlBridge) refreshFuse() string {
 		projectModel.DeleteExtraProjects()
 		newFs.PopulateFilesystem(projectModel.AddToCount)
 		qb.fs.RefreshFilesystem(newFs)
+		qb.SetBuckets(qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName()))
 		qb.FuseReady()
 	}()
 	return ""
