@@ -23,7 +23,7 @@ Page {
         selectExisting: true
         selectFolder: false
 
-        onAccepted: QmlBridge.checkEncryption(dialogSelect.fileUrl.toString())
+        onAccepted: QmlBridge.checkEncryption(dialogSelect.fileUrl.toString(), exportModel.get(0).bucket)
     }
 
     Connections {
@@ -38,23 +38,14 @@ Page {
             infoLabel.text = "Something went wrong when initializing Airlock. Check logs for further details."
         }
         onEncryptionChecked: {
-            if (filename == "") {
+            if (fileEnc == "") {
                 popup.errorMessage = "Failed to check if file is encrypted"
                 popup.open()
-            } else if (existing) {
-                popupOverwrite.additionalText = "Airlock wants to create file " + filenameEnc + " but a file of the same name already exists. Overwrite file?"  
-                popupOverwrite.open()
-                exportModel.setProperty(0, "name", filename)
             } else {
                 page.chosen = true
-                if (filename != filenameEnc) {
-                    exportModel.setProperty(0, "name", filename)
-                } else {
-                    exportModel.setProperty(0, "name", "")
-                }
+                exportModel.setProperty(0, "name", fileOrig)        
+                exportModel.setProperty(0, "nameEncrypted", fileEnc)
             }
-
-            exportModel.setProperty(0, "nameEncrypted", filenameEnc)
         }
     }
 
@@ -66,35 +57,6 @@ Page {
             nameEncrypted: ""
             bucket: ""
             modifiable: true
-        }
-    }
-
-    CSC.Popup {
-        id: popupOverwrite
-        errorMessage: "File already exists"
-        closePolicy: Popup.NoAutoClose
-        mainColor: CSC.Style.orange
-        
-        Row {
-            spacing: CSC.Style.padding
-            anchors.right: parent.right
-
-            CSC.Button {
-                text: "Cancel"
-                outlined: true
-
-                onClicked: popupOverwrite.close()
-            }
-
-            CSC.Button {
-                id: overwriteButton
-                text: "Overwrite and continue"
-                
-                onClicked: {
-                    page.chosen = true
-                    popupOverwrite.close()
-                }
-            }
         }
     }
 
@@ -330,7 +292,7 @@ Page {
                             return
                         }
 
-                        QmlBridge.checkEncryption(drop.urls[0])
+                        QmlBridge.checkEncryption(drop.urls[0], exportModel.get(0).bucket)
                     }
                 }
 
@@ -453,7 +415,7 @@ Page {
 
         RowLayout {
             Label {
-                text: "File Name"
+                text: "Exported File Name"
                 Layout.preferredWidth: parent.width * 0.4
             }
 
