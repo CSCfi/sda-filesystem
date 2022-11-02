@@ -3,6 +3,7 @@ package airlock
 import (
 	"bytes"
 	"crypto/md5" // #nosec (Can't be helped at the moment)
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -24,9 +25,12 @@ import (
 )
 
 var ai airlockInfo = airlockInfo{}
+var infoFile = "/etc/pam_userinfo/config.json"
+
+const keySize = 32
 
 type airlockInfo struct {
-	publicKey [32]byte
+	publicKey [keySize]byte
 	proxy     string
 	project   string
 }
@@ -38,7 +42,7 @@ var GetProjectName = func() string {
 var IsProjectManager = func() (bool, error) {
 	errStr := "Could not find user info"
 
-	file, err := os.ReadFile("/etc/pam_userinfo/config.json")
+	file, err := os.ReadFile(infoFile)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", errStr, err)
 	}
@@ -99,9 +103,25 @@ func GetPublicKey() error {
 		return fmt.Errorf("%s: %w", errStr, err)
 	}
 
-	if !strings.HasPrefix(string(public_key_slice),
-		"-----BEGIN CRYPT4GH PUBLIC KEY-----") {
-		return fmt.Errorf("Invalid public key %s", string(public_key_slice))
+	public_key_str := string(public_key_slice)
+	for strings.Contains(public_key_str, "\n\n") {
+		public_key_str = strings.Replace(public_key_str, "\n\n", "\n", -1)
+	}
+	public_key_str = strings.TrimSuffix(public_key_str, "\n")
+	parts := strings.Split(public_key_str, "\n")
+
+	if len(parts) != 3 ||
+		!strings.HasPrefix(parts[0], "-----BEGIN CRYPT4GH PUBLIC KEY-----") ||
+		!strings.HasSuffix(parts[2], "-----END CRYPT4GH PUBLIC KEY-----") {
+		return fmt.Errorf("Invalid public key format %q", public_key_str)
+	}
+
+	data, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("Could not decode public key: %w", err)
+	}
+	if len(data) != keySize {
+		return fmt.Errorf("Invalid length of decoded public key (%v)", len(data))
 	}
 
 	logs.Debugf("Encryption key: %s", public_key_slice)
@@ -166,6 +186,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	if err != nil {
 		return fmt.Errorf("Cannot open encypted file: %w", err)
 	}
+	defer encrypted_file.Close()
 
 	// If number of segments is 1, do regular upload, else upload file in segments
 	if segment_nro < 2 {
@@ -210,7 +231,6 @@ func Upload(original_filename, filename, container, journal_number string,
 		}
 	}
 
-	encrypted_file.Close()
 	return nil
 }
 
@@ -219,6 +239,7 @@ func getFileDetails(filename string) (string, int64, error) {
 	if err != nil {
 		return "", 0, err
 	}
+	defer file.Close()
 
 	file_info, _ := file.Stat()
 	file_size := file_info.Size()
@@ -229,19 +250,17 @@ func getFileDetails(filename string) (string, int64, error) {
 		return "", 0, err
 	}
 
-	file.Close()
 	return hex.EncodeToString(hash.Sum(nil)), file_size, nil
 }
 
 func CheckEncryption(filename string) (bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return false, fmt.Errorf("Failed to check if file %s is encypted: %w", filename, err)
+		return false, fmt.Errorf("Failed to check if file is encrypted: %w", err)
 	}
 	defer file.Close()
 
-	var reader io.Reader = file
-	_, err = headers.ReadHeader(reader)
+	_, err = headers.ReadHeader(file)
 	return err == nil, nil
 }
 
@@ -252,11 +271,13 @@ func encrypt(in_filename, out_filename string) error {
 	if err != nil {
 		return err
 	}
+	defer in_file.Close()
 
 	out_file, err := os.Create(out_filename)
 	if err != nil {
 		return err
 	}
+	defer out_file.Close()
 
 	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(out_file, ai.publicKey, nil)
 	if err != nil {
@@ -268,17 +289,7 @@ func encrypt(in_filename, out_filename string) error {
 		return err
 	}
 
-	err = in_file.Close()
-	if err != nil {
-		return err
-	}
-
 	err = c4gh_writer.Close()
-	if err != nil {
-		return err
-	}
-
-	err = out_file.Close()
 	if err != nil {
 		return err
 	}
@@ -304,10 +315,12 @@ func put(url, container string, segment_nro, segment_total int,
 
 	var bodyBytes []byte
 	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
-		if string(bodyBytes) != "" {
-			return fmt.Errorf("Failed to upload data to container %s: %w", container, errors.New(string(bodyBytes)))
+		errStr := "Failed to upload data to container"
+		var re *api.RequestError
+		if errors.As(err, &re) && string(bodyBytes) != "" {
+			return fmt.Errorf("%s %s: %w", errStr, container, errors.New(string(bodyBytes)))
 		}
-		return fmt.Errorf("Failed to upload data to container %s: %w", container, err)
+		return fmt.Errorf("%s %s: %w", errStr, container, err)
 	}
 	return nil
 }
