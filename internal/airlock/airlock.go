@@ -39,6 +39,10 @@ var GetProjectName = func() string {
 	return ai.project
 }
 
+var currentTime = func() time.Time {
+	return time.Now()
+}
+
 var IsProjectManager = func() (bool, error) {
 	errStr := "Could not find user info"
 
@@ -153,7 +157,7 @@ func Upload(original_filename, filename, container, journal_number string,
 
 	url := ai.proxy + "/airlock"
 
-	before, after, _ := strings.Cut(container, "/")
+	before, after, _ := strings.Cut(strings.TrimRight(container, "/"), "/")
 	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
 	container = before
 	logs.Info("Uploading object " + object + " to container " + container)
@@ -161,7 +165,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	query := map[string]string{
 		"filename":  object,
 		"bucket":    container,
-		"timestamp": time.Now().Format(time.RFC3339),
+		"timestamp": currentTime().Format(time.RFC3339),
 	}
 
 	if original_filename != "" {

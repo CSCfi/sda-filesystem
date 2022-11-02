@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
@@ -280,7 +282,7 @@ func TestPublicKey(t *testing.T) {
 		},
 		{
 			"OK_2",
-			"-----BEGIN CRYPT4GH PUBLIC KEY-----\n\nR29vZCBtb3JuaW5nIHN1bnNoaW5lISBnaDZ4Mzl4dGs=\n\n\n-----END CRYPT4GH PUBLIC KEY-----\n",
+			"-----BEGIN CRYPT4GH PUBLIC KEY-----\nR29vZCBtb3JuaW5nIHN1bnNoaW5lISBnaDZ4Mzl4dGs=\n-----END CRYPT4GH PUBLIC KEY-----\n",
 			"Good morning sunshine! gh6x39xtk",
 		},
 	}
@@ -313,6 +315,157 @@ func TestPublicKey(t *testing.T) {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if tt.decoded_key != string(ai.publicKey[:]) {
 				t.Errorf("Function saved incorrect public key\nExpected=%s\nReceived=%s", tt.decoded_key, ai.publicKey)
+			}
+		})
+	}
+}
+
+func TestUpload_Encrypt_Error(t *testing.T) {
+	origEncrypt := encrypt
+	defer func() { encrypt = origEncrypt }()
+
+	encrypt = func(in_filename, out_filename string) error {
+		return errExpected
+	}
+
+	errStr := fmt.Sprintf("Failed to encrypt file orig: %s", errExpected.Error())
+	if err := Upload("orig", "enc", "container", "", 4000, true); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestUpload_FileDetails_Error(t *testing.T) {
+	var tests = []struct {
+		testname, failOnFile string
+	}{
+		{"FAIL_1", "enc"},
+		{"FAIL_2", "orig"},
+	}
+
+	origEncrypt := encrypt
+	origGetFileDetails := getFileDetails
+	defer func() {
+		encrypt = origEncrypt
+		getFileDetails = origGetFileDetails
+	}()
+
+	encrypt = func(in_filename, out_filename string) error {
+		return errors.New("Should not have called function")
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			getFileDetails = func(filename string) (string, int64, error) {
+				if filename == tt.failOnFile {
+					return "", 0, errExpected
+				}
+				return "smthsmth", 40, nil
+			}
+
+			errStr := fmt.Sprintf("Failed to get details for file %s: %s", tt.failOnFile, errExpected.Error())
+			if err := Upload("orig", "enc", "container", "", 400, false); err == nil {
+				t.Error("Function did not return error")
+			} else if err.Error() != errStr {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+			}
+		})
+	}
+}
+
+func TestUpload_NoFile(t *testing.T) {
+	file, err := os.CreateTemp("", "file")
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	os.RemoveAll(file.Name())
+
+	origEncrypt := encrypt
+	origGetFileDetails := getFileDetails
+	defer func() {
+		encrypt = origEncrypt
+		getFileDetails = origGetFileDetails
+	}()
+
+	encrypt = func(in_filename, out_filename string) error {
+		return nil
+	}
+	getFileDetails = func(filename string) (string, int64, error) {
+		return "smthsmth", 40, nil
+	}
+
+	errStr := fmt.Sprintf("Cannot open encypted file: open %s: no such file or directory", file.Name())
+	if err := Upload("orig", file.Name(), "bucket473", "", 500, true); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestUpload(t *testing.T) {
+	var tests = []struct {
+		testname, checksum, container  string
+		journal_number, origFile, file string
+		size                           int64
+		query                          map[string]string
+	}{
+		{
+			"OK_1", "gyov7vclytc6g7x", "bucket784/", "", "", "../../test/sample.txt.enc", 958,
+			map[string]string{"filename": "sample.txt.enc", "bucket": "bucket784"},
+		},
+		{
+			"OK_2", "n7cpo5oviuogv78o", "bucket937/dir/subdir/", "",
+			"../../test/sample.txt", "../../test/sample.txt.enc", 2724,
+			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937", "encfilesize": "2724",
+				"encchecksum": "n7cpo5oviuogv78o", "filesize": "2924", "checksum": "n7cpo5oviuogv78ohmmhmm"},
+		},
+		{
+			"OK_3", "i8vgyuo8cr7o", "bucket790/subdir", "9", "", "../../test/sample.txt", 93,
+			map[string]string{"filename": "subdir/sample.txt", "bucket": "bucket790", "journal": "9"},
+		},
+	}
+
+	origEncrypt := encrypt
+	origGetFileDetails := getFileDetails
+	origPut := put
+	origCurrentTime := currentTime
+	defer func() {
+		encrypt = origEncrypt
+		getFileDetails = origGetFileDetails
+		put = origPut
+		currentTime = origCurrentTime
+	}()
+
+	encrypt = func(in_filename, out_filename string) error {
+		return nil
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			testTime := time.Now()
+			currentTime = func() time.Time {
+				return testTime
+			}
+			getFileDetails = func(filename string) (string, int64, error) {
+				if filename == tt.file {
+					return tt.checksum, tt.size, nil
+				}
+				return tt.checksum + strings.Repeat("hmm", i+1), tt.size*int64(i) + 200, nil
+			}
+			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
+				if container != tt.query["bucket"] {
+					t.Errorf("Function received incorrect container. Expected=%s, received=%s", tt.query["bucket"], container)
+				}
+				tt.query["timestamp"] = testTime.Format(time.RFC3339)
+				if !reflect.DeepEqual(query, tt.query) {
+					t.Errorf("Function received incorrect query\nExpected=%v\nReceived=%v", tt.query, query)
+				}
+				return nil
+			}
+
+			if err := Upload(tt.origFile, tt.file, tt.container, tt.journal_number, 100, true); err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
 			}
 		})
 	}

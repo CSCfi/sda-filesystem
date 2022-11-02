@@ -1,12 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,10 +80,10 @@ func TestMain(m *testing.M) {
 
 func TestUserChooseUpdate(t *testing.T) {
 	finished := false
-	buf := bytes.NewBufferString("continue\nhello\nupdate")
+	reader := strings.NewReader("continue\nhello\nupdate")
 
 	go func() {
-		userChooseUpdate(buf)
+		userChooseUpdate(reader)
 		finished = true
 	}()
 
