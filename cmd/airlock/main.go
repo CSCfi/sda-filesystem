@@ -141,7 +141,6 @@ func main() {
 		askOverwrite(filename, "File "+filename+" exists. Overwrite file")
 	}
 
-	logs.Info("Beggining file upload")
 	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), !encrypted)
 	if err != nil {
 		logs.Fatal(err)

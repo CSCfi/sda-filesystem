@@ -277,7 +277,7 @@ func main() {
 	core.QCoreApplication_SetApplicationName("Data Gateway")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")
-	core.QCoreApplication_SetApplicationVersion("1.2.2")
+	core.QCoreApplication_SetApplicationVersion("1.3.0")
 	core.QCoreApplication_SetAttribute(core.Qt__AA_EnableHighDpiScaling, true)
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)

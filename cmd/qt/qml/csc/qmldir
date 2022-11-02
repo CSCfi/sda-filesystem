@@ -1,10 +1,10 @@
 module csc
-singleton Style 1.2 Style.qml
-Popup 1.2 Popup.qml
-TextField 1.2 TextField.qml
-Button 1.2 Button.qml
-ProgressBar 1.2 ProgressBar.qml
-Accordion 1.2 Accordion.qml
-Toggle 1.2 Toggle.qml
-Table 1.2 Table.qml
-ProgressTracker 1.2 ProgressTracker.qml
+singleton Style 1.3 Style.qml
+Popup 1.3 Popup.qml
+TextField 1.3 TextField.qml
+Button 1.3 Button.qml
+ProgressBar 1.3 ProgressBar.qml
+Accordion 1.3 Accordion.qml
+Toggle 1.3 Toggle.qml
+Table 1.3 Table.qml
+ProgressTracker 1.3 ProgressTracker.qml

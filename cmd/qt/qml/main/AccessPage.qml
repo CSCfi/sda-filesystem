@@ -3,7 +3,7 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Dialogs 1.3
-import csc 1.2 as CSC
+import csc 1.3 as CSC
 
 Page {
     id: page

@@ -104,9 +104,6 @@ func GetPublicKey() error {
 	}
 
 	public_key_str := string(public_key_slice)
-	for strings.Contains(public_key_str, "\n\n") {
-		public_key_str = strings.Replace(public_key_str, "\n\n", "\n", -1)
-	}
 	public_key_str = strings.TrimSuffix(public_key_str, "\n")
 	parts := strings.Split(public_key_str, "\n")
 
@@ -135,6 +132,7 @@ func GetPublicKey() error {
 func Upload(original_filename, filename, container, journal_number string,
 	segment_size_mb uint64, performEncryption bool) error {
 
+	logs.Info("Beggining uploading file ", filename)
 	if performEncryption {
 		if err := encrypt(original_filename, filename); err != nil {
 			return fmt.Errorf("Failed to encrypt file %s: %w", original_filename, err)
@@ -234,7 +232,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	return nil
 }
 
-func getFileDetails(filename string) (string, int64, error) {
+var getFileDetails = func(filename string) (string, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return "", 0, err
@@ -264,7 +262,7 @@ func CheckEncryption(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-func encrypt(in_filename, out_filename string) error {
+var encrypt = func(in_filename, out_filename string) error {
 	logs.Info("Encrypting file ", in_filename)
 
 	in_file, err := os.Open(in_filename)
@@ -298,7 +296,7 @@ func encrypt(in_filename, out_filename string) error {
 	return nil
 }
 
-func put(url, container string, segment_nro, segment_total int,
+var put = func(url, container string, segment_nro, segment_total int,
 	upload_dir string, upload_data io.Reader, query map[string]string) error {
 
 	headers := map[string]string{"SDS-Access-Token": api.GetSDSToken(),
