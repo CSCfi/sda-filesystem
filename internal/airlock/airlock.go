@@ -136,21 +136,16 @@ func GetPublicKey() error {
 func Upload(original_filename, filename, container, journal_number string,
 	segment_size_mb uint64, performEncryption bool) error {
 
-	var err error
-	var encrypted_file io.Reader
-	var encrypted_checksum string
-	var encrypted_file_size int64
 	logs.Info("Beggining uploading file ", filename)
-
 	if performEncryption {
-		logs.Info("Encrypting file ", original_filename)
-		encrypted_file, encrypted_checksum, encrypted_file_size, err = getFileDetailsAndEncrypt(original_filename)
-	} else {
-		encrypted_file, encrypted_checksum, encrypted_file_size, err = getFileDetails(original_filename)
+		if err := encrypt(original_filename, filename); err != nil {
+			return fmt.Errorf("Failed to encrypt file %s: %w", original_filename, err)
+		}
 	}
 
+	encrypted_checksum, encrypted_file_size, err := getFileDetails(filename)
 	if err != nil {
-		return fmt.Errorf("Failed to get details for file %s: %w", original_filename, err)
+		return fmt.Errorf("Failed to get details for file %s: %w", filename, err)
 	}
 
 	logs.Debugf("File size %v", encrypted_file_size)
@@ -162,7 +157,9 @@ func Upload(original_filename, filename, container, journal_number string,
 
 	url := ai.proxy + "/airlock"
 
-	object, container := ReorderNames(filename, container)
+	before, after, _ := strings.Cut(strings.TrimRight(container, "/"), "/")
+	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
+	container = before
 	logs.Info("Uploading object " + object + " to container " + container)
 
 	query := map[string]string{
@@ -172,7 +169,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	}
 
 	if original_filename != "" {
-		_, original_checksum, original_filesize, err := getFileDetails(original_filename)
+		original_checksum, original_filesize, err := getFileDetails(original_filename)
 		if err != nil {
 			return fmt.Errorf("Failed to get details for file %s: %w", original_filename, err)
 		}
@@ -186,6 +183,12 @@ func Upload(original_filename, filename, container, journal_number string,
 	if journal_number != "" {
 		query["journal"] = journal_number
 	}
+
+	encrypted_file, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("Cannot open encypted file: %w", err)
+	}
+	defer encrypted_file.Close()
 
 	// If number of segments is 1, do regular upload, else upload file in segments
 	if segment_nro < 2 {
@@ -204,6 +207,11 @@ func Upload(original_filename, filename, container, journal_number string,
 			this_segment_size := segment_end - segment_start
 			logs.Debugf("Segment start %v", segment_start)
 			logs.Debugf("Segment end %v", segment_end)
+
+			// Move io reader pointer to correct location on orignal file
+			if _, err = encrypted_file.Seek(segment_start, 0); err != nil {
+				return err
+			}
 
 			logs.Infof("Uploading segment %v/%v", i+1, segment_nro)
 
@@ -228,10 +236,23 @@ func Upload(original_filename, filename, container, journal_number string,
 	return nil
 }
 
-func ReorderNames(filename, directory string) (string, string) {
-	before, after, _ := strings.Cut(strings.TrimRight(directory, "/"), "/")
-	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
-	return object, before
+var getFileDetails = func(filename string) (string, int64, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", 0, err
+	}
+	defer file.Close()
+
+	file_info, _ := file.Stat()
+	file_size := file_info.Size()
+
+	hash := md5.New() // #nosec
+	_, err = io.Copy(hash, file)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), file_size, nil
 }
 
 func CheckEncryption(filename string) (bool, error) {
@@ -245,48 +266,38 @@ func CheckEncryption(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-var getFileDetails = func(filename string) (io.Reader, string, int64, error) {
-	file, err := os.Open(filename)
+var encrypt = func(in_filename, out_filename string) error {
+	logs.Info("Encrypting file ", in_filename)
+
+	in_file, err := os.Open(in_filename)
 	if err != nil {
-		return nil, "", 0, err
+		return err
 	}
-	defer file.Close() //?
+	defer in_file.Close()
 
-	file_info, _ := file.Stat()
-	file_size := file_info.Size()
-
-	hash := md5.New() // #nosec
-	tr := io.TeeReader(file, hash)
-	return tr, hex.EncodeToString(hash.Sum(nil)), file_size, nil
-}
-
-var getFileDetailsAndEncrypt = func(filename string) (io.Reader, string, int64, error) {
-	file, err := os.Open(filename)
+	out_file, err := os.Create(out_filename)
 	if err != nil {
-		return nil, "", 0, err
+		return err
 	}
-	defer file.Close()
+	defer out_file.Close()
 
-	r, w := io.Pipe()
-	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(w, ai.publicKey, nil)
+	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(out_file, ai.publicKey, nil)
 	if err != nil {
-		return nil, "", 0, err
+		return err
 	}
 
-	bytes_written, err := io.Copy(c4gh_writer, file)
+	bytes_written, err := io.Copy(c4gh_writer, in_file)
 	if err != nil {
-		return nil, "", 0, err
+		return err
 	}
-
-	hash := md5.New() // #nosec
-	tr := io.TeeReader(r, hash)
 
 	err = c4gh_writer.Close()
 	if err != nil {
-		return nil, "", 0, err
+		return err
 	}
 
-	return tr, hex.EncodeToString(hash.Sum(nil)), bytes_written, nil
+	logs.Info(bytes_written, " bytes encrypted to file ", out_filename)
+	return nil
 }
 
 var put = func(url, container string, segment_nro, segment_total int,
