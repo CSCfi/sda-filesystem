@@ -38,23 +38,19 @@ Page {
             infoLabel.text = "Something went wrong when initializing Airlock. Check logs for further details."
         }
         onEncryptionChecked: {
-            if (filename == "") {
+            if (fileEnc == "") {
                 popup.errorMessage = "Failed to check if file is encrypted"
                 popup.open()
+                return
             } else if (existing) {
-                popupOverwrite.additionalText = "Airlock wants to create file " + filenameEnc + " but a file of the same name already exists. Overwrite file?"  
+                popupOverwrite.additionalText = "Airlock wants to create file " + fileEnc + " but a file of the same name already exists. Overwrite file?"  
                 popupOverwrite.open()
-                exportModel.setProperty(0, "name", filename)
             } else {
                 page.chosen = true
-                if (filename != filenameEnc) {
-                    exportModel.setProperty(0, "name", filename)
-                } else {
-                    exportModel.setProperty(0, "name", "")
-                }
             }
 
-            exportModel.setProperty(0, "nameEncrypted", filenameEnc)
+            exportModel.setProperty(0, "name", fileOrig)
+            exportModel.setProperty(0, "nameEncrypted", fileEnc)
         }
     }
 
@@ -441,6 +437,7 @@ Page {
 
                     onClicked: { 
                         nameField.text = ""
+                        nameField.compareText = ""
                         stack.currentIndex = 1 
                     }
                 }

@@ -26,6 +26,7 @@ import (
 
 var ai airlockInfo = airlockInfo{}
 var infoFile = "/etc/pam_userinfo/config.json"
+var minimumSegmentSize = 1 << 20
 
 const keySize = 32
 
@@ -149,7 +150,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	}
 
 	logs.Debugf("File size %v", encrypted_file_size)
-	segment_size := segment_size_mb * (1 << 20)
+	segment_size := segment_size_mb * uint64(minimumSegmentSize)
 	logs.Debugf("Segment size %v", segment_size)
 
 	// Get total number of segments
@@ -194,7 +195,7 @@ func Upload(original_filename, filename, container, journal_number string,
 	if segment_nro < 2 {
 		err = put(url, container, 1, 1, "", encrypted_file, query)
 		if err != nil {
-			return err
+			return fmt.Errorf("Uploading file failed: %w", err)
 		}
 	} else {
 		upload_dir := ".segments/" + object + "/"
@@ -208,18 +209,13 @@ func Upload(original_filename, filename, container, journal_number string,
 			logs.Debugf("Segment start %v", segment_start)
 			logs.Debugf("Segment end %v", segment_end)
 
-			// Move io reader pointer to correct location on orignal file
-			if _, err = encrypted_file.Seek(segment_start, 0); err != nil {
-				return err
-			}
-
 			logs.Infof("Uploading segment %v/%v", i+1, segment_nro)
 
 			// Send this_segment_size number of bytes to airlock
 			err = put(url, container, int(i+1), int(segment_nro),
 				upload_dir, io.LimitReader(encrypted_file, this_segment_size), query)
 			if err != nil {
-				return err
+				return fmt.Errorf("Uploading file failed: %w", err)
 			}
 
 		}
@@ -229,7 +225,7 @@ func Upload(original_filename, filename, container, journal_number string,
 		var empty *os.File = nil
 		err = put(url, container, -1, -1, upload_dir, empty, query)
 		if err != nil {
-			return err
+			return fmt.Errorf("Uploading manifest file failed: %w", err)
 		}
 	}
 

@@ -1,6 +1,7 @@
 package airlock
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -407,21 +408,21 @@ func TestUpload(t *testing.T) {
 	var tests = []struct {
 		testname, checksum, container  string
 		journal_number, origFile, file string
-		size                           int64
+		size, total                    int64
 		query                          map[string]string
 	}{
 		{
-			"OK_1", "gyov7vclytc6g7x", "bucket784/", "", "", "../../test/sample.txt.enc", 958,
+			"OK_1", "gyov7vclytc6g7x", "bucket784/", "", "", "../../test/sample.txt.enc", 958, 1,
 			map[string]string{"filename": "sample.txt.enc", "bucket": "bucket784"},
 		},
 		{
 			"OK_2", "n7cpo5oviuogv78o", "bucket937/dir/subdir/", "",
-			"../../test/sample.txt", "../../test/sample.txt.enc", 2724,
-			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937", "encfilesize": "2724",
-				"encchecksum": "n7cpo5oviuogv78o", "filesize": "2924", "checksum": "n7cpo5oviuogv78ohmmhmm"},
+			"../../test/sample.txt", "../../test/sample.txt.enc", 114857600, 2,
+			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937", "encfilesize": "114857600",
+				"encchecksum": "n7cpo5oviuogv78o", "filesize": "114857800", "checksum": "n7cpo5oviuogv78ohmmhmm"},
 		},
 		{
-			"OK_3", "i8vgyuo8cr7o", "bucket790/subdir", "9", "", "../../test/sample.txt", 93,
+			"OK_3", "i8vgyuo8cr7o", "bucket790/subdir", "9", "", "../../test/sample.txt", 930485, 1,
 			map[string]string{"filename": "subdir/sample.txt", "bucket": "bucket790", "journal": "9"},
 		},
 	}
@@ -453,11 +454,30 @@ func TestUpload(t *testing.T) {
 				}
 				return tt.checksum + strings.Repeat("hmm", i+1), tt.size*int64(i) + 200, nil
 			}
+
+			count := 1
+			total := int(tt.total)
 			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
 				if container != tt.query["bucket"] {
 					t.Errorf("Function received incorrect container. Expected=%s, received=%s", tt.query["bucket"], container)
 				}
+				if (segment_nro == -1 || segment_total == -1) && tt.total == 1 {
+					t.Error("Segment number and segment total should not be -1")
+				}
+				if segment_nro != count {
+					t.Errorf("Function received incorrect segment number. Expected=%d, received=%d", count, segment_nro)
+				}
+				if segment_total != total {
+					t.Errorf("Function received incorrect segment total. Expected=%d, received=%d", total, segment_total)
+				}
+
+				if count == int(tt.total) {
+					count, total = -1, -1
+				} else {
+					count++
+				}
 				tt.query["timestamp"] = testTime.Format(time.RFC3339)
+
 				if !reflect.DeepEqual(query, tt.query) {
 					t.Errorf("Function received incorrect query\nExpected=%v\nReceived=%v", tt.query, query)
 				}
@@ -466,6 +486,120 @@ func TestUpload(t *testing.T) {
 
 			if err := Upload(tt.origFile, tt.file, tt.container, tt.journal_number, 100, true); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
+			}
+		})
+	}
+}
+
+func TestUpload_Error(t *testing.T) {
+	var tests = []struct {
+		testname, errStr string
+		count, size      int
+	}{
+		{"FAIL_1", "Uploading file failed: ", 1, 8469},
+		{"FAIL_2", "Uploading file failed: ", 2, 114857600},
+		{"FAIL_3", "Uploading manifest file failed: ", 3, 164789600},
+	}
+
+	origEncrypt := encrypt
+	origGetFileDetails := getFileDetails
+	origPut := put
+	defer func() {
+		encrypt = origEncrypt
+		getFileDetails = origGetFileDetails
+		put = origPut
+	}()
+
+	encrypt = func(in_filename, out_filename string) error {
+		return nil
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			getFileDetails = func(filename string) (string, int64, error) {
+				return "", int64(tt.size), nil
+			}
+
+			count := 1
+			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
+				if count == tt.count {
+					return errExpected
+				}
+				count++
+				return nil
+			}
+
+			errStr := tt.errStr + errExpected.Error()
+			if err := Upload("", "../../test/sample.txt.enc", "bucket684", "", 100, false); err == nil {
+				t.Error("Function did not return error")
+			} else if err.Error() != errStr {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+			}
+		})
+	}
+}
+
+func TestUpload_FileContent(t *testing.T) {
+	var tests = []struct {
+		testname, content string
+	}{
+		{"OK_1", "u89pct87"},
+		{"OK_2", "hiopctfylbkigo"},
+		{"OK_3", "jtxfulvghoi.g oi.rf lg o.fblhoo jihuimgk"},
+	}
+
+	origEncrypt := encrypt
+	origGetFileDetails := getFileDetails
+	origPut := put
+	origMiniumSegmentSize := minimumSegmentSize
+	defer func() {
+		encrypt = origEncrypt
+		getFileDetails = origGetFileDetails
+		put = origPut
+		minimumSegmentSize = origMiniumSegmentSize
+	}()
+
+	minimumSegmentSize = 10
+	encrypt = func(in_filename, out_filename string) error {
+		return nil
+	}
+
+	file, err := os.CreateTemp("", "file")
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	defer os.RemoveAll(file.Name())
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			if err = file.Truncate(0); err != nil {
+				t.Errorf("Could not truncate file: %s", err.Error())
+			}
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				t.Errorf("Could not change file offset: %s", err.Error())
+			}
+			if _, err := file.WriteString(tt.content); err != nil {
+				t.Fatalf("Failed to write to file: %s", err.Error())
+			}
+
+			getFileDetails = func(filename string) (string, int64, error) {
+				return "", int64(len(tt.content)), nil
+			}
+
+			buf := &bytes.Buffer{}
+			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
+				if segment_nro != -1 {
+					if _, err := buf.ReadFrom(upload_data); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+
+			if err := Upload("", file.Name(), "bucket684", "", 1, false); err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else if tt.content != buf.String() {
+				t.Errorf("put() read incorrect content\nExpected=%v\nReceived=%v", []byte(tt.content), buf.Bytes())
 			}
 		})
 	}
