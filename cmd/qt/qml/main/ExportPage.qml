@@ -42,13 +42,9 @@ Page {
                 popup.errorMessage = "Failed to check if file is encrypted"
                 popup.open()
                 return
-            } else if (existing) {
-                popupOverwrite.additionalText = "Airlock wants to create file " + fileEnc + " but a file of the same name already exists. Overwrite file?"  
-                popupOverwrite.open()
-            } else {
-                page.chosen = true
             }
 
+            page.chosen = true
             exportModel.setProperty(0, "name", fileOrig)
             exportModel.setProperty(0, "nameEncrypted", fileEnc)
         }

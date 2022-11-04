@@ -31,23 +31,23 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(string, string)                                 `slot:"login,auto"`
-	_ func()                                               `slot:"loadFuse,auto"`
-	_ func()                                               `slot:"openFuse,auto"`
-	_ func() string                                        `slot:"refreshFuse,auto"`
-	_ func(string) bool                                    `slot:"isFile,auto"`
-	_ func(string)                                         `slot:"checkEncryption,auto"`
-	_ func(string, string, string)                         `slot:"exportFile,auto"`
-	_ func(string) string                                  `slot:"changeMountPoint,auto"`
-	_ func()                                               `slot:"shutdown,auto"`
-	_ func()                                               `signal:"loginFail"`
-	_ func(message string)                                 `signal:"popupError"`
-	_ func(message string)                                 `signal:"initError"`
-	_ func()                                               `signal:"fuseReady"`
-	_ func(fileOrig string, fileEnc string, existing bool) `signal:"encryptionChecked"`
-	_ func()                                               `signal:"preventExport"`
-	_ func(success bool)                                   `signal:"exportFinished"`
-	_ func()                                               `signal:"panic"`
+	_ func(string, string)           `slot:"login,auto"`
+	_ func()                         `slot:"loadFuse,auto"`
+	_ func()                         `slot:"openFuse,auto"`
+	_ func() string                  `slot:"refreshFuse,auto"`
+	_ func(string) bool              `slot:"isFile,auto"`
+	_ func(string)                   `slot:"checkEncryption,auto"`
+	_ func(string, string, string)   `slot:"exportFile,auto"`
+	_ func(string) string            `slot:"changeMountPoint,auto"`
+	_ func()                         `slot:"shutdown,auto"`
+	_ func()                         `signal:"loginFail"`
+	_ func(message string)           `signal:"popupError"`
+	_ func(message string)           `signal:"initError"`
+	_ func()                         `signal:"fuseReady"`
+	_ func(fileOrig, fileEnc string) `signal:"encryptionChecked"`
+	_ func()                         `signal:"preventExport"`
+	_ func(success bool)             `signal:"exportFinished"`
+	_ func()                         `signal:"panic"`
 
 	_ []string `property:"buckets"`
 	_ string   `property:"mountPoint"`
@@ -213,21 +213,18 @@ func (qb *QmlBridge) checkEncryption(url string) {
 
 	if encrypted, err := airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
-		qb.EncryptionChecked("", "", false)
+		qb.EncryptionChecked("", "")
 	} else if encrypted {
-		logs.Info("File ", file, " is already encrypted. Skipping encryption.")
-		qb.EncryptionChecked("", file, false)
+		qb.EncryptionChecked("", file)
 	} else {
-		fileEncrypted := file + ".c4gh"
-		_, err := os.Stat(fileEncrypted)
-		qb.EncryptionChecked(file, fileEncrypted, err == nil)
+		qb.EncryptionChecked(file, file+".c4gh")
 	}
 }
 
 func (qb *QmlBridge) exportFile(folder, origFile, file string) {
 	go func() {
 		time.Sleep(1000 * time.Millisecond)
-		err := airlock.Upload(origFile, file, folder, "", 4000, origFile != "")
+		err := airlock.Upload(origFile, file, folder, "", 4000)
 		if err != nil {
 			logs.Error(err)
 			qb.PopupError(fmt.Sprintf("Exporting file %s failed", file))

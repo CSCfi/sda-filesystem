@@ -1,23 +1,16 @@
 package airlock
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
-	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
-
-	"github.com/neicnordic/crypt4gh/keys"
-	"github.com/neicnordic/crypt4gh/streaming"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -321,7 +314,7 @@ func TestPublicKey(t *testing.T) {
 	}
 }
 
-func TestUpload_Encrypt_Error(t *testing.T) {
+/*func TestUpload_Encrypt_Error(t *testing.T) {
 	origEncrypt := encrypt
 	defer func() { encrypt = origEncrypt }()
 
@@ -786,6 +779,44 @@ func TestEncrypt(t *testing.T) {
 	}
 }
 
+func TestGetFileDetailsAndEncrypt(t *testing.T) {
+	origPublicLey := ai.publicKey
+	defer func() { ai.publicKey = origPublicLey }()
+
+	publicKey, privateKey, err := keys.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Could not generate key pair: %s", err.Error())
+	}
+
+	ai.publicKey = publicKey
+	file := "../../test/sample.txt"
+	if _, _, _, err := getFileDetailsAndEncrypt("../../test/sample.txt"); err != nil {
+		t.Errorf("Function returned unexpected error: %s", err.Error())
+	}
+}*/
+
+func TestGetFileDetailsAndEncrypt_C4ghWriterError(t *testing.T) {
+	ai.publicKey = [32]byte{}
+	if _, _, _, err := getFileDetailsAndEncrypt("../../test/sample.txt"); err == nil {
+		t.Errorf("Function did not return error")
+	}
+}
+
+func TestGetFileDetailsAndEncrypt_NoFile(t *testing.T) {
+	file, err := os.CreateTemp("", "file")
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	os.RemoveAll(file.Name())
+
+	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
+	if _, _, _, err := getFileDetailsAndEncrypt(file.Name()); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
 func TestPut(t *testing.T) {
 	var tests = []struct {
 		testname, token  string
@@ -832,7 +863,7 @@ func TestPut(t *testing.T) {
 				return nil
 			}
 
-			err := put(testUrl, "bucket", tt.segNro, tt.segTotal, "dir", nil, tt.query)
+			err := put(testUrl, "bucket/dir", tt.segNro, tt.segTotal, nil, tt.query)
 			if err != nil {
 				t.Errorf("Function returned error: %s", err.Error())
 			}
@@ -873,12 +904,11 @@ func TestPut_Error(t *testing.T) {
 				}
 			}
 
-			errStr := fmt.Sprintf("Failed to upload data to container bucket6754: %s", tt.errStr)
-			err := put("google.com", "bucket6754", 43, 2046, "dir", nil, nil)
+			err := put("google.com", "bucket6754/dir", 43, 2046, nil, nil)
 			if err == nil {
 				t.Error("Function did not return error")
-			} else if errStr != err.Error() {
-				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+			} else if tt.errStr != err.Error() {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
 			}
 		})
 	}

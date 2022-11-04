@@ -36,6 +36,13 @@ type airlockInfo struct {
 	project   string
 }
 
+type readCloser struct {
+	io.Reader
+	io.Closer
+
+	errc chan error
+}
+
 var GetProjectName = func() string {
 	return ai.project
 }
@@ -134,20 +141,26 @@ func GetPublicKey() error {
 	return nil
 }
 
-func Upload(original_filename, filename, container, journal_number string,
-	segment_size_mb uint64, performEncryption bool) error {
+func Upload(original_filename, filename, container, journal_number string, segment_size_mb uint64) error {
+	var err error
+	var encrypted_file io.ReadCloser
+	var encrypted_checksum string
+	var encrypted_file_size int64
 
-	logs.Info("Beggining uploading file ", filename)
-	if performEncryption {
-		if err := encrypt(original_filename, filename); err != nil {
-			return fmt.Errorf("Failed to encrypt file %s: %w", original_filename, err)
-		}
+	if encrypted, err := CheckEncryption(filename); err != nil {
+		return err
+	} else if encrypted {
+		logs.Info("Encrypting file ", original_filename)
+		encrypted_file, encrypted_checksum, encrypted_file_size, err = getFileDetailsAndEncrypt(original_filename)
+	} else {
+		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
+		encrypted_file, encrypted_checksum, encrypted_file_size, err = getFileDetails(filename)
 	}
 
-	encrypted_checksum, encrypted_file_size, err := getFileDetails(filename)
 	if err != nil {
-		return fmt.Errorf("Failed to get details for file %s: %w", filename, err)
+		return fmt.Errorf("Failed to get details for file: %w", err)
 	}
+	defer encrypted_file.Close()
 
 	logs.Debugf("File size %v", encrypted_file_size)
 	segment_size := segment_size_mb * uint64(minimumSegmentSize)
@@ -158,9 +171,7 @@ func Upload(original_filename, filename, container, journal_number string,
 
 	url := ai.proxy + "/airlock"
 
-	before, after, _ := strings.Cut(strings.TrimRight(container, "/"), "/")
-	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
-	container = before
+	object, container := reorderNames(filename, container)
 	logs.Info("Uploading object " + object + " to container " + container)
 
 	query := map[string]string{
@@ -170,7 +181,8 @@ func Upload(original_filename, filename, container, journal_number string,
 	}
 
 	if original_filename != "" {
-		original_checksum, original_filesize, err := getFileDetails(original_filename)
+		rc, original_checksum, original_filesize, err := getFileDetails(original_filename)
+		rc.Close()
 		if err != nil {
 			return fmt.Errorf("Failed to get details for file %s: %w", original_filename, err)
 		}
@@ -185,15 +197,9 @@ func Upload(original_filename, filename, container, journal_number string,
 		query["journal"] = journal_number
 	}
 
-	encrypted_file, err := os.Open(filename)
-	if err != nil {
-		return fmt.Errorf("Cannot open encypted file: %w", err)
-	}
-	defer encrypted_file.Close()
-
 	// If number of segments is 1, do regular upload, else upload file in segments
 	if segment_nro < 2 {
-		err = put(url, container, 1, 1, "", encrypted_file, query)
+		err = put(url, "", 1, 1, encrypted_file, query)
 		if err != nil {
 			return fmt.Errorf("Uploading file failed: %w", err)
 		}
@@ -212,8 +218,8 @@ func Upload(original_filename, filename, container, journal_number string,
 			logs.Infof("Uploading segment %v/%v", i+1, segment_nro)
 
 			// Send this_segment_size number of bytes to airlock
-			err = put(url, container, int(i+1), int(segment_nro),
-				upload_dir, io.LimitReader(encrypted_file, this_segment_size), query)
+			err = put(url, container+"/"+upload_dir, int(i+1), int(segment_nro),
+				io.LimitReader(encrypted_file, this_segment_size), query)
 			if err != nil {
 				return fmt.Errorf("Uploading file failed: %w", err)
 			}
@@ -223,7 +229,7 @@ func Upload(original_filename, filename, container, journal_number string,
 			container)
 
 		var empty *os.File = nil
-		err = put(url, container, -1, -1, upload_dir, empty, query)
+		err = put(url, container+"/"+upload_dir, -1, -1, empty, query)
 		if err != nil {
 			return fmt.Errorf("Uploading manifest file failed: %w", err)
 		}
@@ -232,23 +238,10 @@ func Upload(original_filename, filename, container, journal_number string,
 	return nil
 }
 
-var getFileDetails = func(filename string) (string, int64, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", 0, err
-	}
-	defer file.Close()
-
-	file_info, _ := file.Stat()
-	file_size := file_info.Size()
-
-	hash := md5.New() // #nosec
-	_, err = io.Copy(hash, file)
-	if err != nil {
-		return "", 0, err
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), file_size, nil
+func reorderNames(filename, directory string) (string, string) {
+	before, after, _ := strings.Cut(strings.TrimRight(directory, "/"), "/")
+	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
+	return object, before
 }
 
 func CheckEncryption(filename string) (bool, error) {
@@ -262,42 +255,66 @@ func CheckEncryption(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-var encrypt = func(in_filename, out_filename string) error {
-	logs.Info("Encrypting file ", in_filename)
-
-	in_file, err := os.Open(in_filename)
+var getFileDetails = func(filename string) (io.ReadCloser, string, int64, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		return err
-	}
-	defer in_file.Close()
-
-	out_file, err := os.Create(out_filename)
-	if err != nil {
-		return err
-	}
-	defer out_file.Close()
-
-	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(out_file, ai.publicKey, nil)
-	if err != nil {
-		return err
+		return nil, "", 0, err
 	}
 
-	bytes_written, err := io.Copy(c4gh_writer, in_file)
-	if err != nil {
-		return err
-	}
+	file_info, _ := file.Stat()
+	file_size := file_info.Size()
 
-	err = c4gh_writer.Close()
-	if err != nil {
-		return err
-	}
-
-	logs.Info(bytes_written, " bytes encrypted to file ", out_filename)
-	return nil
+	hash := md5.New() // #nosec
+	tr := io.TeeReader(file, hash)
+	return readCloser{tr, file, nil}, hex.EncodeToString(hash.Sum(nil)), file_size, nil
 }
 
-var put = func(url, container string, segment_nro, segment_total int,
-	upload_dir string, upload_data io.Reader, query map[string]string) error {
+func encrypt(file *os.File, pw io.WriteCloser, errc chan error) {
+	defer pw.Close()
+	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(pw, ai.publicKey, nil)
+	if err != nil {
+		errc <- err
+		return
+	}
+	if _, err = io.Copy(c4gh_writer, file); err != nil {
+		errc <- err
+		return
+	}
+	errc <- c4gh_writer.Close()
+}
+
+var getFileDetailsAndEncrypt = func(filename string) (rc io.ReadCloser, checksum string, bytes_written int64, err error) {
+	var file *os.File
+	if file, err = os.Open(filename); err != nil {
+		return
+	}
+
+	errc := make(chan error, 1)
+	pr, pw := io.Pipe()
+	go encrypt(file, pw, errc)
+
+	hash := md5.New() // #nosec
+	if bytes_written, err = io.Copy(hash, pr); err != nil {
+		return
+	}
+	checksum = hex.EncodeToString(hash.Sum(nil))
+	if _, err = file.Seek(0, io.SeekStart); err != nil {
+		return
+	}
+	if err = <-errc; err != nil {
+		return
+	}
+
+	errc = make(chan error, 1)
+	pr, pw = io.Pipe()
+	go encrypt(file, pw, errc)
+
+	rc = readCloser{pr, file, errc}
+	return
+}
+
+var put = func(url, manifest string, segment_nro, segment_total int,
+	upload_data io.Reader, query map[string]string) error {
 
 	headers := map[string]string{"SDS-Access-Token": api.GetSDSToken(),
 		"SDS-Segment":       fmt.Sprintf("%d", segment_nro),
@@ -308,17 +325,16 @@ var put = func(url, container string, segment_nro, segment_total int,
 	logs.Debugf("Setting header: SDS-Total-Segment %d", segment_total)
 
 	if segment_nro == -1 {
-		headers["X-Object-Manifest"] = container + "/" + upload_dir
+		headers["X-Object-Manifest"] = manifest
 	}
 
 	var bodyBytes []byte
 	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
-		errStr := "Failed to upload data to container"
 		var re *api.RequestError
 		if errors.As(err, &re) && string(bodyBytes) != "" {
-			return fmt.Errorf("%s %s: %w", errStr, container, errors.New(string(bodyBytes)))
+			return errors.New(string(bodyBytes))
 		}
-		return fmt.Errorf("%s %s: %w", errStr, container, err)
+		return err
 	}
 	return nil
 }
