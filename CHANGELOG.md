@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User no longer chooses which repositories they wish to access, rather Data Gateway tries to access all of them after user has given their CSC credentials.
 - small updates to UI components
 - updated github actions to golang versions 1.18 and 1.19
+  - github actions use newer syntax for getting tag name
+  - add airlock cli to artifacts built in a release
 - deprecated ioutils in code
 
 ### Added
