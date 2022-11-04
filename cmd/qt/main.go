@@ -220,7 +220,7 @@ func (qb *QmlBridge) checkEncryption(url string) {
 	} else {
 		fileEncrypted := file + ".c4gh"
 		_, err := os.Stat(fileEncrypted)
-		qb.EncryptionChecked(file, fileEncrypted, err == nil)
+		qb.EncryptionChecked(file, fileEncrypted, err != nil)
 	}
 }
 

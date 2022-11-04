@@ -135,12 +135,12 @@ func Debugf(format string, args ...any) {
 }
 
 // Fatal logs a message at level "Fatal" on the standard logger
-func Fatal(args ...interface{}) {
+func Fatal(args ...any) {
 	log.Fatal(args...)
 }
 
 // Fatalf logs a message at level "Fatal" on the standard logger
-func Fatalf(format string, args ...interface{}) {
+func Fatalf(format string, args ...any) {
 	log.Fatalf(format, args...)
 }
 
