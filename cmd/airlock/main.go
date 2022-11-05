@@ -94,7 +94,7 @@ func main() {
 		filename = filename + ".c4gh"
 	}
 
-	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb))
+	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), !encrypted)
 	if err != nil {
 		logs.Fatal(err)
 	}

@@ -129,7 +129,7 @@ func GetPublicKey() error {
 	if err != nil {
 		return fmt.Errorf("Could not decode public key: %w", err)
 	}
-	if len(data) != keySize {
+	if len(data) < keySize {
 		return fmt.Errorf("Invalid length of decoded public key (%v)", len(data))
 	}
 
@@ -141,24 +141,30 @@ func GetPublicKey() error {
 	return nil
 }
 
-func Upload(original_filename, filename, container, journal_number string, segment_size_mb uint64) error {
+func Upload(original_filename, filename, container, journal_number string, segment_size_mb uint64, encrypt bool) error {
 	var err error
 	var encrypted_file io.ReadCloser
 	var encrypted_checksum string
 	var encrypted_file_size int64
+	var errc chan error = nil
+	var print_filename = original_filename
 
-	if encrypted, err := CheckEncryption(filename); err != nil {
-		return err
-	} else if encrypted {
+	if encrypt {
+		var rc *readCloser
 		logs.Info("Encrypting file ", original_filename)
-		encrypted_file, encrypted_checksum, encrypted_file_size, err = getFileDetailsAndEncrypt(original_filename)
+		rc, encrypted_checksum, encrypted_file_size, err = getFileDetailsEncrypted(original_filename)
+		encrypted_file = rc
+		if rc != nil {
+			errc = rc.errc
+		}
 	} else {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
 		encrypted_file, encrypted_checksum, encrypted_file_size, err = getFileDetails(filename)
+		print_filename = filename
 	}
 
 	if err != nil {
-		return fmt.Errorf("Failed to get details for file: %w", err)
+		return fmt.Errorf("Failed to get details for file %s: %w", print_filename, err)
 	}
 	defer encrypted_file.Close()
 
@@ -235,7 +241,12 @@ func Upload(original_filename, filename, container, journal_number string, segme
 		}
 	}
 
-	return nil
+	if errc == nil {
+		return nil
+	}
+
+	err = <-errc
+	return fmt.Errorf("Streaming file failed: %w", err)
 }
 
 func reorderNames(filename, directory string) (string, string) {
@@ -244,7 +255,7 @@ func reorderNames(filename, directory string) (string, string) {
 	return object, before
 }
 
-func CheckEncryption(filename string) (bool, error) {
+var CheckEncryption = func(filename string) (bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return false, fmt.Errorf("Failed to check if file is encrypted: %w", err)
@@ -255,7 +266,7 @@ func CheckEncryption(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-var getFileDetails = func(filename string) (io.ReadCloser, string, int64, error) {
+var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, "", 0, err
@@ -265,13 +276,25 @@ var getFileDetails = func(filename string) (io.ReadCloser, string, int64, error)
 	file_size := file_info.Size()
 
 	hash := md5.New() // #nosec
-	tr := io.TeeReader(file, hash)
-	return readCloser{tr, file, nil}, hex.EncodeToString(hash.Sum(nil)), file_size, nil
+	_, err = io.Copy(hash, file)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	checksum := hex.EncodeToString(hash.Sum(nil))
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, "", 0, err
+	}
+	return file, checksum, file_size, nil
 }
 
-func encrypt(file *os.File, pw io.WriteCloser, errc chan error) {
+var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
+	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, ai.publicKey, nil)
+}
+
+var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
 	defer pw.Close()
-	c4gh_writer, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(pw, ai.publicKey, nil)
+	c4gh_writer, err := newCrypt4GHWriter(pw)
 	if err != nil {
 		errc <- err
 		return
@@ -283,11 +306,16 @@ func encrypt(file *os.File, pw io.WriteCloser, errc chan error) {
 	errc <- c4gh_writer.Close()
 }
 
-var getFileDetailsAndEncrypt = func(filename string) (rc io.ReadCloser, checksum string, bytes_written int64, err error) {
+var getFileDetailsEncrypted = func(filename string) (rc *readCloser, checksum string, bytes_written int64, err error) {
 	var file *os.File
 	if file, err = os.Open(filename); err != nil {
 		return
 	}
+	defer func() {
+		if rc == nil {
+			file.Close()
+		}
+	}()
 
 	errc := make(chan error, 1)
 	pr, pw := io.Pipe()
@@ -309,7 +337,7 @@ var getFileDetailsAndEncrypt = func(filename string) (rc io.ReadCloser, checksum
 	pr, pw = io.Pipe()
 	go encrypt(file, pw, errc)
 
-	rc = readCloser{pr, file, errc}
+	rc = &readCloser{pr, file, errc}
 	return
 }
 

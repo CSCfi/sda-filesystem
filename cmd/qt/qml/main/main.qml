@@ -150,7 +150,8 @@ ApplicationWindow {
 
     CSC.Popup {
         id: popupPanic
-        errorMessage: "How can this be! Data Gateway failed to load correctly.\nSave logs to find out why this happened and either quit the application or continue at your own peril..."
+        errorMessage: "Data Gateway failed to load correctly"
+        additionalText: "Save logs to find out why this happened and quit the application or continue at your own peril..."
         
         Row {
             spacing: CSC.Style.padding
