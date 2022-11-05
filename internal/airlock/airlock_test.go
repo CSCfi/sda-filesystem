@@ -1,16 +1,22 @@
 package airlock
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+
+	"github.com/neicnordic/crypt4gh/keys"
+	"github.com/neicnordic/crypt4gh/streaming"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -222,8 +228,8 @@ func TestPublicKey_Invalid_Key(t *testing.T) {
 		},
 		{
 			"KEY_DECODE_LEN_FAIL",
-			"-----BEGIN CRYPT4GH PUBLIC KEY-----\nR29vZCBtb3JuaW5nIHN1bnNoaW5lIQ==\n-----END CRYPT4GH PUBLIC KEY-----",
-			"Invalid length of decoded public key (22)",
+			"-----BEGIN CRYPT4GH PUBLIC KEY-----\nSGVsbG8sIHdvcmxkIQ==\n-----END CRYPT4GH PUBLIC KEY-----",
+			"Invalid length of decoded public key (13)",
 		},
 		{
 			"KEY_DECODE_FAIL",
@@ -314,52 +320,40 @@ func TestPublicKey(t *testing.T) {
 	}
 }
 
-/*func TestUpload_Encrypt_Error(t *testing.T) {
-	origEncrypt := encrypt
-	defer func() { encrypt = origEncrypt }()
-
-	encrypt = func(in_filename, out_filename string) error {
-		return errExpected
-	}
-
-	errStr := fmt.Sprintf("Failed to encrypt file orig: %s", errExpected.Error())
-	if err := Upload("orig", "enc", "container", "", 4000, true); err == nil {
-		t.Error("Function did not return error")
-	} else if err.Error() != errStr {
-		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
-	}
-}
-
 func TestUpload_FileDetails_Error(t *testing.T) {
 	var tests = []struct {
 		testname, failOnFile string
+		encrypt              bool
 	}{
-		{"FAIL_1", "enc"},
-		{"FAIL_2", "orig"},
+		{"FAIL_1", "enc", false},
+		{"FAIL_2", "orig", true},
+		{"FAIL_3", "orig", false},
 	}
 
-	origEncrypt := encrypt
 	origGetFileDetails := getFileDetails
+	origGetFileDetailsEncrypted := getFileDetailsEncrypted
 	defer func() {
-		encrypt = origEncrypt
 		getFileDetails = origGetFileDetails
+		getFileDetailsEncrypted = origGetFileDetailsEncrypted
 	}()
-
-	encrypt = func(in_filename, out_filename string) error {
-		return errors.New("Should not have called function")
-	}
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			getFileDetails = func(filename string) (string, int64, error) {
+			getFileDetails = func(filename string) (*os.File, string, int64, error) {
 				if filename == tt.failOnFile {
-					return "", 0, errExpected
+					return nil, "", 0, errExpected
 				}
-				return "smthsmth", 40, nil
+				return nil, "", 0, nil
+			}
+			getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+				if filename == tt.failOnFile {
+					return nil, "", 0, errExpected
+				}
+				return nil, "", 0, nil
 			}
 
 			errStr := fmt.Sprintf("Failed to get details for file %s: %s", tt.failOnFile, errExpected.Error())
-			if err := Upload("orig", "enc", "container", "", 400, false); err == nil {
+			if err := Upload("orig", "enc", "container", "", 400, tt.encrypt); err == nil {
 				t.Error("Function did not return error")
 			} else if err.Error() != errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -368,72 +362,42 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 	}
 }
 
-func TestUpload_NoFile(t *testing.T) {
-	file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	os.RemoveAll(file.Name())
-
-	origEncrypt := encrypt
-	origGetFileDetails := getFileDetails
-	defer func() {
-		encrypt = origEncrypt
-		getFileDetails = origGetFileDetails
-	}()
-
-	encrypt = func(in_filename, out_filename string) error {
-		return nil
-	}
-	getFileDetails = func(filename string) (string, int64, error) {
-		return "smthsmth", 40, nil
-	}
-
-	errStr := fmt.Sprintf("Cannot open encypted file: open %s: no such file or directory", file.Name())
-	if err := Upload("orig", file.Name(), "bucket473", "", 500, true); err == nil {
-		t.Error("Function did not return error")
-	} else if err.Error() != errStr {
-		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
-	}
-}
-
 func TestUpload(t *testing.T) {
 	var tests = []struct {
-		testname, checksum, container  string
-		journal_number, origFile, file string
-		size, total                    int64
-		query                          map[string]string
+		testname, checksum, container, manifest string
+		journal_number, origFile, file          string
+		size, total                             int64
+		encrypt                                 bool
+		query                                   map[string]string
 	}{
 		{
-			"OK_1", "gyov7vclytc6g7x", "bucket784/", "", "", "../../test/sample.txt.enc", 958, 1,
+			"OK_1", "gyov7vclytc6g7x", "bucket784/", "",
+			"", "", "../../test/sample.txt.enc", 958, 1, false,
 			map[string]string{"filename": "sample.txt.enc", "bucket": "bucket784"},
 		},
 		{
-			"OK_2", "n7cpo5oviuogv78o", "bucket937/dir/subdir/", "",
-			"../../test/sample.txt", "../../test/sample.txt.enc", 114857600, 2,
-			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937", "encfilesize": "114857600",
-				"encchecksum": "n7cpo5oviuogv78o", "filesize": "114857800", "checksum": "n7cpo5oviuogv78ohmmhmm"},
+			"OK_2", "n7cpo5oviuogv78o", "bucket937/dir/subdir/", "bucket937/.segments/dir/subdir/sample.txt.enc/",
+			"", "../../test/sample.txt", "../../test/sample.txt.enc", 114857600, 2, true,
+			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937", "encfilesize": "114858600",
+				"encchecksum": "n7cpo5oviuogv78o5050", "filesize": "114858000", "checksum": "n7cpo5oviuogv78o7878"},
 		},
 		{
-			"OK_3", "i8vgyuo8cr7o", "bucket790/subdir", "9", "", "../../test/sample.txt", 930485, 1,
+			"OK_3", "i8vgyuo8cr7o", "bucket790/subdir", "bucket790/.segments/subdir/sample.txt/",
+			"9", "", "../../test/sample.txt", 249715200, 3, false,
 			map[string]string{"filename": "subdir/sample.txt", "bucket": "bucket790", "journal": "9"},
 		},
 	}
 
-	origEncrypt := encrypt
 	origGetFileDetails := getFileDetails
+	origGetFileDetailsEncrypted := getFileDetailsEncrypted
 	origPut := put
 	origCurrentTime := currentTime
 	defer func() {
-		encrypt = origEncrypt
 		getFileDetails = origGetFileDetails
+		getFileDetailsEncrypted = origGetFileDetailsEncrypted
 		put = origPut
 		currentTime = origCurrentTime
 	}()
-
-	encrypt = func(in_filename, out_filename string) error {
-		return nil
-	}
 
 	for i, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
@@ -441,18 +405,32 @@ func TestUpload(t *testing.T) {
 			currentTime = func() time.Time {
 				return testTime
 			}
-			getFileDetails = func(filename string) (string, int64, error) {
-				if filename == tt.file {
-					return tt.checksum, tt.size, nil
+			var file1, file2 *os.File = nil, nil
+			getFileDetails = func(filename string) (*os.File, string, int64, error) {
+				var err error
+				file1, err = os.Open(filename)
+				if err != nil {
+					return nil, "", 0, err
 				}
-				return tt.checksum + strings.Repeat("hmm", i+1), tt.size*int64(i) + 200, nil
+				return file1, tt.checksum + strings.Repeat("78", i+1), tt.size + 200*int64(i+1), nil
+			}
+			getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+				if !tt.encrypt {
+					return nil, "", 0, errors.New("Should not have called getFileDetailsEncrypted()")
+				}
+				var err error
+				file2, err = os.Open(filename)
+				if err != nil {
+					return nil, "", 0, err
+				}
+				return &readCloser{file2, file2, nil}, tt.checksum + strings.Repeat("50", i+1), tt.size + 500*int64(i+1), nil
 			}
 
 			count := 1
 			total := int(tt.total)
-			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
-				if container != tt.query["bucket"] {
-					t.Errorf("Function received incorrect container. Expected=%s, received=%s", tt.query["bucket"], container)
+			put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
+				if manifest != tt.manifest {
+					t.Errorf("Function received incorrect manifest. Expected=%s, received=%s", tt.manifest, manifest)
 				}
 				if (segment_nro == -1 || segment_total == -1) && tt.total == 1 {
 					t.Error("Segment number and segment total should not be -1")
@@ -477,8 +455,19 @@ func TestUpload(t *testing.T) {
 				return nil
 			}
 
-			if err := Upload(tt.origFile, tt.file, tt.container, tt.journal_number, 100, true); err != nil {
+			if err := Upload(tt.origFile, tt.file, tt.container, tt.journal_number, 100, tt.encrypt); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else {
+				if file1 != nil {
+					if err = file1.Close(); err == nil {
+						t.Error("File was not closed")
+					}
+				}
+				if file2 != nil {
+					if err = file2.Close(); err == nil {
+						t.Error("Unencrypted file was not closed")
+					}
+				}
 			}
 		})
 	}
@@ -494,27 +483,32 @@ func TestUpload_Error(t *testing.T) {
 		{"FAIL_3", "Uploading manifest file failed: ", 3, 164789600},
 	}
 
-	origEncrypt := encrypt
 	origGetFileDetails := getFileDetails
+	origGetFileDetailsEncrypted := getFileDetailsEncrypted
 	origPut := put
 	defer func() {
-		encrypt = origEncrypt
 		getFileDetails = origGetFileDetails
+		getFileDetailsEncrypted = origGetFileDetailsEncrypted
 		put = origPut
 	}()
 
-	encrypt = func(in_filename, out_filename string) error {
-		return nil
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			getFileDetails = func(filename string) (string, int64, error) {
-				return "", int64(tt.size), nil
+			var file *os.File = nil
+			getFileDetails = func(filename string) (*os.File, string, int64, error) {
+				var err error
+				file, err = os.Open(filename)
+				if err != nil {
+					return nil, "", 0, err
+				}
+				return file, "", int64(tt.size), nil
+			}
+			getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+				return nil, "", 0, errors.New("Should not have called getFileDetailsEncrypted()")
 			}
 
 			count := 1
-			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
+			put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if count == tt.count {
 					return errExpected
 				}
@@ -527,6 +521,10 @@ func TestUpload_Error(t *testing.T) {
 				t.Error("Function did not return error")
 			} else if err.Error() != errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+			} else if file != nil {
+				if err = file.Close(); err == nil {
+					t.Error("File was not closed")
+				}
 			}
 		})
 	}
@@ -541,21 +539,18 @@ func TestUpload_FileContent(t *testing.T) {
 		{"OK_3", "jtxfulvghoi.g oi.rf lg o.fblhoo jihuimgk"},
 	}
 
-	origEncrypt := encrypt
 	origGetFileDetails := getFileDetails
+	origGetFileDetailsEncrypted := getFileDetailsEncrypted
 	origPut := put
 	origMiniumSegmentSize := minimumSegmentSize
 	defer func() {
-		encrypt = origEncrypt
 		getFileDetails = origGetFileDetails
+		getFileDetailsEncrypted = origGetFileDetailsEncrypted
 		put = origPut
 		minimumSegmentSize = origMiniumSegmentSize
 	}()
 
 	minimumSegmentSize = 10
-	encrypt = func(in_filename, out_filename string) error {
-		return nil
-	}
 
 	file, err := os.CreateTemp("", "file")
 	if err != nil {
@@ -575,12 +570,16 @@ func TestUpload_FileContent(t *testing.T) {
 				t.Fatalf("Failed to write to file: %s", err.Error())
 			}
 
-			getFileDetails = func(filename string) (string, int64, error) {
-				return "", int64(len(tt.content)), nil
+			getFileDetails = func(filename string) (*os.File, string, int64, error) {
+				file, err := os.Open(filename)
+				if err != nil {
+					return nil, "", 0, err
+				}
+				return file, "", int64(len(tt.content)), nil
 			}
 
 			buf := &bytes.Buffer{}
-			put = func(url, container string, segment_nro, segment_total int, upload_dir string, upload_data io.Reader, query map[string]string) error {
+			put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if segment_nro != -1 {
 					if _, err := buf.ReadFrom(upload_data); err != nil {
 						return err
@@ -598,6 +597,55 @@ func TestUpload_FileContent(t *testing.T) {
 	}
 }
 
+func TestUpload_Channel_Error(t *testing.T) {
+	origGetFileDetails := getFileDetails
+	origGetFileDetailsEncrypted := getFileDetailsEncrypted
+	origPut := put
+	defer func() {
+		getFileDetails = origGetFileDetails
+		getFileDetailsEncrypted = origGetFileDetailsEncrypted
+		put = origPut
+	}()
+
+	getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+		file, err := os.Open(filename)
+		if err != nil {
+			return nil, "", 0, err
+		}
+		errc := make(chan error, 1)
+		errc <- errExpected
+		return &readCloser{file, file, errc}, "", 0, nil
+	}
+	getFileDetails = func(filename string) (*os.File, string, int64, error) {
+		file, err := os.Open(filename)
+		if err != nil {
+			return nil, "", 0, err
+		}
+		return file, "", 0, nil
+	}
+	put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
+		return nil
+	}
+
+	file, err := os.CreateTemp("", "file")
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	defer os.RemoveAll(file.Name())
+
+	message := "Some content that will never be read"
+	if _, err := file.WriteString(message); err != nil {
+		t.Fatalf("Failed to write to file: %s", err.Error())
+	}
+
+	errStr := "Streaming file failed: " + errExpected.Error()
+	if err := Upload(file.Name(), file.Name()+".c4gh", "bucket407", "", 100, true); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
 func TestFileDetails_NoFile(t *testing.T) {
 	file, err := os.CreateTemp("", "file")
 	if err != nil {
@@ -606,7 +654,7 @@ func TestFileDetails_NoFile(t *testing.T) {
 	os.RemoveAll(file.Name())
 
 	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
-	if _, _, err := getFileDetails(file.Name()); err == nil {
+	if _, _, _, err := getFileDetails(file.Name()); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -620,20 +668,27 @@ func TestFileDetails(t *testing.T) {
 	}
 	defer os.RemoveAll(file.Name())
 
-	_, err = file.WriteString("secret_content\n")
+	message := "secret_content\n"
+	_, err = file.WriteString(message)
 	if err != nil {
 		t.Fatalf("Failed to write content to file: %s", err.Error())
 	}
 
-	checksum, size, err := getFileDetails(file.Name())
+	testChecksum := "eae319fc2c45359a335451ba6e2fabe5"
+	rc, checksum, size, err := getFileDetails(file.Name())
 	if err != nil {
-		t.Fatal("Function returned unexpected error")
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
 	if size != 15 {
-		t.Fatalf("Returned incorrect size. Expected=%d, received=%d", 15, size)
+		t.Errorf("Returned incorrect size. Expected=%d, received=%d", 15, size)
 	}
-	if checksum != "eae319fc2c45359a335451ba6e2fabe5" {
-		t.Fatalf("Returned incorrect checksum\nExpected=%s\nReceived=%s", "eae319fc2c45359a335451ba6e2fabe5", checksum)
+	if checksum != testChecksum {
+		t.Errorf("Returned incorrect checksum\nExpected=%s\nReceived=%s", testChecksum, checksum)
+	}
+	if bytes, err := io.ReadAll(rc); err != nil {
+		t.Fatalf("Reading file content failed: %s", err.Error())
+	} else if string(bytes) != message {
+		t.Fatalf("Reader returned incorrect message\nExpected=%s\nReceived=%s", message, bytes)
 	}
 }
 
@@ -652,157 +707,98 @@ func TestCheckEncryption_NoFile(t *testing.T) {
 	}
 }
 
-func TestCheckEncryption_Not_Encrypted(t *testing.T) {
-	file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	defer os.RemoveAll(file.Name())
-
-	if encrypted, err := CheckEncryption(file.Name()); err != nil {
-		t.Fatalf("Function returned unexpected error: %s", err.Error())
-	} else if encrypted {
-		t.Fatal("Function mistakenly determined file to be encrypted")
-	}
-}
-
-func TestCheckEncryption_Encrypted(t *testing.T) {
+func TestCheckEncryption(t *testing.T) {
 	if encrypted, err := CheckEncryption("../../test/sample.txt.enc"); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	} else if !encrypted {
-		t.Fatal("Function mistakenly determined file to be not encrypted")
+		t.Fatal("Function mistakenly determined file ../../test/sample.txt.enc to not be encrypted")
+	}
+
+	if encrypted, err := CheckEncryption("../../test/sample.txt"); err != nil {
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
+	} else if encrypted {
+		t.Fatal("Function mistakenly determined file ../../test/sample.txt to be encrypted")
 	}
 }
 
-func TestEncrypt_File_Error(t *testing.T) {
-	in_file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	defer os.RemoveAll(in_file.Name())
+type mockWriteCloser struct {
+	writeErr error
+	closeErr error
+	data     []byte
+}
 
-	out_file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	defer os.RemoveAll(out_file.Name())
+func (wc *mockWriteCloser) Write(data []byte) (n int, err error) {
+	wc.data = data
+	return len(data), wc.writeErr
+}
 
+func (wc *mockWriteCloser) Close() error {
+	return wc.closeErr
+}
+
+func TestGetFileDetailsEncrypted_C4ghWriter_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errStr  string
-		in_perm, out_perm fs.FileMode
+		testname                string
+		err, writeErr, closeErr error
 	}{
-		{"NO_IN_FILE_PERMISSION", fmt.Sprintf("open %s: permission denied", in_file.Name()), 0333, 0666},
-		{"NO_OUT_FILE_PEEMISSION", fmt.Sprintf("open %s: permission denied", out_file.Name()), 0666, 0333},
+		{"FAIL_1", errExpected, nil, nil},
+		{"FAIL_2", nil, errExpected, nil},
+		{"FAIL_3", nil, nil, errExpected},
 	}
+
+	origNewWriter := newCrypt4GHWriter
+	defer func() { newCrypt4GHWriter = origNewWriter }()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			if err = os.Chmod(in_file.Name(), os.FileMode(tt.in_perm)); err != nil {
-				t.Errorf("Changing permission bits failed: %s", err.Error())
-			}
-			if err = os.Chmod(out_file.Name(), os.FileMode(tt.out_perm)); err != nil {
-				t.Errorf("Changing permission bits failed: %s", err.Error())
+			newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
+				return &mockWriteCloser{writeErr: tt.writeErr, closeErr: tt.closeErr}, tt.err
 			}
 
-			if err := encrypt(in_file.Name(), out_file.Name()); err == nil {
-				t.Error("Function did not return error")
-			} else if err.Error() != tt.errStr {
-				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			if _, _, _, err := getFileDetailsEncrypted("../../test/sample.txt"); err == nil {
+				t.Errorf("Function did not return error")
+			} else if err.Error() != errExpected.Error() {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
 			}
 		})
 	}
 }
 
-func TestEncrypt_Fail(t *testing.T) {
-	out_file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	defer os.RemoveAll(out_file.Name())
+func TestGetFileDetailsEncrypted_Hash_Error(t *testing.T) {
+	origEncrypt := encrypt
+	defer func() { encrypt = origEncrypt }()
 
-	origPublicLey := ai.publicKey
-	defer func() { ai.publicKey = origPublicLey }()
-
-	ai.publicKey = [32]byte{}
-	if err := encrypt("../../test/sample.txt", out_file.Name()); err == nil {
-		t.Error("Function did not return error")
-	}
-}
-
-func TestEncrypt(t *testing.T) {
-	out_file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	defer os.RemoveAll(out_file.Name())
-
-	origPublicLey := ai.publicKey
-	defer func() { ai.publicKey = origPublicLey }()
-
-	publicKey, privateKey, err := keys.GenerateKeyPair()
-	if err != nil {
-		t.Fatalf("Could not generate key pair: %s", err.Error())
+	encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
+		pw.CloseWithError(errExpected)
+		errc <- nil
 	}
 
-	ai.publicKey = publicKey
-	file := "../../test/sample.txt"
-	if err := encrypt(file, out_file.Name()); err != nil {
-		t.Fatal("Function did not return error")
-	}
-	if encrypted, _ := CheckEncryption(out_file.Name()); !encrypted {
-		t.Fatal("Function failed to encrypt file")
-	}
-
-	c4ghr, err := streaming.NewCrypt4GHReader(out_file, privateKey, nil)
-	if err != nil {
-		t.Fatalf("Failed to create crypt4gh reader: %s", err.Error())
-	}
-
-	encBytes, err := io.ReadAll(c4ghr)
-	if err != nil {
-		t.Fatalf("Failed to read from encrypted file: %s", err.Error())
-	}
-
-	in_file, err := os.Open(file)
-	if err != nil {
-		t.Fatalf("Failed to open file: %s", err.Error())
-	}
-	defer in_file.Close()
-
-	decBytes, err := io.ReadAll(in_file)
-	if err != nil {
-		t.Fatalf("Failed to read from original file: %s", err.Error())
-	}
-
-	if !reflect.DeepEqual(encBytes, decBytes) {
-		t.Error("Could not recreate decrypted file from encrypted file")
-	}
-}
-
-func TestGetFileDetailsAndEncrypt(t *testing.T) {
-	origPublicLey := ai.publicKey
-	defer func() { ai.publicKey = origPublicLey }()
-
-	publicKey, privateKey, err := keys.GenerateKeyPair()
-	if err != nil {
-		t.Fatalf("Could not generate key pair: %s", err.Error())
-	}
-
-	ai.publicKey = publicKey
-	file := "../../test/sample.txt"
-	if _, _, _, err := getFileDetailsAndEncrypt("../../test/sample.txt"); err != nil {
-		t.Errorf("Function returned unexpected error: %s", err.Error())
-	}
-}*/
-
-func TestGetFileDetailsAndEncrypt_C4ghWriterError(t *testing.T) {
-	ai.publicKey = [32]byte{}
-	if _, _, _, err := getFileDetailsAndEncrypt("../../test/sample.txt"); err == nil {
+	if _, _, _, err := getFileDetailsEncrypted("../../test/sample.txt"); err == nil {
 		t.Errorf("Function did not return error")
+	} else if err.Error() != errExpected.Error() {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
 	}
 }
 
-func TestGetFileDetailsAndEncrypt_NoFile(t *testing.T) {
+func TestGetFileDetailsEncrypted_Seek_Error(t *testing.T) {
+	origEncrypt := encrypt
+	defer func() { encrypt = origEncrypt }()
+
+	encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
+		pw.Close()
+		file.Close()
+		errc <- nil
+	}
+
+	errStr := "seek ../../test/sample.txt: file already closed"
+	if _, _, _, err := getFileDetailsEncrypted("../../test/sample.txt"); err == nil {
+		t.Errorf("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestGetFileDetailsEncrypted_NoFile(t *testing.T) {
 	file, err := os.CreateTemp("", "file")
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
@@ -810,10 +806,108 @@ func TestGetFileDetailsAndEncrypt_NoFile(t *testing.T) {
 	os.RemoveAll(file.Name())
 
 	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
-	if _, _, _, err := getFileDetailsAndEncrypt(file.Name()); err == nil {
+	if _, _, _, err := getFileDetailsEncrypted(file.Name()); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestGetFileDetailsEncrypted(t *testing.T) {
+	var tests = []struct {
+		testname, message, checksum string
+		bytes                       int64
+	}{
+		{"OK_1", "pipe message", "c4c9d148f5d14dfd9e7a31b4e6ab2f43", 12},
+		{"OK_2", "another_message", "5c13b34276b82d5fb39a4e9a99ad182b", 15},
+	}
+
+	origEncrypt := encrypt
+	defer func() { encrypt = origEncrypt }()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
+				_, err := pw.Write([]byte(tt.message))
+				pw.Close()
+				errc <- err
+			}
+
+			if rc, checksum, bytes, err := getFileDetailsEncrypted("../../test/sample.txt"); err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else if checksum != tt.checksum {
+				t.Errorf("Function returned incorrect checksum\nExpected=%s\nReceived=%s", tt.checksum, checksum)
+			} else if bytes != tt.bytes {
+				t.Errorf("Function returned incorrect checksum\nExpected=%d\nReceived=%d", tt.bytes, bytes)
+			} else if data, err := io.ReadAll(rc); err != nil {
+				t.Errorf("Error when read from io.ReadCloser: %s", err.Error())
+			} else if string(data) != tt.message {
+				t.Errorf("io.ReadCloser had incorrect content\nExpected=%s\nReceived=%s", tt.message, data)
+			} else if err = <-rc.errc; err != nil {
+				t.Errorf("Channel returned unexpected error: %s", err.Error())
+			} else if err = rc.Close(); err != nil {
+				t.Errorf("Closing file caused error: %s", err.Error())
+			}
+		})
+	}
+}
+
+func TestGetFileDetailsEncrypted_Crypt4GH(t *testing.T) {
+	var tests = []struct {
+		testname, message string
+	}{
+		{"OK_1", "pipe message"},
+		{"OK_2", "another_message"},
+	}
+
+	origEncrypt := encrypt
+	origPublicLey := ai.publicKey
+	defer func() {
+		encrypt = origEncrypt
+		ai.publicKey = origPublicLey
+	}()
+
+	file, err := os.CreateTemp("", "file")
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	defer os.RemoveAll(file.Name())
+
+	publicKey, privateKey, err := keys.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Could not generate key pair: %s", err.Error())
+	}
+
+	ai.publicKey = publicKey
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			if err = file.Truncate(0); err != nil {
+				t.Errorf("Could not truncate file: %s", err.Error())
+			}
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				t.Errorf("Could not change file offset: %s", err.Error())
+			}
+			if _, err := file.WriteString(tt.message); err != nil {
+				t.Fatalf("Failed to write to file: %s", err.Error())
+			}
+
+			if rc, _, _, err := getFileDetailsEncrypted(file.Name()); err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else {
+				c4ghr, err := streaming.NewCrypt4GHReader(rc, privateKey, nil)
+				if err != nil {
+					t.Errorf("Failed to create crypt4gh reader: %s", err.Error())
+				} else if message, err := io.ReadAll(c4ghr); err != nil {
+					t.Errorf("Failed to read from encrypted file: %s", err.Error())
+				} else if tt.message != string(message) {
+					t.Errorf("Reader received incorrect message\nExpected=%s\nReceived=%s", tt.message, message)
+				}
+				if err = rc.Close(); err != nil {
+					t.Errorf("Closing file caused error: %s", err.Error())
+				}
+			}
+		})
 	}
 }
 
