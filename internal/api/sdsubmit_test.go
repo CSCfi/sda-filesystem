@@ -41,9 +41,9 @@ func (s *mockSubmitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, er
 
 func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
 	// Mock
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+	origMakeRequest := MakeRequest
+	defer func() { MakeRequest = origMakeRequest }()
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return errors.New(constantError)
 	}
 
@@ -62,9 +62,9 @@ func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
 func Test_SDSubmit_GetDatasets_Pass(t *testing.T) {
 	// Mock
 	expectedBody := []string{"dataset1", "dataset2", "dataset3"}
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+	origMakeRequest := MakeRequest
+	defer func() { MakeRequest = origMakeRequest }()
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`["dataset1","dataset2","dataset3"]`))).Decode(ret)
 		return nil
 	}
@@ -83,9 +83,9 @@ func Test_SDSubmit_GetDatasets_Pass(t *testing.T) {
 
 func Test_SDSubmit_GetFiles_Fail(t *testing.T) {
 	// Mock
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+	origMakeRequest := MakeRequest
+	defer func() { MakeRequest = origMakeRequest }()
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return errors.New(constantError)
 	}
 
@@ -126,9 +126,9 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 		},
 	}
 	testFileJSON, _ := json.Marshal(testFile)
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+	origMakeRequest := MakeRequest
+	defer func() { MakeRequest = origMakeRequest }()
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader(testFileJSON)).Decode(ret)
 		return nil
 	}
@@ -167,9 +167,9 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 		},
 	}
 	testFileJSON, _ := json.Marshal(testFile)
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+	origMakeRequest := MakeRequest
+	defer func() { MakeRequest = origMakeRequest }()
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		path := "url/metadata/datasets/dataset1/files"
 		if url != path {
 			return fmt.Errorf("makeRequest() received incorrect url\nExpected=%s\nReceived=%s", path, url)
@@ -202,9 +202,9 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 func Test_SDSubmit_GetEnvs_Fail_SubmitAPI(t *testing.T) {
 	// Mock
 	expectedError := constantError
-	origGetEnv := getEnv
-	defer func() { getEnv = origGetEnv }()
-	getEnv = func(name string, verifyURL bool) (string, error) {
+	origGetEnv := GetEnv
+	defer func() { GetEnv = origGetEnv }()
+	GetEnv = func(name string, verifyURL bool) (string, error) {
 		return "", errors.New(expectedError)
 	}
 	s := sdSubmitInfo{}
@@ -221,14 +221,14 @@ func Test_SDSubmit_GetEnvs_Fail_SubmitAPI(t *testing.T) {
 
 func Test_SDSubmit_GetEnvs_Fail_ValidURL(t *testing.T) {
 	// Mock
-	expectedError := constantError
-	origGetEnv := getEnv
+	expectedError := "SD Apply API not a valid URL: " + constantError
+	origGetEnv := GetEnv
 	origValidURL := validURL
 	defer func() {
-		getEnv = origGetEnv
+		GetEnv = origGetEnv
 		validURL = origValidURL
 	}()
-	getEnv = func(name string, verifyURL bool) (string, error) {
+	GetEnv = func(name string, verifyURL bool) (string, error) {
 		return "env", nil
 	}
 	validURL = func(env string) error {
@@ -249,15 +249,15 @@ func Test_SDSubmit_GetEnvs_Fail_ValidURL(t *testing.T) {
 func Test_SDSubmit_GetEnvs_Fail_TestURL(t *testing.T) {
 	// Mock
 	expectedError := "Cannot connect to SD Apply registered API: some error"
-	origGetEnv := getEnv
+	origGetEnv := GetEnv
 	origValidURL := validURL
 	origTestURL := testURL
 	defer func() {
-		getEnv = origGetEnv
+		GetEnv = origGetEnv
 		validURL = origValidURL
 		testURL = origTestURL
 	}()
-	getEnv = func(name string, verifyURL bool) (string, error) {
+	GetEnv = func(name string, verifyURL bool) (string, error) {
 		return "env", nil
 	}
 	validURL = func(env string) error {
@@ -281,15 +281,15 @@ func Test_SDSubmit_GetEnvs_Fail_TestURL(t *testing.T) {
 func Test_SDSubmit_GetEnvs_Pass(t *testing.T) {
 	// Mock
 	expectedUrls := "url1,url2,url3"
-	origGetEnv := getEnv
+	origGetEnv := GetEnv
 	origValidURL := validURL
 	origTestURL := testURL
 	defer func() {
-		getEnv = origGetEnv
+		GetEnv = origGetEnv
 		validURL = origValidURL
 		testURL = origTestURL
 	}()
-	getEnv = func(name string, verifyURL bool) (string, error) {
+	GetEnv = func(name string, verifyURL bool) (string, error) {
 		return expectedUrls, nil
 	}
 	validURL = func(env string) error {
@@ -501,6 +501,13 @@ func Test_SDSubmit_GetNthLevel_Default(t *testing.T) {
 	}
 }
 
+func Test_SDSubmit_UpdateAttributes(t *testing.T) {
+	s := &sdSubmitInfo{}
+	if s.updateAttributes(nil, "", nil) != nil {
+		t.Error("Function should have returned 'nil'")
+	}
+}
+
 func Test_SDSubmit_DownloadData_Fail(t *testing.T) {
 	// Mock
 	s := sdSubmitInfo{datasets: map[string]int{"something": 0}}
@@ -520,9 +527,9 @@ func Test_SDSubmit_DownloadData_Fail(t *testing.T) {
 func Test_SDSubmit_DownloadData_Pass(t *testing.T) {
 	// Mock
 	expectedData := []byte("hellothere")
-	origMakeRequest := makeRequest
-	defer func() { makeRequest = origMakeRequest }()
-	makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+	origMakeRequest := MakeRequest
+	defer func() { MakeRequest = origMakeRequest }()
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_, _ = io.ReadFull(bytes.NewReader(expectedData), ret.([]byte))
 		return nil
 	}

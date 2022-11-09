@@ -10,13 +10,13 @@ or download the release:
 ```
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=v1.2.2
-wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.17-linux-amd64.zip"
+export version=v1.3.0
+wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.19-linux-amd64.zip"
 ```
 
 Install the software:
 ```
-sudo unzip -qq go-fuse-gui-golang1.17-linux-amd64.zip
+sudo unzip -qq go-fuse-gui-golang1.19-linux-amd64.zip
 sudo chmod 755 /etc/sda-fuse/sda-fuse
 sudo ln -s /etc/sda-fuse/sda-fuse /usr/bin/sda-fuse
 sudo mv cmd/qt/icon.svg /etc/sda-fuse/icon.svg

@@ -3,7 +3,7 @@ import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Dialogs 1.3
-import csc 1.2 as CSC
+import csc 1.3 as CSC
 
 Page {
     id: page
@@ -120,6 +120,13 @@ Page {
                 id: headerText
                 text: "<h1>Preparing access</h1>"
                 maximumLineCount: 1
+            }
+
+            Label {
+                text: "If you update the contents of these projects, please refresh access."
+                visible: buttonRow.visible
+                maximumLineCount: 1
+                font.pixelSize: 14
             }
 
             RowLayout {

@@ -4,7 +4,7 @@ import QtQuick.Layouts 1.13
 import QtQuick.Controls.Material 2.12
 import QtQuick.Dialogs 1.3
 import QtQuick.Shapes 1.13
-import csc 1.2 as CSC
+import csc 1.3 as CSC
 
 Page {
     id: page
@@ -23,18 +23,34 @@ Page {
         selectExisting: true
         selectFolder: false
 
-        onAccepted: {
-            page.chosen = true
-            exportModel.setProperty(0, "name", dialogSelect.fileUrl.toString())
-        }
+        onAccepted: QmlBridge.checkEncryption(dialogSelect.fileUrl.toString())
     }
 
     Connections {
         target: QmlBridge
-        onExportFinished: if (success) {
-            stack.currentIndex = 4
-        } else {
-            stack.currentIndex = 2
+        onExportFinished: {
+            exportModel.setProperty(0, "modifiable", true)
+            stack.currentIndex = success ? 4 : 2
+            page.chosen = false
+        }
+        onPreventExport: {
+            stack.currentIndex = 0
+            infoLabel.text = "Something went wrong when initializing Airlock. Check logs for further details."
+        }
+        onEncryptionChecked: {
+            if (fileEnc == "") {
+                popup.errorMessage = "Failed to check if file is encrypted"
+                popup.open()
+                return
+            } else if (existing) {
+                popupOverwrite.additionalText = "Airlock wants to create file " + fileEnc + " but a file of the same name already exists. Overwrite file?"  
+                popupOverwrite.open()
+            } else {
+                page.chosen = true
+            }
+
+            exportModel.setProperty(0, "name", fileOrig)
+            exportModel.setProperty(0, "nameEncrypted", fileEnc)
         }
     }
 
@@ -43,8 +59,38 @@ Page {
 
         ListElement {
             name: ""
+            nameEncrypted: ""
             bucket: ""
             modifiable: true
+        }
+    }
+
+    CSC.Popup {
+        id: popupOverwrite
+        errorMessage: "File already exists"
+        closePolicy: Popup.NoAutoClose
+        mainColor: CSC.Style.orange
+        
+        Row {
+            spacing: CSC.Style.padding
+            anchors.right: parent.right
+
+            CSC.Button {
+                text: "Cancel"
+                outlined: true
+
+                onClicked: popupOverwrite.close()
+            }
+
+            CSC.Button {
+                id: overwriteButton
+                text: "Overwrite and continue"
+                
+                onClicked: {
+                    page.chosen = true
+                    popupOverwrite.close()
+                }
+            }
         }
     }
 
@@ -70,6 +116,7 @@ Page {
             }
 
             Label {
+                id: infoLabel
                 text: "Your need to be project manager to export files."
                 font.pixelSize: 14
             }
@@ -107,32 +154,32 @@ Page {
                     implicitWidth: 400
 
                     property string compareText: ""
-                    property real spaceLeft
 
-                    onVisibleChanged: spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y - this.height })
-
-                    onFocusChanged: if (focus) {
-                        popupBuckets.open()
-                    }
-
+                    onActiveFocusChanged: popupBuckets.visible = activeFocus
                     onTextChanged: {
                         if (focus) {
                             compareText = text
                         }
                         if (text != "") {
-                            popupBuckets.open()
+                            popupBuckets.visible = true
                         }
                     }
 
-                    Popup {
+                    Pane {
                         id: popupBuckets
                         y: parent.height
                         width: parent.width
-                        implicitHeight: Math.min(parent.spaceLeft - CSC.Style.padding, contentItem.implicitHeight)
+                        implicitHeight: Math.min(spaceLeft - CSC.Style.padding, contentItem.implicitHeight)
                         padding: 0
-                        closePolicy: Popup.NoAutoClose
+                        visible: false
+
+                        property real spaceLeft
 
                         Material.elevation: bucketsList.implicitHeight > 0 ? 6 : 0
+
+                        onVisibleChanged: {
+                            spaceLeft = Qt.binding(function() { return this.mapFromItem(null, 0, window.height).y })
+                        }
 
                         contentItem: ListView {
                             id: bucketsList
@@ -142,7 +189,7 @@ Page {
                             model: QmlBridge.buckets
 
                             delegate: ItemDelegate {
-                                height: modelData.includes(nameField.compareText) ? Math.max(50, implicitHeight) : 0
+                                height: modelData.includes(nameField.compareText) ? Math.max(40, implicitHeight) : 0
                                 width: nameField.width
                                 highlighted: bucketsList.currentIndex === index
 
@@ -151,7 +198,7 @@ Page {
                                     nameField.focus = false
                                     folderColumn.focus = true
                                     nameField.text = modelData
-                                    popupBuckets.close()
+                                    popupBuckets.visible = false
                                 }
 
                                 contentItem: Label {
@@ -166,7 +213,7 @@ Page {
 
                                 background: Rectangle {
                                     anchors.fill: parent
-                                    color: (parent.hovered || parent.highlighted) ? CSC.Style.lightBlue : "transparent"
+                                    color: parent.hovered ? CSC.Style.lightBlue : "transparent"
                                 }
                             }
 
@@ -182,7 +229,7 @@ Page {
                     Layout.alignment: Qt.AlignRight
 
                     onClicked: if (enabled) { 
-                        popupBuckets.close()
+                        popupBuckets.visible = false
                         exportModel.setProperty(0, "bucket", nameField.text)
                         stack.currentIndex = stack.currentIndex + 1 
                     }
@@ -273,13 +320,13 @@ Page {
                             return
                         }
                         
-                        if (QmlBridge.isFile(drop.urls[0])) {
-                            page.chosen = true
-                            exportModel.setProperty(0, "name", drop.urls[0])
-                        } else {
+                        if (!QmlBridge.isFile(drop.urls[0])) {
                             popup.errorMessage = "Dropped item was not a file"
                             popup.open()
+                            return
                         }
+
+                        QmlBridge.checkEncryption(drop.urls[0])
                     }
                 }
 
@@ -319,7 +366,7 @@ Page {
                         onClicked: if (enabled) { 
                             exportModel.setProperty(0, "modifiable", false)
                             stack.currentIndex = stack.currentIndex + 1 
-                            QmlBridge.exportFile(exportModel.get(0).bucket, exportModel.get(0).name) 
+                            QmlBridge.exportFile(exportModel.get(0).bucket, exportModel.get(0).name, exportModel.get(0).nameEncrypted) 
                         }
                     }
                 }
@@ -390,7 +437,7 @@ Page {
 
                     onClicked: { 
                         nameField.text = ""
-                        exportModel.setProperty(0, "modifiable", true)
+                        nameField.compareText = ""
                         stack.currentIndex = 1 
                     }
                 }
@@ -418,12 +465,12 @@ Page {
         id: fileLine
 
         RowLayout {
-            property string name: modelData ? modelData.name : ""
+            property string nameEncrypted: modelData ? modelData.nameEncrypted : ""
             property string bucket: modelData ? modelData.bucket : ""
             property bool modifiable: modelData ? modelData.modifiable : false
 
             Label {
-                text: parent.name.split('/').reverse()[0]
+                text: parent.nameEncrypted.split('/').reverse()[0]
                 elide: Text.ElideRight
                 Layout.preferredWidth: parent.width * 0.4
             }

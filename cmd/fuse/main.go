@@ -53,8 +53,8 @@ func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
-func userChooseUpdate(lr loginReader) {
-	scanner := bufio.NewScanner(lr.getStream())
+func userChooseUpdate(r io.Reader) {
+	scanner := bufio.NewScanner(r)
 	var answer string
 
 	for !strings.EqualFold(answer, "update") {
@@ -207,7 +207,7 @@ func main() {
 
 	go func() {
 		for {
-			userChooseUpdate(&stdinReader{})
+			userChooseUpdate(os.Stdin)
 			if fs.FilesOpen(mount) {
 				logs.Warningf("You have files in use and thus updating is not possible")
 				continue

@@ -69,7 +69,7 @@ func TestSetLevel(t *testing.T) {
 		Warningf = origWarningf
 	}()
 
-	Warningf = func(format string, args ...interface{}) {}
+	Warningf = func(format string, args ...any) {}
 
 	for _, tt := range tests {
 		testname := strings.ToUpper(tt.input)

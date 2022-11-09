@@ -14,22 +14,20 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - uses: actions/checkout@v3
-      - name: Set output tag name
-        id: vars
-        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
       - name: Create release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          name: Release ${{ steps.vars.outputs.tag }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           body: |
-            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem/Data Gateway GUI (Graphical User Interface).
-            Release ${{ steps.vars.outputs.tag }} of SDA-Filesystem/Data Gateway CLI (Command Line Interface).
+            Release ${{ github.ref_name }} of SDA-Filesystem/Data Gateway GUI (Graphical User Interface).
+            Release ${{ github.ref_name }} of SDA-Filesystem/Data Gateway CLI (Command Line Interface).
+            Release ${{ github.ref_name }} of Airlock CLI (Command Line Interface)
             Download artifacts in zip archives below.
   
-  build_cli_release:
-    name: Upload CLI Release Asset
+  build_fuse_cli_release:
+    name: Upload FUSE CLI Release Asset
     needs: create_release
     strategy:
       max-parallel: 4
@@ -73,15 +71,70 @@ jobs:
         run: |
           choco install zip
           choco install WinFsp
-      - name: Build CLI artifact Windows
+      - name: Build FUSE CLI artifact Windows
         if: matrix.os == 'windows-latest'
         run: |
-          $env:CGO_ENABLED=0; go build -o ./go-fuse ./cmd/cli/main.go
-      - name: Build CLI artifact
+          $env:CGO_ENABLED=0; go build -o ./go-fuse ./cmd/fuse/main.go
+      - name: Build FUSE CLI artifact
         if: matrix.os != 'windows-latest'
         run: |
-          go build -o ./go-fuse ./cmd/cli/main.go
-      - name: Archive CLI Asset
+          go build -o ./go-fuse ./cmd/fuse/main.go
+      - name: Archive FUSE CLI Asset
+        run: |
+          zip --junk-paths ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip ${{ matrix.artifact_name }}
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ./${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
+          fail_on_unmatched_files: true
+
+  build_airlock_cli_release:
+    name: Upload Airlock CLI Release Asset
+    needs: create_release
+    strategy:
+      max-parallel: 4
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: go-airlock
+            os_suffix: linux-amd64
+            asset_name: go-airlock-cli
+          - os: macos-latest
+            artifact_name: go-airlock
+            os_suffix: macos-amd64
+            asset_name: go-airlock-cli
+          - os: windows-latest
+            artifact_name: go-airlock
+            os_suffix: windows-amd64
+            asset_name: go-airlock-cli
+        golang-version: [1.19]
+    
+    runs-on: ${{ matrix.os }}
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Golang ${{ matrix.golang-version }}
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.golang-version }}
+      - name: Install Windows dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install zip
+          choco install WinFsp
+      - name: Build Airlock CLI artifact Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          $env:CGO_ENABLED=0; go build -o ./go-airlock ./cmd/airlock/main.go
+      - name: Build Airlock CLI artifact
+        if: matrix.os != 'windows-latest'
+        run: |
+          go build -o ./go-airlock ./cmd/airlock/main.go
+      - name: Archive Airlock CLI Asset
         run: |
           zip --junk-paths ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip ${{ matrix.artifact_name }}
       - name: Upload Release Asset

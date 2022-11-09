@@ -60,7 +60,7 @@ func init() {
 
 func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	var datasets []string
-	err := makeRequest(urlStr+"/metadata/datasets", nil, nil, &datasets)
+	err := MakeRequest(urlStr+"/metadata/datasets", nil, nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmit, urlStr, err)
 	}
@@ -81,7 +81,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	// Request files
 	var files []file
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
-	err := makeRequest(path, query, nil, &files)
+	err := MakeRequest(path, query, nil, nil, &files)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
 	}
@@ -108,14 +108,14 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 
 func (s *sdSubmitInfo) getEnvs() error {
 	var err error
-	urls, err := getEnv("FS_SD_SUBMIT_API", false)
+	urls, err := GetEnv("FS_SD_SUBMIT_API", false)
 	if err != nil {
 		return err
 	}
 	s.urls = []string{}
 	for i, u := range strings.Split(urls, ",") {
 		if err = validURL(u); err != nil {
-			return err
+			return fmt.Errorf("%s API not a valid URL: %w", SDSubmit, err)
 		}
 		s.urls = append(s.urls, strings.TrimRight(u, "/"))
 		if err := testURL(s.urls[i]); err != nil {
@@ -189,11 +189,11 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 }
 
 // Dummy function, not needed
-func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr interface{}) error {
+func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr any) error {
 	return nil
 }
 
-func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, end int64) error {
+func (s *sdSubmitInfo) downloadData(nodes []string, buffer any, start, end int64) error {
 	idx, ok := s.datasets[nodes[0]]
 	if !ok {
 		return fmt.Errorf("Tried to request content of %s file %s with invalid dataset %s", SDSubmit, nodes[1], nodes[0])
@@ -207,5 +207,5 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer interface{}, start, e
 
 	// Request data
 	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+nodes[1]]
-	return makeRequest(path, query, nil, buffer)
+	return MakeRequest(path, query, nil, nil, buffer)
 }

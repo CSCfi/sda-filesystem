@@ -1,24 +1,22 @@
 package api
 
 import (
-	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-logfmt/logfmt"
 
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
@@ -27,7 +25,6 @@ import (
 const chunkSize = 1 << 25
 
 var hi = httpInfo{requestTimeout: 20, httpRetry: 3, repositories: make(map[string]fuseInfo)}
-var airlock = airlockInfo{name: "airlock-client"}
 var allRepositories = make(map[string]fuseInfo)
 var downloadCache *cache.Ristretto
 
@@ -36,17 +33,10 @@ type httpInfo struct {
 	requestTimeout int
 	httpRetry      int
 	certPath       string
+	basicToken     string
 	sdsToken       string
-	userinfoURL    string
 	client         *http.Client
 	repositories   map[string]fuseInfo
-}
-
-type airlockInfo struct {
-	name     string
-	project  string
-	username string
-	password string
 }
 
 // If you wish to add a new repository, it must implement the following functions
@@ -55,8 +45,8 @@ type fuseInfo interface {
 	validateLogin(...string) error
 	levelCount() int
 	getNthLevel(string, ...string) ([]Metadata, error)
-	updateAttributes([]string, string, interface{}) error
-	downloadData([]string, interface{}, int64, int64) error
+	updateAttributes([]string, string, any) error
+	downloadData([]string, any, int64, int64) error
 }
 
 // Metadata contains node metadata fetched from an api
@@ -103,25 +93,27 @@ var GetEnvs = func(r string) error {
 	return allRepositories[r].getEnvs()
 }
 
-// getEnv looks up environment variable given in 'name'
-var getEnv = func(name string, verifyURL bool) (string, error) {
+// GetEnv looks up environment variable given in 'name'
+var GetEnv = func(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 	if !ok {
 		return "", fmt.Errorf("Environment variable %s not set", name)
 	}
 	if verifyURL {
-		return env, validURL(env)
+		if err := validURL(env); err != nil {
+			return "", fmt.Errorf("Environment variable %s not a valid URL: %w", name, err)
+		}
 	}
 	return env, nil
 }
 
-var validURL = func(env string) error {
-	u, err := url.ParseRequestURI(env)
+var validURL = func(value string) error {
+	u, err := url.ParseRequestURI(value)
 	if err != nil {
-		return fmt.Errorf("Environment variable %s is an invalid URL: %w", env, err)
+		return fmt.Errorf("%s is an invalid URL: %w", value, err)
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("Environment variable %s does not have scheme 'https'", env)
+		return fmt.Errorf("%s does not have scheme 'https'", value)
 	}
 	return nil
 }
@@ -129,16 +121,17 @@ var validURL = func(env string) error {
 // GetCommonEnvs gets the environmental varibles that are needed for all repositories
 // This may need to be changed if new repositories are added
 func GetCommonEnvs() (err error) {
-	if hi.certPath, err = getEnv("FS_CERTS", false); err != nil {
+	if hi.certPath, err = GetEnv("FS_CERTS", false); err != nil {
 		return err
 	}
-	if hi.sdsToken, err = getEnv("SDS_ACCESS_TOKEN", false); err != nil {
-		return err
-	}
-	if hi.userinfoURL, err = getEnv("USERINFO_ENDPOINT", true); err != nil {
+	if hi.sdsToken, err = GetEnv("SDS_ACCESS_TOKEN", false); err != nil {
 		return err
 	}
 	return nil
+}
+
+var GetSDSToken = func() string {
+	return hi.sdsToken
 }
 
 // InitializeCache creates a cache for downloaded data
@@ -181,10 +174,7 @@ func InitializeClient() error {
 		return fmt.Errorf("Failed to create a cookie jar: %w", err)
 	}
 
-	timeout := time.Duration(hi.requestTimeout) * time.Second
-
 	hi.client = &http.Client{
-		Timeout:   timeout,
 		Transport: tr,
 		Jar:       jar,
 	}
@@ -202,56 +192,18 @@ var testURL = func(url string) error {
 	return nil
 }
 
-var IsProjectManager = func() (bool, error) {
-	errStr := "Could not determine to which project this Desktop belongs"
-
-	file, err := os.ReadFile("/etc/pam_userinfo/config.json")
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", errStr, err)
-	}
-
-	var data map[string]interface{}
-	if err = json.Unmarshal(file, &data); err != nil {
-		return false, fmt.Errorf("%s: %w", errStr, err)
-	}
-
-	pr, ok := data["login_aud"]
-	if !ok {
-		return false, fmt.Errorf("%s: %w", errStr, errors.New("Config file did not contain key 'login_aud'"))
-	}
-
-	if err := makeRequest(hi.userinfoURL, nil, nil, &data); err != nil {
-		var re *RequestError
-		if errors.As(err, &re) && re.StatusCode == 400 {
-			return false, fmt.Errorf("Invalid token")
-		} else {
-			return false, err
-		}
-	}
-
-	if projectPI, ok := data["projectPI"]; !ok {
-		return false, fmt.Errorf("Response body did not contain key 'projectPI'")
-	} else {
-		projects := strings.Split(fmt.Sprintf("%v", projectPI), " ")
-		for i := range projects {
-			if projects[i] == fmt.Sprintf("%v", pr) {
-				airlock.project = fmt.Sprintf("project_%v", pr)
-				return true, nil
-			}
-		}
-		return false, nil
-	}
+var SetBasicToken = func(username, password string) {
+	hi.basicToken = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
 }
 
 // ValidateLogin checks if user is able to log in with given input
 var ValidateLogin = func(username, password string) (bool, error) {
-	err := allRepositories[SDConnect].validateLogin(username, password)
+	SetBasicToken(username, password)
+	err := allRepositories[SDConnect].validateLogin(hi.basicToken)
 	if err != nil {
 		return false, err
 	}
 	hi.repositories[SDConnect] = allRepositories[SDConnect]
-	airlock.username = username
-	airlock.password = password
 
 	// SDSubmit not necessary if it is unavailable
 	err = allRepositories[SDSubmit].validateLogin()
@@ -267,14 +219,34 @@ var LevelCount = func(rep string) int {
 }
 
 // makeRequest sends HTTP requests and parses the responses
-var makeRequest = func(url string, query, headers map[string]string, ret interface{}) error {
+var MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 	var response *http.Response
 
 	// Build HTTP request
-	request, err := http.NewRequest("GET", url, nil)
+	var err error
+	var timeout time.Duration
+	var request *http.Request
+
+	if body != nil {
+		if reflect.ValueOf(body) == reflect.Zero(reflect.TypeOf(body)) {
+			request, err = http.NewRequest("PUT", url, nil)
+		} else {
+			request, err = http.NewRequest("PUT", url, body)
+		}
+		timeout = time.Duration(108000) * time.Second
+	} else {
+		request, err = http.NewRequest("GET", url, nil)
+		timeout = time.Duration(hi.requestTimeout) * time.Second
+	}
+
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	request = request.WithContext(ctx)
 
 	// Place query params if they are set
 	q := request.URL.Query()
@@ -283,9 +255,11 @@ var makeRequest = func(url string, query, headers map[string]string, ret interfa
 	}
 	request.URL.RawQuery = q.Encode()
 
-	// Place mandatory headers
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+hi.sdsToken)
+	if body == nil {
+		request.Header.Set("Authorization", "Bearer "+hi.sdsToken)
+	} else {
+		request.Header.Set("Authorization", "Basic "+hi.basicToken)
+	}
 
 	// Place additional headers if any are available
 	for k, v := range headers {
@@ -312,7 +286,10 @@ var makeRequest = func(url string, query, headers map[string]string, ret interfa
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode != 200 && response.StatusCode != 206 {
+	if body == nil && response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+		return &RequestError{response.StatusCode}
+	}
+	if body != nil && response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusAccepted {
 		return &RequestError{response.StatusCode}
 	}
 
@@ -347,6 +324,10 @@ var makeRequest = func(url string, query, headers map[string]string, ret interfa
 		if _, err = io.ReadFull(response.Body, v); err != nil {
 			return fmt.Errorf("Copying response failed: %w", err)
 		}
+	case *[]byte:
+		if *v, err = io.ReadAll(response.Body); err != nil {
+			return fmt.Errorf("Copying response failed: %w", err)
+		}
 	default:
 		if err = json.NewDecoder(response.Body).Decode(v); err != nil {
 			return fmt.Errorf("Unable to decode response: %w", err)
@@ -361,25 +342,9 @@ var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, 
 	return hi.repositories[rep].getNthLevel(filepath.FromSlash(fsPath), nodes...)
 }
 
-var GetContainers = func() ([]string, error) {
-	if airlock.project != "" {
-		meta, err := GetNthLevel(SDConnect, SDConnect+"/"+airlock.project, airlock.project)
-		if err != nil {
-			return nil, fmt.Errorf("Could not get containers for combo box: %w", err)
-		}
-
-		containers := make([]string, len(meta))
-		for i := range meta {
-			containers[i] = meta[i].Name
-		}
-		return containers, nil
-	}
-	return nil, nil
-}
-
 // UpdateAttributes modifies attributes of node in 'fsPath'.
 // 'nodes' contains the original names of each node in 'fsPath'
-var UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+var UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
 	return hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
 }
 
@@ -430,41 +395,4 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 
 var ClearCache = func() {
 	downloadCache.Clear()
-}
-
-var SetAirlockName = func(name string) {
-	airlock.name = name
-}
-
-var ExportFile = func(folder, file string) error {
-	_, err := exec.LookPath(airlock.name)
-	if err != nil {
-		return fmt.Errorf("No Airlock found")
-	}
-
-	pwdArg := fmt.Sprintf("-password=%s", airlock.password)
-	cmd := exec.Command(airlock.name, "-force", "-quiet", pwdArg, airlock.username, folder, file) // #nosec (this will be changed anyway in next pr)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-
-	if err != nil {
-		d := logfmt.NewDecoder(strings.NewReader(stderr.String()))
-		if d.ScanRecord() {
-			for d.ScanKeyval() {
-				if string(d.Key()) == "msg" {
-					return fmt.Errorf(string(d.Value()))
-				}
-			}
-		}
-		for d.ScanRecord() {
-		}
-		if d.Err() != nil {
-			return fmt.Errorf("Failed to parse error from Airlock: %w", d.Err())
-		}
-		return fmt.Errorf("Airlock error had unusual format: %s", stderr.String())
-	}
-
-	return nil
 }

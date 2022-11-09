@@ -34,7 +34,7 @@ func TestOpen(t *testing.T) {
 	}()
 
 	isValidOpen = func() bool { return true }
-	api.UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+	api.UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
 		return &api.RequestError{StatusCode: 404}
 	}
 
@@ -55,6 +55,23 @@ func TestOpen(t *testing.T) {
 				t.Errorf("File handle incorrect. Expected %d, received %d", ^uint64(0), fh)
 			}
 		})
+	}
+}
+
+func TestOpen_Cancel(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+
+	origIsValidOpen := isValidOpen
+	defer func() { isValidOpen = origIsValidOpen }()
+
+	isValidOpen = func() bool { return false }
+
+	errc, fh := fs.Open("/prevent/this/path/from/opening", 0)
+	if errc != -fuse.ECANCELED {
+		t.Fatalf("Error code incorrect. Expected %d, received %d", -fuse.ECANCELED, errc)
+	}
+	if fh != ^uint64(0) {
+		t.Errorf("File handle incorrect. Expected %d, received %d", ^uint64(0), fh)
 	}
 }
 
@@ -90,7 +107,7 @@ func TestOpen_Decryption_Check(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+			api.UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
 				size, ok := attr.(*int64)
 				if !ok {
 					return fmt.Errorf("updateAttributes() was called with incorrect attribute. Expected type *int64, got %v", reflect.TypeOf(attr))
@@ -156,7 +173,7 @@ func TestOpen_Decryption_Check_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+			api.UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
 				return &api.RequestError{StatusCode: tt.httpStatus}
 			}
 
@@ -203,7 +220,7 @@ func TestOpendir(t *testing.T) {
 	origUpdateAttributes := api.UpdateAttributes
 	defer func() { api.UpdateAttributes = origUpdateAttributes }()
 
-	api.UpdateAttributes = func(nodes []string, fsPath string, attr interface{}) error {
+	api.UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
 		return nil
 	}
 

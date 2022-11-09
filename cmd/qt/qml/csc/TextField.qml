@@ -1,7 +1,8 @@
 import QtQuick.Controls 2.13
 import QtQuick.Layouts 1.13
 import QtQuick 2.13
-import csc 1.2 as CSC
+import QtQuick.Controls.Material 2.12
+import csc 1.3 as CSC
 
 TextField {
     id: textfield
@@ -21,7 +22,7 @@ TextField {
     background: Rectangle {
         id: bg
         border.width: textfield.activeFocus ? 2 : 1
-        border.color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
+        border.color: title.color
         radius: 5
     }
 
@@ -49,13 +50,14 @@ TextField {
     Label {
         id: title
         text: textfield.titleText
-        color: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
         leftPadding: 3
         rightPadding: 3
         font.pixelSize: 0.4 * (parent.height - (errorText != "" ? errorRow.height : 0))
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: errorText != "" ? -0.5 * errorRow.height : 0
         anchors.left: pane.left
+
+        Material.foreground: textfield.activeFocus ? CSC.Style.primaryColor : CSC.Style.grey
     }
 
     RowLayout {

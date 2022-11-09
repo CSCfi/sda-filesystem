@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 
@@ -517,6 +518,18 @@ func (fs *Fuse) getNode(path string, fh uint64) nodeAndPath {
 		return nodeAndPath{node: node, path: origPath}
 	}
 	return fs.openmap[fh]
+}
+
+func (fs *Fuse) GetNodeChildren(path string) []string {
+	n := fs.getNode(path, ^uint64(0))
+	chld := make([]string, len(n.node.chld))
+	i := 0
+	for _, value := range n.node.chld {
+		chld[i] = value.originalName
+		i++
+	}
+	sort.Strings(chld)
+	return chld
 }
 
 func (fs *Fuse) synchronize() func() {

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/therecipe/qt/qml"
 	"github.com/therecipe/qt/quickcontrols2"
 
+	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
@@ -29,20 +31,23 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(string, string) `slot:"login,auto"`
-	_ func()               `slot:"loadFuse,auto"`
-	_ func()               `slot:"openFuse,auto"`
-	_ func() string        `slot:"refreshFuse,auto"`
-	_ func(string) bool    `slot:"isFile,auto"`
-	_ func(string, string) `slot:"exportFile,auto"`
-	_ func(string) string  `slot:"changeMountPoint,auto"`
-	_ func()               `slot:"shutdown,auto"`
-	_ func()               `signal:"loginFail"`
-	_ func(message string) `signal:"popupError"`
-	_ func(message string) `signal:"initError"`
-	_ func()               `signal:"fuseReady"`
-	_ func(success bool)   `signal:"exportFinished"`
-	_ func()               `signal:"panic"`
+	_ func(string, string)                                 `slot:"login,auto"`
+	_ func()                                               `slot:"loadFuse,auto"`
+	_ func()                                               `slot:"openFuse,auto"`
+	_ func() string                                        `slot:"refreshFuse,auto"`
+	_ func(string) bool                                    `slot:"isFile,auto"`
+	_ func(string)                                         `slot:"checkEncryption,auto"`
+	_ func(string, string, string)                         `slot:"exportFile,auto"`
+	_ func(string) string                                  `slot:"changeMountPoint,auto"`
+	_ func()                                               `slot:"shutdown,auto"`
+	_ func()                                               `signal:"loginFail"`
+	_ func(message string)                                 `signal:"popupError"`
+	_ func(message string)                                 `signal:"initError"`
+	_ func()                                               `signal:"fuseReady"`
+	_ func(fileOrig string, fileEnc string, existing bool) `signal:"encryptionChecked"`
+	_ func()                                               `signal:"preventExport"`
+	_ func(success bool)                                   `signal:"exportFinished"`
+	_ func()                                               `signal:"panic"`
 
 	_ []string `property:"buckets"`
 	_ string   `property:"mountPoint"`
@@ -116,19 +121,23 @@ func (qb *QmlBridge) login(username, password string) {
 			return
 		}
 
-		isManager, err := api.IsProjectManager()
+		isManager, err := airlock.IsProjectManager()
 		qb.SetIsProjectManager(isManager)
 		if err != nil {
 			logs.Errorf("Resolving project manager status failed: %w", err)
+			qb.PreventExport()
 		} else if isManager {
 			logs.Info("You are the project manager")
 		} else {
 			logs.Info("You are not the project manager")
 		}
 
-		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
-		qb.updateBuckets()
+		if err = airlock.GetPublicKey(); err != nil {
+			logs.Error(err)
+			qb.PreventExport()
+		}
 
+		qb.fs = filesystem.InitializeFileSystem(projectModel.AddProject)
 		logs.Info("Login successful")
 		qb.SetLoggedIn(true)
 	}()
@@ -141,6 +150,7 @@ func (qb *QmlBridge) loadFuse() {
 
 		go func() {
 			time.Sleep(time.Second)
+			qb.SetBuckets(qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName()))
 			qb.FuseReady()
 		}()
 
@@ -188,7 +198,7 @@ func (qb *QmlBridge) refreshFuse() string {
 		projectModel.DeleteExtraProjects()
 		newFs.PopulateFilesystem(projectModel.AddToCount)
 		qb.fs.RefreshFilesystem(newFs)
-		qb.updateBuckets()
+		qb.SetBuckets(qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName()))
 		qb.FuseReady()
 	}()
 	return ""
@@ -198,28 +208,32 @@ func (qb *QmlBridge) isFile(url string) bool {
 	return core.NewQUrl3(url, 0).IsLocalFile()
 }
 
-func (qb *QmlBridge) exportFile(folder, url string) {
+func (qb *QmlBridge) checkEncryption(url string) {
+	file := core.NewQUrl3(url, 0).ToLocalFile()
+
+	if encrypted, err := airlock.CheckEncryption(file); err != nil {
+		logs.Error(err)
+		qb.EncryptionChecked("", "", false)
+	} else if encrypted {
+		logs.Info("File ", file, " is already encrypted. Skipping encryption.")
+		qb.EncryptionChecked("", file, false)
+	} else {
+		fileEncrypted := file + ".c4gh"
+		_, err := os.Stat(fileEncrypted)
+		qb.EncryptionChecked(file, fileEncrypted, err == nil)
+	}
+}
+
+func (qb *QmlBridge) exportFile(folder, origFile, file string) {
 	go func() {
 		time.Sleep(1000 * time.Millisecond)
-		file := core.NewQUrl3(url, 0).ToLocalFile()
-		err := api.ExportFile(folder, file)
+		err := airlock.Upload(origFile, file, folder, "", 4000, origFile != "")
 		if err != nil {
 			logs.Error(err)
-			message, _ := logs.Wrapper(err)
-			qb.PopupError(message)
+			qb.PopupError(fmt.Sprintf("Exporting file %s failed", file))
 		}
 		qb.ExportFinished(err == nil)
 	}()
-}
-
-func (qb *QmlBridge) updateBuckets() {
-	if qb.IsProjectManager() {
-		if containers, err := api.GetContainers(); err != nil {
-			logs.Error(err)
-		} else {
-			qb.SetBuckets(containers)
-		}
-	}
 }
 
 func (qb *QmlBridge) changeMountPoint(url string) string {
@@ -244,17 +258,12 @@ func (qb *QmlBridge) shutdown() {
 
 func init() {
 	debug := flag.Bool("debug", false, "print debug logs")
-	airlock := flag.String("airlock", "", "name of airlock executable")
 	flag.Parse()
 
 	if *debug {
 		logs.SetLevel("debug")
 	} else {
 		logs.SetLevel("info")
-	}
-
-	if *airlock != "" {
-		api.SetAirlockName(*airlock)
 	}
 
 	logs.SetSignal(logModel.AddLog)
@@ -265,7 +274,7 @@ func main() {
 	core.QCoreApplication_SetApplicationName("Data Gateway")
 	core.QCoreApplication_SetOrganizationName("CSC")
 	core.QCoreApplication_SetOrganizationDomain("csc.fi")
-	core.QCoreApplication_SetApplicationVersion("1.2.2")
+	core.QCoreApplication_SetApplicationVersion("1.3.0")
 	core.QCoreApplication_SetAttribute(core.Qt__AA_EnableHighDpiScaling, true)
 
 	gui.NewQGuiApplication(len(os.Args), os.Args)

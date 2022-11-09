@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
+
+	"github.com/sirupsen/logrus"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -71,6 +76,52 @@ func newTestReader(input []string, password string, sErr error, rErr error) *tes
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(i int, s []string) {})
 	os.Exit(m.Run())
+}
+
+func TestUserChooseUpdate(t *testing.T) {
+	finished := false
+	reader := strings.NewReader("continue\nhello\nupdate")
+
+	go func() {
+		userChooseUpdate(reader)
+		finished = true
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	if !finished {
+		t.Fatal("Function did not read input correctly. Input 'update' did not stop function")
+	}
+}
+
+func TestUserChooseUpdate_Error(t *testing.T) {
+	finished := false
+	buf := &testStream{err: errExpected}
+
+	var level int = 0
+	var strs []string = nil
+	logs.SetSignal(func(i int, s []string) {
+		level, strs = i, s
+	})
+	defer logs.SetSignal(func(i int, s []string) {})
+
+	go func() {
+		userChooseUpdate(buf)
+		finished = true
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	err := []string{"Could not read input", errExpected.Error()}
+	if level != int(logrus.ErrorLevel) {
+		t.Fatal("Function did not log an error")
+	}
+	if !reflect.DeepEqual(strs, err) {
+		t.Fatalf("Logged output incorrect\nExpected: %q\nReceived: %q", err, strs)
+	}
+	if finished {
+		t.Error("Function did not read input correctly. Input should not have stopped function")
+	}
 }
 
 func TestAskForLogin(t *testing.T) {
