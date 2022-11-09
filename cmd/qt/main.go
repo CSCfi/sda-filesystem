@@ -14,6 +14,7 @@ import (
 	"github.com/therecipe/qt/gui"
 	"github.com/therecipe/qt/qml"
 	"github.com/therecipe/qt/quickcontrols2"
+	"golang.org/x/exp/slices"
 
 	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
@@ -31,23 +32,23 @@ type QmlBridge struct {
 
 	_ func() `constructor:"init"`
 
-	_ func(string, string)           `slot:"login,auto"`
-	_ func()                         `slot:"loadFuse,auto"`
-	_ func()                         `slot:"openFuse,auto"`
-	_ func() string                  `slot:"refreshFuse,auto"`
-	_ func(string) bool              `slot:"isFile,auto"`
-	_ func(string)                   `slot:"checkEncryption,auto"`
-	_ func(string, string, string)   `slot:"exportFile,auto"`
-	_ func(string) string            `slot:"changeMountPoint,auto"`
-	_ func()                         `slot:"shutdown,auto"`
-	_ func()                         `signal:"loginFail"`
-	_ func(message string)           `signal:"popupError"`
-	_ func(message string)           `signal:"initError"`
-	_ func()                         `signal:"fuseReady"`
-	_ func(fileOrig, fileEnc string) `signal:"encryptionChecked"`
-	_ func()                         `signal:"preventExport"`
-	_ func(success bool)             `signal:"exportFinished"`
-	_ func()                         `signal:"panic"`
+	_ func(string, string)                        `slot:"login,auto"`
+	_ func()                                      `slot:"loadFuse,auto"`
+	_ func()                                      `slot:"openFuse,auto"`
+	_ func() string                               `slot:"refreshFuse,auto"`
+	_ func(string) bool                           `slot:"isFile,auto"`
+	_ func(string, string)                        `slot:"checkEncryption,auto"`
+	_ func(string, string, string)                `slot:"exportFile,auto"`
+	_ func(string) string                         `slot:"changeMountPoint,auto"`
+	_ func()                                      `slot:"shutdown,auto"`
+	_ func()                                      `signal:"loginFail"`
+	_ func(message string)                        `signal:"popupError"`
+	_ func(message string)                        `signal:"initError"`
+	_ func()                                      `signal:"fuseReady"`
+	_ func(fileOrig, fileEnc string, exists bool) `signal:"encryptionChecked"`
+	_ func()                                      `signal:"preventExport"`
+	_ func(success bool)                          `signal:"exportFinished"`
+	_ func()                                      `signal:"panic"`
 
 	_ []string `property:"buckets"`
 	_ string   `property:"mountPoint"`
@@ -208,16 +209,22 @@ func (qb *QmlBridge) isFile(url string) bool {
 	return core.NewQUrl3(url, 0).IsLocalFile()
 }
 
-func (qb *QmlBridge) checkEncryption(url string) {
+func (qb *QmlBridge) checkEncryption(url, bucket string) {
 	file := core.NewQUrl3(url, 0).ToLocalFile()
 
 	if encrypted, err := airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
-		qb.EncryptionChecked("", "")
-	} else if encrypted {
-		qb.EncryptionChecked("", file)
+		qb.EncryptionChecked("", "", false)
 	} else {
-		qb.EncryptionChecked(file, file+".c4gh")
+		chld := qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
+		if encrypted {
+			exists := slices.Contains(chld, filepath.Base(file))
+			qb.EncryptionChecked("", file, exists)
+		} else {
+			fileEncrypted := file + ".c4gh"
+			exists := slices.Contains(chld, filepath.Base(fileEncrypted))
+			qb.EncryptionChecked(file, fileEncrypted, exists)
+		}
 	}
 }
 

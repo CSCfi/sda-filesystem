@@ -9,7 +9,7 @@ require (
 	github.com/neicnordic/crypt4gh v1.5.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/therecipe/qt v0.0.0-20200904063919-c0c124a5770d
-	golang.org/x/sys v0.0.0-20221010170243-090e33056c14
+	golang.org/x/sys v0.1.0
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )
 
@@ -24,4 +24,5 @@ require (
 	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/therecipe/qt/internal/binding/files/docs/5.13.0 v0.0.0-20200904063919-c0c124a5770d // indirect
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064 // indirect
+	golang.org/x/exp v0.0.0-20221106115401-f9659909a136 // indirect
 )
