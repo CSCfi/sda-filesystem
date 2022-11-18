@@ -51,6 +51,8 @@ var currentTime = func() time.Time {
 	return time.Now()
 }
 
+// IsProjectManager uses file '/etc/pam_userinfo/config.json' and SDS AAI to determine if the user is the
+// project manager of the SD Connect project in the current VM
 var IsProjectManager = func() (bool, error) {
 	errStr := "Could not find user info"
 
@@ -99,6 +101,7 @@ var IsProjectManager = func() (bool, error) {
 	}
 }
 
+// GetPublicKey retrieves the public key from the proxy URL and checks its validity
 func GetPublicKey() error {
 	var err error
 	var public_key_slice []byte
@@ -141,6 +144,7 @@ func GetPublicKey() error {
 	return nil
 }
 
+// Upload uploads a file to SD Connect
 func Upload(original_filename, filename, container, journal_number string, segment_size_mb uint64, encrypt bool) error {
 	var err error
 	var encrypted_file io.ReadCloser
@@ -152,7 +156,7 @@ func Upload(original_filename, filename, container, journal_number string, segme
 	if encrypt {
 		var rc *readCloser
 		logs.Info("Encrypting file ", original_filename)
-		rc, encrypted_checksum, encrypted_file_size, err = getFileDetailsEncrypted(original_filename)
+		rc, encrypted_checksum, encrypted_file_size, err = getFileDetailsEncrypt(original_filename)
 		encrypted_file = rc
 		if rc != nil {
 			errc = rc.errc
@@ -255,6 +259,7 @@ func reorderNames(filename, directory string) (string, string) {
 	return object, before
 }
 
+// CheckEncryption checks if the file is encrypted
 var CheckEncryption = func(filename string) (bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -266,6 +271,7 @@ var CheckEncryption = func(filename string) (bool, error) {
 	return err == nil, nil
 }
 
+// getFileDetails opens file, calculates its size and checksum, and returns them and the file pointer itself
 var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -282,6 +288,7 @@ var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 	}
 	checksum := hex.EncodeToString(hash.Sum(nil))
 
+	// Need to move file pointer to the beginning so that its content can be read again
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, "", 0, err
 	}
@@ -306,20 +313,24 @@ var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
 	errc <- c4gh_writer.Close()
 }
 
-var getFileDetailsEncrypted = func(filename string) (rc *readCloser, checksum string, bytes_written int64, err error) {
+// getFileDetailsEncrypt is similar to getFileDetails() except the file has to be encrypted before it is read
+var getFileDetailsEncrypt = func(filename string) (rc *readCloser, checksum string, bytes_written int64, err error) {
 	var file *os.File
 	if file, err = os.Open(filename); err != nil {
 		return
 	}
 	defer func() {
+		// If error occurs, close file
 		if rc == nil {
 			file.Close()
 		}
 	}()
 
+	// The file needs to be read twice. Once for determiming checksum, once for http request.
+	// Both times file needs to be encrypted
 	errc := make(chan error, 1)
-	pr, pw := io.Pipe()
-	go encrypt(file, pw, errc)
+	pr, pw := io.Pipe()        // So that 'c4gh_writer' can pass its contents to an io.Reader
+	go encrypt(file, pw, errc) // Writing from file to 'c4gh_writer' will not happen until 'pr' is being read. Code will hang without goroutine.
 
 	hash := md5.New() // #nosec
 	if bytes_written, err = io.Copy(hash, pr); err != nil {
@@ -333,7 +344,7 @@ var getFileDetailsEncrypted = func(filename string) (rc *readCloser, checksum st
 		return
 	}
 
-	errc = make(chan error, 1)
+	errc = make(chan error, 1) // This error will be checked at the end of Upload()
 	pr, pw = io.Pipe()
 	go encrypt(file, pw, errc)
 
