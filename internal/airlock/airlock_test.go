@@ -331,10 +331,10 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 	}
 
 	origGetFileDetails := getFileDetails
-	origGetFileDetailsEncrypted := getFileDetailsEncrypted
+	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	defer func() {
 		getFileDetails = origGetFileDetails
-		getFileDetailsEncrypted = origGetFileDetailsEncrypted
+		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 	}()
 
 	for _, tt := range tests {
@@ -345,7 +345,7 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 				}
 				return nil, "", 0, nil
 			}
-			getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
 				if filename == tt.failOnFile {
 					return nil, "", 0, errExpected
 				}
@@ -389,12 +389,12 @@ func TestUpload(t *testing.T) {
 	}
 
 	origGetFileDetails := getFileDetails
-	origGetFileDetailsEncrypted := getFileDetailsEncrypted
+	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	origPut := put
 	origCurrentTime := currentTime
 	defer func() {
 		getFileDetails = origGetFileDetails
-		getFileDetailsEncrypted = origGetFileDetailsEncrypted
+		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 		put = origPut
 		currentTime = origCurrentTime
 	}()
@@ -414,9 +414,9 @@ func TestUpload(t *testing.T) {
 				}
 				return file1, tt.checksum + strings.Repeat("78", i+1), tt.size + 200*int64(i+1), nil
 			}
-			getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
 				if !tt.encrypt {
-					return nil, "", 0, errors.New("Should not have called getFileDetailsEncrypted()")
+					return nil, "", 0, errors.New("Should not have called getFileDetailsEncrypt()")
 				}
 				var err error
 				file2, err = os.Open(filename)
@@ -484,11 +484,11 @@ func TestUpload_Error(t *testing.T) {
 	}
 
 	origGetFileDetails := getFileDetails
-	origGetFileDetailsEncrypted := getFileDetailsEncrypted
+	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	origPut := put
 	defer func() {
 		getFileDetails = origGetFileDetails
-		getFileDetailsEncrypted = origGetFileDetailsEncrypted
+		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 		put = origPut
 	}()
 
@@ -503,8 +503,8 @@ func TestUpload_Error(t *testing.T) {
 				}
 				return file, "", int64(tt.size), nil
 			}
-			getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
-				return nil, "", 0, errors.New("Should not have called getFileDetailsEncrypted()")
+			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
+				return nil, "", 0, errors.New("Should not have called getFileDetailsEncrypt()")
 			}
 
 			count := 1
@@ -540,12 +540,12 @@ func TestUpload_FileContent(t *testing.T) {
 	}
 
 	origGetFileDetails := getFileDetails
-	origGetFileDetailsEncrypted := getFileDetailsEncrypted
+	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	origPut := put
 	origMiniumSegmentSize := minimumSegmentSize
 	defer func() {
 		getFileDetails = origGetFileDetails
-		getFileDetailsEncrypted = origGetFileDetailsEncrypted
+		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 		put = origPut
 		minimumSegmentSize = origMiniumSegmentSize
 	}()
@@ -599,15 +599,15 @@ func TestUpload_FileContent(t *testing.T) {
 
 func TestUpload_Channel_Error(t *testing.T) {
 	origGetFileDetails := getFileDetails
-	origGetFileDetailsEncrypted := getFileDetailsEncrypted
+	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	origPut := put
 	defer func() {
 		getFileDetails = origGetFileDetails
-		getFileDetailsEncrypted = origGetFileDetailsEncrypted
+		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 		put = origPut
 	}()
 
-	getFileDetailsEncrypted = func(filename string) (*readCloser, string, int64, error) {
+	getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
 		file, err := os.Open(filename)
 		if err != nil {
 			return nil, "", 0, err
@@ -736,7 +736,7 @@ func (wc *mockWriteCloser) Close() error {
 	return wc.closeErr
 }
 
-func TestGetFileDetailsEncrypted_C4ghWriter_Error(t *testing.T) {
+func TestGetFileDetailsEncrypt_C4ghWriter_Error(t *testing.T) {
 	var tests = []struct {
 		testname                string
 		err, writeErr, closeErr error
@@ -755,7 +755,7 @@ func TestGetFileDetailsEncrypted_C4ghWriter_Error(t *testing.T) {
 				return &mockWriteCloser{writeErr: tt.writeErr, closeErr: tt.closeErr}, tt.err
 			}
 
-			if _, _, _, err := getFileDetailsEncrypted("../../test/sample.txt"); err == nil {
+			if _, _, _, err := getFileDetailsEncrypt("../../test/sample.txt"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != errExpected.Error() {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
@@ -764,7 +764,7 @@ func TestGetFileDetailsEncrypted_C4ghWriter_Error(t *testing.T) {
 	}
 }
 
-func TestGetFileDetailsEncrypted_Hash_Error(t *testing.T) {
+func TestGetFileDetailsEncrypt_Hash_Error(t *testing.T) {
 	origEncrypt := encrypt
 	defer func() { encrypt = origEncrypt }()
 
@@ -773,14 +773,14 @@ func TestGetFileDetailsEncrypted_Hash_Error(t *testing.T) {
 		errc <- nil
 	}
 
-	if _, _, _, err := getFileDetailsEncrypted("../../test/sample.txt"); err == nil {
+	if _, _, _, err := getFileDetailsEncrypt("../../test/sample.txt"); err == nil {
 		t.Errorf("Function did not return error")
 	} else if err.Error() != errExpected.Error() {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
 	}
 }
 
-func TestGetFileDetailsEncrypted_Seek_Error(t *testing.T) {
+func TestGetFileDetailsEncrypt_Seek_Error(t *testing.T) {
 	origEncrypt := encrypt
 	defer func() { encrypt = origEncrypt }()
 
@@ -791,14 +791,14 @@ func TestGetFileDetailsEncrypted_Seek_Error(t *testing.T) {
 	}
 
 	errStr := "seek ../../test/sample.txt: file already closed"
-	if _, _, _, err := getFileDetailsEncrypted("../../test/sample.txt"); err == nil {
+	if _, _, _, err := getFileDetailsEncrypt("../../test/sample.txt"); err == nil {
 		t.Errorf("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
-func TestGetFileDetailsEncrypted_NoFile(t *testing.T) {
+func TestGetFileDetailsEncrypt_NoFile(t *testing.T) {
 	file, err := os.CreateTemp("", "file")
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
@@ -806,14 +806,14 @@ func TestGetFileDetailsEncrypted_NoFile(t *testing.T) {
 	os.RemoveAll(file.Name())
 
 	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
-	if _, _, _, err := getFileDetailsEncrypted(file.Name()); err == nil {
+	if _, _, _, err := getFileDetailsEncrypt(file.Name()); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
-func TestGetFileDetailsEncrypted(t *testing.T) {
+func TestGetFileDetailsEncrypt(t *testing.T) {
 	var tests = []struct {
 		testname, message, checksum string
 		bytes                       int64
@@ -833,7 +833,7 @@ func TestGetFileDetailsEncrypted(t *testing.T) {
 				errc <- err
 			}
 
-			if rc, checksum, bytes, err := getFileDetailsEncrypted("../../test/sample.txt"); err != nil {
+			if rc, checksum, bytes, err := getFileDetailsEncrypt("../../test/sample.txt"); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if checksum != tt.checksum {
 				t.Errorf("Function returned incorrect checksum\nExpected=%s\nReceived=%s", tt.checksum, checksum)
@@ -852,7 +852,7 @@ func TestGetFileDetailsEncrypted(t *testing.T) {
 	}
 }
 
-func TestGetFileDetailsEncrypted_Crypt4GH(t *testing.T) {
+func TestGetFileDetailsEncrypt_Crypt4GH(t *testing.T) {
 	var tests = []struct {
 		testname, message string
 	}{
@@ -892,7 +892,7 @@ func TestGetFileDetailsEncrypted_Crypt4GH(t *testing.T) {
 				t.Fatalf("Failed to write to file: %s", err.Error())
 			}
 
-			if rc, _, _, err := getFileDetailsEncrypted(file.Name()); err != nil {
+			if rc, _, _, err := getFileDetailsEncrypt(file.Name()); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else {
 				c4ghr, err := streaming.NewCrypt4GHReader(rc, privateKey, nil)
