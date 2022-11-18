@@ -23,7 +23,7 @@ Page {
         selectExisting: true
         selectFolder: false
 
-        onAccepted: QmlBridge.checkEncryption(dialogSelect.fileUrl.toString())
+        onAccepted: QmlBridge.checkEncryption(dialogSelect.fileUrl.toString(), exportModel.get(0).bucket)
     }
 
     Connections {
@@ -42,8 +42,10 @@ Page {
                 popup.errorMessage = "Failed to check if file is encrypted"
                 popup.open()
                 return
-            } else if (existing) {
-                popupOverwrite.additionalText = "Airlock wants to create file " + fileEnc + " but a file of the same name already exists. Overwrite file?"  
+            }
+
+            if (exists) {
+                popupOverwrite.additionalText = "Airlock wants to upload file " + fileEnc + " but a similar file already exists in SD Connect. Overwrite file?"  
                 popupOverwrite.open()
             } else {
                 page.chosen = true
@@ -326,7 +328,7 @@ Page {
                             return
                         }
 
-                        QmlBridge.checkEncryption(drop.urls[0])
+                        QmlBridge.checkEncryption(drop.urls[0], exportModel.get(0).bucket)
                     }
                 }
 

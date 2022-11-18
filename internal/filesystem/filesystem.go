@@ -522,6 +522,9 @@ func (fs *Fuse) getNode(path string, fh uint64) nodeAndPath {
 
 func (fs *Fuse) GetNodeChildren(path string) []string {
 	n := fs.getNode(path, ^uint64(0))
+	if n.node == nil {
+		return nil
+	}
 	chld := make([]string, len(n.node.chld))
 	i := 0
 	for _, value := range n.node.chld {
