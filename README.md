@@ -82,7 +82,7 @@ The CLI binary will require a username and password for accessing the SD-Connect
 
 ### Build and Run
 ```
-go build -o ./go-fuse ./cmd/cli/main.go
+go build -o ./go-fuse ./cmd/fuse/main.go
 ```
 Test install.
 ```
