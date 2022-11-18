@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v1.3.0] - 2022-11-18
 
 ### Changed
 - User no longer chooses which repositories they wish to access, rather Data Gateway tries to access all of them after user has given their CSC credentials.
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - deprecated ioutils in code
 
 ### Added
-- User can export files to SD Connect using the UI if they are the project manager
+- User can export files to SD Connect using the UI or command line if they are the project manager
 
 ### Fixed
 -  binary for linux needs to contain libQt5QuickShapes.* added that to the release
