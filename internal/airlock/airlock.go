@@ -248,8 +248,10 @@ func Upload(original_filename, filename, container, journal_number string, segme
 		return nil
 	}
 
-	err = <-errc
-	return fmt.Errorf("Streaming file failed: %w", err)
+	if err = <-errc; err != nil {
+		return fmt.Errorf("Streaming file failed: %w", err)
+	}
+	return nil
 }
 
 func reorderNames(filename, directory string) (string, string) {
