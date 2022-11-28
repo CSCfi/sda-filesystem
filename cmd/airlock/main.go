@@ -77,12 +77,18 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	fmt.Println("Enter Password: ")
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		logs.Fatalf("Could not read password: %s", err.Error())
+	password, password_from_env := os.LookupEnv("AIRLOCK_PASSWORD")
+
+	if password_from_env {
+		logs.Info("Using password from environment variable AIRLOCK_PASSWORD")
+	} else {
+		fmt.Println("Enter Password: ")
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			logs.Fatalf("Could not read password: %s", err.Error())
+		}
+		password = string(bytePassword)
 	}
-	password := string(bytePassword)
 
 	api.SetBasicToken(username, password)
 
