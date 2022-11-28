@@ -6,7 +6,7 @@ require (
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
-	github.com/neicnordic/crypt4gh v1.5.3
+	github.com/neicnordic/crypt4gh v1.6.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/therecipe/qt v0.0.0-20200904063919-c0c124a5770d
 	golang.org/x/exp v0.0.0-20221106115401-f9659909a136
