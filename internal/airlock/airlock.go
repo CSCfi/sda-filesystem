@@ -29,10 +29,8 @@ var ai airlockInfo = airlockInfo{}
 var infoFile = "/etc/pam_userinfo/config.json"
 var minimumSegmentSize = 1 << 20
 
-const keySize = 32
-
 type airlockInfo struct {
-	publicKey [keySize]byte
+	publicKey [chacha20poly1305.KeySize]byte
 	proxy     string
 	project   string
 }
@@ -133,7 +131,7 @@ func GetPublicKey() error {
 	if err != nil {
 		return fmt.Errorf("Could not decode public key: %w", err)
 	}
-	if len(data) < keySize {
+	if len(data) < chacha20poly1305.KeySize {
 		return fmt.Errorf("Invalid length of decoded public key (%v)", len(data))
 	}
 
