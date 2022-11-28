@@ -22,6 +22,7 @@ import (
 	"github.com/neicnordic/crypt4gh/keys"
 	"github.com/neicnordic/crypt4gh/model/headers"
 	"github.com/neicnordic/crypt4gh/streaming"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 var ai airlockInfo = airlockInfo{}
@@ -296,7 +297,9 @@ var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 }
 
 var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
-	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, ai.publicKey, nil)
+	pubkeyList := [][chacha20poly1305.KeySize]byte{}
+	pubkeyList = append(pubkeyList, ai.publicKey)
+	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, pubkeyList, nil)
 }
 
 var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
