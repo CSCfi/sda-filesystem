@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `crypt4gh` function `NewCrypt4GHWriterWithoutPrivateKey` now uses list of public keys
+- refactor packages to introduce more restictive linting (consistent camelCase vars, use of `switch`, fix formatting issues)
 
 ### Added
 - Option to input airlock password from environment variable
