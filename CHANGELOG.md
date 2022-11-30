@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Option to input airlock password from environment variable
+- `CSC_USERNAME` and `CSC_PASSWORD` as options to set credentials for fuse layer
 
 ## [v1.3.0] - 2022-11-18
 
