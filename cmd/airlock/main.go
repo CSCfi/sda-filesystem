@@ -99,7 +99,7 @@ func main() {
 		logs.Fatal(err)
 	} else if !encrypted {
 		*original_filename = filename
-		filename = filename + ".c4gh"
+		filename += ".c4gh"
 	}
 
 	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), !encrypted)

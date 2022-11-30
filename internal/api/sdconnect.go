@@ -270,7 +270,7 @@ var calculateDecryptedSize = func(fileSize, headerSize int64) int64 {
 	// the last block can be smaller than 64kiB
 	remainder := bodySize%cipherBlockSize - macSize
 	if remainder < 0 {
-		remainder = remainder + macSize
+		remainder += macSize
 	}
 
 	// Add the previous info back together
