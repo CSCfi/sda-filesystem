@@ -100,10 +100,10 @@ var askForLogin = func(lr loginReader) (string, string, error) {
 }
 
 func checkEnvVars() (string, string, bool) {
-	username, username_env := os.LookupEnv("CSC_USERNAME")
-	password, password_env := os.LookupEnv("CSC_PASSWORD")
+	username, usernameEnv := os.LookupEnv("CSC_USERNAME")
+	password, passwordEnv := os.LookupEnv("CSC_PASSWORD")
 
-	if username_env && password_env {
+	if usernameEnv && passwordEnv {
 		return username, password, true
 	}
 

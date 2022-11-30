@@ -13,27 +13,25 @@ import (
 	"golang.org/x/term"
 )
 
-func usage(self_path string) {
-	fmt.Println("Password is read from environment variable AIRLOCK_PASSWORD")
-	fmt.Println("If this variable is empty airlock requests the password interactively")
+func usage(selfPath string) {
 	fmt.Println("Usage:")
-	fmt.Println(" ", self_path, "[-segment-size=size_in_mb] "+
-		"[-journal-number=journal_number] [-original-file=unecrypted_filename] "+
+	fmt.Println(" ", selfPath, "[-segment-size=sizeInMb] "+
+		"[-journal-number=journalNumber] [-original-file=unecryptedFilename] "+
 		"[-quiet] "+"username container filename")
 	fmt.Println("Examples:")
-	fmt.Println(" ", self_path, "testuser testcontainer path/to/file")
-	fmt.Println(" ", self_path, "-segment-size=100 testuser testcontainer path/to/file")
-	fmt.Println(" ", self_path, "-segment-size=100 "+
+	fmt.Println(" ", selfPath, "testuser testcontainer path/to/file")
+	fmt.Println(" ", selfPath, "-segment-size=100 testuser testcontainer path/to/file")
+	fmt.Println(" ", selfPath, "-segment-size=100 "+
 		"-original-file=/path/to/original/unecrypted/file -journal-number=example124"+
 		"testuser testcontainer path/to/file")
 }
 
 func main() {
-	segment_size_mb := flag.Int("segment-size", 4000,
+	segmentSizeMb := flag.Int("segment-size", 4000,
 		"Maximum size of segments in Mb used to upload data. Valid range is 10-4000.")
-	journal_number := flag.String("journal-number", "",
+	journalNumber := flag.String("journal-number", "",
 		"Journal Number/Name specific for Findata uploads")
-	original_filename := flag.String("original-file", "",
+	originalFilename := flag.String("original-file", "",
 		"Filename of original unecrypted file when uploading pre-encrypted file from Findata vm")
 	quiet := flag.Bool("quiet", false, "Print only errors")
 	debug := flag.Bool("debug", false, "Enable debug prints")
@@ -49,7 +47,7 @@ func main() {
 	container := flag.Arg(1)
 	filename := flag.Arg(2)
 
-	if *segment_size_mb < 10 || *segment_size_mb > 4000 {
+	if *segmentSizeMb < 10 || *segmentSizeMb > 4000 {
 		logs.Fatal("Valid values for segment size are 10-4000")
 	}
 
@@ -79,9 +77,9 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	password, password_from_env := os.LookupEnv("AIRLOCK_PASSWORD")
+	password, passwordFromEnv := os.LookupEnv("AIRLOCK_PASSWORD")
 
-	if password_from_env {
+	if passwordFromEnv {
 		logs.Info("Using password from environment variable AIRLOCK_PASSWORD")
 	} else {
 		fmt.Println("Enter Password: ")
@@ -98,11 +96,11 @@ func main() {
 	if encrypted, err = airlock.CheckEncryption(filename); err != nil {
 		logs.Fatal(err)
 	} else if !encrypted {
-		*original_filename = filename
+		*originalFilename = filename
 		filename += ".c4gh"
 	}
 
-	err = airlock.Upload(*original_filename, filename, container, *journal_number, uint64(*segment_size_mb), !encrypted)
+	err = airlock.Upload(*originalFilename, filename, container, *journalNumber, uint64(*segmentSizeMb), !encrypted)
 	if err != nil {
 		logs.Fatal(err)
 	}

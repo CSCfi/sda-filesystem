@@ -534,7 +534,7 @@ func Test_SDConnect_UpdateAttributes(t *testing.T) {
 				}
 			}
 
-			var size int64 = tt.initSize
+			var size = tt.initSize
 			sd := &sdConnectInfo{}
 			err := sd.updateAttributes([]string{"path", "to", "file"}, "path/to/file", &size)
 
