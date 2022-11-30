@@ -68,24 +68,43 @@ func userChooseUpdate(r io.Reader) {
 }
 
 var askForLogin = func(lr loginReader) (string, string, error) {
-	fmt.Print("Enter username: ")
-	scanner := bufio.NewScanner(lr.getStream())
-	var username string
-	if scanner.Scan() {
-		username = scanner.Text()
-	}
-	if err := scanner.Err(); err != nil {
-		return "", "", fmt.Errorf("Could not read username: %w", err)
-	}
 
-	fmt.Print("Enter password: ")
-	password, err := lr.readPassword()
-	fmt.Println()
-	if err != nil {
-		return "", "", fmt.Errorf("Could not read password: %w", err)
+	username, password, exist := checkEnvVars()
+	if exist {
+		logs.Info("Using username and password from environment variables CSC_USERNAME and CSC_PASSWORD")
+	} else {
+		fmt.Printf("Log in with your CSC credentials\n")
+		fmt.Print("Enter username: ")
+		scanner := bufio.NewScanner(lr.getStream())
+		
+		if scanner.Scan() {
+			username = scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			return "", "", fmt.Errorf("Could not read username: %w", err)
+		}
+
+		fmt.Print("Enter password: ")
+		password, err := lr.readPassword()
+		fmt.Println()
+		if err != nil {
+			return "", "", fmt.Errorf("Could not read password: %w", err)
+		}
+
+		return username, password, nil
 	}
 
 	return username, password, nil
+}
+
+func checkEnvVars() (string, string, bool) {
+	username, username_env := os.LookupEnv("CSC_USERNAME")
+	password, password_env := os.LookupEnv("CSC_PASSWORD")
+
+	if username_env && password_env {
+		return username, password, true
+	}
+	return "", "", false
 }
 
 // login asks for CSC username and password
@@ -108,8 +127,6 @@ var login = func(lr loginReader) error {
 		}
 		os.Exit(1)
 	}()
-
-	fmt.Printf("Log in with your CSC credentials\n")
 
 	for {
 		username, password, err := askForLogin(lr)
