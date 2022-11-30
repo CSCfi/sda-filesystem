@@ -170,9 +170,10 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 			mockGetEnv: func(s string, b bool) (string, error) {
 				if s != "FS_SD_CONNECT_API" {
 					return "https://metadata.csc.fi", nil
-				} else {
-					return "https://data.csc.fi", nil
 				}
+
+				return "https://data.csc.fi", nil
+
 			},
 			mockTestURL: func(s string) error {
 				return nil

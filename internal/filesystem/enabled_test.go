@@ -41,17 +41,17 @@ func TestOpen(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			errc, fh := fs.Open(tt.path, 0)
-
-			if errc != tt.errc {
+			switch {
+			case errc != tt.errc:
 				t.Errorf("Error code incorrect. Expected %d, received %d", tt.errc, errc)
-			} else if tt.node != nil {
+			case tt.node != nil:
 				if fh != tt.node.stat.Ino {
 					t.Errorf("File handle incorrect. Expected %d, received %d", tt.node.stat.Ino, fh)
 				} else if fs.openmap[tt.node.stat.Ino].node != tt.node {
 					t.Errorf("Filesystem's openmap has incorrect value for file handle %d. Expected address %p, received %p",
 						fh, tt.node, fs.openmap[tt.node.stat.Ino].node)
 				}
-			} else if fh != ^uint64(0) {
+			case fh != ^uint64(0):
 				t.Errorf("File handle incorrect. Expected %d, received %d", ^uint64(0), fh)
 			}
 		})
@@ -123,14 +123,14 @@ func TestOpen_Decryption_Check(t *testing.T) {
 
 			path := strings.Join(tt.nodes, "/")
 			errc, fh := fs.Open(path, 0)
-
-			if errc != 0 {
+			switch {
+			case errc != 0:
 				t.Errorf("Error code incorrect for path %s. Expected 0, received %d", path, errc)
-			} else if fh != tt.fh {
+			case fh != tt.fh:
 				t.Errorf("File handle incorrect for path %s. Expected %d, received %d", path, tt.fh, fh)
-			} else if !fs.openmap[fh].node.decryptionChecked {
+			case !fs.openmap[fh].node.decryptionChecked:
 				t.Errorf("Field 'decyptionChecked' is not true for node %s", path)
-			} else {
+			default:
 				prnt := fs.root
 				for i := range tt.nodes {
 					prnt = prnt.chld[tt.nodes[i]]
@@ -185,11 +185,12 @@ func TestOpen_Decryption_Check_Error(t *testing.T) {
 			path := strings.Join(tt.nodes, "/")
 			errc, fh := fs.Open(path, 0)
 
-			if errc != tt.errc {
+			switch {
+			case errc != tt.errc:
 				t.Errorf("Error code incorrect for path %s. Expected %d, received %d", path, tt.errc, errc)
-			} else if fh != ^uint64(0) {
+			case fh != ^uint64(0):
 				t.Errorf("File handle incorrect for path %s. Expected %d, received %d", path, ^uint64(0), fh)
-			} else {
+			default:
 				node := fs.root
 				for i := range tt.nodes {
 					node = node.chld[tt.nodes[i]]
@@ -229,16 +230,17 @@ func TestOpendir(t *testing.T) {
 		t.Run(tt.testname, func(t *testing.T) {
 			errc, fh := fs.Opendir(tt.path)
 
-			if errc != tt.errc {
+			switch {
+			case errc != tt.errc:
 				t.Errorf("Error code incorrect. Expected %d, received %d", tt.errc, errc)
-			} else if tt.node != nil {
+			case tt.node != nil:
 				if fh != tt.node.stat.Ino {
 					t.Errorf("File handle incorrect. Expected %d, received %d", tt.node.stat.Ino, fh)
 				} else if fs.openmap[tt.node.stat.Ino].node != tt.node {
 					t.Errorf("Filesystem's openmap has incorrect value for file handle %d. Expected address %p, received %p",
 						fh, tt.node, fs.openmap[tt.node.stat.Ino].node)
 				}
-			} else if fh != ^uint64(0) {
+			case fh != ^uint64(0):
 				t.Errorf("File handle incorrect. Expected %d, received %d", ^uint64(0), fh)
 			}
 		})
@@ -251,20 +253,24 @@ func TestRelease(t *testing.T) {
 	node := fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"]
 	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
 	node.opencnt = 2
-
-	if ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino); ret != 0 {
+	ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino)
+	switch {
+	case ret != 0:
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
-	} else if node.opencnt != 1 {
+	case node.opencnt != 1:
 		t.Errorf("Node that was closed should have opencnt=1, received=%d", node.opencnt)
-	} else if fs.openmap[node.stat.Ino].node == nil {
+	case fs.openmap[node.stat.Ino].node == nil:
 		t.Errorf("Node should not have been removed from openmap")
 	}
 
-	if ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino); ret != 0 {
+	ret = fs.Release("Rep2/example.com/tiedosto", node.stat.Ino)
+
+	switch {
+	case ret != 0:
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
-	} else if node.opencnt != 0 {
+	case node.opencnt != 0:
 		t.Errorf("Node that was closed should have opencnt=0, received=%d", node.opencnt)
-	} else if fs.openmap[node.stat.Ino].node != nil {
+	case fs.openmap[node.stat.Ino].node != nil:
 		t.Errorf("Node should have been removed from openmap")
 	}
 
@@ -279,20 +285,24 @@ func TestReleaseDir(t *testing.T) {
 	node := fs.root.chld["Rep1"].chld["child_1"].chld["kansio"]
 	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
 	node.opencnt = 2
-
-	if ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino); ret != 0 {
+	ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino)
+	switch {
+	case ret != 0:
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
-	} else if node.opencnt != 1 {
+	case node.opencnt != 1:
 		t.Errorf("Node that was closed should have opencnt=1, received=%d", node.opencnt)
-	} else if fs.openmap[node.stat.Ino].node == nil {
+	case fs.openmap[node.stat.Ino].node == nil:
 		t.Errorf("Node should not have been removed from openmap")
 	}
 
-	if ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino); ret != 0 {
+	ret = fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino)
+
+	switch {
+	case ret != 0:
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
-	} else if node.opencnt != 0 {
+	case node.opencnt != 0:
 		t.Errorf("Node that was closed should have opencnt=0, received=%d", node.opencnt)
-	} else if fs.openmap[node.stat.Ino].node != nil {
+	case fs.openmap[node.stat.Ino].node != nil:
 		t.Errorf("Node should have been removed from openmap")
 	}
 

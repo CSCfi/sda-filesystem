@@ -175,15 +175,16 @@ func TestGetEnv(t *testing.T) {
 			value, err := GetEnv(tt.envName, tt.verifyURL)
 			os.Unsetenv(tt.envName)
 
-			if tt.errText == "" {
+			switch {
+			case tt.errText == "":
 				if err != nil {
 					t.Errorf("Returned unexpected err: %s", err.Error())
 				} else if value != tt.envValue {
 					t.Errorf("Environment variable has incorrect value. Expected=%s, received=%s", tt.envValue, value)
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Error("Function should have returned error")
-			} else if err.Error() != tt.errText {
+			case err.Error() != tt.errText:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 			}
 		})
@@ -244,17 +245,19 @@ func TestGetCommonEnv(t *testing.T) {
 
 			err := GetCommonEnvs()
 
-			if strings.HasPrefix(tt.testname, "OK") {
-				if err != nil {
+			switch {
+			case strings.HasPrefix(tt.testname, "OK"):
+				switch {
+				case err != nil:
 					t.Errorf("Unexpected error: %s", err.Error())
-				} else if tt.certs != hi.certPath {
+				case tt.certs != hi.certPath:
 					t.Errorf("Incorrect certificate path. Expected=%s, received=%s", tt.certs, hi.certPath)
-				} else if tt.token != hi.sdsToken {
+				case tt.token != hi.sdsToken:
 					t.Errorf("Incorrect SDS access token. Expected=%s, received=%s", tt.token, hi.sdsToken)
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Errorf("Function should have returned error")
-			} else if err.Error() != errExpected.Error() {
+			case err.Error() != errExpected.Error():
 				t.Errorf("Incorrect return value\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
 			}
 		})
@@ -649,15 +652,16 @@ func TestMakeRequest(t *testing.T) {
 				ret = objects
 			}
 
-			if tt.errText != "" {
+			switch {
+			case tt.errText != "":
 				if err == nil {
 					t.Errorf("Function did not return error")
 				} else if err.Error() != tt.errText {
 					t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 				}
-			} else if err != nil {
+			case err != nil:
 				t.Errorf("Function returned unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedBody, ret) {
+			case !reflect.DeepEqual(tt.expectedBody, ret):
 				t.Errorf("Incorrect response body\nExpected=%v\nReceived=%v", tt.expectedBody, ret)
 			}
 

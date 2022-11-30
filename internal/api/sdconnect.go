@@ -151,11 +151,12 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	token := c.sTokens[nodes[0]]
 	headers := map[string]string{"X-Project-ID": token.ProjectID, "X-Authorization": "Bearer " + token.Token}
 	path := c.url + "/project/" + url.PathEscape(nodes[0])
-	if len(nodes) == 1 {
+	switch len(nodes) {
+	case 1:
 		path += "/containers"
-	} else if len(nodes) == 2 {
+	case 2:
 		path += "/container/" + url.PathEscape(nodes[1]) + "/objects"
-	} else {
+	default:
 		return nil, nil
 	}
 

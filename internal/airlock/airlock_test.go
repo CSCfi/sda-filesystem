@@ -522,11 +522,13 @@ func TestUpload_Error(t *testing.T) {
 			}
 
 			errStr := tt.errStr + errExpected.Error()
-			if err := Upload("", "../../test/sample.txt.enc", "bucket684", "", 100, false); err == nil {
+			err := Upload("", "../../test/sample.txt.enc", "bucket684", "", 100, false)
+			switch {
+			case err == nil:
 				t.Error("Function did not return error")
-			} else if err.Error() != errStr {
+			case err.Error() != errStr:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
-			} else if file != nil {
+			case file != nil:
 				if err = file.Close(); err == nil {
 					t.Error("File was not closed")
 				}

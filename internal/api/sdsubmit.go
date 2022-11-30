@@ -155,11 +155,12 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	}
 
 	if len(s.datasets) == 0 {
-		if count500 > 0 {
+		switch {
+		case count500 > 0:
 			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmit)
-		} else if count > 0 {
+		case count > 0:
 			return fmt.Errorf("Error(s) occurred for %s", SDSubmit)
-		} else {
+		default:
 			return fmt.Errorf("No datasets found for %s", SDSubmit)
 		}
 	}

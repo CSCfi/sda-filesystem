@@ -79,25 +79,27 @@ var IsProjectManager = func() (bool, error) {
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 400 {
 			return false, fmt.Errorf("Invalid token")
-		} else {
-			return false, err
 		}
+
+		return false, err
+
 	}
 
-	if projectPI, ok := data["projectPI"]; !ok {
+	projectPI, ok := data["projectPI"]
+	if !ok {
 		return false, fmt.Errorf("Response body did not contain key 'projectPI'")
-	} else {
-		projects := strings.Split(fmt.Sprintf("%v", projectPI), " ")
-		for i := range projects {
-			if projects[i] == fmt.Sprintf("%v", pr) {
-				ai.project = fmt.Sprintf("project_%v", pr)
-
-				return true, nil
-			}
-		}
-
-		return false, nil
 	}
+	projects := strings.Split(fmt.Sprintf("%v", projectPI), " ")
+	for i := range projects {
+		if projects[i] == fmt.Sprintf("%v", pr) {
+			ai.project = fmt.Sprintf("project_%v", pr)
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+
 }
 
 // GetPublicKey retrieves the public key from the proxy URL and checks its validity

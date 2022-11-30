@@ -123,15 +123,16 @@ func MountFilesystem(fs *Fuse, mount string) {
 	host = fuse.NewFileSystemHost(fs)
 
 	options := []string{}
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		options = append(options, "-o", "defer_permissions")
 		options = append(options, "-o", "volname="+path.Base(mount))
 		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
 		options = append(options, "-o", "iosize=262144")  // Value not optimized
-	} else if runtime.GOOS == "linux" {
+	case "linux":
 		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
 		options = append(options, "-o", "auto_unmount")
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		options = append(options, "-o", "umask=0222")
 		options = append(options, "-o", "uid=-1")
 		options = append(options, "-o", "gid=-1")

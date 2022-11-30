@@ -158,19 +158,21 @@ func TestAskForLogin(t *testing.T) {
 			os.Stdout = sout
 			null.Close()
 
-			if tt.testname != "OK" {
+			switch {
+			case tt.testname != "OK":
 				if err == nil {
 					t.Error("Function should have returned error")
 				} else if err.Error() != tt.errorText {
 					t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
 				}
-			} else if err != nil {
+			case err != nil:
 				t.Errorf("Function returned error: %s", err.Error())
-			} else if str1 != tt.username {
+			case str1 != tt.username:
 				t.Errorf("Username incorrect. Expected=%s, received=%s", tt.username, str1)
-			} else if str2 != tt.password {
+			case str2 != tt.password:
 				t.Errorf("Password incorrect. Expected=%s, received=%s", tt.password, str2)
 			}
+
 		})
 	}
 }
@@ -307,15 +309,17 @@ func TestLogin(t *testing.T) {
 			os.Stdout = sout
 			null.Close()
 
-			if tt.errorText == "" {
+			switch {
+			case tt.errorText == "":
 				if err != nil {
 					t.Errorf("Returned unexpected error: %s", err.Error())
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Error("Function should have returned error")
-			} else if err.Error() != tt.errorText {
+			case err.Error() != tt.errorText:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
 			}
+
 		})
 	}
 }
@@ -374,17 +378,19 @@ func TestProcessFlags(t *testing.T) {
 
 			err := processFlags()
 
-			if err != nil {
+			switch {
+			case err != nil:
 				t.Errorf("Returned unexpected error: %s", err.Error())
-			} else if tt.timeout != testTimeout {
+			case tt.timeout != testTimeout:
 				t.Errorf("SetRequestTimeout() received incorrect timeout. Expected=%d, received=%d", tt.timeout, testTimeout)
-			} else if tt.logLevel != testLevel {
+			case tt.logLevel != testLevel:
 				t.Errorf("SetLevel() received incorrect log level. Expected=%s, received=%s", tt.logLevel, testLevel)
-			} else if tt.mount == "" && mount != defaultMount {
+			case tt.mount == "" && mount != defaultMount:
 				t.Errorf("Expected default mount point %s, received=%s", defaultMount, mount)
-			} else if tt.mount != testMount {
+			case tt.mount != testMount:
 				t.Errorf("CheckMountPoint() received incorrect mount point. Expected=%s, received=%s", tt.mount, testMount)
 			}
+
 		})
 	}
 }

@@ -26,17 +26,19 @@ type mockSubmitter struct {
 func (s *mockSubmitter) getDatasets(urlStr string) ([]string, error) {
 	if urlStr == s.mockUrlOK {
 		return s.mockDatasets, nil
-	} else {
-		return nil, s.mockError
 	}
+
+	return nil, s.mockError
+
 }
 
 func (s *mockSubmitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
 	if urlStr == s.mockUrlOK {
 		return s.mockFiles, nil
-	} else {
-		return nil, s.mockError
 	}
+
+	return nil, s.mockError
+
 }
 
 func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {

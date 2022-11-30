@@ -39,11 +39,11 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 				n.node.decryptionChecked = true
 
 				return -fuse.EACCES, ^uint64(0)
-			} else {
-				logs.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", path, err)
-
-				return -fuse.EIO, ^uint64(0)
 			}
+			logs.Errorf("Encryption status and segmented object size of object %s could not be determined: %w", path, err)
+
+			return -fuse.EIO, ^uint64(0)
+
 		} else if n.node.stat.Size != newSize {
 			fs.updateNodeSizesAlongPath(path, n.node.stat.Size-newSize, fuse.Now())
 		}

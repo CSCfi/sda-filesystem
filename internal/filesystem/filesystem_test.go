@@ -243,11 +243,12 @@ func getTestFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
 	fs.root.stat.Ino = 1
 	fs.openmap = map[uint64]nodeAndPath{1: {fs.root, []string{"path"}}}
 
-	if sizeUnfinished && nodes.Size < 0 {
+	switch {
+	case sizeUnfinished && nodes.Size < 0:
 		fs.root.stat.Size = -1
-	} else if nodes.Size < 0 {
+	case nodes.Size < 0:
 		fs.root.stat.Size = -nodes.Size
-	} else {
+	default:
 		fs.root.stat.Size = nodes.Size
 	}
 
@@ -262,11 +263,12 @@ func assignChildren(n *node, template *[]jsonNode, sizeUnfinished bool, maxLevel
 		n.chld[child.NameSafe].originalName = child.Name
 		n.chld[child.NameSafe].stat.Ino = ino
 
-		if sizeUnfinished && child.Size < 0 {
+		switch {
+		case sizeUnfinished && child.Size < 0:
 			n.chld[child.NameSafe].stat.Size = -1
-		} else if child.Size < 0 {
+		case child.Size < 0:
 			n.chld[child.NameSafe].stat.Size = -child.Size
-		} else {
+		default:
 			n.chld[child.NameSafe].stat.Size = child.Size
 		}
 
@@ -456,19 +458,21 @@ func TestPopulateFilesystem(t *testing.T) {
 			return nil, fmt.Errorf("Third parameter of api.GetNthLevel() should have had length 1, received %v that has length %d", nodes, len(nodes))
 		}
 		if rep == rep1 {
-			if nodes[0] == "child+1" {
+			switch nodes[0] {
+			case "child+1":
 				return []api.Metadata{{Bytes: -1, Name: "kansio"}, {Bytes: 112, Name: "dir+"}}, nil
-			} else if nodes[0] == "child_2" {
+			case "child_2":
 				return []api.Metadata{{Bytes: 151, Name: "dir"}, {Bytes: 65, Name: "+folder"}}, nil
-			} else {
+			default:
 				return nil, fmt.Errorf("api.GetNthLevel() received invalid project %s", rep+"/"+nodes[0])
 			}
 		} else if rep == rep2 {
 			if nodes[0] == "https://example.com" {
 				return []api.Metadata{{Bytes: 5, Name: "tiedosto"}}, nil
-			} else {
-				return nil, fmt.Errorf("api.GetNthLevel() received invalid project %s", rep+"/"+nodes[0])
 			}
+
+			return nil, fmt.Errorf("api.GetNthLevel() received invalid project %s", rep+"/"+nodes[0])
+
 		}
 
 		return nil, fmt.Errorf("api.GetNthLevel() received invalid repository %s", rep)
@@ -711,19 +715,20 @@ func TestNewNode(t *testing.T) {
 				return
 			}
 
-			if node.stat.Ino != tt.ino {
+			switch {
+			case node.stat.Ino != tt.ino:
 				t.Errorf("File serial number incorrect. Expected %d, got %d", tt.ino, node.stat.Ino)
-			} else if node.stat.Mode != mode {
+			case node.stat.Mode != mode:
 				t.Errorf("Mode incorrect. Expected %d, got %d", mode, node.stat.Mode)
-			} else if node.stat.Atim != tt.tmsp {
+			case node.stat.Atim != tt.tmsp:
 				t.Errorf("Atim field incorrect. Expected %q, got %q", tt.tmsp.Time().String(), node.stat.Atim.Time().String())
-			} else if node.stat.Ctim != tt.tmsp {
+			case node.stat.Ctim != tt.tmsp:
 				t.Errorf("Ctim field incorrect. Expected %q, got %q", tt.tmsp.Time().String(), node.stat.Ctim.Time().String())
-			} else if node.stat.Mtim != tt.tmsp {
+			case node.stat.Mtim != tt.tmsp:
 				t.Errorf("Mtim field incorrect. Expected %q, got %q", tt.tmsp.Time().String(), node.stat.Mtim.Time().String())
-			} else if node.stat.Birthtim != tt.tmsp {
+			case node.stat.Birthtim != tt.tmsp:
 				t.Errorf("Birthtim field incorrect. Expected %q, got %q", tt.tmsp.Time().String(), node.stat.Birthtim.Time().String())
-			} else if tt.dir && node.chld == nil {
+			case tt.dir && node.chld == nil:
 				t.Errorf("Node's chld field was not initialized")
 			}
 		})
@@ -766,15 +771,16 @@ func TestLookupNode(t *testing.T) {
 		t.Run(testname, func(t *testing.T) {
 			node, origPath := lookupNode(fs.root, tt.path)
 
-			if tt.nodeMatch == nil {
+			switch {
+			case tt.nodeMatch == nil:
 				if node != nil {
 					t.Errorf("Should not have returned node for path %s", tt.path)
 				}
-			} else if node == nil {
+			case node == nil:
 				t.Errorf("Returned nil for path %s", tt.path)
-			} else if node != tt.nodeMatch {
+			case node != tt.nodeMatch:
 				t.Errorf("Node incorrect for path %q. Expected address %p, got %p", tt.path, tt.nodeMatch, node)
-			} else if !reflect.DeepEqual(origPath, tt.origPath) {
+			case !reflect.DeepEqual(origPath, tt.origPath):
 				t.Errorf("Original path incorrect for path %s\nExpected %v\nReceived %v", tt.path, tt.origPath, origPath)
 			}
 		})
