@@ -410,7 +410,7 @@ func TestUpload(t *testing.T) {
 			currentTime = func() time.Time {
 				return testTime
 			}
-			var file1, file2 *os.File = nil, nil
+			var file1, file2 *os.File
 			getFileDetails = func(filename string) (*os.File, string, int64, error) {
 				var err error
 				file1, err = os.Open(filename)
@@ -502,7 +502,7 @@ func TestUpload_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			var file *os.File = nil
+			var file *os.File
 			getFileDetails = func(filename string) (*os.File, string, int64, error) {
 				var err error
 				file, err = os.Open(filename)

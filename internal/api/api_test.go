@@ -677,7 +677,7 @@ func TestMakeRequest_PutRequestNil_And_ReadAll_Error(t *testing.T) {
 	hi.client = server.Client()
 
 	var buf []byte
-	var empty *os.File = nil
+	var empty *os.File
 	errStr := "Copying response failed: unexpected EOF"
 	err := MakeRequest(server.URL, nil, nil, empty, &buf)
 	if err == nil {

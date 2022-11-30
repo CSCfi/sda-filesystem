@@ -100,8 +100,8 @@ func TestUserChooseUpdate_Error(t *testing.T) {
 	finished := false
 	buf := &testStream{err: errExpected}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	logs.SetSignal(func(i int, s []string) {
 		level, strs = i, s
 	})

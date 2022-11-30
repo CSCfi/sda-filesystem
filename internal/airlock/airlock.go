@@ -154,7 +154,7 @@ func Upload(original_filename, filename, container, journal_number string, segme
 	var encrypted_file io.ReadCloser
 	var encrypted_checksum string
 	var encrypted_file_size int64
-	var errc chan error = nil
+	var errc chan error
 	var print_filename = original_filename
 
 	if encrypt {
@@ -242,7 +242,7 @@ func Upload(original_filename, filename, container, journal_number string, segme
 		logs.Info("Uploading manifest file for object " + object + " to container " +
 			container)
 
-		var empty *os.File = nil
+		var empty *os.File
 		err = put(url, container+"/"+upload_dir, -1, -1, empty, query)
 		if err != nil {
 			return fmt.Errorf("Uploading manifest file failed: %w", err)

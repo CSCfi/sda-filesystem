@@ -157,8 +157,8 @@ func TestError_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -209,8 +209,8 @@ func TestErrorf_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -261,8 +261,8 @@ func TestWarning_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -313,8 +313,8 @@ func TestWarningf_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -351,8 +351,8 @@ func TestInfo_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "I am grand, and you?"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -389,8 +389,8 @@ func TestInfof_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "99 students barged in the classroom"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -427,8 +427,8 @@ func TestDebug_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "When did this happen? I don't know"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -475,8 +475,8 @@ func TestDebugf_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "8 dogs crossed the road. And?"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}

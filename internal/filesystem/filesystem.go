@@ -22,8 +22,8 @@ import (
 const sRDONLY = 00444
 const numRoutines = 4
 
-var signalBridge func() = nil
-var host *fuse.FileSystemHost = nil
+var signalBridge func()
+var host *fuse.FileSystemHost
 
 // Fuse stores the filesystem structure
 type Fuse struct {

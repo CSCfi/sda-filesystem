@@ -9,7 +9,7 @@ import (
 )
 
 // signal sends a new log to the LogModel
-var signal func(int, []string) = nil
+var signal func(int, []string)
 
 var log *logrus.Logger
 
