@@ -305,27 +305,27 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	// Parse request
 	switch v := ret.(type) {
 	case *SpecialHeaders:
-		(*v).Decrypted = (response.Header.Get("X-Decrypted") == "True")
+		v.Decrypted = (response.Header.Get("X-Decrypted") == "True")
 
-		if (*v).Decrypted {
+		if v.Decrypted {
 			if headerSize := response.Header.Get("X-Header-Size"); headerSize != "" {
-				if (*v).HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
+				if v.HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
 					logs.Warningf("Could not convert header X-Header-Size to integer: %w", err)
-					(*v).Decrypted = false
+					v.Decrypted = false
 				}
 			} else {
 				logs.Warningf("Could not find header X-Header-Size in response")
-				(*v).Decrypted = false
+				v.Decrypted = false
 			}
 		}
 
 		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
-			if (*v).SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
+			if v.SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
 				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %w", err)
-				(*v).SegmentedObjectSize = -1
+				v.SegmentedObjectSize = -1
 			}
 		} else {
-			(*v).SegmentedObjectSize = -1
+			v.SegmentedObjectSize = -1
 		}
 
 		_, _ = io.Copy(io.Discard, response.Body)
