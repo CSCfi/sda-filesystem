@@ -46,10 +46,6 @@ var GetProjectName = func() string {
 	return ai.project
 }
 
-var currentTime = func() time.Time {
-	return time.Now()
-}
-
 // IsProjectManager uses file '/etc/pam_userinfo/config.json' and SDS AAI to determine if the user is the
 // project manager of the SD Connect project in the current VM
 var IsProjectManager = func() (bool, error) {
@@ -191,7 +187,7 @@ func Upload(original_filename, filename, container, journal_number string, segme
 	query := map[string]string{
 		"filename":  object,
 		"bucket":    container,
-		"timestamp": currentTime().Format(time.RFC3339),
+		"timestamp": time.Now().Format(time.RFC3339),
 	}
 
 	if original_filename != "" {

@@ -396,20 +396,15 @@ func TestUpload(t *testing.T) {
 	origGetFileDetails := getFileDetails
 	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	origPut := put
-	origCurrentTime := currentTime
 	defer func() {
 		getFileDetails = origGetFileDetails
 		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 		put = origPut
-		currentTime = origCurrentTime
 	}()
 
 	for i, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			testTime := time.Now()
-			currentTime = func() time.Time {
-				return testTime
-			}
 			var file1, file2 *os.File
 			getFileDetails = func(filename string) (*os.File, string, int64, error) {
 				var err error
