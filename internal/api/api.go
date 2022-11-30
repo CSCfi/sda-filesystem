@@ -275,8 +275,8 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 		request.Header.Set(k, v)
 	}
 
-	escapedURL := strings.Replace(request.URL.EscapedPath(), "\n", "", -1)
-	escapedURL = strings.Replace(escapedURL, "\r", "", -1)
+	escapedURL := strings.ReplaceAll(request.URL.EscapedPath(), "\n", "")
+	escapedURL = strings.ReplaceAll(escapedURL, "\r", "")
 
 	// Execute HTTP request
 	// retry the request as specified by hi.httpRetry variable
