@@ -68,12 +68,14 @@ var IsProjectManager = func() (bool, error) {
 	endpoint, ok := data["userinfo_endpoint"]
 	if !ok {
 		err = errors.New("Config file did not contain key 'userinfo_endpoint'")
+
 		return false, fmt.Errorf("Could not determine endpoint for user info: %w", err)
 	}
 
 	pr, ok := data["login_aud"]
 	if !ok {
 		err = errors.New("Config file did not contain key 'login_aud'")
+
 		return false, fmt.Errorf("Could not determine to which project this Desktop belongs: %w", err)
 	}
 
@@ -93,9 +95,11 @@ var IsProjectManager = func() (bool, error) {
 		for i := range projects {
 			if projects[i] == fmt.Sprintf("%v", pr) {
 				ai.project = fmt.Sprintf("project_%v", pr)
+
 				return true, nil
 			}
 		}
+
 		return false, nil
 	}
 }
@@ -140,6 +144,7 @@ func GetPublicKey() error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", errStr, err)
 	}
+
 	return nil
 }
 
@@ -251,12 +256,14 @@ func Upload(original_filename, filename, container, journal_number string, segme
 	if err = <-errc; err != nil {
 		return fmt.Errorf("Streaming file failed: %w", err)
 	}
+
 	return nil
 }
 
 func reorderNames(filename, directory string) (string, string) {
 	before, after, _ := strings.Cut(strings.TrimRight(directory, "/"), "/")
 	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
+
 	return object, before
 }
 
@@ -269,6 +276,7 @@ var CheckEncryption = func(filename string) (bool, error) {
 	defer file.Close()
 
 	_, err = headers.ReadHeader(file)
+
 	return err == nil, nil
 }
 
@@ -293,12 +301,14 @@ var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, "", 0, err
 	}
+
 	return file, checksum, file_size, nil
 }
 
 var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
 	pubkeyList := [][chacha20poly1305.KeySize]byte{}
 	pubkeyList = append(pubkeyList, ai.publicKey)
+
 	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, pubkeyList, nil)
 }
 
@@ -307,10 +317,12 @@ var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
 	c4gh_writer, err := newCrypt4GHWriter(pw)
 	if err != nil {
 		errc <- err
+
 		return
 	}
 	if _, err = io.Copy(c4gh_writer, file); err != nil {
 		errc <- err
+
 		return
 	}
 	errc <- c4gh_writer.Close()
@@ -352,6 +364,7 @@ var getFileDetailsEncrypt = func(filename string) (rc *readCloser, checksum stri
 	go encrypt(file, pw, errc)
 
 	rc = &readCloser{pr, file, errc}
+
 	return
 }
 
@@ -376,7 +389,9 @@ var put = func(url, manifest string, segment_nro, segment_total int,
 		if errors.As(err, &re) && string(bodyBytes) != "" {
 			return errors.New(string(bodyBytes))
 		}
+
 		return err
 	}
+
 	return nil
 }

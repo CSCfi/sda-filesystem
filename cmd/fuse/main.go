@@ -37,6 +37,7 @@ type stdinReader struct {
 
 func (r *stdinReader) readPassword() (string, error) {
 	pwd, err := term.ReadPassword(int(syscall.Stdin))
+
 	return string(pwd), err
 }
 
@@ -46,6 +47,7 @@ func (r *stdinReader) getStream() io.Reader {
 
 func (r *stdinReader) getState() (err error) {
 	r.originalState, err = term.GetState(int(syscall.Stdin))
+
 	return
 }
 
@@ -76,7 +78,7 @@ var askForLogin = func(lr loginReader) (string, string, error) {
 		fmt.Printf("Log in with your CSC credentials\n")
 		fmt.Print("Enter username: ")
 		scanner := bufio.NewScanner(lr.getStream())
-		
+
 		if scanner.Scan() {
 			username = scanner.Text()
 		}
@@ -104,6 +106,7 @@ func checkEnvVars() (string, string, bool) {
 	if username_env && password_env {
 		return username, password, true
 	}
+
 	return "", "", false
 }
 
@@ -140,6 +143,7 @@ var login = func(lr loginReader) error {
 		}
 		if success {
 			logs.Error(err) // If SD Submit authorization fails
+
 			return nil
 		}
 
@@ -166,6 +170,7 @@ func processFlags() error {
 	mount = filepath.Clean(mount)
 	api.SetRequestTimeout(requestTimeout)
 	logs.SetLevel(logLevel)
+
 	return nil
 }
 
@@ -184,6 +189,7 @@ func shutdown() <-chan bool {
 		logs.Info("Shutting down Data Gateway")
 		done <- true
 	}()
+
 	return done
 }
 
@@ -227,6 +233,7 @@ func main() {
 			userChooseUpdate(os.Stdin)
 			if fs.FilesOpen(mount) {
 				logs.Warningf("You have files in use and thus updating is not possible")
+
 				continue
 			}
 			newFs := filesystem.InitializeFileSystem(nil)

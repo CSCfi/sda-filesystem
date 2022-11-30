@@ -114,6 +114,7 @@ func InitializeFileSystem(send func(string, string)) *Fuse {
 			}
 		}
 	}
+
 	return &fs
 }
 
@@ -168,6 +169,7 @@ func (fs *Fuse) FilesOpen(mount string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
@@ -196,6 +198,7 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 
 				if err != nil {
 					logs.Error(err)
+
 					return
 				}
 
@@ -266,6 +269,7 @@ var removeInvalidChars = func(str string) string {
 
 	// Remove characters which may interfere with filesystem structure
 	r := strings.NewReplacer(forReplacer...)
+
 	return r.Replace(str)
 }
 
@@ -277,6 +281,7 @@ func calculateFinalSize(n *node, path string) int64 {
 	for key, value := range n.chld {
 		n.stat.Size += calculateFinalSize(value, path+"/"+key)
 	}
+
 	return n.stat.Size
 }
 
@@ -294,12 +299,14 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 		c := fs.getNode(containerPath, ^uint64(0))
 		if c.node == nil {
 			logs.Errorf("Bug in code? Cannot find node %s", containerPath)
+
 			continue
 		}
 
 		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1], c.path[2])
 		if err != nil {
 			logs.Error(err)
+
 			continue
 		}
 
@@ -319,6 +326,7 @@ func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string,
 	for _, obj := range objects {
 		// Prevent the creation of objects that are actually empty directories
 		if strings.HasSuffix(obj.Name, "/") {
+
 			continue
 		}
 
@@ -330,6 +338,7 @@ func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string,
 			objectPath := prntPath + "/" + objectSafe
 			logs.Debugf("Creating file %s", filepath.FromSlash(objectPath))
 			fs.makeNode(prnt, obj, objectPath, fuse.S_IFREG|sRDONLY, tmsp)
+
 			continue
 		}
 
@@ -378,6 +387,7 @@ var newNode = func(ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Ti
 	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
 		self.chld = map[string]*node{}
 	}
+
 	return &self
 }
 
@@ -444,6 +454,7 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 	prnt.chld[name] = n
 	prnt.stat.Ctim = n.stat.Ctim
 	prnt.stat.Mtim = n.stat.Ctim
+
 	return n, name
 }
 
@@ -462,6 +473,7 @@ var lookupNode = func(root *node, path string) (node *node, origPath []string) {
 			}
 		}
 	}
+
 	return
 }
 
@@ -497,6 +509,7 @@ func (fs *Fuse) openNode(path string, dir bool) (int, uint64) {
 	if n.opencnt == 1 {
 		fs.openmap[n.stat.Ino] = nodeAndPath{node: n, path: origPath}
 	}
+
 	return 0, n.stat.Ino
 }
 
@@ -509,14 +522,17 @@ func (fs *Fuse) closeNode(fh uint64) int {
 	if node.opencnt == 0 {
 		delete(fs.openmap, node.stat.Ino)
 	}
+
 	return 0
 }
 
 func (fs *Fuse) getNode(path string, fh uint64) nodeAndPath {
 	if fh == ^uint64(0) {
 		node, origPath := lookupNode(fs.root, path)
+
 		return nodeAndPath{node: node, path: origPath}
 	}
+
 	return fs.openmap[fh]
 }
 
@@ -531,12 +547,15 @@ func (fs *Fuse) GetNodeChildren(path string) []string {
 		chld[i] = value.originalName
 		i++
 	}
+
 	sort.Strings(chld)
+
 	return chld
 }
 
 func (fs *Fuse) synchronize() func() {
 	fs.lock.Lock()
+
 	return func() {
 		fs.lock.Unlock()
 	}

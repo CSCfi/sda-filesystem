@@ -122,6 +122,7 @@ type Testfs struct {
 
 func (t *Testfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc int) {
 	stat.Mode = fuse.S_IFDIR | 0755
+
 	return 0
 }
 

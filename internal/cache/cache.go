@@ -70,6 +70,7 @@ func (s *storage) Set(key string, value any, cost int64, ttl time.Duration) bool
 	if ttl == -1 {
 		ttl = RistrettoCacheTTL
 	}
+
 	return s.cache.SetWithTTL(key, value, cost, ttl)
 }
 

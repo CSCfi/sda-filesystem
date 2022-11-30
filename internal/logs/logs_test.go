@@ -438,6 +438,7 @@ func TestDebug_Signal(t *testing.T) {
 
 	if level != 0 || strs != nil {
 		t.Error("With loglevel=info, signal() should not have been called")
+
 		return
 	}
 
@@ -485,6 +486,7 @@ func TestDebugf_Signal(t *testing.T) {
 
 	if level != 0 || strs != nil {
 		t.Error("With loglevel=info, signal() should not have been called")
+
 		return
 	}
 

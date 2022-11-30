@@ -66,6 +66,7 @@ func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	}
 
 	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, urlStr)
+
 	return datasets, nil
 }
 
@@ -99,6 +100,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	}
 
 	logs.Infof("Retrieved files for dataset %s", fsPath)
+
 	return metadata, nil
 }
 
@@ -122,6 +124,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 			return fmt.Errorf("Cannot connect to %s registered API: %w", SDSubmit, err)
 		}
 	}
+
 	return nil
 }
 
@@ -160,6 +163,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 			return fmt.Errorf("No datasets found for %s", SDSubmit)
 		}
 	}
+
 	return nil
 }
 
@@ -176,12 +180,14 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 			datasets[i] = Metadata{Name: ds, Bytes: -1}
 			i++
 		}
+
 		return datasets, nil
 	case 1:
 		idx, ok := s.datasets[nodes[0]]
 		if !ok {
 			return nil, fmt.Errorf("Tried to request files for invalid dataset %s", fsPath)
 		}
+
 		return s.getFiles(fsPath, s.urls[idx], nodes[0])
 	default:
 		return nil, nil
@@ -207,5 +213,6 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer any, start, end int64
 
 	// Request data
 	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+nodes[1]]
+
 	return MakeRequest(path, query, nil, nil, buffer)
 }

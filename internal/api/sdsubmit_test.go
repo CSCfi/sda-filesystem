@@ -66,6 +66,7 @@ func Test_SDSubmit_GetDatasets_Pass(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`["dataset1","dataset2","dataset3"]`))).Decode(ret)
+
 		return nil
 	}
 
@@ -130,6 +131,7 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader(testFileJSON)).Decode(ret)
+
 		return nil
 	}
 
@@ -178,6 +180,7 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 			return fmt.Errorf("makeRequest() received incorrect scheme in query\nExpected=%s\nReceived=%s", "https", scheme)
 		}
 		_ = json.NewDecoder(bytes.NewReader(testFileJSON)).Decode(ret)
+
 		return nil
 	}
 
@@ -531,6 +534,7 @@ func Test_SDSubmit_DownloadData_Pass(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_, _ = io.ReadFull(bytes.NewReader(expectedData), ret.([]byte))
+
 		return nil
 	}
 	s := sdSubmitInfo{

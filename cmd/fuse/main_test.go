@@ -56,12 +56,14 @@ func (s *testStream) Read(p []byte) (int, error) {
 	}
 	if s.done || s.idx == len(s.data) {
 		s.done = false
+
 		return 0, io.EOF
 	}
 	content := []byte(s.data[s.idx])
 	copy(p, content)
 	s.done = true
 	s.idx++
+
 	return len(content), nil
 }
 
@@ -189,6 +191,7 @@ func TestLogin(t *testing.T) {
 					return "", "", fmt.Errorf("Function did not approve login during first loop")
 				}
 				count++
+
 				return "dumbledore", "345fgj78", nil
 			},
 			func(uname, pwd string) (bool, error) {
@@ -199,6 +202,7 @@ func TestLogin(t *testing.T) {
 				if pwd != password {
 					return false, fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, pwd)
 				}
+
 				return true, nil
 			},
 		},
@@ -209,6 +213,7 @@ func TestLogin(t *testing.T) {
 					return "", "", fmt.Errorf("Function did not approve login during first loop")
 				}
 				count++
+
 				return "sandman", "89bf5cifu6vo", nil
 			},
 			func(uname, pwd string) (bool, error) {
@@ -219,6 +224,7 @@ func TestLogin(t *testing.T) {
 				if pwd != password {
 					return false, fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, pwd)
 				}
+
 				return true, errExpected
 			},
 		},
@@ -230,12 +236,14 @@ func TestLogin(t *testing.T) {
 					return "", "", fmt.Errorf("Function in infinite loop")
 				}
 				count++
+
 				return usernames[count-1], passwords[count-1], nil
 			},
 			func(uname, pwd string) (bool, error) {
 				if uname == "Doris" && pwd == "pwd" {
 					return true, nil
 				}
+
 				return false, &api.RequestError{StatusCode: 401}
 			},
 		},
@@ -265,6 +273,7 @@ func TestLogin(t *testing.T) {
 					return "", "", fmt.Errorf("Function in infinite loop")
 				}
 				count++
+
 				return "", "", nil
 			},
 			func(uname, pwd string) (bool, error) {
@@ -344,6 +353,7 @@ func TestProcessFlags(t *testing.T) {
 	}
 	mountpoint.CheckMountPoint = func(mount string) error {
 		testMount = mount
+
 		return nil
 	}
 	api.SetRequestTimeout = func(timeout int) {

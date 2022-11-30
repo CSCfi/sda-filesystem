@@ -252,6 +252,7 @@ func getTestFuse(t *testing.T, sizeUnfinished bool, maxLevel int) (fs *Fuse) {
 	}
 
 	assignChildren(fs.root, nodes.Children, sizeUnfinished, maxLevel, 2)
+
 	return
 }
 
@@ -281,6 +282,7 @@ func assignChildren(n *node, template *[]jsonNode, sizeUnfinished bool, maxLevel
 
 		ino++
 	}
+
 	return ino
 }
 
@@ -368,6 +370,7 @@ func TestInitializeFilesystem(t *testing.T) {
 		n := &node{}
 		n.stat.Mode = mode
 		n.chld = map[string]*node{}
+
 		return n
 	}
 	api.GetEnabledRepositories = func() []string {
@@ -382,6 +385,7 @@ func TestInitializeFilesystem(t *testing.T) {
 		} else if rep == rep2 {
 			return []api.Metadata{{Bytes: 5, Name: "https://example.com"}}, nil
 		}
+
 		return nil, fmt.Errorf("api.GetNthLevel() received invalid repository %q", rep)
 	}
 	removeInvalidChars = func(str string) string {
@@ -443,6 +447,7 @@ func TestPopulateFilesystem(t *testing.T) {
 		n := &node{}
 		n.stat.Mode = mode
 		n.chld = map[string]*node{}
+
 		return n
 	}
 	CheckPanic = func() {}
@@ -465,6 +470,7 @@ func TestPopulateFilesystem(t *testing.T) {
 				return nil, fmt.Errorf("api.GetNthLevel() received invalid project %s", rep+"/"+nodes[0])
 			}
 		}
+
 		return nil, fmt.Errorf("api.GetNthLevel() received invalid repository %s", rep)
 	}
 	removeInvalidChars = func(str string) string {
@@ -477,6 +483,7 @@ func TestPopulateFilesystem(t *testing.T) {
 			nodes := strings.Split(j.containerPath, "/")
 			if len(nodes) != 3 {
 				t.Errorf("Invalid containerPath %s", j.containerPath)
+
 				continue
 			}
 
@@ -486,14 +493,17 @@ func TestPopulateFilesystem(t *testing.T) {
 
 			if _, ok := origFs.root.chld[repository]; !ok {
 				t.Errorf("Invalid repository %s in containerInfo", repository)
+
 				continue
 			}
 			if _, ok := origFs.root.chld[repository].chld[project]; !ok {
 				t.Errorf("Invalid project %s in containerInfo", repository+"/"+project)
+
 				continue
 			}
 			if _, ok := origFs.root.chld[repository].chld[project].chld[container]; !ok {
 				t.Errorf("Invalid container %s in containerInfo", repository+"/"+project+"/"+container)
+
 				continue
 			}
 			for key, value := range origFs.root.chld[repository].chld[project].chld[container].chld {
@@ -508,6 +518,7 @@ func TestPopulateFilesystem(t *testing.T) {
 			return 2
 		}
 		t.Fatalf("api.LevelCount() received invalid repository %s", rep)
+
 		return 0
 	}
 
@@ -542,6 +553,7 @@ func TestCreateObjects(t *testing.T) {
 		n := &node{}
 		n.stat.Mode = mode
 		n.chld = map[string]*node{}
+
 		return n
 	}
 	CheckPanic = func() {}
@@ -558,6 +570,7 @@ func TestCreateObjects(t *testing.T) {
 		if nodes[1] != cont {
 			t.Fatalf("GetNthLevel() received incorrect container %q, expected %q", rep+"/"+pr+"/"+nodes[1], rep+"/"+pr+"/"+cont)
 		}
+
 		return []api.Metadata{{Bytes: 29, Name: "dir1/dir+2/dir3.2.1/file.c4gh"},
 			{Bytes: 1, Name: "dir1/dir+2/dir3.2.1/file/h%e%ll+o"},
 			{Bytes: 1, Name: "dir1/dir5/"},
@@ -694,6 +707,7 @@ func TestNewNode(t *testing.T) {
 
 			if node == nil {
 				t.Error("Node is nil")
+
 				return
 			}
 

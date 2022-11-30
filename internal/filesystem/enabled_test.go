@@ -113,6 +113,7 @@ func TestOpen_Decryption_Check(t *testing.T) {
 					return fmt.Errorf("updateAttributes() was called with incorrect attribute. Expected type *int64, got %v", reflect.TypeOf(attr))
 				}
 				*size = tt.sizes[len(tt.sizes)-1]
+
 				return nil
 			}
 
@@ -452,6 +453,7 @@ func TestReaddir(t *testing.T) {
 		} else {
 			t.Errorf("Invalid name %q", name)
 		}
+
 		return false
 	}
 

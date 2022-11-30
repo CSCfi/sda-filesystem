@@ -22,6 +22,7 @@ func (c *mockConnecter) getProjects(string, string) ([]Metadata, error) {
 	if c.projectsErr != nil {
 		return nil, fmt.Errorf("getProjects error: %w", c.projectsErr)
 	}
+
 	return c.projects, nil
 }
 
@@ -60,6 +61,7 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 				switch v := ret.(type) {
 				case *[]Metadata:
 					*v = tt.expectedMetaData
+
 					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *[]Metadata", reflect.TypeOf(v))
@@ -136,6 +138,7 @@ func Test_SDConnect_GetSTokens(t *testing.T) {
 				switch v := ret.(type) {
 				case *sToken:
 					*v = tt.sTokens[query["project"]]
+
 					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
@@ -391,6 +394,7 @@ func Test_SDConnect_GetNthLevel_Pass_1Node(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy1"}]`))).Decode(ret)
+
 		return nil
 	}
 	sd := &sdConnectInfo{}
@@ -414,6 +418,7 @@ func Test_SDConnect_GetNthLevel_Pass_2Node(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy2"}]`))).Decode(ret)
+
 		return nil
 	}
 	sd := &sdConnectInfo{}
@@ -438,8 +443,10 @@ func Test_SDConnect_GetNthLevel_Pass_TokenExpired(t *testing.T) {
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
 			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy3"}]`))).Decode(ret)
+
 			return nil
 		}
+
 		return &RequestError{http.StatusUnauthorized}
 	}
 	mockC := &mockConnecter{sTokens: map[string]sToken{"project": {"freshToken", "projectID"}}}
@@ -519,6 +526,7 @@ func Test_SDConnect_UpdateAttributes(t *testing.T) {
 					v.Decrypted = tt.decrypted
 					v.SegmentedObjectSize = tt.segmentedObjectSize
 					v.HeaderSize = 0
+
 					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *SpecialHeaders", reflect.TypeOf(v))
@@ -599,6 +607,7 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 			t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
 		}
 		_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
+
 		return nil
 	}
 	sd := &sdConnectInfo{sTokens: map[string]sToken{"project": {"token", "project"}}}
@@ -628,8 +637,10 @@ func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 				t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedHeaders, headers)
 			}
 			_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
+
 			return nil
 		}
+
 		return &RequestError{http.StatusUnauthorized}
 	}
 	mockC := &mockConnecter{sTokens: map[string]sToken{"project": {"freshToken", "projectID"}}}

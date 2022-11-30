@@ -31,12 +31,14 @@ func (c *mockCache) Get(key string) (any, bool) {
 	if c.key == key && c.data != nil {
 		return c.data, true
 	}
+
 	return nil, false
 }
 
 func (c *mockCache) Set(key string, value any, cost int64, ttl time.Duration) bool {
 	c.key = key
 	c.data = value.([]byte)
+
 	return true
 }
 
@@ -52,6 +54,7 @@ func (r *mockRepository) getEnvs() error { return r.envError }
 
 func (r *mockRepository) downloadData(nodes []string, buf any, start, end int64) error {
 	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
+
 	return r.mockDownloadDataError
 }
 
@@ -229,11 +232,13 @@ func TestGetCommonEnv(t *testing.T) {
 					if tt.certs == "" {
 						return "", errExpected
 					}
+
 					return tt.certs, nil
 				}
 				if tt.token == "" {
 					return "", errExpected
 				}
+
 				return tt.token, nil
 			}
 

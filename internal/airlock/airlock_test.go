@@ -155,6 +155,7 @@ func TestIsProjectManager(t *testing.T) {
 				switch v := ret.(type) {
 				case *map[string]any:
 					(*v)["projectPI"] = tt.data
+
 					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *map[string]any", reflect.TypeOf(v))
@@ -253,6 +254,7 @@ func TestPublicKey_Invalid_Key(t *testing.T) {
 		switch v := ret.(type) {
 		case *[]byte:
 			(*v) = []byte(keyStr)
+
 			return nil
 		default:
 			return fmt.Errorf("ret has incorrect type %v, expected *byte[]", reflect.TypeOf(v))
@@ -302,6 +304,7 @@ func TestPublicKey(t *testing.T) {
 		switch v := ret.(type) {
 		case *[]byte:
 			(*v) = []byte(keyStr)
+
 			return nil
 		default:
 			return fmt.Errorf("ret has incorrect type %v, expected *byte[]", reflect.TypeOf(v))
@@ -343,12 +346,14 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 				if filename == tt.failOnFile {
 					return nil, "", 0, errExpected
 				}
+
 				return nil, "", 0, nil
 			}
 			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
 				if filename == tt.failOnFile {
 					return nil, "", 0, errExpected
 				}
+
 				return nil, "", 0, nil
 			}
 
@@ -412,6 +417,7 @@ func TestUpload(t *testing.T) {
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return file1, tt.checksum + strings.Repeat("78", i+1), tt.size + 200*int64(i+1), nil
 			}
 			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
@@ -423,6 +429,7 @@ func TestUpload(t *testing.T) {
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return &readCloser{file2, file2, nil}, tt.checksum + strings.Repeat("50", i+1), tt.size + 500*int64(i+1), nil
 			}
 
@@ -452,6 +459,7 @@ func TestUpload(t *testing.T) {
 				if !reflect.DeepEqual(query, tt.query) {
 					t.Errorf("Function received incorrect query\nExpected=%v\nReceived=%v", tt.query, query)
 				}
+
 				return nil
 			}
 
@@ -501,6 +509,7 @@ func TestUpload_Error(t *testing.T) {
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return file, "", int64(tt.size), nil
 			}
 			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
@@ -513,6 +522,7 @@ func TestUpload_Error(t *testing.T) {
 					return errExpected
 				}
 				count++
+
 				return nil
 			}
 
@@ -575,6 +585,7 @@ func TestUpload_FileContent(t *testing.T) {
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return file, "", int64(len(tt.content)), nil
 			}
 
@@ -585,6 +596,7 @@ func TestUpload_FileContent(t *testing.T) {
 						return err
 					}
 				}
+
 				return nil
 			}
 
@@ -614,6 +626,7 @@ func TestUpload_Channel_Error(t *testing.T) {
 		}
 		errc := make(chan error, 1)
 		errc <- errExpected
+
 		return &readCloser{file, file, errc}, "", 0, nil
 	}
 	getFileDetails = func(filename string) (*os.File, string, int64, error) {
@@ -621,6 +634,7 @@ func TestUpload_Channel_Error(t *testing.T) {
 		if err != nil {
 			return nil, "", 0, err
 		}
+
 		return file, "", 0, nil
 	}
 	put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
@@ -729,6 +743,7 @@ type mockWriteCloser struct {
 
 func (wc *mockWriteCloser) Write(data []byte) (n int, err error) {
 	wc.data = data
+
 	return len(data), wc.writeErr
 }
 
@@ -954,6 +969,7 @@ func TestPut(t *testing.T) {
 				if !reflect.DeepEqual(headers, tt.headers) {
 					t.Errorf("Function received incorrect headers\nExpected=%q\nReceived=%q", tt.headers, headers)
 				}
+
 				return nil
 			}
 
@@ -992,6 +1008,7 @@ func TestPut_Error(t *testing.T) {
 				switch v := ret.(type) {
 				case *[]byte:
 					(*v) = []byte("request body error")
+
 					return tt.err
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *byte[]", reflect.TypeOf(v))
