@@ -39,5 +39,5 @@ jobs:
         uses: golangci/golangci-lint-action@v3.3.1
         with:
           version: v1.50
-          args: -E gosec,goconst,nestif,bodyclose,rowserrcheck --skip-files cmd/qt/moc.go  --timeout=10m
+          args: -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --skip-files cmd/qt/moc.go,cmd/qt/main.go,cmd/qt/logmodel.go,cmd/qt/projectmodel.go  --timeout=10m
           skip-pkg-cache: true
