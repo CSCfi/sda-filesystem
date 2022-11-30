@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `crypt4gh` function `NewCrypt4GHWriterWithoutPrivateKey` now uses list of public keys
 
+### Added
+- Option to input airlock password from environment variable
+
 ## [v1.3.0] - 2022-11-18
 
 ### Changed
