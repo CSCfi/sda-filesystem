@@ -71,6 +71,7 @@ var GetAllRepositories = func() []string {
 	for key := range allRepositories {
 		names = append(names, key)
 	}
+
 	return names
 }
 
@@ -80,6 +81,7 @@ var GetEnabledRepositories = func() []string {
 	for key := range hi.repositories {
 		names = append(names, key)
 	}
+
 	return names
 }
 
@@ -104,6 +106,7 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 			return "", fmt.Errorf("Environment variable %s not a valid URL: %w", name, err)
 		}
 	}
+
 	return env, nil
 }
 
@@ -115,6 +118,7 @@ var validURL = func(value string) error {
 	if u.Scheme != "https" {
 		return fmt.Errorf("%s does not have scheme 'https'", value)
 	}
+
 	return nil
 }
 
@@ -127,6 +131,7 @@ func GetCommonEnvs() (err error) {
 	if hi.sdsToken, err = GetEnv("SDS_ACCESS_TOKEN", false); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -141,6 +146,7 @@ func InitializeCache() error {
 	if err != nil {
 		return fmt.Errorf("Could not create cache: %w", err)
 	}
+
 	return nil
 }
 
@@ -180,6 +186,7 @@ func InitializeClient() error {
 	}
 
 	logs.Debug("Initializing HTTP client successful")
+
 	return nil
 }
 
@@ -189,6 +196,7 @@ var testURL = func(url string) error {
 		return err
 	}
 	response.Body.Close()
+
 	return nil
 }
 
@@ -210,6 +218,7 @@ var ValidateLogin = func(username, password string) (bool, error) {
 	if err == nil {
 		hi.repositories[SDSubmit] = allRepositories[SDSubmit]
 	}
+
 	return true, err
 }
 
@@ -266,8 +275,8 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 		request.Header.Set(k, v)
 	}
 
-	escapedURL := strings.Replace(request.URL.EscapedPath(), "\n", "", -1)
-	escapedURL = strings.Replace(escapedURL, "\r", "", -1)
+	escapedURL := strings.ReplaceAll(request.URL.EscapedPath(), "\n", "")
+	escapedURL = strings.ReplaceAll(escapedURL, "\r", "")
 
 	// Execute HTTP request
 	// retry the request as specified by hi.httpRetry variable
@@ -296,27 +305,27 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	// Parse request
 	switch v := ret.(type) {
 	case *SpecialHeaders:
-		(*v).Decrypted = (response.Header.Get("X-Decrypted") == "True")
+		v.Decrypted = (response.Header.Get("X-Decrypted") == "True")
 
-		if (*v).Decrypted {
+		if v.Decrypted {
 			if headerSize := response.Header.Get("X-Header-Size"); headerSize != "" {
-				if (*v).HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
+				if v.HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
 					logs.Warningf("Could not convert header X-Header-Size to integer: %w", err)
-					(*v).Decrypted = false
+					v.Decrypted = false
 				}
 			} else {
 				logs.Warningf("Could not find header X-Header-Size in response")
-				(*v).Decrypted = false
+				v.Decrypted = false
 			}
 		}
 
 		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
-			if (*v).SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
+			if v.SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
 				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %w", err)
-				(*v).SegmentedObjectSize = -1
+				v.SegmentedObjectSize = -1
 			}
 		} else {
-			(*v).SegmentedObjectSize = -1
+			v.SegmentedObjectSize = -1
 		}
 
 		_, _ = io.Copy(io.Discard, response.Body)
@@ -335,6 +344,7 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	}
 
 	logs.Debugf("Request %s returned a response", escapedURL)
+
 	return nil
 }
 
@@ -382,6 +392,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 		if endofst > int64(len(buf)) {
 			endofst = int64(len(buf))
 		}
+
 		return buf[ofst:endofst], nil
 	}
 
@@ -390,6 +401,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 		endofst = int64(len(ret))
 	}
 	logs.Debugf("Retrieved file %s from cache, with coordinates [%d, %d)", path, start, end)
+
 	return ret[ofst:endofst], nil
 }
 

@@ -21,6 +21,7 @@ var CheckMountPoint = func(mount string) error {
 		if err = os.MkdirAll(mount, 0755); err != nil {
 			return fmt.Errorf("Could not create directory %s", mount)
 		}
+
 		return nil
 	} else if err != nil {
 		return err
@@ -45,9 +46,11 @@ var CheckMountPoint = func(mount string) error {
 		if err != nil {
 			return fmt.Errorf("Error occurred when trying to read from directory %s: %w", mount, err)
 		}
+
 		return fmt.Errorf("Mount point %s must be empty", mount)
 	}
 
 	logs.Debugf("Directory %s is a valid mount point", mount)
+
 	return nil
 }

@@ -24,5 +24,6 @@ var CheckMountPoint = func(mount string) error {
 			return fmt.Errorf("Could not create a path to directory %s: %w", mount, err)
 		}
 	}
+
 	return nil
 }

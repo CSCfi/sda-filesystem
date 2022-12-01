@@ -9,7 +9,7 @@ import (
 )
 
 // signal sends a new log to the LogModel
-var signal func(int, []string) = nil
+var signal func(int, []string)
 
 var log *logrus.Logger
 
@@ -29,6 +29,7 @@ func SetSignal(fn func(int, []string)) {
 var SetLevel = func(level string) {
 	if logrusLevel, ok := levelMap[strings.ToLower(level)]; ok {
 		log.SetLevel(logrusLevel)
+
 		return
 	}
 
@@ -42,6 +43,7 @@ func Wrapper(err error) (string, error) {
 	if unwrapped != nil {
 		return strings.TrimRight(strings.TrimSuffix(err.Error(), unwrapped.Error()), ": "), unwrapped
 	}
+
 	return err.Error(), nil
 }
 
@@ -53,6 +55,7 @@ var StructureError = func(err error) []string {
 		str, err = Wrapper(err)
 		fullError = append(fullError, str)
 	}
+
 	return fullError
 }
 

@@ -135,14 +135,16 @@ func TestError(t *testing.T) {
 
 	Error(errors.New(message))
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.ErrorLevel {
+	case testHook.LastEntry().Level != logrus.ErrorLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.ErrorLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
+
 }
 
 func TestError_Signal(t *testing.T) {
@@ -157,21 +159,23 @@ func TestError_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
 
 	Error(errors.New(message))
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.ErrorLevel) {
+	case level != int(logrus.ErrorLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.ErrorLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
+
 }
 
 func TestErrorf(t *testing.T) {
@@ -187,14 +191,16 @@ func TestErrorf(t *testing.T) {
 
 	Errorf("This is an %s error: %w", "unexpected", errors.New("Where am I?"))
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.ErrorLevel {
+	case testHook.LastEntry().Level != logrus.ErrorLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.ErrorLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
+
 }
 
 func TestErrorf_Signal(t *testing.T) {
@@ -209,21 +215,23 @@ func TestErrorf_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
 
 	Errorf("This is an %s error: %w", "unexpected", errors.New("Who are you?"))
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.ErrorLevel) {
+	case level != int(logrus.ErrorLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.ErrorLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
+
 }
 
 func TestWarning(t *testing.T) {
@@ -239,14 +247,16 @@ func TestWarning(t *testing.T) {
 
 	Warning(errors.New(message))
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.WarnLevel {
+	case testHook.LastEntry().Level != logrus.WarnLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.WarnLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
+
 }
 
 func TestWarning_Signal(t *testing.T) {
@@ -261,21 +271,23 @@ func TestWarning_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
 
 	Warning(errors.New(message))
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.WarnLevel) {
+	case level != int(logrus.WarnLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.WarnLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
+
 }
 
 func TestWarningf(t *testing.T) {
@@ -291,12 +303,13 @@ func TestWarningf(t *testing.T) {
 
 	Warningf("%s the sun will shine: %w", "Tomorrow", errors.New("Remember sunscreen"))
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.WarnLevel {
+	case testHook.LastEntry().Level != logrus.WarnLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.WarnLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }
@@ -313,19 +326,20 @@ func TestWarningf_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
 
 	Warningf("%s the sun will not shine: %w", "Tomorrow", errors.New("It is the end of days"))
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.WarnLevel) {
+	case level != int(logrus.WarnLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.WarnLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
 }
@@ -337,12 +351,13 @@ func TestInfo(t *testing.T) {
 
 	Info("I am ", "grand,", " and you?")
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.InfoLevel {
+	case testHook.LastEntry().Level != logrus.InfoLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.InfoLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }
@@ -351,19 +366,20 @@ func TestInfo_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "I am grand, and you?"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
 
 	Info("I am ", "grand,", " and you?")
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.InfoLevel) {
+	case level != int(logrus.InfoLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.InfoLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
 }
@@ -375,12 +391,13 @@ func TestInfof(t *testing.T) {
 
 	Infof("%d students barged in the %s", 100, "classroom")
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.InfoLevel {
+	case testHook.LastEntry().Level != logrus.InfoLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.InfoLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }
@@ -389,19 +406,20 @@ func TestInfof_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "99 students barged in the classroom"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
 
 	Infof("%d students barged in the %s", 99, "classroom")
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.InfoLevel) {
+	case level != int(logrus.InfoLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.InfoLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
 }
@@ -413,12 +431,13 @@ func TestDebug(t *testing.T) {
 
 	Debug("Why did a ", "thing happen? ", "I don't know")
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.DebugLevel {
+	case testHook.LastEntry().Level != logrus.DebugLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.DebugLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }
@@ -427,8 +446,8 @@ func TestDebug_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "When did this happen? I don't know"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -438,17 +457,19 @@ func TestDebug_Signal(t *testing.T) {
 
 	if level != 0 || strs != nil {
 		t.Error("With loglevel=info, signal() should not have been called")
+
 		return
 	}
 
 	log.SetLevel(logrus.DebugLevel)
 	Debug("When did ", "this happen? ", "I don't know")
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.DebugLevel) {
+	case level != int(logrus.DebugLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.DebugLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
 }
@@ -460,12 +481,13 @@ func TestDebugf(t *testing.T) {
 
 	Debugf("%d ducks crossed the road. %s", 10, "And?")
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.DebugLevel {
+	case testHook.LastEntry().Level != logrus.DebugLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.DebugLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }
@@ -474,8 +496,8 @@ func TestDebugf_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "8 dogs crossed the road. And?"
 
-	var level int = 0
-	var strs []string = nil
+	var level int
+	var strs []string
 	signal = func(i int, s []string) {
 		level, strs = i, s
 	}
@@ -485,17 +507,19 @@ func TestDebugf_Signal(t *testing.T) {
 
 	if level != 0 || strs != nil {
 		t.Error("With loglevel=info, signal() should not have been called")
+
 		return
 	}
 
 	log.SetLevel(logrus.DebugLevel)
 	Debugf("%d dogs crossed the road. %s", 8, "And?")
 
-	if len(testHook.Entries) != 0 {
+	switch {
+	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	} else if level != int(logrus.DebugLevel) {
+	case level != int(logrus.DebugLevel):
 		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.DebugLevel), level)
-	} else if !reflect.DeepEqual(strs, []string{message}) {
+	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
 }
@@ -510,12 +534,13 @@ func TestFatal(t *testing.T) {
 	message := "Too late. All 5 programs are dead"
 	Fatal("Too late. ", "All ", 5, " programs are dead")
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.FatalLevel {
+	case testHook.LastEntry().Level != logrus.FatalLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.FatalLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }
@@ -530,12 +555,13 @@ func TestFatalf(t *testing.T) {
 	message := "No! This cannot be happening! Football is cancelled"
 	Fatalf("No! This cannot be happening! %s is cancelled", "Football")
 
-	if len(testHook.Entries) != 1 {
+	switch {
+	case len(testHook.Entries) != 1:
 		t.Errorf("Logger did not make the correct amount of entries. Expected=1, received=%d", len(testHook.Entries))
-	} else if testHook.LastEntry().Level != logrus.FatalLevel {
+	case testHook.LastEntry().Level != logrus.FatalLevel:
 		t.Errorf("Logger logged at incorrect level. Expected=%s, received=%s",
 			logrus.FatalLevel.String(), testHook.LastEntry().Level.String())
-	} else if testHook.LastEntry().Message != message {
+	case testHook.LastEntry().Message != message:
 		t.Errorf("Logger displayed incorrect message\nExpected=%s\nReceived=%s", message, testHook.LastEntry().Message)
 	}
 }

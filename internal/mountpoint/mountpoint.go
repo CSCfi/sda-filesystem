@@ -16,5 +16,6 @@ var DefaultMountPoint = func() (string, error) {
 	if err = CheckMountPoint(p); err != nil {
 		return "", fmt.Errorf("Cannot create Data Gateway in default directory: %w", err)
 	}
+
 	return p, nil
 }

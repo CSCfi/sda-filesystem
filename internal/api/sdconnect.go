@@ -64,6 +64,7 @@ func (c *connecter) getProjects(url, token string) ([]Metadata, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
 	}
+
 	return projects, nil
 }
 
@@ -80,6 +81,7 @@ func (c *connecter) getSTokens(projects []Metadata, url, token string) map[strin
 		token := sToken{}
 		if err := MakeRequest(url+"/token", query, headers, nil, &token); err != nil {
 			logs.Warningf("Failed to retrieve %s scoped token for %s: %w", SDConnect, projects[i].Name, err)
+
 			continue
 		}
 
@@ -88,6 +90,7 @@ func (c *connecter) getSTokens(projects []Metadata, url, token string) map[strin
 	}
 
 	logs.Infof("Fetching %s tokens finished", SDConnect)
+
 	return newSTokens
 }
 
@@ -104,6 +107,7 @@ func (c *sdConnectInfo) getEnvs() error {
 	if err := testURL(c.url); err != nil {
 		return fmt.Errorf("Cannot connect to %s API: %w", SDConnect, err)
 	}
+
 	return nil
 }
 
@@ -120,6 +124,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 		}
 		logs.Infof("Retrieved %d %s project(s)", len(c.projects), SDConnect)
 		c.sTokens = c.getSTokens(c.projects, c.url, c.token)
+
 		return nil
 	}
 
@@ -130,6 +135,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 	if errors.As(err, &re) && re.StatusCode == 500 {
 		return fmt.Errorf("%s is not available, please contact CSC servicedesk: %w", SDConnect, err)
 	}
+
 	return fmt.Errorf("Error occurred for %s: %w", SDConnect, err)
 }
 
@@ -145,11 +151,12 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	token := c.sTokens[nodes[0]]
 	headers := map[string]string{"X-Project-ID": token.ProjectID, "X-Authorization": "Bearer " + token.Token}
 	path := c.url + "/project/" + url.PathEscape(nodes[0])
-	if len(nodes) == 1 {
+	switch len(nodes) {
+	case 1:
 		path += "/containers"
-	} else if len(nodes) == 2 {
+	case 2:
 		path += "/container/" + url.PathEscape(nodes[1]) + "/objects"
-	} else {
+	default:
 		return nil, nil
 	}
 
@@ -166,6 +173,7 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	}
 
 	logs.Infof("Retrieved metadata for %s", fsPath)
+
 	return meta, nil
 }
 
@@ -174,8 +182,10 @@ func (c *sdConnectInfo) tokenExpired(err error) bool {
 	if errors.As(err, &re) && re.StatusCode == 401 {
 		logs.Infof("%s tokens no longer valid. Fetching them again", SDConnect)
 		c.sTokens = c.getSTokens(c.projects, c.url, c.token)
+
 		return true
 	}
+
 	return false
 }
 
@@ -207,6 +217,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr any) 
 			logs.Warningf("API returned header 'X-Decrypted' even though size of object %s is too small", path)
 		}
 	}
+
 	return nil
 }
 
@@ -232,8 +243,10 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer any, start, end int6
 		token = c.sTokens[nodes[0]]
 		headers["X-Project-ID"] = token.ProjectID
 		headers["X-Authorization"] = "Bearer " + token.Token
+
 		return MakeRequest(path, query, headers, nil, buffer)
 	}
+
 	return err
 }
 
@@ -258,7 +271,7 @@ var calculateDecryptedSize = func(fileSize, headerSize int64) int64 {
 	// the last block can be smaller than 64kiB
 	remainder := bodySize%cipherBlockSize - macSize
 	if remainder < 0 {
-		remainder = remainder + macSize
+		remainder += macSize
 	}
 
 	// Add the previous info back together

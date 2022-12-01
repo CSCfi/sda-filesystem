@@ -31,12 +31,14 @@ func (c *mockCache) Get(key string) (any, bool) {
 	if c.key == key && c.data != nil {
 		return c.data, true
 	}
+
 	return nil, false
 }
 
 func (c *mockCache) Set(key string, value any, cost int64, ttl time.Duration) bool {
 	c.key = key
 	c.data = value.([]byte)
+
 	return true
 }
 
@@ -52,6 +54,7 @@ func (r *mockRepository) getEnvs() error { return r.envError }
 
 func (r *mockRepository) downloadData(nodes []string, buf any, start, end int64) error {
 	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
+
 	return r.mockDownloadDataError
 }
 
@@ -172,15 +175,16 @@ func TestGetEnv(t *testing.T) {
 			value, err := GetEnv(tt.envName, tt.verifyURL)
 			os.Unsetenv(tt.envName)
 
-			if tt.errText == "" {
+			switch {
+			case tt.errText == "":
 				if err != nil {
 					t.Errorf("Returned unexpected err: %s", err.Error())
 				} else if value != tt.envValue {
 					t.Errorf("Environment variable has incorrect value. Expected=%s, received=%s", tt.envValue, value)
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Error("Function should have returned error")
-			} else if err.Error() != tt.errText {
+			case err.Error() != tt.errText:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 			}
 		})
@@ -229,27 +233,31 @@ func TestGetCommonEnv(t *testing.T) {
 					if tt.certs == "" {
 						return "", errExpected
 					}
+
 					return tt.certs, nil
 				}
 				if tt.token == "" {
 					return "", errExpected
 				}
+
 				return tt.token, nil
 			}
 
 			err := GetCommonEnvs()
 
-			if strings.HasPrefix(tt.testname, "OK") {
-				if err != nil {
+			switch {
+			case strings.HasPrefix(tt.testname, "OK"):
+				switch {
+				case err != nil:
 					t.Errorf("Unexpected error: %s", err.Error())
-				} else if tt.certs != hi.certPath {
+				case tt.certs != hi.certPath:
 					t.Errorf("Incorrect certificate path. Expected=%s, received=%s", tt.certs, hi.certPath)
-				} else if tt.token != hi.sdsToken {
+				case tt.token != hi.sdsToken:
 					t.Errorf("Incorrect SDS access token. Expected=%s, received=%s", tt.token, hi.sdsToken)
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Errorf("Function should have returned error")
-			} else if err.Error() != errExpected.Error() {
+			case err.Error() != errExpected.Error():
 				t.Errorf("Incorrect return value\nExpected=%s\nReceived=%s", errExpected.Error(), err.Error())
 			}
 		})
@@ -644,15 +652,16 @@ func TestMakeRequest(t *testing.T) {
 				ret = objects
 			}
 
-			if tt.errText != "" {
+			switch {
+			case tt.errText != "":
 				if err == nil {
 					t.Errorf("Function did not return error")
 				} else if err.Error() != tt.errText {
 					t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errText, err.Error())
 				}
-			} else if err != nil {
+			case err != nil:
 				t.Errorf("Function returned unexpected error: %s", err.Error())
-			} else if !reflect.DeepEqual(tt.expectedBody, ret) {
+			case !reflect.DeepEqual(tt.expectedBody, ret):
 				t.Errorf("Incorrect response body\nExpected=%v\nReceived=%v", tt.expectedBody, ret)
 			}
 
@@ -672,7 +681,7 @@ func TestMakeRequest_PutRequestNil_And_ReadAll_Error(t *testing.T) {
 	hi.client = server.Client()
 
 	var buf []byte
-	var empty *os.File = nil
+	var empty *os.File
 	errStr := "Copying response failed: unexpected EOF"
 	err := MakeRequest(server.URL, nil, nil, empty, &buf)
 	if err == nil {

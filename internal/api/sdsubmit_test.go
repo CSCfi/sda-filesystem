@@ -17,26 +17,28 @@ const constantError = "some error"
 
 type mockSubmitter struct {
 	submittable
-	mockUrlOK    string
+	mockURLOK    string
 	mockDatasets []string
 	mockFiles    []Metadata
 	mockError    error
 }
 
 func (s *mockSubmitter) getDatasets(urlStr string) ([]string, error) {
-	if urlStr == s.mockUrlOK {
+	if urlStr == s.mockURLOK {
 		return s.mockDatasets, nil
-	} else {
-		return nil, s.mockError
 	}
+
+	return nil, s.mockError
+
 }
 
 func (s *mockSubmitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
-	if urlStr == s.mockUrlOK {
+	if urlStr == s.mockURLOK {
 		return s.mockFiles, nil
-	} else {
-		return nil, s.mockError
 	}
+
+	return nil, s.mockError
+
 }
 
 func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
@@ -66,6 +68,7 @@ func Test_SDSubmit_GetDatasets_Pass(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`["dataset1","dataset2","dataset3"]`))).Decode(ret)
+
 		return nil
 	}
 
@@ -130,6 +133,7 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader(testFileJSON)).Decode(ret)
+
 		return nil
 	}
 
@@ -178,6 +182,7 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 			return fmt.Errorf("makeRequest() received incorrect scheme in query\nExpected=%s\nReceived=%s", "https", scheme)
 		}
 		_ = json.NewDecoder(bytes.NewReader(testFileJSON)).Decode(ret)
+
 		return nil
 	}
 
@@ -313,7 +318,7 @@ func Test_SDSubmit_GetEnvs_Pass(t *testing.T) {
 
 func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusUnauthorized}}
+	ms := &mockSubmitter{mockURLOK: "good", mockError: &RequestError{http.StatusUnauthorized}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
@@ -329,7 +334,7 @@ func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 
 func Test_SDSubmit_ValidateLogin_500_Error(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusInternalServerError}}
+	ms := &mockSubmitter{mockURLOK: "good", mockError: &RequestError{http.StatusInternalServerError}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	expectedError := "SD Apply is not available, please contact CSC servicedesk"
@@ -344,7 +349,7 @@ func Test_SDSubmit_ValidateLogin_500_Error(t *testing.T) {
 
 func Test_SDSubmit_ValidateLogin_500_And_Pass(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusInternalServerError},
+	ms := &mockSubmitter{mockURLOK: "good", mockError: &RequestError{http.StatusInternalServerError},
 		mockDatasets: []string{"dataset1", "dataset2", "dataset3"}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad", "good"}}
 
@@ -362,7 +367,7 @@ func Test_SDSubmit_ValidateLogin_500_And_Pass(t *testing.T) {
 
 func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "good", mockError: &RequestError{http.StatusBadGateway}}
+	ms := &mockSubmitter{mockURLOK: "good", mockError: &RequestError{http.StatusBadGateway}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
@@ -378,7 +383,7 @@ func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 
 func Test_SDSubmit_ValidateLogin_Pass_Found(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "good", mockDatasets: []string{"dataset1", "dataset2", "dataset3"}}
+	ms := &mockSubmitter{mockURLOK: "good", mockDatasets: []string{"dataset1", "dataset2", "dataset3"}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"good"}}
 
 	// Test
@@ -395,7 +400,7 @@ func Test_SDSubmit_ValidateLogin_Pass_Found(t *testing.T) {
 
 func Test_SDSubmit_ValidateLogin_Pass_None(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "good", mockDatasets: []string{}}
+	ms := &mockSubmitter{mockURLOK: "good", mockDatasets: []string{}}
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"good"}}
 
 	// Test
@@ -468,7 +473,7 @@ func Test_SDSubmit_GetNthLevel_Fail_1(t *testing.T) {
 
 func Test_SDSubmit_GetNthLevel_Pass_1(t *testing.T) {
 	// Mock
-	ms := &mockSubmitter{mockUrlOK: "someurl", mockFiles: []Metadata{{Name: "file1.txt"}}}
+	ms := &mockSubmitter{mockURLOK: "someurl", mockFiles: []Metadata{{Name: "file1.txt"}}}
 	s := &sdSubmitInfo{
 		submittable: ms,
 		datasets:    map[string]int{"dataset1": 0, "dataset2": 1},
@@ -531,6 +536,7 @@ func Test_SDSubmit_DownloadData_Pass(t *testing.T) {
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_, _ = io.ReadFull(bytes.NewReader(expectedData), ret.([]byte))
+
 		return nil
 	}
 	s := sdSubmitInfo{

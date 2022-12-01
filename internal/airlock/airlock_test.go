@@ -155,6 +155,7 @@ func TestIsProjectManager(t *testing.T) {
 				switch v := ret.(type) {
 				case *map[string]any:
 					(*v)["projectPI"] = tt.data
+
 					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *map[string]any", reflect.TypeOf(v))
@@ -253,6 +254,7 @@ func TestPublicKey_Invalid_Key(t *testing.T) {
 		switch v := ret.(type) {
 		case *[]byte:
 			(*v) = []byte(keyStr)
+
 			return nil
 		default:
 			return fmt.Errorf("ret has incorrect type %v, expected *byte[]", reflect.TypeOf(v))
@@ -273,7 +275,7 @@ func TestPublicKey_Invalid_Key(t *testing.T) {
 
 func TestPublicKey(t *testing.T) {
 	var tests = []struct {
-		testname, key, decoded_key string
+		testname, key, decodedKey string
 	}{
 		{
 			"OK_1",
@@ -302,6 +304,7 @@ func TestPublicKey(t *testing.T) {
 		switch v := ret.(type) {
 		case *[]byte:
 			(*v) = []byte(keyStr)
+
 			return nil
 		default:
 			return fmt.Errorf("ret has incorrect type %v, expected *byte[]", reflect.TypeOf(v))
@@ -313,8 +316,8 @@ func TestPublicKey(t *testing.T) {
 			keyStr = tt.key
 			if err := GetPublicKey(); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
-			} else if tt.decoded_key != string(ai.publicKey[:]) {
-				t.Errorf("Function saved incorrect public key\nExpected=%s\nReceived=%s", tt.decoded_key, ai.publicKey)
+			} else if tt.decodedKey != string(ai.publicKey[:]) {
+				t.Errorf("Function saved incorrect public key\nExpected=%s\nReceived=%s", tt.decodedKey, ai.publicKey)
 			}
 		})
 	}
@@ -343,12 +346,14 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 				if filename == tt.failOnFile {
 					return nil, "", 0, errExpected
 				}
+
 				return nil, "", 0, nil
 			}
 			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
 				if filename == tt.failOnFile {
 					return nil, "", 0, errExpected
 				}
+
 				return nil, "", 0, nil
 			}
 
@@ -365,7 +370,7 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 func TestUpload(t *testing.T) {
 	var tests = []struct {
 		testname, checksum, container, manifest string
-		journal_number, origFile, file          string
+		journalNumber, origFile, file           string
 		size, total                             int64
 		encrypt                                 bool
 		query                                   map[string]string
@@ -391,27 +396,23 @@ func TestUpload(t *testing.T) {
 	origGetFileDetails := getFileDetails
 	origGetFileDetailsEncrypt := getFileDetailsEncrypt
 	origPut := put
-	origCurrentTime := currentTime
 	defer func() {
 		getFileDetails = origGetFileDetails
 		getFileDetailsEncrypt = origGetFileDetailsEncrypt
 		put = origPut
-		currentTime = origCurrentTime
 	}()
 
 	for i, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			testTime := time.Now()
-			currentTime = func() time.Time {
-				return testTime
-			}
-			var file1, file2 *os.File = nil, nil
+			var file1, file2 *os.File
 			getFileDetails = func(filename string) (*os.File, string, int64, error) {
 				var err error
 				file1, err = os.Open(filename)
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return file1, tt.checksum + strings.Repeat("78", i+1), tt.size + 200*int64(i+1), nil
 			}
 			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
@@ -423,20 +424,21 @@ func TestUpload(t *testing.T) {
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return &readCloser{file2, file2, nil}, tt.checksum + strings.Repeat("50", i+1), tt.size + 500*int64(i+1), nil
 			}
 
 			count := 1
 			total := int(tt.total)
-			put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
+			put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if manifest != tt.manifest {
 					t.Errorf("Function received incorrect manifest. Expected=%s, received=%s", tt.manifest, manifest)
 				}
-				if (segment_nro == -1 || segment_total == -1) && tt.total == 1 {
+				if (segmentNro == -1 || segment_total == -1) && tt.total == 1 {
 					t.Error("Segment number and segment total should not be -1")
 				}
-				if segment_nro != count {
-					t.Errorf("Function received incorrect segment number. Expected=%d, received=%d", count, segment_nro)
+				if segmentNro != count {
+					t.Errorf("Function received incorrect segment number. Expected=%d, received=%d", count, segmentNro)
 				}
 				if segment_total != total {
 					t.Errorf("Function received incorrect segment total. Expected=%d, received=%d", total, segment_total)
@@ -452,10 +454,11 @@ func TestUpload(t *testing.T) {
 				if !reflect.DeepEqual(query, tt.query) {
 					t.Errorf("Function received incorrect query\nExpected=%v\nReceived=%v", tt.query, query)
 				}
+
 				return nil
 			}
 
-			if err := Upload(tt.origFile, tt.file, tt.container, tt.journal_number, 100, tt.encrypt); err != nil {
+			if err := Upload(tt.origFile, tt.file, tt.container, tt.journalNumber, 100, tt.encrypt); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else {
 				if file1 != nil {
@@ -494,13 +497,14 @@ func TestUpload_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			var file *os.File = nil
+			var file *os.File
 			getFileDetails = func(filename string) (*os.File, string, int64, error) {
 				var err error
 				file, err = os.Open(filename)
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return file, "", int64(tt.size), nil
 			}
 			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
@@ -508,20 +512,23 @@ func TestUpload_Error(t *testing.T) {
 			}
 
 			count := 1
-			put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
+			put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if count == tt.count {
 					return errExpected
 				}
 				count++
+
 				return nil
 			}
 
 			errStr := tt.errStr + errExpected.Error()
-			if err := Upload("", "../../test/sample.txt.enc", "bucket684", "", 100, false); err == nil {
+			err := Upload("", "../../test/sample.txt.enc", "bucket684", "", 100, false)
+			switch {
+			case err == nil:
 				t.Error("Function did not return error")
-			} else if err.Error() != errStr {
+			case err.Error() != errStr:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
-			} else if file != nil {
+			case file != nil:
 				if err = file.Close(); err == nil {
 					t.Error("File was not closed")
 				}
@@ -575,16 +582,18 @@ func TestUpload_FileContent(t *testing.T) {
 				if err != nil {
 					return nil, "", 0, err
 				}
+
 				return file, "", int64(len(tt.content)), nil
 			}
 
 			buf := &bytes.Buffer{}
-			put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
-				if segment_nro != -1 {
+			put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
+				if segmentNro != -1 {
 					if _, err := buf.ReadFrom(upload_data); err != nil {
 						return err
 					}
 				}
+
 				return nil
 			}
 
@@ -614,6 +623,7 @@ func TestUpload_Channel_Error(t *testing.T) {
 		}
 		errc := make(chan error, 1)
 		errc <- errExpected
+
 		return &readCloser{file, file, errc}, "", 0, nil
 	}
 	getFileDetails = func(filename string) (*os.File, string, int64, error) {
@@ -621,9 +631,10 @@ func TestUpload_Channel_Error(t *testing.T) {
 		if err != nil {
 			return nil, "", 0, err
 		}
+
 		return file, "", 0, nil
 	}
-	put = func(url, manifest string, segment_nro, segment_total int, upload_data io.Reader, query map[string]string) error {
+	put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 		return nil
 	}
 
@@ -729,6 +740,7 @@ type mockWriteCloser struct {
 
 func (wc *mockWriteCloser) Write(data []byte) (n int, err error) {
 	wc.data = data
+
 	return len(data), wc.writeErr
 }
 
@@ -937,7 +949,7 @@ func TestPut(t *testing.T) {
 		api.MakeRequest = origMakeRequest
 	}()
 
-	testUrl := "https://example.com"
+	testURL := "https://example.com"
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
@@ -945,8 +957,8 @@ func TestPut(t *testing.T) {
 				return tt.token
 			}
 			api.MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
-				if url != testUrl {
-					t.Errorf("Function received incorrect url\nExpected=%s\nReceived=%s", testUrl, url)
+				if url != testURL {
+					t.Errorf("Function received incorrect url\nExpected=%s\nReceived=%s", testURL, url)
 				}
 				if !reflect.DeepEqual(query, tt.query) {
 					t.Errorf("Function received incorrect query\nExpected=%q\nReceived=%q", tt.query, query)
@@ -954,10 +966,11 @@ func TestPut(t *testing.T) {
 				if !reflect.DeepEqual(headers, tt.headers) {
 					t.Errorf("Function received incorrect headers\nExpected=%q\nReceived=%q", tt.headers, headers)
 				}
+
 				return nil
 			}
 
-			err := put(testUrl, "bucket/dir", tt.segNro, tt.segTotal, nil, tt.query)
+			err := put(testURL, "bucket/dir", tt.segNro, tt.segTotal, nil, tt.query)
 			if err != nil {
 				t.Errorf("Function returned error: %s", err.Error())
 			}
@@ -992,6 +1005,7 @@ func TestPut_Error(t *testing.T) {
 				switch v := ret.(type) {
 				case *[]byte:
 					(*v) = []byte("request body error")
+
 					return tt.err
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *byte[]", reflect.TypeOf(v))
