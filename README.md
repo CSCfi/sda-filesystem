@@ -29,8 +29,8 @@ Set these environment variables before running the application:
 
 Optional envronment variables:
 
-- `CSC_USERNAME` - username for Data Gateway
-- `CSC_PASSWORD` - password for Data Gateway and Airlock CLI
+- `CSC_USERNAME` - username for SDA-Filesystem
+- `CSC_PASSWORD` - password for SDA-Filesystem and Airlock CLI
 
 For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/local-proxy
 
