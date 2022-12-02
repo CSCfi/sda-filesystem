@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v1.4.0] - 2022-12-02
 
 ### Changed
 - `crypt4gh` function `NewCrypt4GHWriterWithoutPrivateKey` now uses list of public keys
@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Option to input airlock password from environment variable
 - `CSC_USERNAME` and `CSC_PASSWORD` as options to set credentials for fuse layer
+
+### Fixed
+- Uploading mistakenly returned error for unencrypted files
 
 ## [v1.3.0] - 2022-11-18
 
@@ -28,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User can export files to SD Connect using the UI or command line if they are the project manager
 
 ### Fixed
--  binary for linux needs to contain libQt5QuickShapes.* added that to the release
+- binary for linux needs to contain libQt5QuickShapes.* added that to the release
 - fixed dependency for building properly on all OS
 
 ## [v1.2.2] - 2022-05-05

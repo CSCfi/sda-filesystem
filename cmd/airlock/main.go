@@ -77,10 +77,10 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	password, passwordFromEnv := os.LookupEnv("AIRLOCK_PASSWORD")
+	password, passwordFromEnv := os.LookupEnv("CSC_PASSWORD")
 
 	if passwordFromEnv {
-		logs.Info("Using password from environment variable AIRLOCK_PASSWORD")
+		logs.Info("Using password from environment variable CSC_PASSWORD")
 	} else {
 		fmt.Println("Enter Password: ")
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
