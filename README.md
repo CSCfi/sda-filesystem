@@ -11,7 +11,7 @@ Data Gateway makes use of the:
 - [SD Connect Proxy API](docs/SD-Connect-API.md) 
 - [SD Apply/SD Submit Download API](docs/SD-Submit-API.md) 
 
-It builds a FUSE (Filesystem in Userspace) layer. Software currently supports Linux, macOS and Windows for:
+It builds a FUSE (Filesystem in Userspace) layer and uses Airlock to export files to SD Connect. Software currently supports Linux, macOS and Windows for:
 - [Graphical User Interface](#graphical-user-interface)
 - [Command Line Interface](#command-line-interface)
 
@@ -27,7 +27,12 @@ Set these environment variables before running the application:
 - `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD APIs
 - `FS_CERTS` - path to a file that contains certificates required by SD Connect, SD Apply/SD Submit, and SDS AAI 
 
-For test environment use follow instructions at https://gitlab.ci.csc.fi/sds-dev/local-proxy
+Optional envronment variables:
+
+- `CSC_USERNAME` - username for Data Gateway
+- `CSC_PASSWORD` - password for Data Gateway and Airlock CLI
+
+For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/local-proxy
 
 ## Graphical User Interface
 
@@ -78,9 +83,13 @@ Copy the archive of the deployment environment, for more details see: [Linux set
 
 ## Command Line Interface
 
-The CLI binary will require a username and password for accessing the SD-Connect Proxy API.
+Two command line binaries are released, one for SDA-Filesystem and one for Airlock. 
 
-### Build and Run
+### SDA-Fileystem
+
+The CLI binary will require a username and password for accessing the SD-Connect Proxy API. Username is given as input. Password is either given as input or in an environmental variable.
+
+#### Build and Run
 ```
 go build -o ./go-fuse ./cmd/fuse/main.go
 ```
@@ -111,6 +120,45 @@ Usage of ./go-fuse:
 
 ```
 Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both 'SD Connect' and 'SD Apply'.
+
+### Airlock
+
+The CLI binary will require a username, a bucket and a filename. Password is either given as input or in an environmental variable.
+
+#### Build and Run
+```
+go build -o ./airlock ./cmd/airlock/main.go
+```
+Test install.
+```
+Usage of ./airlock:
+  -alsologtostderr
+    	log to standard error as well as files
+  -debug
+    	Enable debug prints
+  -journal-number string
+    	Journal Number/Name specific for Findata uploads
+  -log_backtrace_at value
+    	when logging hits line file:N, emit a stack trace
+  -log_dir string
+    	If non-empty, write log files in this directory
+  -logtostderr
+    	log to standard error instead of files
+  -original-file string
+    	Filename of original unecrypted file when uploading pre-encrypted file from Findata vm
+  -quiet
+    	Print only errors
+  -segment-size int
+    	Maximum size of segments in Mb used to upload data. Valid range is 10-4000. (default 4000)
+  -stderrthreshold value
+    	logs at or above this threshold go to stderr
+  -v value
+    	log level for V logs
+  -vmodule value
+    	comma-separated list of pattern=N settings for file-filtered logging
+``` 
+
+Example run: `./airlock username ExampleBucket ExampleFile` will export file `ExampleFile` to bucket `ExampleBucket`.
 
 ## Troubleshooting
 See [troubleshooting](docs/troubleshooting.md) for fixes to known issues.
