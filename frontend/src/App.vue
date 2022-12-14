@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { CToastMessage, CToastType } from 'csc-ui/dist/types/types';
+import { CToastMessage, CToastType } from 'csc-ui/dist/types'
 import { ref, onMounted } from 'vue'
+import { EventsOn, EventsEmit } from '../wailsjs/runtime'
 import { InitializeAPI } from '../wailsjs/go/main/App'
 
 import Access from './components/Access.vue'
@@ -9,26 +10,32 @@ import Login from './components/Login.vue'
 import Logs from './components/Logs.vue'
 
 const page = ref("login")
+const disabled = ref(false)
 const initialized = ref(false)
 const loggedIn = ref(false)
+const toast = ref<any>(null)
+//<ComponentPublicInstance<typeof CToast> | null>
 
 onMounted(() => {
   InitializeAPI().then(() => {
-    console.log("Initializing API finished");
+    console.log("Initializing Data Gateway finished");
     initialized.value = true;
   }).catch(e => {
-    AddErrorToast(e as string);
+    disabled.value = true;
+    EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
   });
 })
 
-function AddErrorToast(err: string) {
+EventsOn('showToast', function(title: string, err: string) {
   const message: CToastMessage = {
-    title: "Testing",
+    title: title,
     message: err,
-    type: "error" as CToastType
+    type: "error" as CToastType,
+    persistent: true,
   };
-  console.log(err);
-}
+
+  toast.value.addToast?.(message);
+})
 </script>
 
 <template>
@@ -51,13 +58,13 @@ function AddErrorToast(err: string) {
     </c-toolbar>
 
     <div id="content">
-      <Login v-show="page === 'login'" :ready="initialized" @proceed="loggedIn = true"/>
+      <Login v-show="page === 'login'" :ready="initialized" :disabled="disabled" @proceed="loggedIn = true"/>
       <Access v-show="page === 'access'" />
       <Export v-show="page === 'export'" />
       <Logs v-show="page === 'logs'" />
     </div>
 
-    <c-toasts></c-toasts>
+    <c-toasts ref="toast"></c-toasts>
   </c-main>
 </template>
 

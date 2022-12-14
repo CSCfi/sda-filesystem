@@ -55,11 +55,10 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 func (a *App) InitializeAPI() error {
-	logs.Info("fdyukc")
 	err := api.GetCommonEnvs()
 	if err != nil {
 		logs.Error(err)
-		return fmt.Errorf("Required environmental varibles missing")
+		return fmt.Errorf("Required environmental variables missing")
 	}
 
 	err = api.InitializeCache()
