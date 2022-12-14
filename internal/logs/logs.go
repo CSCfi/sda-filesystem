@@ -9,19 +9,19 @@ import (
 )
 
 // signal sends a new log to the LogModel
-var signal func(int, []string)
+var signal func(string, []string)
 
 var log *logrus.Logger
 
 var levelMap = map[string]logrus.Level{
-	"debug":   logrus.DebugLevel,
-	"info":    logrus.InfoLevel,
-	"warning": logrus.WarnLevel,
-	"error":   logrus.ErrorLevel,
+	logrus.DebugLevel.String(): logrus.DebugLevel,
+	logrus.InfoLevel.String():  logrus.InfoLevel,
+	logrus.WarnLevel.String():  logrus.WarnLevel,
+	logrus.ErrorLevel.String(): logrus.ErrorLevel,
 }
 
 // SetSignal initializes 'signal', which sends logs to LogModel
-func SetSignal(fn func(int, []string)) {
+func SetSignal(fn func(string, []string)) {
 	signal = fn
 }
 
@@ -62,7 +62,7 @@ var StructureError = func(err error) []string {
 // Error logs a message at level "Error" either on the standard logger or in the GUI
 func Error(err error) {
 	if signal != nil {
-		signal(int(logrus.ErrorLevel), StructureError(err))
+		signal(logrus.ErrorLevel.String(), StructureError(err))
 	} else {
 		log.Error(err)
 	}
@@ -72,7 +72,7 @@ func Error(err error) {
 func Errorf(format string, args ...any) {
 	err := fmt.Errorf(format, args...)
 	if signal != nil {
-		signal(int(logrus.ErrorLevel), StructureError(err))
+		signal(logrus.ErrorLevel.String(), StructureError(err))
 	} else {
 		log.Error(err)
 	}
@@ -81,7 +81,7 @@ func Errorf(format string, args ...any) {
 // Warning logs a message at level "Warning" either on the standard logger or in the GUI
 func Warning(err error) {
 	if signal != nil {
-		signal(int(logrus.WarnLevel), StructureError(err))
+		signal(logrus.WarnLevel.String(), StructureError(err))
 	} else {
 		log.Warning(err.Error())
 	}
@@ -91,7 +91,7 @@ func Warning(err error) {
 var Warningf = func(format string, args ...any) {
 	err := fmt.Errorf(format, args...)
 	if signal != nil {
-		signal(int(logrus.WarnLevel), StructureError(err))
+		signal(logrus.WarnLevel.String(), StructureError(err))
 	} else {
 		log.Warningf(err.Error())
 	}
@@ -100,7 +100,7 @@ var Warningf = func(format string, args ...any) {
 // Info logs a message at level "Info" either on the standard logger or in the GUI
 func Info(args ...any) {
 	if signal != nil {
-		signal(int(logrus.InfoLevel), []string{fmt.Sprint(args...)})
+		signal(logrus.InfoLevel.String(), []string{fmt.Sprint(args...)})
 	} else {
 		log.Info(args...)
 	}
@@ -109,7 +109,7 @@ func Info(args ...any) {
 // Infof logs a message at level "Info" either on the standard logger or in the GUI
 func Infof(format string, args ...any) {
 	if signal != nil {
-		signal(int(logrus.InfoLevel), []string{fmt.Sprintf(format, args...)})
+		signal(logrus.InfoLevel.String(), []string{fmt.Sprintf(format, args...)})
 	} else {
 		log.Infof(format, args...)
 	}
@@ -119,7 +119,7 @@ func Infof(format string, args ...any) {
 func Debug(args ...any) {
 	if signal != nil {
 		if log.IsLevelEnabled(logrus.DebugLevel) {
-			signal(int(logrus.DebugLevel), []string{fmt.Sprint(args...)})
+			signal(logrus.DebugLevel.String(), []string{fmt.Sprint(args...)})
 		}
 	} else {
 		log.Debug(args...)
@@ -130,7 +130,7 @@ func Debug(args ...any) {
 func Debugf(format string, args ...any) {
 	if signal != nil {
 		if log.IsLevelEnabled(logrus.DebugLevel) {
-			signal(int(logrus.DebugLevel), []string{fmt.Sprintf(format, args...)})
+			signal(logrus.DebugLevel.String(), []string{fmt.Sprintf(format, args...)})
 		}
 	} else {
 		log.Debugf(format, args...)

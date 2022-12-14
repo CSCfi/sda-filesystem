@@ -1,27 +1,34 @@
 <script lang="ts" setup>
-  import { ref, onMounted } from 'vue'
-  import type { Ref } from 'vue'
-  import { InitializeAPI } from '../wailsjs/go/main/App'
+import { CToastMessage, CToastType } from 'csc-ui/dist/types/types';
+import { ref, onMounted } from 'vue'
+import { InitializeAPI } from '../wailsjs/go/main/App'
 
-  import Access from './components/Access.vue'
-  import Export from './components/Export.vue'
-  import Login from './components/Login.vue'
-  import Logs from './components/Logs.vue'
-  import { on } from 'events'
+import Access from './components/Access.vue'
+import Export from './components/Export.vue'
+import Login from './components/Login.vue'
+import Logs from './components/Logs.vue'
 
-  const page: Ref<string> = ref("login")
-  const mountpoint: Ref<string> = ref("")
-  const loggedIn: Ref<boolean> = ref(false)
-  const isProjectManager: Ref<boolean> = ref(false)
-  
-  onMounted(() => {
-    InitializeAPI().then((result: string) => {
-      if (result !== "") {
-        console.log(result) // Change to popup
-      }
-    })
-  })
+const page = ref("login")
+const initialized = ref(false)
+const loggedIn = ref(false)
 
+onMounted(() => {
+  InitializeAPI().then(() => {
+    console.log("Initializing API finished");
+    initialized.value = true;
+  }).catch(e => {
+    AddErrorToast(e as string);
+  });
+})
+
+function AddErrorToast(err: string) {
+  const message: CToastMessage = {
+    title: "Testing",
+    message: err,
+    type: "error" as CToastType
+  };
+  console.log(err);
+}
 </script>
 
 <template>
@@ -31,7 +38,7 @@
       <h4>Data Gateway</h4>
       <c-spacer></c-spacer>
       <c-tabs id="tabs" :value="page" borderless @changeValue="(page = ($event.target as HTMLInputElement).value)">
-        <c-tab value="login">Login</c-tab>
+        <c-tab value="login" v-show="!loggedIn">Login</c-tab>
         <c-tab value="access" v-show="loggedIn">Access</c-tab>
         <c-tab value="export" v-show="loggedIn">Export</c-tab>
         <c-tab value="logs">Logs</c-tab>
@@ -43,10 +50,14 @@
       </c-button>
     </c-toolbar>
 
-    <Login v-if="page === 'login'" />
-    <Access v-else-if="page === 'access'" />
-    <Export v-else-if="page === 'export'" />
-    <Logs v-else-if="page === 'logs'" />
+    <div id="content">
+      <Login v-show="page === 'login'" :ready="initialized" @proceed="loggedIn = true"/>
+      <Access v-show="page === 'access'" />
+      <Export v-show="page === 'export'" />
+      <Logs v-show="page === 'logs'" />
+    </div>
+
+    <c-toasts></c-toasts>
   </c-main>
 </template>
 
@@ -76,5 +87,10 @@ c-tabs {
   display: flex;
   align-items: flex-end;
   flex-grow: 1;
+}
+
+#content {
+  margin: 40px;
+  display: flex;
 }
 </style>

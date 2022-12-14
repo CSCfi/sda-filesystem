@@ -1,7 +1,9 @@
 <script lang="ts" setup></script>
 
 <template>
-    Export
+    <c-container>
+        Export
+    </c-container>
 </template>
 
 <style></style>

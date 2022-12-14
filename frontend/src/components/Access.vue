@@ -1,7 +1,9 @@
 <script lang="ts" setup></script>
 
 <template>
-    Access
+    <c-container>
+        Access
+    </c-container>
 </template>
 
 <style></style>

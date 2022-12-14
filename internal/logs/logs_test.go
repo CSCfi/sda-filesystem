@@ -31,7 +31,7 @@ func TestSetSignal(t *testing.T) {
 	defer func() { signal = nil }()
 
 	called := false
-	testSignal := func(i int, s []string) {
+	testSignal := func(i string, s []string) {
 		called = true
 	}
 
@@ -41,7 +41,7 @@ func TestSetSignal(t *testing.T) {
 		t.Error("SetSignal() should not have called signal")
 	}
 
-	signal(0, []string{})
+	signal("", []string{})
 
 	if !called {
 		t.Error("Signal was not assigned correctly")
