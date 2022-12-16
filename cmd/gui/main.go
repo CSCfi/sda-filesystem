@@ -11,8 +11,9 @@ import (
 
 func main() {
 	// Create an instance of the app structure
-	app := NewApp()
 	logHandler := NewLogHandler()
+	projectHandler := NewProjectHandler()
+	app := NewApp(projectHandler)
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -23,11 +24,13 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			app.startup(ctx)
 			logHandler.SetContext(ctx)
+			projectHandler.SetContext(ctx)
 		},
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 			logHandler,
+			projectHandler,
 		},
 	})
 

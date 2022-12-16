@@ -48,16 +48,16 @@ function saveLogs() {
 </script>
 
 <template>
-    <c-container class="fillWidth">
+    <c-container class="fill-width">
         <c-row justify="space-between" align="center">
-            <h1>Logs</h1>
+            <h2>Logs</h2>
             <c-button text no-radius @click="saveLogs">
                 <i class="material-icons" slot="icon">logout</i>
                 Export detailed logs
             </c-button>
         </c-row>
         <c-data-table 
-            id="logs" 
+            class="gateway-table"
             no-data-text="No logs available" 
             :key="logsKey" 
             :data.prop="logData" 
@@ -67,8 +67,4 @@ function saveLogs() {
     </c-container>
 </template>
 
-<style>
-#logs {
-    margin-top: 20px;
-}
-</style>
+<style></style>

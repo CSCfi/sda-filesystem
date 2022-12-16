@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { CToastMessage, CToastType } from 'csc-ui/dist/types'
 import { ref, onMounted } from 'vue'
-import { EventsOn, EventsEmit } from '../wailsjs/runtime'
+import { EventsOn, EventsEmit, Quit } from '../wailsjs/runtime'
 import { InitializeAPI } from '../wailsjs/go/main/App'
 
 import Access from './components/Access.vue'
@@ -13,8 +13,8 @@ const page = ref("login")
 const disabled = ref(false)
 const initialized = ref(false)
 const loggedIn = ref(false)
-const toast = ref<any>(null)
-//<ComponentPublicInstance<typeof CToast> | null>
+const accessed = ref(false)
+const toasts = ref<HTMLCToastsElement | null>();
 
 onMounted(() => {
   InitializeAPI().then(() => {
@@ -34,7 +34,7 @@ EventsOn('showToast', function(title: string, err: string) {
     persistent: true,
   };
 
-  toast.value.addToast?.(message);
+  toasts.value?.addToast(message);
 })
 </script>
 
@@ -47,24 +47,30 @@ EventsOn('showToast', function(title: string, err: string) {
       <c-tabs id="tabs" :value="page" borderless @changeValue="(page = ($event.target as HTMLInputElement).value)">
         <c-tab value="login" v-show="!loggedIn">Login</c-tab>
         <c-tab value="access" v-show="loggedIn">Access</c-tab>
-        <c-tab value="export" v-show="loggedIn">Export</c-tab>
+        <c-tab value="export" v-show="loggedIn" :disabled="!accessed">Export</c-tab>
         <c-tab value="logs">Logs</c-tab>
       </c-tabs>
       <c-spacer></c-spacer>
-      <c-button size="small" text no-radius icon-end :style="{visibility: loggedIn ? 'visible' : 'hidden'}">
+      <c-button 
+        size="small" 
+        text 
+        no-radius 
+        icon-end 
+        @click="Quit"
+        :style="{visibility: loggedIn ? 'visible' : 'hidden'}">
         <i class="material-icons" slot="icon">logout</i>
         Disconnect and sign out
       </c-button>
     </c-toolbar>
 
     <div id="content">
-      <Login v-show="page === 'login'" :ready="initialized" :disabled="disabled" @proceed="loggedIn = true"/>
+      <Login v-show="page === 'login'" :ready="initialized" :disabled="disabled" @proceed="loggedIn = true; page = 'access'"/>
       <Access v-show="page === 'access'" />
       <Export v-show="page === 'export'" />
       <Logs v-show="page === 'logs'" />
     </div>
 
-    <c-toasts ref="toast"></c-toasts>
+    <c-toasts ref="toasts"></c-toasts>
   </c-main>
 </template>
 

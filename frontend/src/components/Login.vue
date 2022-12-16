@@ -13,6 +13,7 @@ const emit = defineEmits(["proceed"])
 const username = ref("") // validity checks?
 const password = ref("")
 const loading = ref(false)
+const error401 = ref(false)
 
 watch(() => props.disabled, (disabled: boolean) => { 
     if (disabled) {
@@ -27,7 +28,7 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
             if (result) {
                 emit('proceed');
             } else {
-                //show 401
+                error401.value = true;
             }
         }).catch(e => {
             emit('proceed');
@@ -39,18 +40,23 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
 
 <template>
     <c-container>
-        <form id="loginForm" v-on:submit.prevent>
+        <form id="login-form" v-on:submit.prevent>
             <c-login-card-title>Log in to Data Gateway</c-login-card-title>
             <p>Data Gateway gives you secure access to your data.</p>
-            <p id="smaller">Please log in with your CSC credentials.</p>
+            <p class="smaller-text">Please log in with your CSC credentials.</p>
             <c-text-field label="Username" :disabled="props.disabled"></c-text-field>
             <c-text-field label="Password" type="password" :disabled="props.disabled"></c-text-field>
 
+            <c-alert type="error" v-if="error401">
+                <div slot="title">Username or password is incorrect</div>
+                If you have forgotten your password, visit https://my.csc.fi/forgot-password.
+            </c-alert>
+         
             <c-button 
                 size="large" 
                 :loading="loading" 
                 :disabled="props.disabled"
-                @click="loading = true">
+                @click="loading = true; error401 = false;">
                 Login
             </c-button>
         </form>
@@ -58,17 +64,17 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
 </template>
 
 <style>
-#loginForm {
+#login-form {
     width: 500px;
     display: flex;
     flex-direction: column;
 }
 
-#smaller {
-    font-size: 14px;
+#login-form > c-button {
+    margin-top: 10px;
 }
 
-#loginForm > c-button {
-    margin-top: 10px;
+c-alert > div {
+    font-size: 16px;
 }
 </style>

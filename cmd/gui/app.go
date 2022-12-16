@@ -23,19 +23,14 @@ import (
 // App struct
 type App struct {
 	ctx        context.Context
+	ph         *ProjectHandler
 	fs         *filesystem.Fuse
-	mountPoint string
-}
-
-type Project struct {
-	Name       string `json:"name"`
-	Repository string `json:"repository"`
-	//Containers string `json:"containers"`
+	mountpoint string
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{}
+func NewApp(ph *ProjectHandler) *App {
+	return &App{ph: ph}
 }
 
 // startup is called when the app starts. The context is saved
@@ -44,7 +39,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
 	var err error
-	a.mountPoint, err = mountpoint.DefaultMountPoint()
+	a.mountpoint, err = mountpoint.DefaultMountPoint()
 	if err != nil {
 		logs.Warning(err)
 	}
@@ -52,6 +47,15 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	filesystem.UnmountFilesystem()
+}
+
+func (a *App) GetDefaultMountPoint() string {
+	var err error
+	a.mountpoint, err = mountpoint.DefaultMountPoint()
+	if err != nil {
+		logs.Warning(err)
+	}
+	return a.mountpoint
 }
 
 func (a *App) InitializeAPI() error {
@@ -105,54 +109,58 @@ func (a *App) Login(username, password string) (bool, error) {
 	}
 
 	isManager, err := airlock.IsProjectManager()
-	//qb.SetIsProjectManager(isManager)
 	if err != nil {
 		logs.Errorf("Resolving project manager status failed: %w", err)
-		//qb.PreventExport()
-	} else if isManager {
-		logs.Info("You are the project manager")
-	} else {
+	} else if !isManager {
 		logs.Info("You are not the project manager")
+	} else {
+		logs.Info("You are the project manager")
+		if err = airlock.GetPublicKey(); err != nil {
+			logs.Error(err)
+		} else {
+			wailsruntime.EventsEmit(a.ctx, "projectManager")
+		}
 	}
 
-	if err = airlock.GetPublicKey(); err != nil {
-		logs.Error(err)
-		//qb.PreventExport()
-	}
-
-	a.fs = filesystem.InitializeFileSystem(a.AddProject)
+	a.fs = filesystem.InitializeFileSystem(a.ph.addProject)
 	logs.Info("Login successful")
 	return true, nil
 }
 
-func (a *App) AddProject(rep, pr string) {
-	/*if idx, ok := pm.nameToIndex[rep+"/"+pr]; ok {
-		delete(pm.deletedIdxs, idx)
-		return
-	}*/
+func (a *App) ChangeMountPoint(mount string) string {
+	mount = filepath.Clean(mount)
+	logs.Debugf("Trying to change mount point to %s", mount)
 
-	wailsruntime.EventsEmit(a.ctx, "newLogEntry", Project{Name: pr, Repository: rep})
+	if err := mountpoint.CheckMountPoint(mount); err != nil {
+		logs.Error(err)
+		return err.Error()
+	}
+
+	logs.Infof("Data Gateway will be mounted at %s", mount)
+	a.mountpoint = mount
+	return ""
 }
 
 func (a *App) LoadFuse() {
 	go func() {
 		defer filesystem.CheckPanic()
-		//a.fs.PopulateFilesystem(projectModel.AddToCount)
+		a.fs.PopulateFilesystem(a.ph.trackContainers)
 
 		go func() {
 			time.Sleep(time.Second)
-			//a.SetBuckets(qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName()))
+			buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
+			wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 			wailsruntime.EventsEmit(a.ctx, "fuseReady")
 		}()
 
-		filesystem.MountFilesystem(a.fs, a.mountPoint)
+		filesystem.MountFilesystem(a.fs, a.mountpoint)
 		os.Exit(0)
 	}()
 }
 
 func (a *App) OpenFuse() {
 	var cmd *exec.Cmd
-	userPath := a.mountPoint
+	userPath := a.mountpoint
 
 	_, err := os.Stat(userPath)
 	if err != nil {
@@ -177,25 +185,25 @@ func (a *App) OpenFuse() {
 	}
 }
 
-func (a *App) RefreshFuse() string {
-	if a.fs.FilesOpen(a.mountPoint) {
-		return "You have files in use and thus updating is not possible"
+func (a *App) RefreshFuse() error {
+	if a.fs.FilesOpen(a.mountpoint) {
+		return fmt.Errorf("You have files in use and thus updating is not possible")
 	}
 	logs.Info("Updating Data Gateway")
-	//projectModel.PrepareForRefresh()
 	time.Sleep(200 * time.Millisecond)
-	//newFs := filesystem.InitializeFileSystem(projectModel.AddProject)
-	//projectModel.DeleteExtraProjects()
-	//newFs.PopulateFilesystem(projectModel.AddToCount)
-	//qb.fs.RefreshFilesystem(newFs)
-	//qb.SetBuckets(qb.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName()))
+
+	newFs := filesystem.InitializeFileSystem(a.ph.addProject)
+	newFs.PopulateFilesystem(a.ph.trackContainers)
+	a.fs.RefreshFilesystem(newFs)
+
+	buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
+	wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 	wailsruntime.EventsEmit(a.ctx, "fuseReady")
-	return ""
+
+	return nil
 }
 
-func (a *App) CheckEncryption(url, bucket string) (string, string, bool) {
-	file := "" // core.NewQUrl3(url, 0).ToLocalFile()
-
+func (a *App) CheckEncryption(file, bucket string) (string, string, bool) {
 	if encrypted, err := airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
 		return "", "", false
@@ -219,20 +227,5 @@ func (a *App) ExportFile(folder, origFile, file string) string {
 		logs.Error(err)
 		return fmt.Sprintf("Exporting file %s failed", file)
 	}
-	return ""
-}
-
-func (a *App) ChangeMountPoint(url string) string {
-	mount := "" //core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
-	mount = filepath.Clean(mount)
-	logs.Debugf("Trying to change mount point to %s", mount)
-
-	if err := mountpoint.CheckMountPoint(mount); err != nil {
-		logs.Error(err)
-		return err.Error()
-	}
-
-	logs.Infof("Data Gateway will be mounted at %s", mount)
-	a.mountPoint = mount
 	return ""
 }
