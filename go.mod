@@ -6,13 +6,13 @@ require (
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
-	github.com/neicnordic/crypt4gh v1.6.1
+	github.com/neicnordic/crypt4gh v1.6.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/therecipe/qt v0.0.0-20200904063919-c0c124a5770d
-	golang.org/x/crypto v0.3.0
-	golang.org/x/exp v0.0.0-20221126150942-6ab00d035af9
-	golang.org/x/sys v0.2.0
-	golang.org/x/term v0.2.0
+	golang.org/x/crypto v0.5.0
+	golang.org/x/exp v0.0.0-20230108222341-4b8118a2686a
+	golang.org/x/sys v0.4.0
+	golang.org/x/term v0.4.0
 )
 
 require (
