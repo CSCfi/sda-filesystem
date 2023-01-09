@@ -60,7 +60,7 @@ jobs:
       - name: Install macOS dependencies
         if: matrix.os == 'macOS-latest'
         run: |
-          brew install --cask osxfuse
+          brew install --cask macfuse
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-20.04'
         run: |
@@ -180,7 +180,7 @@ jobs:
       - name: Install macOS dependencies
         if: matrix.os == 'macOS-latest'
         run: |
-          brew install --cask osxfuse
+          brew install --cask macfuse
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-20.04'
         run: |
