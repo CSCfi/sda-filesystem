@@ -37,16 +37,15 @@ func NewApp(ph *ProjectHandler) *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-
-	var err error
-	a.mountpoint, err = mountpoint.DefaultMountPoint()
-	if err != nil {
-		logs.Warning(err)
-	}
+	filesystem.SetSignalBridge(a.Panic)
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	filesystem.UnmountFilesystem()
+}
+
+func (a *App) Panic() {
+
 }
 
 func (a *App) GetDefaultMountPoint() string {
@@ -118,27 +117,39 @@ func (a *App) Login(username, password string) (bool, error) {
 		if err = airlock.GetPublicKey(); err != nil {
 			logs.Error(err)
 		} else {
-			wailsruntime.EventsEmit(a.ctx, "projectManager")
+			wailsruntime.EventsEmit(a.ctx, "isProjectManager")
 		}
 	}
 
-	a.fs = filesystem.InitializeFileSystem(a.ph.addProject)
+	a.fs = filesystem.InitializeFileSystem(a.ph.AddProject)
+	a.ph.sendProjects()
 	logs.Info("Login successful")
 	return true, nil
 }
 
-func (a *App) ChangeMountPoint(mount string) string {
+func (a *App) ChangeMountPoint() (string, error) {
+	home, _ := os.UserHomeDir()
+	options := wailsruntime.OpenDialogOptions{DefaultDirectory: home, CanCreateDirectories: true}
+	mount, err := wailsruntime.OpenDirectoryDialog(a.ctx, options)
+	if mount == "" {
+		return a.mountpoint, nil
+	}
+	if err != nil {
+		logs.Error(err)
+		return "", err
+	}
+
 	mount = filepath.Clean(mount)
 	logs.Debugf("Trying to change mount point to %s", mount)
 
 	if err := mountpoint.CheckMountPoint(mount); err != nil {
 		logs.Error(err)
-		return err.Error()
+		return "", err
 	}
 
 	logs.Infof("Data Gateway will be mounted at %s", mount)
 	a.mountpoint = mount
-	return ""
+	return mount, nil
 }
 
 func (a *App) LoadFuse() {
@@ -192,7 +203,7 @@ func (a *App) RefreshFuse() error {
 	logs.Info("Updating Data Gateway")
 	time.Sleep(200 * time.Millisecond)
 
-	newFs := filesystem.InitializeFileSystem(a.ph.addProject)
+	newFs := filesystem.InitializeFileSystem(a.ph.AddProject)
 	newFs.PopulateFilesystem(a.ph.trackContainers)
 	a.fs.RefreshFilesystem(newFs)
 

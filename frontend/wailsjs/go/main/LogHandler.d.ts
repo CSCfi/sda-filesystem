@@ -5,6 +5,6 @@ import {context} from '../models';
 
 export function AddLog(arg1:string,arg2:Array<string>):Promise<void>;
 
-export function SaveLogs(arg1:string,arg2:Array<main.Log>):Promise<void>;
+export function SaveLogs(arg1:Array<main.Log>):Promise<void>;
 
 export function SetContext(arg1:context.Context):Promise<void>;

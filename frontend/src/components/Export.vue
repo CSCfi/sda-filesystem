@@ -7,7 +7,7 @@ const pageIdx = ref(0)
 
 const bucketItems = ref<CAutocompleteItem[]>([])
 
-EventsOn('projectManager', () => {
+EventsOn('setProjectManager', () => {
     pageIdx.value = 1;
 })
 

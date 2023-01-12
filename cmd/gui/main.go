@@ -22,9 +22,9 @@ func main() {
 			Assets: frontend.Assets,
 		},
 		OnStartup: func(ctx context.Context) {
-			app.startup(ctx)
 			logHandler.SetContext(ctx)
 			projectHandler.SetContext(ctx)
+			app.startup(ctx)
 		},
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{
@@ -32,6 +32,9 @@ func main() {
 			logHandler,
 			projectHandler,
 		},
+		MinWidth: 800,
+		Width:    800,
+		Height:   575,
 	})
 
 	if err != nil {

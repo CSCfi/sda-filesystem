@@ -4,6 +4,15 @@ body {
     font-family: Arial, Helvetica, sans-serif;
 }
 
+h2 {
+    margin-top: 0px;
+}
+
+c-steps {
+    font-size: 0.9em;
+    margin-bottom: 20px;
+}
+
 .fill-width {
     width: 100%;
 }

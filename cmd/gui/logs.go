@@ -1,18 +1,23 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"os"
+	"runtime"
+	"strings"
 	"time"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"sda-filesystem/internal/logs"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type Log struct {
-	Level     string `json:"loglevel"`
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
+	Level     string   `json:"loglevel"`
+	Timestamp string   `json:"timestamp"`
+	Message   []string `json:"message"`
 }
 
 type LogHandler struct {
@@ -30,12 +35,18 @@ func (lh *LogHandler) SetContext(ctx context.Context) {
 }
 
 func (lh *LogHandler) AddLog(level string, message []string) {
-	lg := Log{Level: level, Timestamp: time.Now().Format("2006-01-02 15:04:05"), Message: message[0]}
+	lg := Log{Level: level, Timestamp: time.Now().Format("2006-01-02 15:04:05.000000"), Message: message}
 	wailsruntime.EventsEmit(lh.ctx, "newLogEntry", lg)
 }
 
-func (lh *LogHandler) SaveLogs(url string, logs []Log) {
-	/*file := url //core.QDir_ToNativeSeparators(core.NewQUrl3(url, 0).ToLocalFile())
+func (lh *LogHandler) SaveLogs(logsToSave []Log) {
+	home, _ := os.UserHomeDir()
+	options := wailsruntime.SaveDialogOptions{DefaultDirectory: home, DefaultFilename: "gateway.log"}
+	file, err := wailsruntime.SaveFileDialog(lh.ctx, options)
+	if err != nil {
+		logs.Errorf("Could not select file name: %w", err)
+		return
+	}
 
 	f, err := os.Create(file)
 	if err != nil {
@@ -51,11 +62,11 @@ func (lh *LogHandler) SaveLogs(url string, logs []Log) {
 		newline = "\r\n"
 	}
 
-	for i := range lh.logs {
-		lg := lh.logs[i]
-		str := fmt.Sprintf(strings.ToUpper(logrus.Level(lg.level).String())[:4] + "[" +
-			strings.ReplaceAll(lg.timestamp, " ", "T") + "] " +
-			strings.Join(lg.message, ": "))
+	for i := range logsToSave {
+		lg := logsToSave[i]
+		str := fmt.Sprintf(strings.ToUpper(lg.Level))[:4] + "[" +
+			strings.ReplaceAll(strings.Split(lg.Timestamp, ".")[0], " ", "T") + "] " +
+			strings.Join(lg.Message, ": ")
 
 		if _, err = writer.WriteString(str + newline); err != nil {
 			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)
@@ -68,5 +79,5 @@ func (lh *LogHandler) SaveLogs(url string, logs []Log) {
 		logs.Errorf("Could not flush file %s: %w", file, err)
 	}
 
-	logs.Infof("Logs written successfully to file %s", file)*/
+	logs.Infof("Logs written successfully to file %s", file)
 }

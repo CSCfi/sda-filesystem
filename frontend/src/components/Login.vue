@@ -31,21 +31,25 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
                 error401.value = true;
             }
         }).catch(e => {
-            emit('proceed');
             EventsEmit("showToast", "Login error", e as string);
         });
     }
 })
+
+function login() {
+    loading.value = true;
+    error401.value = false;
+}
 </script>
 
 <template>
     <c-container>
-        <form id="login-form" v-on:submit.prevent>
+        <form id="login-form" v-on:submit.prevent v-on:keyup.enter="login">
             <c-login-card-title>Log in to Data Gateway</c-login-card-title>
             <p>Data Gateway gives you secure access to your data.</p>
             <p class="smaller-text">Please log in with your CSC credentials.</p>
-            <c-text-field label="Username" :disabled="props.disabled"></c-text-field>
-            <c-text-field label="Password" type="password" :disabled="props.disabled"></c-text-field>
+            <c-text-field label="Username" :disabled="props.disabled" v-model="username"></c-text-field>
+            <c-text-field label="Password" :disabled="props.disabled" v-model="password" type="password"></c-text-field>
 
             <c-alert type="error" v-if="error401">
                 <div slot="title">Username or password is incorrect</div>
@@ -56,7 +60,7 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
                 size="large" 
                 :loading="loading" 
                 :disabled="props.disabled"
-                @click="loading = true; error401 = false;">
+                @click="login">
                 Login
             </c-button>
         </form>

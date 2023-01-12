@@ -58,6 +58,11 @@ type containerInfo struct {
 	fs            *Fuse
 }
 
+type Project struct {
+	Name       string `json:"name"`
+	Repository string `json:"repository"`
+}
+
 // SetSignalBridge initializes the signal which informs QML that program has paniced
 func SetSignalBridge(fn func()) {
 	signalBridge = fn
@@ -76,7 +81,7 @@ var CheckPanic = func() {
 }
 
 // InitializeFileSystem initializes the in-memory filesystem database
-func InitializeFileSystem(send func(string, string)) *Fuse {
+func InitializeFileSystem(send func(Project)) *Fuse {
 	logs.Info("Initializing in-memory Data Gateway database")
 	timestamp := fuse.Now()
 	fs := Fuse{}
@@ -110,7 +115,7 @@ func InitializeFileSystem(send func(string, string)) *Fuse {
 			_, projectSafe = fs.makeNode(fs.root.chld[enabled], project, projectPath, fuse.S_IFDIR|sRDONLY, timestamp)
 
 			if send != nil {
-				send(enabled, projectSafe)
+				send(Project{Repository: enabled, Name: projectSafe})
 			}
 		}
 	}
