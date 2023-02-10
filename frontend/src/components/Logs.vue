@@ -18,8 +18,7 @@ const logHeaders: CDataTableHeader[] = [
 
 const logData = reactive<main.Log[]>([])
 const logDataTable = reactive<CDataTableData[]>([])
-const logsKey = ref(-1)
-const interval = ref(setInterval(() => addLogsToTable(), 1000))
+const logsKey = ref(0)
 
 const footerOptions: CDataTableFooterOptions = {
     itemsPerPageOptions: [5, 10, 15, 20],
@@ -32,55 +31,42 @@ const paginationOptions: CPaginationOptions = {
     endTo: 4,
 }
 
-onUnmounted(() => {
-    clearInterval(interval.value);
-})
-
 EventsOn('newLogEntry', function(entry: main.Log) {
     logData.push(entry);
+
+    let timestamp: CDataTableDataItem = {
+        "value": entry.timestamp, 
+        "formattedValue": entry.timestamp.split(".")[0],
+    };
+    let level: CDataTableDataItem = {
+        "component": {
+            tag: 'c-status', 
+            params: { type: entry.loglevel },
+        },
+        "value": entry.loglevel.charAt(0).toUpperCase() + entry.loglevel.slice(1)
+    };
+    let message: CDataTableDataItem = {"value": entry.message[0]};
+
+    let logRow: CDataTableData = {'loglevel': level, 'timestamp': timestamp, 'message': message}
+    logDataTable.push(logRow);
 })
-
-function addLogsToTable() {
-    if (logsKey.value === -1) {
-        logsKey.value = 0;
-        return;
-    }
-    if (logsKey.value >= logData.length) {
-        return;
-    }
-
-    let tableData: CDataTableData[] = logData.map((logRow: main.Log) => {
-        //Object.fromEntries(Object.entries(log).map(([k, v]) => [k, {"value": v}]));
-        let timestamp: CDataTableDataItem = {
-            "value": logRow.timestamp, 
-            "formattedValue": logRow.timestamp.split(".")[0],
-        };
-        let level: CDataTableDataItem = {
-            "component": {
-                tag: 'c-status', 
-                params: { type: logRow.loglevel },
-            },
-            "value": logRow.loglevel.charAt(0).toUpperCase() + logRow.loglevel.slice(1)
-        };
-        let message: CDataTableDataItem = {"value": logRow.message[0]};
-        return {'loglevel': level, 'timestamp': timestamp, 'message': message};
-    });
-
-    logDataTable.push(...tableData);
-    logsKey.value += tableData.length;
-}
 </script>
 
 <template>
     <c-container class="fill-width">
-        <c-row justify="space-between" align="center">
+        <c-row id="log-title-row" justify="space-between" align="center">
             <h2 id="log-title">Logs</h2>
-            <c-button text no-radius @click="SaveLogs(logData)">
+            <c-button id="export-button" text no-radius @click="SaveLogs(logData)">
                 <i class="material-icons" slot="icon">logout</i>
                 Export detailed logs
             </c-button>
         </c-row>
+        <c-text-field
+            label="Filter items">
+            <i class="material-icons" slot="pre">filter_list</i>
+        </c-text-field>
         <c-data-table 
+            id="log-table"
             class="gateway-table"
             no-data-text="No logs available" 
             sortBy="timestamp"
@@ -88,13 +74,23 @@ function addLogsToTable() {
             :data.prop="logDataTable" 
             :headers.prop="logHeaders"
             :footerOptions="footerOptions"
-            :pagination="paginationOptions">
+            :pagination="paginationOptions"
+            :hide-footer="logDataTable.length <= 5">
         </c-data-table>
     </c-container>
 </template>
 
 <style>
+#log-title-row {
+    display: block;
+    margin-bottom: 20px;
+}
+
 #log-title {
     margin-bottom: 0px;
+}
+
+#log-table {
+    margin-top: 0px;
 }
 </style>

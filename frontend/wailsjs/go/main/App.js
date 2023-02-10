@@ -41,3 +41,7 @@ export function Panic() {
 export function RefreshFuse() {
   return window['go']['main']['App']['RefreshFuse']();
 }
+
+export function SelectFile() {
+  return window['go']['main']['App']['SelectFile']();
+}

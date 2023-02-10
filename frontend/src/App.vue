@@ -36,6 +36,8 @@ EventsOn('showToast', function(title: string, err: string) {
 
     toasts.value?.addToast(message);
 })
+
+EventsOn('fuseReady', () => (accessed.value = true))
 </script>
 
 <template>
@@ -44,7 +46,7 @@ EventsOn('showToast', function(title: string, err: string) {
             <c-csc-logo></c-csc-logo>
             <h4>Data Gateway</h4>
             <c-spacer></c-spacer>
-            <c-tabs id="tabs" :value="page" borderless @changeValue="(page = ($event.target as HTMLInputElement).value)">
+            <c-tabs id="tabs" v-model="page" borderless v-control>
                 <c-tab value="login" v-if="!loggedIn">Login</c-tab>
                 <c-tab value="access" v-if="loggedIn">Access</c-tab>
                 <c-tab value="export" v-if="loggedIn" :disabled="!accessed">Export</c-tab>

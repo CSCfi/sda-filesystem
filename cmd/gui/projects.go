@@ -52,9 +52,14 @@ func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
 
 	ph.progress[project][0] += count
 	progress := 1.0
-	if ph.progress[project][1] != 0 {
+	if ph.progress[project][1] != 0 && ph.progress[project][0] != ph.progress[project][1] {
 		progress = float64(ph.progress[project][0]) / float64(ph.progress[project][1])
 	}
 	wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", count, 0)
 	wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project, progress)
+}
+
+func (ph *ProjectHandler) deleteProjects() {
+	ph.projects = []filesystem.Project{}
+	ph.progress = make(map[filesystem.Project][]int)
 }

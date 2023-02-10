@@ -63,7 +63,7 @@ func (r *mockRepository) validateLogin(...string) error {
 }
 
 func TestMain(m *testing.M) {
-	logs.SetSignal(func(i int, s []string) {})
+	logs.SetSignal(func(string, []string) {})
 	os.Exit(m.Run())
 }
 

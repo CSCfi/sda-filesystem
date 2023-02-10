@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -64,7 +63,7 @@ func (lh *LogHandler) SaveLogs(logsToSave []Log) {
 
 	for i := range logsToSave {
 		lg := logsToSave[i]
-		str := fmt.Sprintf(strings.ToUpper(lg.Level))[:4] + "[" +
+		str := strings.ToUpper(lg.Level)[:4] + "[" +
 			strings.ReplaceAll(strings.Split(lg.Timestamp, ".")[0], " ", "T") + "] " +
 			strings.Join(lg.Message, ": ")
 

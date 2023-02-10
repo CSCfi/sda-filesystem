@@ -20,3 +20,5 @@ export function OpenFuse():Promise<void>;
 export function Panic():Promise<void>;
 
 export function RefreshFuse():Promise<void>;
+
+export function SelectFile():Promise<string>;

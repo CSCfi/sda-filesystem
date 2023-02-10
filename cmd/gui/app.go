@@ -198,11 +198,12 @@ func (a *App) OpenFuse() {
 
 func (a *App) RefreshFuse() error {
 	if a.fs.FilesOpen(a.mountpoint) {
-		return fmt.Errorf("You have files in use and thus updating is not possible")
+		return fmt.Errorf("You have files in use which prevents updating Data Gateway")
 	}
 	logs.Info("Updating Data Gateway")
 	time.Sleep(200 * time.Millisecond)
 
+	a.ph.deleteProjects()
 	newFs := filesystem.InitializeFileSystem(a.ph.AddProject)
 	newFs.PopulateFilesystem(a.ph.trackContainers)
 	a.fs.RefreshFilesystem(newFs)
@@ -212,6 +213,18 @@ func (a *App) RefreshFuse() error {
 	wailsruntime.EventsEmit(a.ctx, "fuseReady")
 
 	return nil
+}
+
+func (a *App) SelectFile() (string, error) {
+	home, _ := os.UserHomeDir()
+	options := wailsruntime.OpenDialogOptions{DefaultDirectory: home}
+	file, err := wailsruntime.OpenFileDialog(a.ctx, options)
+	if err != nil {
+		logs.Error(err)
+		return "", err
+	}
+
+	return file, nil
 }
 
 func (a *App) CheckEncryption(file, bucket string) (string, string, bool) {

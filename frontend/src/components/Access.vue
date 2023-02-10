@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import { reactive, ref, onMounted, computed } from 'vue'
-import { GetDefaultMountPoint, LoadFuse, ChangeMountPoint } from '../../wailsjs/go/main/App'
+import { GetDefaultMountPoint, LoadFuse, OpenFuse, RefreshFuse, ChangeMountPoint } from '../../wailsjs/go/main/App'
 import { CDataTableHeader, CDataTableData, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
 import { EventsEmit, EventsOn } from '../../wailsjs/runtime'
 import { filesystem } from "../../wailsjs/go/models";
 
+const updating = ref(false)
 const pageIdx = ref(1)
 const mountpoint = ref("")
 const allContainers = ref(0)
@@ -49,6 +50,7 @@ EventsOn('sendProjects', function(projects: filesystem.Project[]) {
         item['progress'] = {"value": 0};
         return item;
     });
+    projectData.length = 0;
     projectData.push(...tableData);
     projectKey.value++;
 })
@@ -62,9 +64,14 @@ EventsOn('updateGlobalProgress', function(nom: number, denom: number) {
 
 EventsOn('updateProjectProgress', function(project: filesystem.Project, progress: number) {
     let idx: number = projectData.findIndex(row => row['name'].value === project.name && row['repository'].value === project.repository);
-    projectData[idx]['progress'].value = Math.floor(progress * 100);
-    projectKey.value++;
+    let progressPercent = Math.floor(progress * 100);
+    if (progressPercent > projectData[idx]['progress'].value) {
+        projectData[idx]['progress'].value = Math.floor(progress * 100);
+        projectKey.value++;
+    }
 })
+
+EventsOn('fuseReady', () => {pageIdx.value = 4; updating.value = false;})
 
 onMounted(() => {
     GetDefaultMountPoint().then((dir: string) => {
@@ -78,6 +85,21 @@ function changeMountPoint() {
     }).catch(e => {
         EventsEmit("showToast", "Could not change directory", e as string);
     });
+}
+
+function refresh() {
+    updating.value = true;
+    allContainers.value = 0;
+    loadedContainers.value = 0;
+
+    projectData.forEach((project) => {
+        project['progress'].value = 0;
+    });
+    projectKey.value = 0;
+
+    RefreshFuse().catch(e => {
+        EventsEmit("showToast", "Refresh not possible", e as string);
+    })
 }
 </script>
 
@@ -105,8 +127,15 @@ function changeMountPoint() {
             </c-button>
         </c-flex>
         <c-flex v-else>
-            <h2>Preparing access</h2>
-            <p class="smaller-text">Please wait, this might take a few minutes.</p>
+            <h2>{{ pageIdx == 2 ? "Preparing access" : "Access ready"}}</h2>
+            <c-flex v-if="pageIdx > 2">
+                <p>If you update the contents of projects, please refresh access.</p>
+                <c-row gap="20px" justify="end">
+                    <c-button @click="refresh" outlined :disabled="updating">Refresh access</c-button>
+                    <c-button @click="OpenFuse" :disabled="updating">Open folder</c-button>
+                </c-row>
+            </c-flex>
+            <p class="smaller-text">{{ pageIdx == 2 ? "Please wait, this might take a few minutes." : "Data Gateway is ready to be used."}}</p>
             <c-progress-bar label="complete" :value=globalProgress></c-progress-bar>
             <c-data-table 
                 class="gateway-table"
@@ -115,7 +144,8 @@ function changeMountPoint() {
                 :key="projectKey" 
                 :footerOptions="footerOptions"
                 :pagination="paginationOptions"
-            ></c-data-table>
+                :hide-footer="projectData.length <= 5">
+            </c-data-table>
         </c-flex>
     </c-container>
 </template>

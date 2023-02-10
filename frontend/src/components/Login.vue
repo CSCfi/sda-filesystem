@@ -31,6 +31,7 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
                 error401.value = true;
             }
         }).catch(e => {
+            loading.value = false;
             EventsEmit("showToast", "Login error", e as string);
         });
     }
