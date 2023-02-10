@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mdi/js": "^7.1.96",
     "csc-ui": "^0.6.4",
     "csc-ui-vue-directive": "^0.0.6",
     "vue": "^3.2.37"

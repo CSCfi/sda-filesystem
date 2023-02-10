@@ -227,19 +227,21 @@ func (a *App) SelectFile() (string, error) {
 	return file, nil
 }
 
-func (a *App) CheckEncryption(file, bucket string) (string, string, bool) {
+func (a *App) CheckEncryption(file, bucket string) (bool, error) {
 	if encrypted, err := airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
-		return "", "", false
+		return false, err
 	} else {
 		chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
 		if encrypted {
 			exists := slices.Contains(chld, filepath.Base(file))
-			return "", file, exists
+			wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", "", file)
+			return exists, nil
 		} else {
 			fileEncrypted := file + ".c4gh"
 			exists := slices.Contains(chld, filepath.Base(fileEncrypted))
-			return file, fileEncrypted, exists
+			wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", file, fileEncrypted)
+			return exists, nil
 		}
 	}
 }

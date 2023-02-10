@@ -3,7 +3,7 @@ import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
 import { EventsOn } from '../../wailsjs/runtime'
 import { main } from "../../wailsjs/go/models";
 import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
-import { reactive, ref, onUnmounted } from 'vue';
+import { reactive, ref, computed } from 'vue';
 
 const logHeaders: CDataTableHeader[] = [
     { key: 'loglevel', value: 'Level', sortable: false, width: "120px" },
@@ -18,7 +18,15 @@ const logHeaders: CDataTableHeader[] = [
 
 const logData = reactive<main.Log[]>([])
 const logDataTable = reactive<CDataTableData[]>([])
+const logDataTableFiltered = computed(() => logDataTable.filter(row => {
+    let matchedLevel: boolean = containsFilterString(row['loglevel'].value as string);
+    let matchedStamp: boolean = containsFilterString(row['timestamp'].formattedValue as string);
+    let matchedMessage: boolean = containsFilterString(row['message'].value as string);
+    return matchedLevel || matchedStamp || matchedMessage;
+}))
+
 const logsKey = ref(0)
+const filterStr = ref("") 
 
 const footerOptions: CDataTableFooterOptions = {
     itemsPerPageOptions: [5, 10, 15, 20],
@@ -50,6 +58,10 @@ EventsOn('newLogEntry', function(entry: main.Log) {
     let logRow: CDataTableData = {'loglevel': level, 'timestamp': timestamp, 'message': message}
     logDataTable.push(logRow);
 })
+
+function containsFilterString(str: string): boolean {
+    return str.toLowerCase().includes(filterStr.value.toLowerCase());
+}
 </script>
 
 <template>
@@ -61,8 +73,7 @@ EventsOn('newLogEntry', function(entry: main.Log) {
                 Export detailed logs
             </c-button>
         </c-row>
-        <c-text-field
-            label="Filter items">
+        <c-text-field label="Filter items" v-model="filterStr">
             <i class="material-icons" slot="pre">filter_list</i>
         </c-text-field>
         <c-data-table 
@@ -71,10 +82,10 @@ EventsOn('newLogEntry', function(entry: main.Log) {
             no-data-text="No logs available" 
             sortBy="timestamp"
             :key="logsKey" 
-            :data.prop="logDataTable" 
+            :data.prop="logDataTableFiltered" 
             :headers.prop="logHeaders"
-            :footerOptions="footerOptions"
-            :pagination="paginationOptions"
+            :footerOptions.prop="footerOptions"
+            :pagination.prop="paginationOptions"
             :hide-footer="logDataTable.length <= 5">
         </c-data-table>
     </c-container>

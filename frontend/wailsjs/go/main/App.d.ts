@@ -3,7 +3,7 @@
 
 export function ChangeMountPoint():Promise<string>;
 
-export function CheckEncryption(arg1:string,arg2:string):Promise<string>;
+export function CheckEncryption(arg1:string,arg2:string):Promise<boolean>;
 
 export function ExportFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
