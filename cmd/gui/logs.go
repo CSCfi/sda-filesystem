@@ -30,6 +30,7 @@ func NewLogHandler() *LogHandler {
 
 func (lh *LogHandler) SetContext(ctx context.Context) {
 	lh.ctx = ctx
+	logs.SetLevel("info")
 	logs.SetSignal(lh.AddLog)
 }
 
@@ -44,12 +45,14 @@ func (lh *LogHandler) SaveLogs(logsToSave []Log) {
 	file, err := wailsruntime.SaveFileDialog(lh.ctx, options)
 	if err != nil {
 		logs.Errorf("Could not select file name: %w", err)
+
 		return
 	}
 
 	f, err := os.Create(file)
 	if err != nil {
 		logs.Errorf("Could not create file %s: %w", file, err)
+
 		return
 	}
 	defer f.Close()
@@ -69,6 +72,7 @@ func (lh *LogHandler) SaveLogs(logsToSave []Log) {
 
 		if _, err = writer.WriteString(str + newline); err != nil {
 			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)
+
 			return
 		}
 	}

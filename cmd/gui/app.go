@@ -54,6 +54,7 @@ func (a *App) GetDefaultMountPoint() string {
 	if err != nil {
 		logs.Warning(err)
 	}
+
 	return a.mountpoint
 }
 
@@ -61,18 +62,21 @@ func (a *App) InitializeAPI() error {
 	err := api.GetCommonEnvs()
 	if err != nil {
 		logs.Error(err)
+
 		return fmt.Errorf("Required environmental variables missing")
 	}
 
 	err = api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
+
 		return fmt.Errorf("Initializing cache failed")
 	}
 
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Error(err)
+
 		return fmt.Errorf("Initializing HTTP client failed")
 	}
 
@@ -101,18 +105,20 @@ func (a *App) Login(username, password string) (bool, error) {
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			return false, nil
-		} else {
-			message, _ := logs.Wrapper(err)
-			return false, fmt.Errorf(message)
 		}
+
+		message, _ := logs.Wrapper(err)
+
+		return false, fmt.Errorf(message)
 	}
 
 	isManager, err := airlock.IsProjectManager()
-	if err != nil {
+	switch {
+	case err != nil:
 		logs.Errorf("Resolving project manager status failed: %w", err)
-	} else if !isManager {
+	case !isManager:
 		logs.Info("You are not the project manager")
-	} else {
+	default:
 		logs.Info("You are the project manager")
 		if err = airlock.GetPublicKey(); err != nil {
 			logs.Error(err)
@@ -124,6 +130,7 @@ func (a *App) Login(username, password string) (bool, error) {
 	a.fs = filesystem.InitializeFileSystem(a.ph.AddProject)
 	a.ph.sendProjects()
 	logs.Info("Login successful")
+
 	return true, nil
 }
 
@@ -136,6 +143,7 @@ func (a *App) ChangeMountPoint() (string, error) {
 	}
 	if err != nil {
 		logs.Error(err)
+
 		return "", err
 	}
 
@@ -144,11 +152,13 @@ func (a *App) ChangeMountPoint() (string, error) {
 
 	if err := mountpoint.CheckMountPoint(mount); err != nil {
 		logs.Error(err)
+
 		return "", err
 	}
 
 	logs.Infof("Data Gateway will be mounted at %s", mount)
 	a.mountpoint = mount
+
 	return mount, nil
 }
 
@@ -176,6 +186,7 @@ func (a *App) OpenFuse() {
 	_, err := os.Stat(userPath)
 	if err != nil {
 		logs.Errorf("Failed to find directory %s: %w", userPath, err)
+
 		return
 	}
 
@@ -188,6 +199,7 @@ func (a *App) OpenFuse() {
 		cmd = exec.Command("cmd", "/C", "start", userPath)
 	default:
 		logs.Errorf("Unrecognized OS")
+
 		return
 	}
 
@@ -221,6 +233,7 @@ func (a *App) SelectFile() (string, error) {
 	file, err := wailsruntime.OpenFileDialog(a.ctx, options)
 	if err != nil {
 		logs.Error(err)
+
 		return "", err
 	}
 
@@ -228,22 +241,27 @@ func (a *App) SelectFile() (string, error) {
 }
 
 func (a *App) CheckEncryption(file, bucket string) (bool, error) {
-	if encrypted, err := airlock.CheckEncryption(file); err != nil {
+	var encrypted bool
+	var err error
+	if encrypted, err = airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
+
 		return false, err
-	} else {
-		chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
-		if encrypted {
-			exists := slices.Contains(chld, filepath.Base(file))
-			wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", "", file)
-			return exists, nil
-		} else {
-			fileEncrypted := file + ".c4gh"
-			exists := slices.Contains(chld, filepath.Base(fileEncrypted))
-			wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", file, fileEncrypted)
-			return exists, nil
-		}
 	}
+
+	chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
+	if encrypted {
+		exists := slices.Contains(chld, filepath.Base(file))
+		wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", "", file)
+
+		return exists, nil
+	}
+
+	fileEncrypted := file + ".c4gh"
+	exists := slices.Contains(chld, filepath.Base(fileEncrypted))
+	wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", file, fileEncrypted)
+
+	return exists, nil
 }
 
 func (a *App) ExportFile(folder, origFile, file string) string {
@@ -251,7 +269,9 @@ func (a *App) ExportFile(folder, origFile, file string) string {
 	err := airlock.Upload(origFile, file, folder, "", 4000, origFile != "")
 	if err != nil {
 		logs.Error(err)
+
 		return fmt.Sprintf("Exporting file %s failed", file)
 	}
+
 	return ""
 }

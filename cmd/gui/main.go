@@ -32,9 +32,10 @@ func main() {
 			logHandler,
 			projectHandler,
 		},
-		MinWidth: 800,
-		Width:    800,
-		Height:   575,
+		MinWidth:          800,
+		Width:             800,
+		Height:            575,
+		HideWindowOnClose: true,
 	})
 
 	if err != nil {

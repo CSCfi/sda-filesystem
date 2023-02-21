@@ -13,30 +13,10 @@ elif ! [ "$(go version | awk 'NR==1{print $3}')" == "${GO_VERSION}" ]; then
     echo "continuing for now ..."
 fi
 
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+export PATH=$GOPATH/bin:$PATH
+wails doctor
 
-# download as general package
-# otherwise it will not work
-export GO111MODULE=off
-
-go get github.com/therecipe/qt/cmd/... 
-
-export GO111MODULE=on
-
-# dependencies not easily installed
-go get github.com/therecipe/qt/internal/binding/files/docs/5.13.0
-go get github.com/therecipe/qt/internal/cmd/moc@v0.0.0-20200904063919-c0c124a5770d
-
-go install -v -tags=no_env github.com/therecipe/qt/cmd/...
-
-# rebuild vendor
-go mod vendor
-[ -d "vendor/github.com/therecipe/env_linux_amd64_513" ] && rm -rf vendor/github.com/therecipe/env_linux_amd64_513
-
-git clone https://github.com/therecipe/env_linux_amd64_513.git vendor/github.com/therecipe/env_linux_amd64_513
-
-# actually do the setup so that a binary can be built
-"$(go env GOPATH)"/bin/qtsetup
-
-echo "Now qtdeploy can be used."
-echo "If the command is not found refresh your bash/zsh shell, or start a new terminal."
+echo "If the wails command is not found, refresh your bash/zsh shell, or start a new terminal."
+echo "Check also that $GOPATH/bin is in PATH."
 echo "===> Done. "

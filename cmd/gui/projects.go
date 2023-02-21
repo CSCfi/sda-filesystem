@@ -34,6 +34,7 @@ func (ph *ProjectHandler) sendProjects() {
 func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
 	if rep == "" {
 		wailsruntime.EventsEmit(ph.ctx, "showProgress")
+
 		return
 	}
 
@@ -43,10 +44,12 @@ func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
 
 		if count == 0 {
 			wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", 1, -1)
+
 			return
 		}
 
 		wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", 0, -count)
+
 		return
 	}
 

@@ -30,7 +30,7 @@ const exportHeaders: CDataTableHeader[] = [
 
 const exportData = ref<CDataTableData[]>([])
 const bucketItems = ref<CAutocompleteItem[]>([])
-const pageIdx = ref(1)
+const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
 const file = ref("")

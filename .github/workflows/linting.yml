@@ -24,20 +24,16 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
-
-      - name: Install GUI dependencies
-        if: steps.cache-vendor.outputs.cache-hit != 'true'
-        run: |
-          bash ./dev_utils/setup-linux.sh
+          sudo apt-get install build-essential libgtk-3-dev libwebkit2gtk-4.0-dev npm pkg-config libfuse-dev -y
   
-      - name: Build desktop
+      - name: Build assets
         run: |
-          qtdeploy build desktop cmd/qt/
+          npm install --prefix frontend
+          npm run build --prefix frontend
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v3.3.1
         with:
           version: v1.50
-          args: -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --skip-files cmd/qt/moc.go,cmd/qt/main.go,cmd/qt/logmodel.go,cmd/qt/projectmodel.go  --timeout=10m
+          args: -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --timeout=10m
           skip-pkg-cache: true

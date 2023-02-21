@@ -65,7 +65,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
+          sudo apt-get install build-essential libfuse-dev -y
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
@@ -125,7 +125,6 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           choco install zip
-          choco install WinFsp
       - name: Build Airlock CLI artifact Windows
         if: matrix.os == 'windows-latest'
         run: |
@@ -181,82 +180,46 @@ jobs:
         if: matrix.os == 'macOS-latest'
         run: |
           brew install --cask osxfuse
+          brew install node@18
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install mesa-common-dev libpulse-mainloop-glib0 libpulse0 libfuse-dev -y
-      - name: Install Linux GUI dependencies
-        if: (matrix.os == 'ubuntu-latest')
-        run: |
-          bash ./dev_utils/setup-linux.sh
-
-      - name: Install macOS GUI dependencies
-        if: (matrix.os == 'macOS-latest')
-        run: |
-          export GO111MODULE=off
-          go get github.com/therecipe/qt/cmd/... 
-          export GO111MODULE=on
-
-          go get github.com/therecipe/qt/internal/binding/files/docs/5.13.0
-          go get github.com/therecipe/qt/internal/cmd/moc@v0.0.0-20200904063919-c0c124a5770d
-
-          go install -v -tags=no_env github.com/therecipe/qt/cmd/...
-          go mod vendor
-          git clone https://github.com/therecipe/env_darwin_amd64_513.git vendor/github.com/therecipe/env_darwin_amd64_513
-          
-          $(go env GOPATH)/bin/qtsetup
-
+          sudo apt-get install build-essential libgtk-3-dev libwebkit2gtk-4.0-dev npm pkg-config libfuse-dev -y          
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
           choco install zip
+          choco install nodejs-lts
+          choco install webview2-runtime
           choco install WinFsp
-
-          set GO111MODULE=off
-          go get -v github.com/therecipe/qt/cmd/... 
-          set GO111MODULE=on
-
-          go install -v -tags=no_env github.com/therecipe/qt/cmd/... 
-          go mod vendor
-          git clone https://github.com/therecipe/env_windows_amd64_513.git vendor/github.com/therecipe/env_windows_amd64_513
-
-          C:\Users\runneradmin\go\bin\qtsetup.exe
+      - name: Install GUI dependencies
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          npm install --prefix frontend
+          npm run build --prefix frontend
 
         shell: cmd
       - name: Build GUI artifact Windows
         if: matrix.os == 'windows-latest'
         run: |
           set CPATH=C:\Program Files (x86)\WinFsp\inc\fuse
-          C:\Users\runneradmin\go\bin\qtdeploy.exe build desktop cmd/qt/main.go
+          cd cmd/gui
+          wails build -clean
         shell: cmd
       - name: Build GUI artifact
         if: matrix.os != 'windows-latest'
         run: |
-          qtdeploy build desktop cmd/qt/main.go
-      - name: Archive GUI Asset Linux
-        if: matrix.os == 'ubuntu-latest'
+          cd cmd/gui
+          wails build -clean
+      - name: Archive GUI Asset
         run: |
-          cp vendor/github.com/therecipe/env_linux_amd64_513/5.13.0/gcc_64/lib/libQt5QuickShapes.* cmd/qt/deploy/linux/lib/
-          cd cmd/qt/deploy/linux
-          mv qt_project sda-fuse
-          zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
-      - name: Archive GUI Asset macOS
-        if: matrix.os == 'macOS-latest'
-        run: |
-          cd cmd/qt/deploy/darwin
-          mv qt_project.app/Contents/MacOS/qt_project qt_project.app/Contents/MacOS/sda-fuse
-          zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
-      - name: Archive GUI Asset Windows
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd cmd/qt/deploy/windows
-          ren qt_project.exe sda-fuse.exe
+          cd build/bin
           zip -r ${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip .
       - name: Upload Release Asset
         id: upload-release-asset 
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ./cmd/qt/deploy/${{ matrix.os_folder }}/${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
+          files: ./build/bin/${{ matrix.os_folder }}/${{ matrix.asset_name }}-golang${{ matrix.golang-version }}-${{ matrix.os_suffix }}.zip
           fail_on_unmatched_files: true
