@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"sda-filesystem/build"
 	"sda-filesystem/frontend"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 )
 
 func main() {
@@ -36,6 +38,9 @@ func main() {
 		Width:             800,
 		Height:            575,
 		HideWindowOnClose: true,
+		Linux: &linux.Options{
+			Icon: build.Icon,
+		},
 	})
 
 	if err != nil {
