@@ -14,13 +14,14 @@ import (
 )
 
 type Log struct {
-	Level     string   `json:"loglevel"`
-	Timestamp string   `json:"timestamp"`
-	Message   []string `json:"message"`
+	level     string
+	timestamp string
+	message   []string
 }
 
 type LogHandler struct {
-	ctx context.Context
+	ctx  context.Context
+	logs []Log
 }
 
 // NewApp creates a new App application struct
@@ -35,11 +36,12 @@ func (lh *LogHandler) SetContext(ctx context.Context) {
 }
 
 func (lh *LogHandler) AddLog(level string, message []string) {
-	lg := Log{Level: level, Timestamp: time.Now().Format("2006-01-02 15:04:05.000000"), Message: message}
-	wailsruntime.EventsEmit(lh.ctx, "newLogEntry", lg)
+	lg := Log{level: level, timestamp: time.Now().Format("2006-01-02 15:04:05.000000"), message: message}
+	lh.logs = append(lh.logs, lg)
+	wailsruntime.EventsEmit(lh.ctx, "newLogEntry", lg.level, lg.timestamp, lg.message)
 }
 
-func (lh *LogHandler) SaveLogs(logsToSave []Log) {
+func (lh *LogHandler) SaveLogs() {
 	home, _ := os.UserHomeDir()
 	options := wailsruntime.SaveDialogOptions{DefaultDirectory: home, DefaultFilename: "gateway.log"}
 	file, err := wailsruntime.SaveFileDialog(lh.ctx, options)
@@ -64,11 +66,11 @@ func (lh *LogHandler) SaveLogs(logsToSave []Log) {
 		newline = "\r\n"
 	}
 
-	for i := range logsToSave {
-		lg := logsToSave[i]
-		str := strings.ToUpper(lg.Level)[:4] + "[" +
-			strings.ReplaceAll(strings.Split(lg.Timestamp, ".")[0], " ", "T") + "] " +
-			strings.Join(lg.Message, ": ")
+	for i := range lh.logs {
+		lg := lh.logs[i]
+		str := strings.ToUpper(lg.level)[:4] + "[" +
+			strings.ReplaceAll(strings.Split(lg.timestamp, ".")[0], " ", "T") + "] " +
+			strings.Join(lg.message, ": ")
 
 		if _, err = writer.WriteString(str + newline); err != nil {
 			logs.Errorf("Something went wrong when writing to file %s: %w", file, err)

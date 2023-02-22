@@ -6,8 +6,8 @@ export function AddLog(arg1, arg2) {
   return window['go']['main']['LogHandler']['AddLog'](arg1, arg2);
 }
 
-export function SaveLogs(arg1) {
-  return window['go']['main']['LogHandler']['SaveLogs'](arg1);
+export function SaveLogs() {
+  return window['go']['main']['LogHandler']['SaveLogs']();
 }
 
 export function SetContext(arg1) {

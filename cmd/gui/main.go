@@ -11,9 +11,9 @@ import (
 
 func main() {
 	// Create an instance of the app structure
-	logHandler := NewLogHandler()
 	projectHandler := NewProjectHandler()
-	app := NewApp(projectHandler)
+	logHandler := NewLogHandler()
+	app := NewApp(projectHandler, logHandler)
 
 	// Create application with options
 	err := wails.Run(&options.App{

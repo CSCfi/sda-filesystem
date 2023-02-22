@@ -50,7 +50,7 @@ EventsOn('setBuckets', (buckets: string[]) => {
     }))
 })
 
-EventsOn('setExportedFilenames', (f1: string, f2: string) => { 
+EventsOn('setExportFilenames', (f1: string, f2: string) => { 
     file.value = f1;
     fileEncrypted.value = f2;
     let exportRow: CDataTableData = {'name': {'value': f2.split('/').reverse()[0]}, 

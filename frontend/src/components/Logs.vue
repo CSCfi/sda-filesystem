@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
 import { EventsOn } from '../../wailsjs/runtime'
-import { main } from "../../wailsjs/go/models";
 import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
 import { reactive, ref, computed } from 'vue';
 
@@ -16,7 +15,6 @@ const logHeaders: CDataTableHeader[] = [
     { key: 'message', value: 'Message', sortable: false },
 ]
 
-const logData = reactive<main.Log[]>([])
 const logDataTable = reactive<CDataTableData[]>([])
 const logDataTableFiltered = computed(() => logDataTable.filter(row => {
     let matchedLevel: boolean = containsFilterString(row['loglevel'].value as string);
@@ -39,21 +37,19 @@ const paginationOptions: CPaginationOptions = {
     endTo: 4,
 }
 
-EventsOn('newLogEntry', function(entry: main.Log) {
-    logData.push(entry);
-
+EventsOn('newLogEntry', function(lvl: string, tsmp: string, ms: string) {
     let timestamp: CDataTableDataItem = {
-        "value": entry.timestamp, 
-        "formattedValue": entry.timestamp.split(".")[0],
+        "value": tsmp, 
+        "formattedValue": tsmp.split(".")[0],
     };
     let level: CDataTableDataItem = {
         "component": {
             tag: 'c-status', 
-            params: { type: entry.loglevel },
+            params: { type: lvl },
         },
-        "value": entry.loglevel.charAt(0).toUpperCase() + entry.loglevel.slice(1)
+        "value": lvl.charAt(0).toUpperCase() + lvl.slice(1)
     };
-    let message: CDataTableDataItem = {"value": entry.message[0]};
+    let message: CDataTableDataItem = {"value": ms[0]};
 
     let logRow: CDataTableData = {'loglevel': level, 'timestamp': timestamp, 'message': message}
     logDataTable.push(logRow);
@@ -68,7 +64,7 @@ function containsFilterString(str: string): boolean {
     <c-container class="fill-width">
         <c-row id="log-title-row" justify="space-between" align="center">
             <h2 id="log-title">Logs</h2>
-            <c-button id="export-button" text no-radius @click="SaveLogs(logData)">
+            <c-button id="export-button" text no-radius @click="SaveLogs()">
                 <i class="material-icons" slot="icon">logout</i>
                 Export detailed logs
             </c-button>

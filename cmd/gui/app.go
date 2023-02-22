@@ -24,13 +24,15 @@ import (
 type App struct {
 	ctx        context.Context
 	ph         *ProjectHandler
+	lh         *LogHandler
 	fs         *filesystem.Fuse
 	mountpoint string
+	paniced    bool
 }
 
 // NewApp creates a new App application struct
-func NewApp(ph *ProjectHandler) *App {
-	return &App{ph: ph}
+func NewApp(ph *ProjectHandler, lh *LogHandler) *App {
+	return &App{ph: ph, lh: lh}
 }
 
 // startup is called when the app starts. The context is saved
@@ -45,7 +47,26 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 func (a *App) Panic() {
+	if a.paniced {
+		return
+	}
+	a.paniced = true
 
+	quitButton := "Save logs and quit"
+	options := wailsruntime.MessageDialogOptions{
+		Type:          wailsruntime.ErrorDialog,
+		Buttons:       []string{quitButton, "Ignore"},
+		DefaultButton: quitButton,
+		Title:         "Data Gateway failed to load correctly",
+		Message:       "Save logs to find out why this happened and quit the application or continue at your own peril...",
+	}
+	result, err := wailsruntime.MessageDialog(a.ctx, options)
+	if err != nil {
+		logs.Error(fmt.Errorf("Dialog gave an error, could not respond to user decision: %w", err))
+	} else if result == quitButton {
+		a.lh.SaveLogs()
+		wailsruntime.Quit(a.ctx)
+	}
 }
 
 func (a *App) GetDefaultMountPoint() string {
@@ -106,7 +127,6 @@ func (a *App) Login(username, password string) (bool, error) {
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			return false, nil
 		}
-
 		message, _ := logs.Wrapper(err)
 
 		return false, fmt.Errorf(message)
@@ -240,38 +260,35 @@ func (a *App) SelectFile() (string, error) {
 	return file, nil
 }
 
-func (a *App) CheckEncryption(file, bucket string) (bool, error) {
+func (a *App) CheckEncryption(file, bucket string) (exists bool, err error) {
 	var encrypted bool
-	var err error
 	if encrypted, err = airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
 
-		return false, err
+		return
 	}
 
 	chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
 	if encrypted {
-		exists := slices.Contains(chld, filepath.Base(file))
-		wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", "", file)
-
-		return exists, nil
+		exists = slices.Contains(chld, filepath.Base(file))
+		wailsruntime.EventsEmit(a.ctx, "setExportFilenames", "", file)
+	} else {
+		fileEncrypted := file + ".c4gh"
+		exists = slices.Contains(chld, filepath.Base(fileEncrypted))
+		wailsruntime.EventsEmit(a.ctx, "setExportFilenames", file, fileEncrypted)
 	}
 
-	fileEncrypted := file + ".c4gh"
-	exists := slices.Contains(chld, filepath.Base(fileEncrypted))
-	wailsruntime.EventsEmit(a.ctx, "setExportedFilenames", file, fileEncrypted)
-
-	return exists, nil
+	return
 }
 
-func (a *App) ExportFile(folder, origFile, file string) string {
+func (a *App) ExportFile(folder, origFile, file string) error {
 	time.Sleep(1000 * time.Millisecond)
 	err := airlock.Upload(origFile, file, folder, "", 4000, origFile != "")
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Sprintf("Exporting file %s failed", file)
+		return fmt.Errorf("Exporting file %s failed", file)
 	}
 
-	return ""
+	return nil
 }
