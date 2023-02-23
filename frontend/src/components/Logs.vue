@@ -5,18 +5,14 @@ import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterO
 import { reactive, ref, computed } from 'vue';
 
 const logHeaders: CDataTableHeader[] = [
-    { key: 'loglevel', value: 'Level', sortable: false, width: "120px" },
-    { 
-        key: 'timestamp', 
-        value: 'Date and Time', 
-        sortable: false,
-        width: "200px",
-    },
+    { key: 'loglevel', value: 'Level', sortable: false },
+    { key: 'timestamp', value: 'Date and Time', sortable: false },
     { key: 'message', value: 'Message', sortable: false },
 ]
 
 const logDataTable = reactive<CDataTableData[]>([])
 const logDataTableFiltered = computed(() => logDataTable.filter(row => {
+    logsKey.value++;
     let matchedLevel: boolean = containsFilterString(row['loglevel'].value as string);
     let matchedStamp: boolean = containsFilterString(row['timestamp'].formattedValue as string);
     let matchedMessage: boolean = containsFilterString(row['message'].value as string);
@@ -49,7 +45,7 @@ EventsOn('newLogEntry', function(lvl: string, tsmp: string, ms: string) {
         },
         "value": lvl.charAt(0).toUpperCase() + lvl.slice(1)
     };
-    let message: CDataTableDataItem = {"value": ms[0]};
+    let message: CDataTableDataItem = {"value": ms};
 
     let logRow: CDataTableData = {'loglevel': level, 'timestamp': timestamp, 'message': message}
     logDataTable.push(logRow);
@@ -64,7 +60,7 @@ function containsFilterString(str: string): boolean {
     <c-container class="fill-width">
         <c-row id="log-title-row" justify="space-between" align="center">
             <h2 id="log-title">Logs</h2>
-            <c-button id="export-button" text no-radius @click="SaveLogs()">
+            <c-button id="export-button" text no-radius @click="SaveLogs">
                 <i class="material-icons" slot="icon">logout</i>
                 Export detailed logs
             </c-button>

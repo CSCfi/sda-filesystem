@@ -14,7 +14,7 @@ const globalProgress = computed(() => (allContainers.value <= 0 ? 0 : Math.floor
 
 const projectHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name' },
-    { key: 'repository', value: 'Location', width: "100px" },
+    { key: 'repository', value: 'Location' },
     { 
         key: 'progress', 
         value: 'Progress', 
@@ -64,14 +64,13 @@ EventsOn('updateGlobalProgress', function(nom: number, denom: number) {
 
 EventsOn('updateProjectProgress', function(project: filesystem.Project, progress: number) {
     let idx: number = projectData.findIndex(row => row['name'].value === project.name && row['repository'].value === project.repository);
-    let progressPercent = Math.floor(progress * 100);
-    if (progressPercent > projectData[idx]['progress'].value) {
-        projectData[idx]['progress'].value = Math.floor(progress * 100);
+    if (progress > projectData[idx]['progress'].value) {
+        projectData[idx]['progress'].value = progress;
         projectKey.value++;
     }
 })
 
-EventsOn('fuseReady', () => {pageIdx.value = 4; updating.value = false;})
+EventsOn('fuseReady', () => {pageIdx.value = 4; updating.value = false})
 
 onMounted(() => {
     GetDefaultMountPoint().then((dir: string) => {

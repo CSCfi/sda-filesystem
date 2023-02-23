@@ -37,7 +37,7 @@ func main() {
 		MinWidth:          800,
 		Width:             800,
 		Height:            575,
-		HideWindowOnClose: true,
+		HideWindowOnClose: app.initialized,
 		Linux: &linux.Options{
 			Icon: build.Icon,
 		},

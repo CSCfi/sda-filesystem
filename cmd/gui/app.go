@@ -22,12 +22,13 @@ import (
 
 // App struct
 type App struct {
-	ctx        context.Context
-	ph         *ProjectHandler
-	lh         *LogHandler
-	fs         *filesystem.Fuse
-	mountpoint string
-	paniced    bool
+	ctx         context.Context
+	ph          *ProjectHandler
+	lh          *LogHandler
+	fs          *filesystem.Fuse
+	mountpoint  string
+	paniced     bool
+	initialized bool
 }
 
 // NewApp creates a new App application struct
@@ -113,6 +114,8 @@ func (a *App) InitializeAPI() error {
 	if noneAvailable {
 		return fmt.Errorf("No services available")
 	}
+
+	a.initialized = true
 
 	return nil
 }

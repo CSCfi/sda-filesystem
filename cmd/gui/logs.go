@@ -38,7 +38,7 @@ func (lh *LogHandler) SetContext(ctx context.Context) {
 func (lh *LogHandler) AddLog(level string, message []string) {
 	lg := Log{level: level, timestamp: time.Now().Format("2006-01-02 15:04:05.000000"), message: message}
 	lh.logs = append(lh.logs, lg)
-	wailsruntime.EventsEmit(lh.ctx, "newLogEntry", lg.level, lg.timestamp, lg.message)
+	wailsruntime.EventsEmit(lh.ctx, "newLogEntry", lg.level, lg.timestamp, lg.message[0])
 }
 
 func (lh *LogHandler) SaveLogs() {

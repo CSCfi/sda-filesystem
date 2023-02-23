@@ -4,24 +4,18 @@ import { Login } from '../../wailsjs/go/main/App'
 import { EventsEmit } from '../../wailsjs/runtime'
 
 const props = defineProps<{
-    ready: boolean,
+    initialized: boolean,
     disabled: boolean,
 }>()
 
 const emit = defineEmits(["proceed"])
 
-const username = ref("") // validity checks?
+const username = ref("") 
 const password = ref("")
 const loading = ref(false)
 const error401 = ref(false)
 
-watch(() => props.disabled, (disabled: boolean) => { 
-    if (disabled) {
-        loading.value = false
-    }
-})
-
-watch(() => props.ready && loading.value, (ready: boolean) => { 
+watch(() => props.initialized && loading.value, (ready: boolean) => { 
     if (ready) {
         Login(username.value, password.value).then((result: boolean) => {
             loading.value = false;
@@ -38,8 +32,10 @@ watch(() => props.ready && loading.value, (ready: boolean) => {
 })
 
 function login() {
-    loading.value = true;
-    error401.value = false;
+    if (!props.disabled) {
+        loading.value = true;
+        error401.value = false;
+    }
 }
 </script>
 
@@ -60,7 +56,7 @@ function login() {
             <c-button 
                 size="large" 
                 :loading="loading" 
-                :disabled="props.disabled"
+                :disabled="props.disabled || !username || !password"
                 @click="login">
                 Login
             </c-button>

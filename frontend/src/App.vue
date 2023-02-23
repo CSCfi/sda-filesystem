@@ -14,7 +14,7 @@ const disabled = ref(false)
 const initialized = ref(false)
 const loggedIn = ref(false)
 const accessed = ref(false)
-const toasts = ref<HTMLCToastsElement>();
+const toasts = ref<HTMLCToastsElement | null>(null);
 
 onMounted(() => {
     InitializeAPI().then(() => {
@@ -48,7 +48,7 @@ EventsOn('fuseReady', () => (accessed.value = true))
             <c-spacer></c-spacer>
             <c-tabs id="tabs" v-model="page" borderless v-control>
                 <c-tab value="login" v-if="!loggedIn">Login</c-tab>
-                <c-tab value="access" v-if="loggedIn">Access</c-tab>
+                <c-tab value="access" v-if="loggedIn" :active="loggedIn">Access</c-tab>
                 <c-tab value="export" v-if="loggedIn" :disabled="!accessed">Export</c-tab>
                 <c-tab value="logs">Logs</c-tab>
             </c-tabs>
@@ -68,9 +68,9 @@ EventsOn('fuseReady', () => (accessed.value = true))
         <div id="content">
             <Login 
                 v-show="page === 'login'" 
-                :ready="initialized" 
+                :initialized="initialized" 
                 :disabled="disabled" 
-                @proceed="loggedIn = true; page = 'access'"/>
+                @proceed="loggedIn = true; page = 'access'" />
             <Access v-show="page === 'access'" />
             <Export v-show="page === 'export'" />
             <Logs v-show="page === 'logs'" />

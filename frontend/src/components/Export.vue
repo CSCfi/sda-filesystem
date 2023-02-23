@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime'
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist/types';
 import { SelectFile, CheckEncryption } from '../../wailsjs/go/main/App'
