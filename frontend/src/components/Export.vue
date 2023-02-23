@@ -2,13 +2,18 @@
 import { ref, watch } from 'vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime'
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist/types';
-import { SelectFile, CheckEncryption } from '../../wailsjs/go/main/App'
-import { mdiDelete } from '@mdi/js'
+import { SelectFile, CheckEncryption, ExportFile } from '../../wailsjs/go/main/App'
+import { mdiTrashCanOutline } from '@mdi/js'
 
 const exportHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name', sortable: false },
     { key: 'folder', value: 'Target Folder', sortable: false },
-    { key: 'actions', value: null, sortable: false, align: "end", 
+]
+
+const exportHeadersModifiable: CDataTableHeader[] = [
+    { key: 'name', value: 'Name', sortable: false },
+    { key: 'folder', value: 'Target Folder', sortable: false },
+    { key: 'actions', value: null, sortable: false, justify: "end", 
       children: [
         {
             value: 'Remove',
@@ -18,9 +23,9 @@ const exportHeaders: CDataTableHeader[] = [
                 text: true,
                 size: 'small',
                 title: 'Remove',
-                path: mdiDelete,
+                path: mdiTrashCanOutline,
                 onClick: ({ data }) =>
-                    alert('Country code for ' + data['country'].value + ': ' + data['code'].value + ''),
+                    { exportData.value.pop(); chooseToContinue.value = false }
                 },
             },
         },
@@ -33,13 +38,13 @@ const bucketItems = ref<CAutocompleteItem[]>([])
 const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
+
 const file = ref("")
 const fileEncrypted = ref("")
-const exportKey = ref(0)
 const modal = ref(false)
 const chooseToContinue = ref(false)
 
-EventsOn('setProjectManager', () => {
+EventsOn('isProjectManager', () => {
     pageIdx.value = 1;
 })
 
@@ -50,11 +55,13 @@ EventsOn('setBuckets', (buckets: string[]) => {
     }))
 })
 
-EventsOn('setExportFilenames', (f1: string, f2: string) => { 
-    file.value = f1;
-    fileEncrypted.value = f2;
-    let exportRow: CDataTableData = {'name': {'value': f2.split('/').reverse()[0]}, 
-        'folder': {'value': selectedBucket.value}};
+EventsOn('setExportFilenames', (fileOrig: string, fileEnc: string) => { 
+    file.value = fileOrig;
+    fileEncrypted.value = fileEnc;
+    let exportRow: CDataTableData = {
+        'name': {'value': fileEnc.split('/').reverse()[0]}, 
+        'folder': {'value': selectedBucket.value}
+    };
     exportData.value = [];
     exportData.value.push(exportRow);
 })
@@ -78,6 +85,15 @@ function selectFile() {
         EventsEmit("showToast", "Could not choose file", e as string);
     });
 }
+
+function exportFile() {
+    ExportFile(selectedBucket.value, file.value, fileEncrypted.value).then(() => {
+        pageIdx.value = 4;
+    }).catch(e => {
+        pageIdx.value = 2;
+        EventsEmit("showToast", "Exporting file failed", e as string);
+    })
+}
 </script>
 
 <template>
@@ -90,7 +106,7 @@ function selectFile() {
 
         <c-flex v-show="pageIdx == 0">
             <h2>Export is not possible</h2>
-            <p>Your need to be project manager to export files.</p>
+            <p>You need to be project manager to export files.</p>
         </c-flex>
         <c-flex v-show="pageIdx == 1">
             <h2>Select a destination folder for your export</h2>
@@ -104,6 +120,7 @@ function selectFile() {
                     label="Folder name"
                     :items="bucketItems"
                     v-model="selectedBucket"
+                    items-per-page=5
                     return-value
                     v-control
                     @changeQuery="(bucketQuery = $event.detail)">
@@ -132,12 +149,12 @@ function selectFile() {
                 id="export-table"
                 class="gateway-table"
                 :data.prop="exportData" 
-                :headers.prop="exportHeaders"
+                :headers.prop="exportHeadersModifiable"
                 hide-footer=true>
             </c-data-table>
             <c-row justify="space-between">
                 <c-button @click="pageIdx--; exportData.pop()" outlined>Cancel</c-button>
-                <c-button @click="pageIdx++; exportKey++">Export</c-button>
+                <c-button @click="pageIdx++; exportFile()" :disabled="!chooseToContinue">Export</c-button>
             </c-row>
         </c-flex>
         <c-flex v-show="pageIdx == 3">
@@ -146,7 +163,6 @@ function selectFile() {
             <c-progress-bar indeterminate></c-progress-bar>
             <c-data-table
                 class="gateway-table"
-                :key="exportKey" 
                 :data.prop="exportData" 
                 :headers.prop="exportHeaders"
                 hide-footer=true>

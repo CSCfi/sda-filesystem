@@ -193,7 +193,9 @@ func (a *App) LoadFuse() {
 		go func() {
 			time.Sleep(time.Second)
 			buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
-			wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
+			if len(buckets) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
+			}
 			wailsruntime.EventsEmit(a.ctx, "fuseReady")
 		}()
 
@@ -244,7 +246,9 @@ func (a *App) RefreshFuse() error {
 	a.fs.RefreshFilesystem(newFs)
 
 	buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
-	wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
+	if len(buckets) > 0 {
+		wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
+	}
 	wailsruntime.EventsEmit(a.ctx, "fuseReady")
 
 	return nil
@@ -284,13 +288,14 @@ func (a *App) CheckEncryption(file, bucket string) (exists bool, err error) {
 	return
 }
 
-func (a *App) ExportFile(folder, origFile, file string) error {
+func (a *App) ExportFile(folder, origFile, encFile string) error {
 	time.Sleep(1000 * time.Millisecond)
-	err := airlock.Upload(origFile, file, folder, "", 4000, origFile != "")
+	err := airlock.Upload(origFile, encFile, folder, "", 4000, origFile != "")
 	if err != nil {
 		logs.Error(err)
+		message, _ := logs.Wrapper(err)
 
-		return fmt.Errorf("Exporting file %s failed", file)
+		return fmt.Errorf(message)
 	}
 
 	return nil
