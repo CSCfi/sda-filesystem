@@ -44,6 +44,7 @@ func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
 
 		if count == 0 {
 			wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", 1, -1)
+			wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project, 100)
 
 			return
 		}
@@ -54,9 +55,9 @@ func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
 	}
 
 	ph.progress[project][0] += count
-	progress := 1.0
+	progress := 100
 	if ph.progress[project][1] != 0 && ph.progress[project][0] != ph.progress[project][1] {
-		progress = float64(ph.progress[project][0]) / float64(ph.progress[project][1])
+		progress = int(float64(ph.progress[project][0]) / float64(ph.progress[project][1]) * 100)
 	}
 	wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", count, 0)
 	wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project, progress)

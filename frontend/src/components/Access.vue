@@ -18,7 +18,7 @@ const projectHeaders: CDataTableHeader[] = [
     { 
         key: 'progress', 
         value: 'Progress', 
-        width: "300px",
+        width: "200px",
         component: {
             tag: 'c-progress-bar',
             injectValue: true,
