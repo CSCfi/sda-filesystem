@@ -12,6 +12,6 @@
         "companyName": "CSC",
         "productName": "Data Gateway",
         "productVersion": "2.0.0",
-        "copyright": "MIT",
-    },
+        "copyright": "MIT"
+    }
 }
