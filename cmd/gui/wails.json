@@ -8,8 +8,10 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
-  "author": {
-    "name": "Emmi Rehn",
-    "email": "emmi.rehn@csc.fi"
-  }
+  "info": {
+        "companyName": "CSC",
+        "productName": "Data Gateway",
+        "productVersion": "2.0.0",
+        "copyright": "MIT",
+    },
 }
