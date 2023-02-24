@@ -3,6 +3,7 @@
 Build:
 ```
 qtdeploy build desktop cmd/qt/main.go
+cp vendor/github.com/therecipe/env_linux_amd64_513/5.13.0/gcc_64/lib/libQt5QuickShapes.* cmd/qt/deploy/linux/lib/
 tar -czf deploy.tar.gz -C cmd/qt/deploy linux
 ```
 
@@ -10,7 +11,7 @@ or download the release:
 ```
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=v1.3.0
+export version=v1.4.1
 wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.19-linux-amd64.zip"
 ```
 

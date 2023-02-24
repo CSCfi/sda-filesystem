@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-GO_VERSION='go1.19.1'
+GO_VERSION='go1.19.4'
 OS=$(uname -nsm)
 
 # Check golang exists and it has a specific version

@@ -14,6 +14,8 @@ import (
 )
 
 func usage(selfPath string) {
+	fmt.Println("Password is read from environment variable CSC_PASSWORD")
+	fmt.Println("If this variable is empty airlock requests the password interactively")
 	fmt.Println("Usage:")
 	fmt.Println(" ", selfPath, "[-segment-size=sizeInMb] "+
 		"[-journal-number=journalNumber] [-original-file=unecryptedFilename] "+
