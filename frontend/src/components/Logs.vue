@@ -73,6 +73,7 @@ function containsFilterString(str: string): boolean {
             class="gateway-table"
             no-data-text="No logs available" 
             sortBy="timestamp"
+            sort-direction="desc"
             :key="logsKey" 
             :data.prop="logDataTableFiltered" 
             :headers.prop="logHeaders"

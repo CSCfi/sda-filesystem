@@ -35,6 +35,8 @@ const exportHeadersModifiable: CDataTableHeader[] = [
 
 const exportData = ref<CDataTableData[]>([])
 const bucketItems = ref<CAutocompleteItem[]>([])
+const filteredBucketItems = ref<CAutocompleteItem[]>([])
+
 const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
@@ -53,6 +55,7 @@ EventsOn('setBuckets', (buckets: string[]) => {
         value: bucket,
         name: bucket,
     }))
+    filteredBucketItems.value = bucketItems.value;
 })
 
 EventsOn('setExportFilenames', (fileOrig: string, fileEnc: string) => { 
@@ -68,6 +71,13 @@ EventsOn('setExportFilenames', (fileOrig: string, fileEnc: string) => {
 
 watch(() => bucketQuery.value, (query: string) => { 
     selectedBucket.value = query;
+    filteredBucketItems.value = bucketItems.value.filter((item: CAutocompleteItem) => {
+        if (selectedBucket.value) {
+            return containsFilterString(item.name);
+        }
+
+        return true;
+    })
 })
 
 function selectFile() {
@@ -94,6 +104,10 @@ function exportFile() {
         EventsEmit("showToast", "Exporting file failed", e as string);
     })
 }
+
+function containsFilterString(str: string): boolean {
+    return str.toLowerCase().includes(selectedBucket.value.toLowerCase());
+}
 </script>
 
 <template>
@@ -118,12 +132,12 @@ function exportFile() {
             <c-row>
                 <c-autocomplete
                     label="Folder name"
-                    :items="bucketItems"
+                    :items="filteredBucketItems"
                     v-model="selectedBucket"
                     items-per-page=5
                     return-value
                     v-control
-                    @changeQuery="(bucketQuery = $event.detail)">
+                    @changeQuery="bucketQuery = $event.detail">
                 </c-autocomplete>
             </c-row>
             <c-button 
