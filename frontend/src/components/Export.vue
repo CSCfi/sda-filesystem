@@ -43,7 +43,7 @@ const bucketQuery = ref("")
 
 const file = ref("")
 const fileEncrypted = ref("")
-const modal = ref(false)
+const showModal = ref(false)
 const chooseToContinue = ref(false)
 
 EventsOn('isProjectManager', () => {
@@ -84,7 +84,7 @@ function selectFile() {
     SelectFile().then((filename: string) => {
         CheckEncryption(filename, selectedBucket.value).then((exists: boolean) => {
             if (exists) {
-                modal.value = true;
+                showModal.value = true;
             } else {
                 chooseToContinue.value = true;
             }
@@ -117,6 +117,22 @@ function containsFilterString(str: string): boolean {
             <c-step>Export files</c-step>
             <c-step>Export complete</c-step>
         </c-steps>
+
+        <c-modal :value="showModal">
+            <c-card>
+                <c-card-title>File already exists</c-card-title>
+
+                <c-card-content>
+                    Airlock wants to upload file {{ exportData.length ? exportData[0]['name']['value'] : "" }} 
+                    but a similar file already exists in SD Connect. Overwrite file?
+                </c-card-content>
+
+                <c-card-actions justify="end">
+                    <c-button @click="showModal = false" outlined>Cancel</c-button>
+                    <c-button @click="showModal = false; chooseToContinue = true">Overwrite and Continue</c-button>
+                </c-card-actions>
+            </c-card>
+        </c-modal>
 
         <c-flex v-show="pageIdx == 0">
             <h2>Export is not possible</h2>
@@ -189,25 +205,10 @@ function containsFilterString(str: string): boolean {
             <c-button
                 class="continue-button" 
                 size="large" 
-                @click="exportData.pop(); pageIdx = 1">
+                @click="exportData.pop(); chooseToContinue = false; pageIdx = 1">
                 New Export
             </c-button>
         </c-flex>
-        <c-modal :modal="modal" v-control>
-            <c-card>
-                <c-card-title>File already exists</c-card-title>
-
-                <c-card-content>
-                    Airlock wants to upload file " + {{ fileEncrypted }} + " but a similar 
-                    file already exists in SD Connect. Overwrite file?"  
-                </c-card-content>
-
-                <c-card-actions>
-                    <c-button @click="modal = false">Cancel</c-button>
-                    <c-button @click="modal = false; chooseToContinue = true">Overwrite and Continue</c-button>
-                </c-card-actions>
-            </c-card>
-        </c-modal>
     </c-container>
 </template>
 
