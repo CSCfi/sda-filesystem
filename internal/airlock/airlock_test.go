@@ -710,7 +710,7 @@ func TestCheckEncryption_NoFile(t *testing.T) {
 	}
 	os.RemoveAll(file.Name())
 
-	errStr := fmt.Sprintf("Failed to check if file is encrypted: open %s: no such file or directory", file.Name())
+	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
 	if _, err := CheckEncryption(file.Name()); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
