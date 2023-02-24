@@ -5,13 +5,6 @@ import { CDataTableHeader, CDataTableData, CDataTableFooterOptions, CPaginationO
 import { EventsEmit, EventsOn } from '../../wailsjs/runtime'
 import { filesystem } from "../../wailsjs/go/models";
 
-const updating = ref(false)
-const pageIdx = ref(1)
-const mountpoint = ref("")
-const allContainers = ref(0)
-const loadedContainers = ref(0)
-const globalProgress = computed(() => (allContainers.value <= 0 ? 0 : Math.floor(loadedContainers.value / allContainers.value * 100)))
-
 const projectHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name' },
     { key: 'repository', value: 'Location' },
@@ -31,7 +24,15 @@ const projectHeaders: CDataTableHeader[] = [
 ]
 
 const projectData = reactive<CDataTableData[]>([])
+
+const pageIdx = ref(1)
 const projectKey = ref(0)
+const updating = ref(false)
+const mountpoint = ref("")
+
+const allContainers = ref(0)
+const loadedContainers = ref(0)
+const globalProgress = computed(() => (allContainers.value <= 0 ? 0 : Math.floor(loadedContainers.value / allContainers.value * 100)))
 
 const footerOptions: CDataTableFooterOptions = {
     itemsPerPageOptions: [5, 10, 15, 20],
@@ -43,6 +44,12 @@ const paginationOptions: CPaginationOptions = {
     startFrom: 0,
     endTo: 4,
 }
+
+onMounted(() => {
+    GetDefaultMountPoint().then((dir: string) => {
+        mountpoint.value = dir;
+    })
+})
 
 EventsOn('sendProjects', function(projects: filesystem.Project[]) {
     let tableData: CDataTableData[] = projects.map(project => {
@@ -71,12 +78,6 @@ EventsOn('updateProjectProgress', function(project: filesystem.Project, progress
 })
 
 EventsOn('fuseReady', () => {pageIdx.value = 4; updating.value = false})
-
-onMounted(() => {
-    GetDefaultMountPoint().then((dir: string) => {
-        mountpoint.value = dir;
-    })
-})
 
 function changeMountPoint() {
     ChangeMountPoint().then((dir: string) => {
