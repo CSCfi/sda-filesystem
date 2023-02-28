@@ -8,8 +8,6 @@ const props = defineProps<{
     disabled: boolean,
 }>()
 
-const emit = defineEmits(["proceed"])
-
 const username = ref("") 
 const password = ref("")
 const loading = ref(false)
@@ -20,7 +18,7 @@ watch(() => props.initialized && loading.value, (ready: boolean) => {
         Login(username.value, password.value).then((result: boolean) => {
             loading.value = false;
             if (result) {
-                emit('proceed');
+                EventsEmit("loggedIn");
             } else {
                 error401.value = true;
             }

@@ -1,19 +1,36 @@
 <script lang="ts" setup>
 import { CToastMessage, CToastType } from 'csc-ui/dist/types'
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { EventsOn, EventsEmit, Quit } from '../wailsjs/runtime'
 import { InitializeAPI } from '../wailsjs/go/main/App'
 
-import Access from './components/Access.vue'
-import Export from './components/Export.vue'
-import Login from './components/Login.vue'
-import Logs from './components/Logs.vue'
+interface ComponentType {
+    name: string
+    visible: boolean
+    props?: {[key:string]:boolean}
+    active?: boolean
+    disabled?: boolean
+}
 
-const page = ref("login")
 const disabled = ref(false)
 const initialized = ref(false)
 const loggedIn = ref(false)
 const accessed = ref(false)
+
+const currentPage = ref("Login")
+const componentData = computed<ComponentType[]>(() => ([
+    {
+        name: "Login",
+        visible: !loggedIn.value,
+        props: {initialized: initialized.value, disabled: disabled.value},
+    },
+    { name: "Access", visible: loggedIn.value, active: loggedIn.value },
+    { name: "Export", visible: loggedIn.value, disabled: !accessed.value },
+    { name: "Logs", visible: true }
+]))
+
+const visibleTabs = computed(() => componentData.value.filter(data => data.visible))
+
 const toasts = ref<HTMLCToastsElement | null>(null);
 
 onMounted(() => {
@@ -37,6 +54,8 @@ EventsOn('showToast', function(title: string, err: string) {
     toasts.value?.addToast(message);
 })
 
+EventsOn('loggedIn', () => {loggedIn.value = true; currentPage.value = 'Access'})
+
 EventsOn('fuseReady', () => (accessed.value = true))
 </script>
 
@@ -46,11 +65,13 @@ EventsOn('fuseReady', () => (accessed.value = true))
             <c-csc-logo></c-csc-logo>
             <h4>Data Gateway</h4>
             <c-spacer></c-spacer>
-            <c-tabs id="tabs" v-model="page" borderless v-control>
-                <c-tab value="login" v-if="!loggedIn">Login</c-tab>
-                <c-tab value="access" v-if="loggedIn" :active="loggedIn">Access</c-tab>
-                <c-tab value="export" v-if="loggedIn" :disabled="!accessed">Export</c-tab>
-                <c-tab value="logs">Logs</c-tab>
+            <c-tabs id="tabs" v-model="currentPage" borderless v-control>
+                <c-tab
+                    v-for="tab in visibleTabs"
+                    :value="tab.name"
+                    :active="tab.active"
+                    :disabled="tab.disabled"
+                >{{ tab.name }}</c-tab>
             </c-tabs>
             <c-spacer></c-spacer>
             <c-button 
@@ -66,14 +87,12 @@ EventsOn('fuseReady', () => (accessed.value = true))
         </c-toolbar>
 
         <div id="content">
-            <Login 
-                v-show="page === 'login'" 
-                :initialized="initialized" 
-                :disabled="disabled" 
-                @proceed="loggedIn = true; page = 'access'" />
-            <Access v-show="page === 'access'" />
-            <Export v-show="page === 'export'" />
-            <Logs v-show="page === 'logs'" />
+            <component 
+                v-for="data in componentData"
+                v-show="data.name === currentPage"
+                :is="data.name" 
+                v-bind="data.props">
+            </component>
         </div>
 
         <c-toasts ref="toasts"></c-toasts>
