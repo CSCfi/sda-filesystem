@@ -18,7 +18,7 @@ type mockConnecter struct {
 	projectsErr error
 }
 
-func (c *mockConnecter) getProjects(string, string) ([]Metadata, error) {
+func (c *mockConnecter) getProjects() ([]Metadata, error) {
 	if c.projectsErr != nil {
 		return nil, fmt.Errorf("getProjects error: %w", c.projectsErr)
 	}
@@ -26,7 +26,11 @@ func (c *mockConnecter) getProjects(string, string) ([]Metadata, error) {
 	return c.projects, nil
 }
 
-func (c *mockConnecter) getSTokens([]Metadata, string, string) map[string]sToken {
+func (c *mockConnecter) getToken(string) (sToken, error) {
+	return sToken{}, nil
+}
+
+func (c *mockConnecter) getSTokens([]Metadata) map[string]sToken {
 	return c.sTokens
 }
 
@@ -68,8 +72,9 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 				}
 			}
 
-			c := connecter{}
-			projects, err := c.getProjects("https://data.csc.fi", tt.token)
+			url := "https://data.csc.fi"
+			c := connecter{url: &url, token: &tt.token}
+			projects, err := c.getProjects()
 
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err.Error())
@@ -88,8 +93,10 @@ func Test_SDConnect_GetProjects_Error(t *testing.T) {
 		return errExpected
 	}
 
-	c := connecter{}
-	projects, err := c.getProjects("url", "token")
+	url := "url"
+	token := "token"
+	c := connecter{url: &url, token: &token}
+	projects, err := c.getProjects()
 
 	if err == nil {
 		t.Error("Function should have returned error")
@@ -145,8 +152,10 @@ func Test_SDConnect_GetSTokens(t *testing.T) {
 				}
 			}
 
-			c := connecter{}
-			newSTokens := c.getSTokens(tt.projects, "url", "token")
+			url := "url"
+			token := "token"
+			c := connecter{url: &url, token: &token}
+			newSTokens := c.getSTokens(tt.projects)
 
 			if !reflect.DeepEqual(newSTokens, tt.sTokens) {
 				t.Errorf("sTokens incorrect.\nExpected=%s\nReceived=%s", tt.sTokens, newSTokens)

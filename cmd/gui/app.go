@@ -121,7 +121,7 @@ func (a *App) InitializeAPI() error {
 }
 
 func (a *App) Login(username, password string) (bool, error) {
-	success, err := api.ValidateLogin(username, password)
+	success, err := api.ValidateLogin(username, password, "")
 	if err != nil {
 		logs.Error(err)
 	}

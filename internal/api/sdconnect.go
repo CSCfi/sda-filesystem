@@ -18,19 +18,23 @@ const SDConnect string = "SD Connect"
 
 // This exists for unit test mocking
 type connectable interface {
-	getProjects(string, string) ([]Metadata, error)
-	getSTokens([]Metadata, string, string) map[string]sToken
+	getProjects() ([]Metadata, error)
+	getToken(string) (sToken, error)
+	getSTokens([]Metadata) map[string]sToken
 }
 
 type connecter struct {
+	url   *string
+	token *string
 }
 
 type sdConnectInfo struct {
 	connectable
-	url      string
-	token    string
-	sTokens  map[string]sToken
-	projects []Metadata
+	url             string
+	token           string
+	sTokens         map[string]sToken
+	projects        []Metadata
+	overrideProject string
 }
 
 // sToken is a scoped token for a certain project
@@ -50,6 +54,8 @@ type SpecialHeaders struct {
 func init() {
 	cr := &connecter{}
 	sd := &sdConnectInfo{connectable: cr, sTokens: make(map[string]sToken)}
+	cr.url = &sd.url
+	cr.token = &sd.token
 	allRepositories[SDConnect] = sd
 }
 
@@ -57,10 +63,10 @@ func init() {
 // Functions for connecter
 //
 
-func (c *connecter) getProjects(url, token string) ([]Metadata, error) {
+func (c *connecter) getProjects() ([]Metadata, error) {
 	var projects []Metadata
-	headers := map[string]string{"X-Authorization": "Basic " + token}
-	err := MakeRequest(url+"/projects", nil, headers, nil, &projects)
+	headers := map[string]string{"X-Authorization": "Basic " + *c.token}
+	err := MakeRequest(*c.url+"/projects", nil, headers, nil, &projects)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
 	}
@@ -68,25 +74,34 @@ func (c *connecter) getProjects(url, token string) ([]Metadata, error) {
 	return projects, nil
 }
 
+func (c *connecter) getToken(name string) (sToken, error) {
+	query := map[string]string{"project": name}
+	headers := map[string]string{
+		"X-Authorization":  "Basic " + *c.token,
+		"X-Project-Number": name,
+	}
+
+	// Request token
+	ret := sToken{}
+	err := MakeRequest(*c.url+"/token", query, headers, nil, &ret)
+	return ret, err
+}
+
 // getSTokens fetches the scoped tokens
 // Using only one goroutine since SD Desktop VM should only allow for one project
-func (c *connecter) getSTokens(projects []Metadata, url, token string) map[string]sToken {
+func (c *connecter) getSTokens(projects []Metadata) map[string]sToken {
 	newSTokens := make(map[string]sToken)
 
 	for i := range projects {
-		query := map[string]string{"project": projects[i].Name}
-		headers := map[string]string{"X-Authorization": "Basic " + token}
-
-		// Request token
-		token := sToken{}
-		if err := MakeRequest(url+"/token", query, headers, nil, &token); err != nil {
+		projectToken, err := c.getToken(projects[i].Name)
+		if err != nil {
 			logs.Warningf("Failed to retrieve %s scoped token for %s: %w", SDConnect, projects[i].Name, err)
 
 			continue
 		}
 
 		logs.Debugf("Retrieved %s scoped token for %s", SDConnect, projects[i].Name)
-		newSTokens[projects[i].Name] = sToken{Token: token.Token, ProjectID: token.ProjectID}
+		newSTokens[projects[i].Name] = sToken{Token: projectToken.Token, ProjectID: projectToken.ProjectID}
 	}
 
 	logs.Infof("Fetching %s tokens finished", SDConnect)
@@ -112,18 +127,27 @@ func (c *sdConnectInfo) getEnvs() error {
 }
 
 func (c *sdConnectInfo) validateLogin(auth ...string) error {
-	if len(auth) >= 1 {
-		c.token = auth[0]
+	if len(auth) < 2 {
+		return fmt.Errorf("validateLogin() called with too few parameters")
 	}
 
 	var err error
 	c.projects = nil
-	if c.projects, err = c.getProjects(c.url, c.token); err == nil {
+	c.token = auth[0]
+	c.overrideProject = auth[1]
+
+	if c.overrideProject != "" {
+		c.projects = []Metadata{{-1, c.overrideProject}}
+
+		var token sToken
+		token, err = c.getToken(c.overrideProject)
+		c.sTokens = map[string]sToken{c.overrideProject: token}
+	} else if c.projects, err = c.getProjects(); err == nil {
 		if len(c.projects) == 0 {
 			return fmt.Errorf("No projects found for %s", SDConnect)
 		}
 		logs.Infof("Retrieved %d %s project(s)", len(c.projects), SDConnect)
-		c.sTokens = c.getSTokens(c.projects, c.url, c.token)
+		c.sTokens = c.getSTokens(c.projects)
 
 		return nil
 	}
@@ -148,8 +172,7 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 		return c.projects, nil
 	}
 
-	token := c.sTokens[nodes[0]]
-	headers := map[string]string{"X-Project-ID": token.ProjectID, "X-Authorization": "Bearer " + token.Token}
+	headers := map[string]string{}
 	path := c.url + "/project/" + url.PathEscape(nodes[0])
 	switch len(nodes) {
 	case 1:
@@ -161,12 +184,9 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	}
 
 	var meta []Metadata
-	err := MakeRequest(path, nil, headers, nil, &meta)
+	err := c.makeRequest(path, nodes[0], nil, headers, &meta)
 	if c.tokenExpired(err) {
-		token = c.sTokens[nodes[0]]
-		headers["X-Project-ID"] = token.ProjectID
-		headers["X-Authorization"] = "Bearer " + token.Token
-		err = MakeRequest(path, nil, headers, nil, &meta)
+		err = c.makeRequest(path, nodes[0], nil, headers, &meta)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
@@ -181,7 +201,7 @@ func (c *sdConnectInfo) tokenExpired(err error) bool {
 	var re *RequestError
 	if errors.As(err, &re) && re.StatusCode == 401 {
 		logs.Infof("%s tokens no longer valid. Fetching them again", SDConnect)
-		c.sTokens = c.getSTokens(c.projects, c.url, c.token)
+		c.sTokens = c.getSTokens(c.projects)
 
 		return true
 	}
@@ -221,6 +241,14 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr any) 
 	return nil
 }
 
+func (c *sdConnectInfo) makeRequest(path, project string, query, headers map[string]string, ret any) error {
+	token := c.sTokens[project]
+	headers["X-Project-ID"] = token.ProjectID
+	headers["X-Authorization"] = "Bearer " + token.Token
+	headers["X-Project-Number"] = c.overrideProject
+	return MakeRequest(path, query, headers, nil, ret)
+}
+
 func (c *sdConnectInfo) downloadData(nodes []string, buffer any, start, end int64) error {
 	// Query params
 	query := map[string]string{
@@ -229,22 +257,15 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer any, start, end int6
 		"object":    strings.Join(nodes[2:], "/"),
 	}
 
-	token := c.sTokens[nodes[0]]
-
 	// Additional headers
-	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10),
-		"X-Project-ID": token.ProjectID, "X-Authorization": "Bearer " + token.Token}
+	headers := map[string]string{"Range": "bytes=" + strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end-1, 10)}
 
 	path := c.url + "/data"
 
 	// Request data
-	err := MakeRequest(path, query, headers, nil, buffer)
+	err := c.makeRequest(path, nodes[0], query, headers, buffer)
 	if c.tokenExpired(err) {
-		token = c.sTokens[nodes[0]]
-		headers["X-Project-ID"] = token.ProjectID
-		headers["X-Authorization"] = "Bearer " + token.Token
-
-		return MakeRequest(path, query, headers, nil, buffer)
+		return c.makeRequest(path, nodes[0], query, headers, buffer)
 	}
 
 	return err

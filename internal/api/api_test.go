@@ -399,7 +399,7 @@ func TestValidateLogin_Success(t *testing.T) {
 	allRepositories = map[string]fuseInfo{SDConnect: mockRepoC, SDSubmit: mockRepoS}
 	hi.repositories = make(map[string]fuseInfo)
 
-	success, err := ValidateLogin("username", "password")
+	success, err := ValidateLogin("username", "password", "")
 
 	if !success {
 		t.Fatal("Login should have been successful")
@@ -426,7 +426,7 @@ func TestValidateLogin_Submit_Error(t *testing.T) {
 	hi.repositories = make(map[string]fuseInfo)
 	repC := map[string]fuseInfo{SDConnect: mockRepoC}
 
-	success, err := ValidateLogin("username", "password")
+	success, err := ValidateLogin("username", "password", "project")
 
 	if !success {
 		t.Fatal("Login should have been successful")
@@ -455,7 +455,7 @@ func TestValidateLogin_Fail(t *testing.T) {
 	allRepositories = map[string]fuseInfo{SDConnect: mockRepoC, SDSubmit: mockRepoS}
 	hi.repositories = make(map[string]fuseInfo)
 
-	success, err := ValidateLogin("username", "password")
+	success, err := ValidateLogin("username", "password", "")
 
 	if success {
 		t.Fatal("Login should not have been successful")

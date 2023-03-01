@@ -20,7 +20,7 @@ import (
 	"golang.org/x/term"
 )
 
-var mount, logLevel string
+var mount, project, logLevel string
 var requestTimeout int
 
 type loginReader interface {
@@ -137,7 +137,7 @@ var login = func(lr loginReader) error {
 			return err
 		}
 
-		success, err := api.ValidateLogin(username, password)
+		success, err := api.ValidateLogin(username, password, project)
 		if err == nil {
 			return nil
 		}
@@ -176,6 +176,7 @@ func processFlags() error {
 
 func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
+	flag.StringVar(&project, "project", "", "The SD Connect project when using Hopsworks")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
