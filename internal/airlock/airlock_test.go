@@ -560,10 +560,11 @@ func TestUpload_Error(t *testing.T) {
 func TestUpload_FileContent(t *testing.T) {
 	var tests = []struct {
 		testname, content string
+		encrypt           bool
 	}{
-		{"OK_1", "u89pct87"},
-		{"OK_2", "hiopctfylbkigo"},
-		{"OK_3", "jtxfulvghoi.g oi.rf lg o.fblhoo jihuimgk"},
+		{"OK_1", "u89pct87", false},
+		{"OK_2", "hiopctfylbkigo", true},
+		{"OK_3", "jtxfulvghoi.g oi.rf lg o.fblhoo jihuimgk", false},
 	}
 
 	origGetFileDetails := getFileDetails
@@ -605,6 +606,16 @@ func TestUpload_FileContent(t *testing.T) {
 
 				return file, "", int64(len(tt.content)), nil
 			}
+			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
+				file, err := os.Open(filename)
+				if err != nil {
+					return nil, "", 0, err
+				}
+				errc := make(chan error, 1)
+				errc <- nil
+
+				return &readCloser{file, file, errc}, "", int64(len(tt.content)), nil
+			}
 
 			buf := &bytes.Buffer{}
 			put = func(manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
@@ -617,7 +628,14 @@ func TestUpload_FileContent(t *testing.T) {
 				return nil
 			}
 
-			if err := Upload("", file.Name(), "bucket684", "", 1, false); err != nil {
+			var filename, filenameEnc string
+			if tt.encrypt {
+				filename = file.Name()
+			} else {
+				filenameEnc = file.Name()
+			}
+
+			if err := Upload(filename, filenameEnc, "bucket684", "", 1, tt.encrypt); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if tt.content != buf.String() {
 				t.Errorf("put() read incorrect content\nExpected=%v\nReceived=%v", []byte(tt.content), buf.Bytes())

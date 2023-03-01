@@ -177,6 +177,36 @@ func TestAskForLogin(t *testing.T) {
 	}
 }
 
+func TestAskForLogin_Envs(t *testing.T) {
+	// Ignore prints to stdout
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	os.Stdout = null
+
+	username := "rumplestiltskin"
+	password := "very-secret-password"
+	os.Setenv("CSC_USERNAME", username)
+	os.Setenv("CSC_PASSWORD", password)
+
+	r := newTestReader([]string{}, "", errors.New("stream error"), errors.New("reader error"))
+	str1, str2, err := askForLogin(r)
+
+	os.Unsetenv("CSC_USERNAME")
+	os.Unsetenv("CSC_PASSWORD")
+
+	os.Stdout = sout
+	null.Close()
+
+	switch {
+	case err != nil:
+		t.Errorf("Function returned error: %s", err.Error())
+	case str1 != username:
+		t.Errorf("Username incorrect. Expected=%s, received=%s", username, str1)
+	case str2 != password:
+		t.Errorf("Password incorrect. Expected=%s, received=%s", password, str2)
+	}
+}
+
 func TestLogin(t *testing.T) {
 	var count int
 	var tests = []struct {
