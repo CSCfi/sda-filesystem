@@ -16,6 +16,8 @@ type mockConnecter struct {
 	sTokens     map[string]sToken
 	projects    []Metadata
 	projectsErr error
+	token       sToken
+	tokenErr    error
 }
 
 func (c *mockConnecter) getProjects() ([]Metadata, error) {
@@ -27,7 +29,11 @@ func (c *mockConnecter) getProjects() ([]Metadata, error) {
 }
 
 func (c *mockConnecter) getToken(string) (sToken, error) {
-	return sToken{}, nil
+	if c.tokenErr != nil {
+		return sToken{}, fmt.Errorf("getToken error: %w", c.tokenErr)
+	}
+
+	return c.token, nil
 }
 
 func (c *mockConnecter) getSTokens([]Metadata) map[string]sToken {
@@ -57,7 +63,7 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret any) error {
+			MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 				if token, ok := headers["X-Authorization"]; !ok || token != "Basic "+tt.token {
 					return fmt.Errorf("Incorrect header 'X-Authorization'\nExpected=%s\nReceived=%s", "Bearer "+tt.token, token)
 				}
@@ -89,7 +95,7 @@ func Test_SDConnect_GetProjects_Error(t *testing.T) {
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
 
-	MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret any) error {
+	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		return errExpected
 	}
 
@@ -113,18 +119,19 @@ func Test_SDConnect_GetSTokens(t *testing.T) {
 	var tests = []struct {
 		testname string
 		projects []Metadata
+		override bool
 		sTokens  map[string]sToken
 	}{
 		{
-			"OK_1", []Metadata{{56, "project1"}, {67, "project2"}},
+			"OK_1", []Metadata{{56, "project1"}, {67, "project2"}}, false,
 			map[string]sToken{"project1": {"vhjk", "cud7"}, "project2": {"d6l", "88x6l"}},
 		},
 		{
-			"OK_2", []Metadata{{23, "pr1568"}, {90, "pr2097"}},
+			"OK_2", []Metadata{{23, "pr1568"}, {90, "pr2097"}}, true,
 			map[string]sToken{"pr1568": {"6rxy", "7cli87t"}, "pr2097": {"7cek", "25c8"}},
 		},
 		{
-			"FAIL_STOKENS", []Metadata{{496, "pr152"}, {271, "pr375"}, {12, "pr225"}},
+			"FAIL_STOKENS", []Metadata{{496, "pr152"}, {271, "pr375"}, {12, "pr225"}}, false,
 			map[string]sToken{"pr225": {"8vgicö", "xfd6"}},
 		},
 	}
@@ -134,27 +141,34 @@ func Test_SDConnect_GetSTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(url string, query map[string]string, headers map[string]string, body io.Reader, ret any) error {
-				if token, ok := headers["X-Authorization"]; !ok || token != "Basic token" {
-					return fmt.Errorf("Real error ccurred")
-				}
+			MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 				if _, ok := tt.sTokens[query["project"]]; !ok {
 					return fmt.Errorf("Error occurred")
+				}
+				if token, ok := headers["X-Authorization"]; !ok || token != "Basic token" {
+					t.Errorf("X-Authorization header incorrect.")
+				}
+
+				switch project, ok := headers["X-Project-Name"]; {
+				case tt.override && (!ok || project != query["project"]):
+					t.Errorf("X-Project-Name header incorrect.")
+				case !tt.override && ok:
+					t.Errorf("Header should not contain X-Project-Name")
 				}
 
 				switch v := ret.(type) {
 				case *sToken:
 					*v = tt.sTokens[query["project"]]
-
-					return nil
 				default:
-					return fmt.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
+					t.Errorf("ret has incorrect type %v, expected *SToken", reflect.TypeOf(v))
 				}
+
+				return nil
 			}
 
 			url := "url"
 			token := "token"
-			overridden := false
+			overridden := tt.override
 			c := connecter{url: &url, token: &token, overriden: &overridden}
 			newSTokens := c.getSTokens(tt.projects)
 
@@ -259,11 +273,44 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	if sd.token != "dXNlcjpwYXNz" {
 		t.Errorf("Token incorrect. Expected=dXNlcjpwYXNz, received=%s", sd.token)
 	}
+	if sd.overriden {
+		t.Error("Projects should not have been overridden")
+	}
 	if st := sd.sTokens["s1"].Token; st != "sToken" {
 		t.Errorf("sToken incorrect for project 's1'. Expected=sToken, received=%s", st)
 	}
 	if pi := sd.sTokens["s1"].ProjectID; pi != "proj1" {
 		t.Errorf("ProjectID incorrect for project 's1'. expected=proj1, received=%s", pi)
+	}
+	if !reflect.DeepEqual(sd.projects, projects) {
+		t.Errorf("Projects incorrect\nExpected=%v\nReceived=%v", projects, sd.projects)
+	}
+}
+
+func Test_SDConnect_ValidateLogin_Override_OK(t *testing.T) {
+	project := "project_7376"
+	projects := []Metadata{{-1, project}}
+	mockC := &mockConnecter{
+		projectsErr: errors.New("Should not have fetched projects."),
+		token:       sToken{"sToken", "projectID"},
+	}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	err := sd.validateLogin("vfylxr7pckgh", project)
+	if err != nil {
+		t.Fatalf("Function failed, expected no error, received=%v", err)
+	}
+	if sd.token != "vfylxr7pckgh" {
+		t.Errorf("Token incorrect. Expected=vfylxr7pckgh, received=%s", sd.token)
+	}
+	if !sd.overriden {
+		t.Error("Projects should have been overridden.")
+	}
+	if st := sd.sTokens[project].Token; st != "sToken" {
+		t.Errorf("sToken incorrect for project '%s'. Expected=sToken, received=%s", project, st)
+	}
+	if pi := sd.sTokens[project].ProjectID; pi != "projectID" {
+		t.Errorf("ProjectID incorrect for project '%s'. expected=projectID, received=%s", project, pi)
 	}
 	if !reflect.DeepEqual(sd.projects, projects) {
 		t.Errorf("Projects incorrect\nExpected=%v\nReceived=%v", projects, sd.projects)
@@ -276,6 +323,31 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 
 	expectedError := "Error occurred for SD Connect: getProjects error: Error occurred"
 	err := sd.validateLogin("u7c9Cstlv7", "")
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
+	}
+}
+
+func Test_SDConnect_ValidateLogin_Fail_GetToken(t *testing.T) {
+	mockC := &mockConnecter{tokenErr: errors.New("Error occurred")}
+	sd := &sdConnectInfo{connectable: mockC}
+
+	expectedError := "Error occurred for SD Connect: getToken error: Error occurred"
+	err := sd.validateLogin("vhy9pcr7til", "project")
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
+	}
+}
+
+func Test_SDConnect_ValidateLogin_Fail_Parameters(t *testing.T) {
+	sd := &sdConnectInfo{}
+	expectedError := "validateLogin() called with too few parameters"
+
+	err := sd.validateLogin("one-param")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {
@@ -615,7 +687,11 @@ func Test_SDConnect_UpdateAttributes_Error(t *testing.T) {
 func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 	// Mock
 	expectedBody := []byte("hellothere")
-	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Authorization": "Bearer token", "X-Project-ID": "project"}
+	expectedHeaders := map[string]string{
+		"Range":           "bytes=0-9",
+		"X-Authorization": "Bearer token",
+		"X-Project-ID":    "project",
+	}
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
@@ -644,9 +720,16 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	expectedBody := []byte("hellothere")
-	expectedHeaders := map[string]string{"Range": "bytes=0-9", "X-Authorization": "Bearer freshToken", "X-Project-ID": "projectID"}
+	expectedHeaders := map[string]string{
+		"Range":           "bytes=0-9",
+		"X-Authorization": "Bearer freshToken",
+		"X-Project-ID":    "projectID",
+		"X-Project-Name":  "project",
+	}
+
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
+
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
 			// Test that headers were computed properly
@@ -665,6 +748,7 @@ func Test_SDConnect_DownloadData_Pass_TokenExpired(t *testing.T) {
 		connectable: mockC,
 		sTokens:     map[string]sToken{"project": {"expiredToken", "projectID"}},
 		projects:    []Metadata{},
+		overriden:   true,
 	}
 
 	// Test
