@@ -291,7 +291,7 @@ func Test_SDConnect_ValidateLogin_Override_OK(t *testing.T) {
 	project := "project_7376"
 	projects := []Metadata{{-1, project}}
 	mockC := &mockConnecter{
-		projectsErr: errors.New("Should not have fetched projects."),
+		projectsErr: errors.New("should not have fetched projects"),
 		token:       sToken{"sToken", "projectID"},
 	}
 	sd := &sdConnectInfo{connectable: mockC}
