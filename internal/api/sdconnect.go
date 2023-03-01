@@ -24,17 +24,18 @@ type connectable interface {
 }
 
 type connecter struct {
-	url   *string
-	token *string
+	url       *string
+	token     *string
+	overriden *bool
 }
 
 type sdConnectInfo struct {
 	connectable
-	url             string
-	token           string
-	sTokens         map[string]sToken
-	projects        []Metadata
-	overrideProject string
+	url       string
+	token     string
+	sTokens   map[string]sToken
+	projects  []Metadata
+	overriden bool
 }
 
 // sToken is a scoped token for a certain project
@@ -56,6 +57,7 @@ func init() {
 	sd := &sdConnectInfo{connectable: cr, sTokens: make(map[string]sToken)}
 	cr.url = &sd.url
 	cr.token = &sd.token
+	cr.overriden = &sd.overriden
 	allRepositories[SDConnect] = sd
 }
 
@@ -76,9 +78,10 @@ func (c *connecter) getProjects() ([]Metadata, error) {
 
 func (c *connecter) getToken(name string) (sToken, error) {
 	query := map[string]string{"project": name}
-	headers := map[string]string{
-		"X-Authorization": "Basic " + *c.token,
-		"X-Project-Name":  name,
+	headers := map[string]string{"X-Authorization": "Basic " + *c.token}
+
+	if *c.overriden {
+		headers["X-Project-Name"] = name
 	}
 
 	// Request token
@@ -135,14 +138,19 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 	var err error
 	c.projects = nil
 	c.token = auth[0]
-	c.overrideProject = auth[1]
+	projectReplacement := auth[1]
 
-	if c.overrideProject != "" {
-		c.projects = []Metadata{{-1, c.overrideProject}}
+	if projectReplacement != "" {
+		c.overriden = true
+		c.projects = []Metadata{{-1, projectReplacement}}
 
 		var token sToken
-		token, err = c.getToken(c.overrideProject)
-		c.sTokens = map[string]sToken{c.overrideProject: token}
+		token, err = c.getToken(projectReplacement)
+		if err == nil {
+			c.sTokens = map[string]sToken{projectReplacement: token}
+
+			return nil
+		}
 	} else if c.projects, err = c.getProjects(); err == nil {
 		if len(c.projects) == 0 {
 			return fmt.Errorf("No projects found for %s", SDConnect)
@@ -246,7 +254,10 @@ func (c *sdConnectInfo) makeRequest(path, project string, query, headers map[str
 	token := c.sTokens[project]
 	headers["X-Project-ID"] = token.ProjectID
 	headers["X-Authorization"] = "Bearer " + token.Token
-	headers["X-Project-Name"] = c.overrideProject
+
+	if c.overriden {
+		headers["X-Project-Name"] = project
+	}
 
 	return MakeRequest(path, query, headers, nil, ret)
 }

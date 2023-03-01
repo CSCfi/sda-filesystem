@@ -54,10 +54,10 @@ func Test_SDSubmit_GetDatasets_Fail(t *testing.T) {
 	s := submitter{}
 	_, err := s.getDatasets("url")
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%v", expectedError, err)
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -97,10 +97,10 @@ func Test_SDSubmit_GetFiles_Fail(t *testing.T) {
 	s := submitter{}
 	_, err := s.getFiles("fspath", "url", "dataset1")
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -217,10 +217,10 @@ func Test_SDSubmit_GetEnvs_Fail_SubmitAPI(t *testing.T) {
 	// Test
 	err := s.getEnvs()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -244,10 +244,10 @@ func Test_SDSubmit_GetEnvs_Fail_ValidURL(t *testing.T) {
 	// Test
 	err := s.getEnvs()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -276,10 +276,10 @@ func Test_SDSubmit_GetEnvs_Fail_TestURL(t *testing.T) {
 	// Test
 	err := s.getEnvs()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -325,10 +325,10 @@ func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 	expectedError := "SD Apply authorization failed: API responded with status 401 Unauthorized"
 	err := s.validateLogin()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -340,10 +340,10 @@ func Test_SDSubmit_ValidateLogin_500_Error(t *testing.T) {
 	expectedError := "SD Apply is not available, please contact CSC servicedesk"
 	err := s.validateLogin()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -374,10 +374,10 @@ func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 	expectedError := "Error(s) occurred for SD Apply"
 	err := s.validateLogin()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -407,11 +407,12 @@ func Test_SDSubmit_ValidateLogin_Pass_None(t *testing.T) {
 	expectedError := "No datasets found for SD Apply"
 	err := s.validateLogin()
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Fatalf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
+
 	if len(s.datasets) > 0 {
 		t.Errorf("Function failed, expected no datasets, received=%d", len(s.datasets))
 	}
@@ -464,10 +465,10 @@ func Test_SDSubmit_GetNthLevel_Fail_1(t *testing.T) {
 	expectedError := "Tried to request files for invalid dataset fspath"
 	_, err := s.getNthLevel("fspath", "dataset2")
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed, expected=%s, received=%v", expectedError, err)
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -522,10 +523,10 @@ func Test_SDSubmit_DownloadData_Fail(t *testing.T) {
 	buf := []byte{}
 	err := s.downloadData([]string{"missing", "file1"}, buf, 0, 0)
 
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
-		}
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 

@@ -154,7 +154,8 @@ func Test_SDConnect_GetSTokens(t *testing.T) {
 
 			url := "url"
 			token := "token"
-			c := connecter{url: &url, token: &token}
+			overridden := false
+			c := connecter{url: &url, token: &token, overriden: &overridden}
 			newSTokens := c.getSTokens(tt.projects)
 
 			if !reflect.DeepEqual(newSTokens, tt.sTokens) {
@@ -228,11 +229,17 @@ func Test_SDConnect_GetEnvs(t *testing.T) {
 			err := sd.getEnvs()
 
 			// Test results
-			if err != nil {
-				if err.Error() != tt.expectedError.Error() {
-					t.Errorf("Function returned incorrect error\nExpected=%v\nReceived=%v", tt.expectedError, err)
+			switch {
+			case tt.testname == "OK":
+				if err != nil {
+					t.Errorf("Unexpected error: %s", err.Error())
 				}
+			case err == nil:
+				t.Error("Function did not return error")
+			case err.Error() != tt.expectedError.Error():
+				t.Errorf("Function failed\nExpected=%s\nReceived=%s", tt.expectedError.Error(), err.Error())
 			}
+
 			if sd.url != tt.expectedURL {
 				t.Errorf("URL incorrect. Expected=%v, received=%v", tt.expectedURL, sd.url)
 			}
@@ -245,9 +252,9 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	mockC := &mockConnecter{sTokens: map[string]sToken{"s1": {"sToken", "proj1"}}, projects: projects}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	err := sd.validateLogin("dXNlcjpwYXNz")
+	err := sd.validateLogin("dXNlcjpwYXNz", "")
 	if err != nil {
-		t.Errorf("Function failed, expected no error, received=%v", err)
+		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
 	if sd.token != "dXNlcjpwYXNz" {
 		t.Errorf("Token incorrect. Expected=dXNlcjpwYXNz, received=%s", sd.token)
@@ -268,11 +275,11 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "Error occurred for SD Connect: getProjects error: Error occurred"
-	err := sd.validateLogin("user", "pass")
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
-		}
+	err := sd.validateLogin("u7c9Cstlv7", "")
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -281,11 +288,11 @@ func Test_SDConnect_ValidateLogin_No_Projects(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "No projects found for SD Connect"
-	err := sd.validateLogin("user", "pass")
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
-		}
+	err := sd.validateLogin("f60ovguTit7", "")
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -294,11 +301,11 @@ func Test_SDConnect_ValidateLogin_401_Error(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "SD Connect login failed: getProjects error: API responded with status 401 Unauthorized"
-	err := sd.validateLogin("user", "pass")
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
-		}
+	err := sd.validateLogin("69vdtulvf6", "")
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -307,11 +314,11 @@ func Test_SDConnect_ValidateLogin_500_Error(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "SD Connect is not available, please contact CSC servicedesk: getProjects error: API responded with status 500 Internal Server Error"
-	err := sd.validateLogin("user", "pass")
-	if err != nil {
-		if err.Error() != expectedError {
-			t.Errorf("Function failed\nExpected=%v\nReceived=%v", expectedError, err)
-		}
+	err := sd.validateLogin("7vr6lvgil", "")
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != expectedError {
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedError, err.Error())
 	}
 }
 
@@ -614,7 +621,7 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		// Test that headers were computed properly
 		if !reflect.DeepEqual(headers, expectedHeaders) {
-			t.Errorf("Function failed, expected=%s, received=%s", expectedHeaders, headers)
+			t.Errorf("Function failed\nExpected=%s\nReceived=%s", expectedHeaders, headers)
 		}
 		_, _ = io.ReadFull(bytes.NewReader(expectedBody), ret.([]byte))
 
@@ -630,7 +637,7 @@ func Test_SDConnect_DownloadData_Pass(t *testing.T) {
 		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
 	if !bytes.Equal(buf, expectedBody) {
-		t.Errorf("Function failed, expected=%s, received=%s", string(expectedBody), string(buf))
+		t.Errorf("Function failed\nExpected=%s\nReceived=%s", string(expectedBody), string(buf))
 	}
 }
 
