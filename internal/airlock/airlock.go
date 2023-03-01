@@ -30,9 +30,10 @@ var infoFile = "/etc/pam_userinfo/config.json"
 var minimumSegmentSize = 1 << 20
 
 type airlockInfo struct {
-	publicKey [chacha20poly1305.KeySize]byte
-	proxy     string
-	project   string
+	publicKey  [chacha20poly1305.KeySize]byte
+	proxy      string
+	project    string
+	overridden bool
 }
 
 type readCloser struct {
@@ -48,7 +49,7 @@ var GetProjectName = func() string {
 
 // IsProjectManager uses file '/etc/pam_userinfo/config.json' and SDS AAI to determine if the user is the
 // project manager of the SD Connect project in the current VM
-var IsProjectManager = func() (bool, error) {
+var IsProjectManager = func(project string) (bool, error) {
 	errStr := "Could not find user info"
 
 	file, err := os.ReadFile(infoFile)
@@ -68,11 +69,16 @@ var IsProjectManager = func() (bool, error) {
 		return false, fmt.Errorf("Could not determine endpoint for user info: %w", err)
 	}
 
-	pr, ok := data["login_aud"]
-	if !ok {
-		err = errors.New("Config file did not contain key 'login_aud'")
+	if project != "" {
+		ai.overridden = true
+	} else {
+		pr, ok := data["login_aud"]
+		if !ok {
+			err = errors.New("Config file did not contain key 'login_aud'")
 
-		return false, fmt.Errorf("Could not determine to which project this Desktop belongs: %w", err)
+			return false, fmt.Errorf("Could not determine to which project this Desktop belongs: %w", err)
+		}
+		project = fmt.Sprintf("project_%v", pr)
 	}
 
 	if err := api.MakeRequest(fmt.Sprintf("%v", endpoint), nil, nil, nil, &data); err != nil {
@@ -82,7 +88,6 @@ var IsProjectManager = func() (bool, error) {
 		}
 
 		return false, err
-
 	}
 
 	projectPI, ok := data["projectPI"]
@@ -91,8 +96,8 @@ var IsProjectManager = func() (bool, error) {
 	}
 	projects := strings.Split(fmt.Sprintf("%v", projectPI), " ")
 	for i := range projects {
-		if projects[i] == fmt.Sprintf("%v", pr) {
-			ai.project = fmt.Sprintf("project_%v", pr)
+		if fmt.Sprintf("project_%s", projects[i]) == project {
+			ai.project = project
 
 			return true, nil
 		}
@@ -181,8 +186,6 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 	// Get total number of segments
 	segmentNro := uint64(math.Ceil(float64(encryptedFileSize) / float64(segmentSize)))
 
-	url := ai.proxy + "/airlock"
-
 	object, container := reorderNames(filename, container)
 	logs.Info("Uploading object " + object + " to container " + container)
 
@@ -211,7 +214,7 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 
 	// If number of segments is 1, do regular upload, else upload file in segments
 	if segmentNro < 2 {
-		err = put(url, "", 1, 1, encryptedFile, query)
+		err = put("", 1, 1, encryptedFile, query)
 		if err != nil {
 			return fmt.Errorf("Uploading file failed: %w", err)
 		}
@@ -230,7 +233,7 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 			logs.Infof("Uploading segment %v/%v", i+1, segmentNro)
 
 			// Send thisSegmentSize number of bytes to airlock
-			err = put(url, container+"/"+uploadDir, int(i+1), int(segmentNro),
+			err = put(container+"/"+uploadDir, int(i+1), int(segmentNro),
 				io.LimitReader(encryptedFile, thisSegmentSize), query)
 			if err != nil {
 				return fmt.Errorf("Uploading file failed: %w", err)
@@ -241,7 +244,7 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 			container)
 
 		var empty *os.File
-		err = put(url, container+"/"+uploadDir, -1, -1, empty, query)
+		err = put(container+"/"+uploadDir, -1, -1, empty, query)
 		if err != nil {
 			return fmt.Errorf("Uploading manifest file failed: %w", err)
 		}
@@ -366,12 +369,13 @@ var getFileDetailsEncrypt = func(filename string) (rc *readCloser, checksum stri
 	return
 }
 
-var put = func(url, manifest string, segmentNro, segment_total int,
+var put = func(manifest string, segmentNro, segment_total int,
 	upload_data io.Reader, query map[string]string) error {
 
 	headers := map[string]string{"SDS-Access-Token": api.GetSDSToken(),
 		"SDS-Segment":       fmt.Sprintf("%d", segmentNro),
-		"SDS-Total-Segment": fmt.Sprintf("%d", segment_total)}
+		"SDS-Total-Segment": fmt.Sprintf("%d", segment_total),
+	}
 
 	logs.Debug("Setting header: SDS-Access-Token << redacted >>")
 	logs.Debugf("Setting header: SDS-Segment %d", segmentNro)
@@ -381,7 +385,12 @@ var put = func(url, manifest string, segmentNro, segment_total int,
 		headers["X-Object-Manifest"] = manifest
 	}
 
+	if ai.overridden {
+		headers["Project-Name"] = ai.project
+	}
+
 	var bodyBytes []byte
+	url := ai.proxy + "/airlock"
 	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
 		var re *api.RequestError
 		if errors.As(err, &re) && string(bodyBytes) != "" {

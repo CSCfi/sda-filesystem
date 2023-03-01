@@ -77,8 +77,8 @@ func (c *connecter) getProjects() ([]Metadata, error) {
 func (c *connecter) getToken(name string) (sToken, error) {
 	query := map[string]string{"project": name}
 	headers := map[string]string{
-		"X-Authorization":  "Basic " + *c.token,
-		"X-Project-Number": name,
+		"X-Authorization": "Basic " + *c.token,
+		"X-Project-Name":  name,
 	}
 
 	// Request token
@@ -245,7 +245,7 @@ func (c *sdConnectInfo) makeRequest(path, project string, query, headers map[str
 	token := c.sTokens[project]
 	headers["X-Project-ID"] = token.ProjectID
 	headers["X-Authorization"] = "Bearer " + token.Token
-	headers["X-Project-Number"] = c.overrideProject
+	headers["X-Project-Name"] = c.overrideProject
 	return MakeRequest(path, query, headers, nil, ret)
 }
 
