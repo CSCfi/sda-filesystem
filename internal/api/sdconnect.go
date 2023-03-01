@@ -84,6 +84,7 @@ func (c *connecter) getToken(name string) (sToken, error) {
 	// Request token
 	ret := sToken{}
 	err := MakeRequest(*c.url+"/token", query, headers, nil, &ret)
+
 	return ret, err
 }
 
@@ -246,6 +247,7 @@ func (c *sdConnectInfo) makeRequest(path, project string, query, headers map[str
 	headers["X-Project-ID"] = token.ProjectID
 	headers["X-Authorization"] = "Bearer " + token.Token
 	headers["X-Project-Name"] = c.overrideProject
+
 	return MakeRequest(path, query, headers, nil, ret)
 }
 

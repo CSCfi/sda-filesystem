@@ -177,13 +177,14 @@ func TestIsProjectManager(t *testing.T) {
 				}
 			}
 
-			if isManager, err := IsProjectManager(tt.projectParam); err != nil {
+			switch isManager, err := IsProjectManager(tt.projectParam); {
+			case err != nil:
 				t.Errorf("Function returned unexpected error: %s", err.Error())
-			} else if tt.isManager != isManager {
+			case tt.isManager != isManager:
 				t.Errorf("Function returned incorrect manager status. Expected=%v, received=%v", tt.isManager, isManager)
-			} else if isManager && ai.project != tt.project {
+			case isManager && ai.project != tt.project:
 				t.Errorf("Field 'project' not defined correctly. Expected=%v, received=%v", tt.project, ai.project)
-			} else if ai.overridden != tt.overridden {
+			case ai.overridden != tt.overridden:
 				t.Errorf("Field 'overridden' not defined correctly. Expected=%v, received=%v", tt.overridden, ai.overridden)
 			}
 		})

@@ -184,7 +184,7 @@ func TestLogin(t *testing.T) {
 		readerError       error
 		errorText         string
 		mockAskForLogin   func(loginReader) (string, string, error)
-		mockValidateLogin func(string, string) (bool, error)
+		mockValidateLogin func(string, string, string) (bool, error)
 	}{
 		{
 			"OK", nil, "",
@@ -196,7 +196,7 @@ func TestLogin(t *testing.T) {
 
 				return "dumbledore", "345fgj78", nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				username, password := "dumbledore", "345fgj78"
 				if uname != username {
 					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
@@ -218,7 +218,7 @@ func TestLogin(t *testing.T) {
 
 				return "sandman", "89bf5cifu6vo", nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				username, password := "sandman", "89bf5cifu6vo" // #nosec G101
 				if uname != username {
 					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
@@ -241,7 +241,7 @@ func TestLogin(t *testing.T) {
 
 				return usernames[count-1], passwords[count-1], nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				if uname == "Doris" && pwd == "pwd" {
 					return true, nil
 				}
@@ -255,7 +255,7 @@ func TestLogin(t *testing.T) {
 			func(lr loginReader) (string, string, error) {
 				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				return false, fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
@@ -264,7 +264,7 @@ func TestLogin(t *testing.T) {
 			func(lr loginReader) (string, string, error) {
 				return "", "", errExpected
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				return false, fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
@@ -278,7 +278,7 @@ func TestLogin(t *testing.T) {
 
 				return "", "", nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				return false, errExpected
 			},
 		},
