@@ -1,27 +1,38 @@
 # Setting up linux GUI
 
 Build:
+(if upx is not install remove the flag)
 ```
-qtdeploy build desktop cmd/qt/main.go
-cp vendor/github.com/therecipe/env_linux_amd64_513/5.13.0/gcc_64/lib/libQt5QuickShapes.* cmd/qt/deploy/linux/lib/
-tar -czf deploy.tar.gz -C cmd/qt/deploy linux
+wails build -upx -trimpath -clean -s
 ```
 
 or download the release:
 ```
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=v1.4.1
-wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.19-linux-amd64.zip"
+export version=v2.0.0
+wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.20-linux-amd64.zip"
 ```
 
 Install the software:
 ```
-sudo unzip -qq go-fuse-gui-golang1.19-linux-amd64.zip
-sudo chmod 755 /etc/sda-fuse/sda-fuse
+sudo unzip -qq go-fuse-gui-golang1.20-linux-amd64.zip
+sudo mv /etc/sda-fuse/data-gateway /etc/sda-fuse/sda-fuse
+sudo chmod 755 /etc/sda-fuse/data-gateway
 sudo ln -s /etc/sda-fuse/sda-fuse /usr/bin/sda-fuse
-sudo mv cmd/qt/icon.svg /etc/sda-fuse/icon.svg
-sudo mv cmd/qt/filesystem.desktop /etc/skel/Desktop/filesystem.desktop
+sudo wget https://raw.githubusercontent.com/CSCfi/sda-filesystem/refactor/wails-gui/build/appicon.png --directory-prefix=/etc/sda-fuse
+sudo cat > /etc/skel/Desktop/filesystem.desktop << EOF
+[Desktop Entry]
+Version=2.0.0
+Type=Application
+Terminal=false
+Exec=/usr/bin/sda-fuse
+Name=Data Gateway
+Comment=
+Icon=/etc/sda-fuse/appicon.png
+Comment[en_US.utf8]=CSC SDA-Filesystem/Data Gateway
+Name[en_US]=Data Gateway
+EOF
 ```
 
 For the desktop icon to be functional, each user needs to enable it using:

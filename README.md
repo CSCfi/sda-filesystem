@@ -19,7 +19,7 @@ Binaries are built on each release for all supported Operating Systems.
 
 ### Requirements
 
-Go version 1.19
+Go version 1.20
 
 Set these environment variables before running the application:
 - `FS_SD_CONNECT_API` - API for SD-Connect
@@ -40,46 +40,36 @@ For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/loc
 
 `cgofuse` and its [dependencies on different operating systems](https://github.com/billziss-gh/cgofuse#how-to-build).
 
-Install [Qt for Go](https://github.com/therecipe/qt). Regardless of the operating system, there are multiple ways of installing this package. Required that `GO111MODULE=on`.
-
-### Setup
-
-On linux install required packages and vendor dependencies
-```
-./dev_utils/setup-linux.sh
-```
-
-Note: for some vendor modules there might be warnings such as:
-```
-INFO[0427] installing full qt/bluetooth                 
-go install: no install location for directory /home/<user>/sda-filesystem/vendor/github.com/therecipe/qt/bluetooth outside GOPATH
-	For more details see: 'go help gopath'
-```
-These are ok, and are caused as of go 1.14+ 
+Install [Wails](https://wails.io/docs/gettingstarted/installation) and its dependencies.
 
 ### Build and Run
 
+Before running/building the repository for the first time, generate the frontend assests by running:
 ```
-qtdeploy build desktop cmd/qt/main.go
+npm install --prefix frontend
+npm run build --prefix frontend
+```
 
-# Running the application is slightly different for each operating system
-# On macOS:
-./cmd/qt/deploy/darwin/qt_project.app/Contents/MacOS/qt_project
-# On Linux:
-./cmd/qt/deploy/linux/qt_project
-# On Windows:
-cmd\qt\deploy\windows\qt_project.exe
+To run in development mode:
+```
+cd cmd/gui
+wails dev
+``` 
+
+To build for production:
+```
+cd cmd/gui
+
+# For Linx and macOS
+wails build -upx -trimpath -clean -s
+
+# For Windows
+wails build -upx -trimpath -clean -s -webview2=embed
 ```
 
 ### Deploy
 
-To deploy binary to Virtual Machine (VM):
-```
-qtdeploy build desktop cmd/qt/main.go
-tar -czf deploy.tar.gz -C cmd/qt/deploy linux
-```
-
-Copy the archive of the deployment environment, for more details see: [Linux setup](docs/linux-setup.md).
+See [Linux setup](docs/linux-setup.md).
 
 ## Command Line Interface
 
@@ -167,8 +157,6 @@ See [troubleshooting](docs/troubleshooting.md) for fixes to known issues.
 
 Data Gateway is released under `MIT`, see [LICENSE](LICENSE).
 
-[Qt binding package for Go](https://github.com/therecipe/qt) released under [LGPLv3](https://opensource.org/licenses/LGPL-3.0)
+[Wails](https://wails.io) is released under [MIT](https://github.com/wailsapp/wails/blob/master/LICENSE)
 
 [CgoFuse](https://github.com/billziss-gh/cgofuse) is released under [MIT](https://github.com/billziss-gh/cgofuse/blob/master/LICENSE.txt)
-
-Qt itself is licensed and available under multiple [licenses](https://www.qt.io/licensing).
