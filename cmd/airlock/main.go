@@ -35,6 +35,7 @@ func main() {
 		"Journal Number/Name specific for Findata uploads")
 	originalFilename := flag.String("original-file", "",
 		"Filename of original unecrypted file when uploading pre-encrypted file from Findata vm")
+	project := flag.String("project", "", "SD Connect project if it differs from that in the VM")
 	quiet := flag.Bool("quiet", false, "Print only errors")
 	debug := flag.Bool("debug", false, "Enable debug prints")
 
@@ -69,7 +70,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	if isManager, err := airlock.IsProjectManager(); err != nil {
+	if isManager, err := airlock.IsProjectManager(*project); err != nil {
 		logs.Fatalf("Unable to determine project manager status: %s", err.Error())
 	} else if !isManager {
 		logs.Fatal("You cannot use Airlock as you are not the project manager")

@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Refactor GUI to use Wails
 
+### Added
+
+- `-project` parameter, which can be used to override the SD Connect project in the VM
+
 ## [v1.4.1] - 2023-01-09
 
 ### Changed

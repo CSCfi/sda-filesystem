@@ -38,7 +38,7 @@ func TestIsProjectManager_NoFile(t *testing.T) {
 	infoFile = file.Name()
 
 	errStr := fmt.Sprintf("Could not find user info: open %s: no such file or directory", file.Name())
-	if _, err := IsProjectManager(); err == nil {
+	if _, err := IsProjectManager(""); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -109,7 +109,7 @@ func TestIsProjectManager_Error(t *testing.T) {
 				return tt.err
 			}
 
-			if _, err := IsProjectManager(); err == nil {
+			if _, err := IsProjectManager(""); err == nil {
 				t.Error("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -120,19 +120,34 @@ func TestIsProjectManager_Error(t *testing.T) {
 
 func TestIsProjectManager(t *testing.T) {
 	var tests = []struct {
-		testname  string
-		data      string
-		isManager bool
+		testname, data, project, projectParam string
+		isManager, overridden                 bool
 	}{
-		{"OK_1", "wrong_project another_project pr726", false},
-		{"OK_2", "wrong_project project_4726 cupcake", true},
+		{
+			"OK_1", "6036 7843 6947",
+			"", "", false, false,
+		},
+		{
+			"OK_2", "1394 4726 9362",
+			"project_4726", "", true, false,
+		},
+		{
+			"OK_3", "4726 0837 7295",
+			"project_7295", "project_7295", true, true,
+		},
+		{
+			"OK_3", "0593 9274 2735",
+			"project_9274", "project_9274", true, true,
+		},
 	}
 
 	origInfoFile := infoFile
 	origMakeRequest := api.MakeRequest
+	origProject := ai.project
 	defer func() {
 		infoFile = origInfoFile
 		api.MakeRequest = origMakeRequest
+		ai.project = origProject
 	}()
 
 	file, err := os.CreateTemp("", "file")
@@ -141,7 +156,7 @@ func TestIsProjectManager(t *testing.T) {
 	}
 	defer os.RemoveAll(file.Name())
 
-	data := map[string]string{"userinfo_endpoint": "test_point2", "login_aud": "project_4726"}
+	data := map[string]string{"userinfo_endpoint": "test_point2", "login_aud": "4726"}
 	encoder := json.NewEncoder(file)
 	if err = encoder.Encode(data); err != nil {
 		t.Fatalf("Failed to encode data to json file: %s", err.Error())
@@ -162,10 +177,15 @@ func TestIsProjectManager(t *testing.T) {
 				}
 			}
 
-			if isManager, err := IsProjectManager(); err != nil {
+			switch isManager, err := IsProjectManager(tt.projectParam); {
+			case err != nil:
 				t.Errorf("Function returned unexpected error: %s", err.Error())
-			} else if tt.isManager != isManager {
+			case tt.isManager != isManager:
 				t.Errorf("Function returned incorrect manager status. Expected=%v, received=%v", tt.isManager, isManager)
+			case isManager && ai.project != tt.project:
+				t.Errorf("Field 'project' not defined correctly. Expected=%v, received=%v", tt.project, ai.project)
+			case ai.overridden != tt.overridden:
+				t.Errorf("Field 'overridden' not defined correctly. Expected=%v, received=%v", tt.overridden, ai.overridden)
 			}
 		})
 	}
@@ -430,7 +450,7 @@ func TestUpload(t *testing.T) {
 
 			count := 1
 			total := int(tt.total)
-			put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
+			put = func(manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if manifest != tt.manifest {
 					t.Errorf("Function received incorrect manifest. Expected=%s, received=%s", tt.manifest, manifest)
 				}
@@ -512,7 +532,7 @@ func TestUpload_Error(t *testing.T) {
 			}
 
 			count := 1
-			put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
+			put = func(manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if count == tt.count {
 					return errExpected
 				}
@@ -540,10 +560,11 @@ func TestUpload_Error(t *testing.T) {
 func TestUpload_FileContent(t *testing.T) {
 	var tests = []struct {
 		testname, content string
+		encrypt           bool
 	}{
-		{"OK_1", "u89pct87"},
-		{"OK_2", "hiopctfylbkigo"},
-		{"OK_3", "jtxfulvghoi.g oi.rf lg o.fblhoo jihuimgk"},
+		{"OK_1", "u89pct87", false},
+		{"OK_2", "hiopctfylbkigo", true},
+		{"OK_3", "jtxfulvghoi.g oi.rf lg o.fblhoo jihuimgk", false},
 	}
 
 	origGetFileDetails := getFileDetails
@@ -585,9 +606,19 @@ func TestUpload_FileContent(t *testing.T) {
 
 				return file, "", int64(len(tt.content)), nil
 			}
+			getFileDetailsEncrypt = func(filename string) (*readCloser, string, int64, error) {
+				file, err := os.Open(filename)
+				if err != nil {
+					return nil, "", 0, err
+				}
+				errc := make(chan error, 1)
+				errc <- nil
+
+				return &readCloser{file, file, errc}, "", int64(len(tt.content)), nil
+			}
 
 			buf := &bytes.Buffer{}
-			put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
+			put = func(manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 				if segmentNro != -1 {
 					if _, err := buf.ReadFrom(upload_data); err != nil {
 						return err
@@ -597,7 +628,14 @@ func TestUpload_FileContent(t *testing.T) {
 				return nil
 			}
 
-			if err := Upload("", file.Name(), "bucket684", "", 1, false); err != nil {
+			var filename, filenameEnc string
+			if tt.encrypt {
+				filename = file.Name()
+			} else {
+				filenameEnc = file.Name()
+			}
+
+			if err := Upload(filename, filenameEnc, "bucket684", "", 1, tt.encrypt); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if tt.content != buf.String() {
 				t.Errorf("put() read incorrect content\nExpected=%v\nReceived=%v", []byte(tt.content), buf.Bytes())
@@ -634,7 +672,7 @@ func TestUpload_Channel_Error(t *testing.T) {
 
 		return file, "", 0, nil
 	}
-	put = func(url, manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
+	put = func(manifest string, segmentNro, segment_total int, upload_data io.Reader, query map[string]string) error {
 		return nil
 	}
 
@@ -925,28 +963,44 @@ func TestGetFileDetailsEncrypt_Crypt4GH(t *testing.T) {
 
 func TestPut(t *testing.T) {
 	var tests = []struct {
-		testname, token  string
-		segNro, segTotal int
-		query, headers   map[string]string
+		testname, token, project string
+		segNro, segTotal         int
+		query, headers           map[string]string
 	}{
 		{
-			"OK_1", "test_token", 385, 9563,
+			"OK_1", "test_token", "project_9385", 385, 9563,
 			map[string]string{"test": "hello", "world": "bye"},
-			map[string]string{"SDS-Access-Token": "test_token", "SDS-Segment": "385", "SDS-Total-Segment": "9563"},
+			map[string]string{
+				"SDS-Access-Token":  "test_token",
+				"SDS-Segment":       "385",
+				"SDS-Total-Segment": "9563",
+				"Project-Name":      "project_9385",
+			},
 		},
 		{
-			"OK_2", "another_token", -1, 56,
+			"OK_2", "another_token", "", -1, 56,
 			map[string]string{"test": "good bye", "parrot": "carrot"},
-			map[string]string{"SDS-Access-Token": "another_token", "SDS-Segment": "-1", "SDS-Total-Segment": "56", "X-Object-Manifest": "bucket/dir"},
+			map[string]string{
+				"SDS-Access-Token":  "another_token",
+				"SDS-Segment":       "-1",
+				"SDS-Total-Segment": "56",
+				"X-Object-Manifest": "bucket/dir",
+			},
 		},
 	}
 
 	origGetSDSToken := api.GetSDSToken
 	origMakeRequest := api.MakeRequest
+	origProxy := ai.proxy
+	origOverridden := ai.overridden
+	origProject := ai.project
 
 	defer func() {
 		api.GetSDSToken = origGetSDSToken
 		api.MakeRequest = origMakeRequest
+		ai.proxy = origProxy
+		ai.overridden = origOverridden
+		ai.project = origProject
 	}()
 
 	testURL := "https://example.com"
@@ -957,8 +1011,8 @@ func TestPut(t *testing.T) {
 				return tt.token
 			}
 			api.MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
-				if url != testURL {
-					t.Errorf("Function received incorrect url\nExpected=%s\nReceived=%s", testURL, url)
+				if url != testURL+"/airlock" {
+					t.Errorf("Function received incorrect url\nExpected=%s\nReceived=%s", testURL+"/airlock", url)
 				}
 				if !reflect.DeepEqual(query, tt.query) {
 					t.Errorf("Function received incorrect query\nExpected=%q\nReceived=%q", tt.query, query)
@@ -970,7 +1024,10 @@ func TestPut(t *testing.T) {
 				return nil
 			}
 
-			err := put(testURL, "bucket/dir", tt.segNro, tt.segTotal, nil, tt.query)
+			ai.proxy = testURL
+			ai.project = tt.project
+			ai.overridden = tt.project != ""
+			err := put("bucket/dir", tt.segNro, tt.segTotal, nil, tt.query)
 			if err != nil {
 				t.Errorf("Function returned error: %s", err.Error())
 			}
@@ -1012,7 +1069,7 @@ func TestPut_Error(t *testing.T) {
 				}
 			}
 
-			err := put("google.com", "bucket6754/dir", 43, 2046, nil, nil)
+			err := put("bucket6754/dir", 43, 2046, nil, nil)
 			if err == nil {
 				t.Error("Function did not return error")
 			} else if tt.errStr != err.Error() {

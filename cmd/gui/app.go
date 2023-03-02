@@ -121,7 +121,7 @@ func (a *App) InitializeAPI() error {
 }
 
 func (a *App) Login(username, password string) (bool, error) {
-	success, err := api.ValidateLogin(username, password)
+	success, err := api.ValidateLogin(username, password, "")
 	if err != nil {
 		logs.Error(err)
 	}
@@ -135,7 +135,7 @@ func (a *App) Login(username, password string) (bool, error) {
 		return false, fmt.Errorf(message)
 	}
 
-	isManager, err := airlock.IsProjectManager()
+	isManager, err := airlock.IsProjectManager("")
 	switch {
 	case err != nil:
 		logs.Errorf("Resolving project manager status failed: %w", err)

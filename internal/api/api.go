@@ -205,9 +205,9 @@ var SetBasicToken = func(username, password string) {
 }
 
 // ValidateLogin checks if user is able to log in with given input
-var ValidateLogin = func(username, password string) (bool, error) {
+var ValidateLogin = func(username, password, project string) (bool, error) {
 	SetBasicToken(username, password)
-	err := allRepositories[SDConnect].validateLogin(hi.basicToken)
+	err := allRepositories[SDConnect].validateLogin(hi.basicToken, project)
 	if err != nil {
 		return false, err
 	}

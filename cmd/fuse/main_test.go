@@ -177,6 +177,36 @@ func TestAskForLogin(t *testing.T) {
 	}
 }
 
+func TestAskForLogin_Envs(t *testing.T) {
+	// Ignore prints to stdout
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	os.Stdout = null
+
+	username := "rumplestiltskin"
+	password := "very-secret-password"
+	os.Setenv("CSC_USERNAME", username)
+	os.Setenv("CSC_PASSWORD", password)
+
+	r := newTestReader([]string{}, "", errors.New("stream error"), errors.New("reader error"))
+	str1, str2, err := askForLogin(r)
+
+	os.Unsetenv("CSC_USERNAME")
+	os.Unsetenv("CSC_PASSWORD")
+
+	os.Stdout = sout
+	null.Close()
+
+	switch {
+	case err != nil:
+		t.Errorf("Function returned error: %s", err.Error())
+	case str1 != username:
+		t.Errorf("Username incorrect. Expected=%s, received=%s", username, str1)
+	case str2 != password:
+		t.Errorf("Password incorrect. Expected=%s, received=%s", password, str2)
+	}
+}
+
 func TestLogin(t *testing.T) {
 	var count int
 	var tests = []struct {
@@ -184,7 +214,7 @@ func TestLogin(t *testing.T) {
 		readerError       error
 		errorText         string
 		mockAskForLogin   func(loginReader) (string, string, error)
-		mockValidateLogin func(string, string) (bool, error)
+		mockValidateLogin func(string, string, string) (bool, error)
 	}{
 		{
 			"OK", nil, "",
@@ -196,7 +226,7 @@ func TestLogin(t *testing.T) {
 
 				return "dumbledore", "345fgj78", nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				username, password := "dumbledore", "345fgj78"
 				if uname != username {
 					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
@@ -218,7 +248,7 @@ func TestLogin(t *testing.T) {
 
 				return "sandman", "89bf5cifu6vo", nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				username, password := "sandman", "89bf5cifu6vo" // #nosec G101
 				if uname != username {
 					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
@@ -241,7 +271,7 @@ func TestLogin(t *testing.T) {
 
 				return usernames[count-1], passwords[count-1], nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				if uname == "Doris" && pwd == "pwd" {
 					return true, nil
 				}
@@ -255,7 +285,7 @@ func TestLogin(t *testing.T) {
 			func(lr loginReader) (string, string, error) {
 				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				return false, fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
@@ -264,7 +294,7 @@ func TestLogin(t *testing.T) {
 			func(lr loginReader) (string, string, error) {
 				return "", "", errExpected
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				return false, fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
@@ -278,7 +308,7 @@ func TestLogin(t *testing.T) {
 
 				return "", "", nil
 			},
-			func(uname, pwd string) (bool, error) {
+			func(uname, pwd, pr string) (bool, error) {
 				return false, errExpected
 			},
 		},
