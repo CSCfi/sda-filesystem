@@ -1,0 +1,34 @@
+* {
+    font-family: Arial, Helvetica, "FreeSans", sans-serif;
+}
+
+body {
+    margin: 0;
+    color: #595959;
+}
+
+h2 {
+    margin-top: 0px;
+}
+
+c-steps {
+    font-size: 0.9em;
+    margin-bottom: 20px;
+}
+
+.fill-width {
+    width: 100%;
+}
+
+.continue-button {
+    float: right; 
+}
+
+.smaller-text {
+    font-size: 14px;
+}
+
+.gateway-table {
+    margin-top: 20px;
+    margin-bottom: 40px;
+}

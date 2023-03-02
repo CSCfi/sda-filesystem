@@ -31,7 +31,7 @@ func TestSetSignal(t *testing.T) {
 	defer func() { signal = nil }()
 
 	called := false
-	testSignal := func(i int, s []string) {
+	testSignal := func(i string, s []string) {
 		called = true
 	}
 
@@ -41,7 +41,7 @@ func TestSetSignal(t *testing.T) {
 		t.Error("SetSignal() should not have called signal")
 	}
 
-	signal(0, []string{})
+	signal("", []string{})
 
 	if !called {
 		t.Error("Signal was not assigned correctly")
@@ -159,10 +159,10 @@ func TestError_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	Error(errors.New(message))
@@ -170,8 +170,8 @@ func TestError_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.ErrorLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.ErrorLevel), level)
+	case level != logrus.ErrorLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.ErrorLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -215,10 +215,10 @@ func TestErrorf_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	Errorf("This is an %s error: %w", "unexpected", errors.New("Who are you?"))
@@ -226,8 +226,8 @@ func TestErrorf_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.ErrorLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.ErrorLevel), level)
+	case level != logrus.ErrorLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.ErrorLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -271,10 +271,10 @@ func TestWarning_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	Warning(errors.New(message))
@@ -282,8 +282,8 @@ func TestWarning_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.WarnLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.WarnLevel), level)
+	case level != logrus.WarnLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.WarnLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -326,10 +326,10 @@ func TestWarningf_Signal(t *testing.T) {
 		return []string{err.Error()}
 	}
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	Warningf("%s the sun will not shine: %w", "Tomorrow", errors.New("It is the end of days"))
@@ -337,8 +337,8 @@ func TestWarningf_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.WarnLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.WarnLevel), level)
+	case level != logrus.WarnLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.WarnLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -366,10 +366,10 @@ func TestInfo_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "I am grand, and you?"
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	Info("I am ", "grand,", " and you?")
@@ -377,8 +377,8 @@ func TestInfo_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.InfoLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.InfoLevel), level)
+	case level != logrus.InfoLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.InfoLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -406,10 +406,10 @@ func TestInfof_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "99 students barged in the classroom"
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	Infof("%d students barged in the %s", 99, "classroom")
@@ -417,8 +417,8 @@ func TestInfof_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.InfoLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.InfoLevel), level)
+	case level != logrus.InfoLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.ErrorLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -446,16 +446,16 @@ func TestDebug_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "When did this happen? I don't know"
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	log.SetLevel(logrus.InfoLevel)
 	Debug("When did ", "this happen? ", "I don't know")
 
-	if level != 0 || strs != nil {
+	if level != "" || strs != nil {
 		t.Error("With loglevel=info, signal() should not have been called")
 
 		return
@@ -467,8 +467,8 @@ func TestDebug_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.DebugLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.DebugLevel), level)
+	case level != logrus.DebugLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.DebugLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}
@@ -496,16 +496,16 @@ func TestDebugf_Signal(t *testing.T) {
 	defer testHook.Reset()
 	message := "8 dogs crossed the road. And?"
 
-	var level int
+	var level string
 	var strs []string
-	signal = func(i int, s []string) {
-		level, strs = i, s
+	signal = func(s1 string, s2 []string) {
+		level, strs = s1, s2
 	}
 
 	log.SetLevel(logrus.InfoLevel)
 	Debugf("%d dogs crossed the road. %s", 8, "And?")
 
-	if level != 0 || strs != nil {
+	if level != "" || strs != nil {
 		t.Error("With loglevel=info, signal() should not have been called")
 
 		return
@@ -517,8 +517,8 @@ func TestDebugf_Signal(t *testing.T) {
 	switch {
 	case len(testHook.Entries) != 0:
 		t.Error("Logger with signal should not have logged to stdout")
-	case level != int(logrus.DebugLevel):
-		t.Errorf("Logger with signal logged at incorrect level. Expected=%d, received=%d", int(logrus.DebugLevel), level)
+	case level != logrus.DebugLevel.String():
+		t.Errorf("Logger with signal logged at incorrect level. Expected=%s, received=%s", logrus.DebugLevel.String(), level)
 	case !reflect.DeepEqual(strs, []string{message}):
 		t.Errorf("Logger with signal gave incorrect message\nExpected=%v\nReceived=%v", []string{message}, strs)
 	}

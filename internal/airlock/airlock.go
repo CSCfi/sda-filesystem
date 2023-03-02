@@ -269,7 +269,7 @@ func reorderNames(filename, directory string) (string, string) {
 var CheckEncryption = func(filename string) (bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return false, fmt.Errorf("Failed to check if file is encrypted: %w", err)
+		return false, err
 	}
 	defer file.Close()
 

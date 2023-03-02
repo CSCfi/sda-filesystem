@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "data-gateway",
+  "outputfilename": "data-gateway",
+  "build:dir": "../../build",
+  "frontend:dir": "../../frontend",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "info": {
+        "companyName": "CSC",
+        "productName": "Data Gateway",
+        "productVersion": "2.0.0",
+        "copyright": "MIT"
+    }
+}

@@ -96,7 +96,7 @@ func main() {
 
 	var encrypted bool
 	if encrypted, err = airlock.CheckEncryption(filename); err != nil {
-		logs.Fatal(err)
+		logs.Fatalf("Failed to check if file is encrypted: %s", err.Error())
 	} else if !encrypted {
 		*originalFilename = filename
 		filename += ".c4gh"

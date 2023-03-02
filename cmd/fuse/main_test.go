@@ -76,7 +76,7 @@ func newTestReader(input []string, password string, sErr error, rErr error) *tes
 }
 
 func TestMain(m *testing.M) {
-	logs.SetSignal(func(i int, s []string) {})
+	logs.SetSignal(func(l string, s []string) {})
 	os.Exit(m.Run())
 }
 
@@ -100,12 +100,12 @@ func TestUserChooseUpdate_Error(t *testing.T) {
 	finished := false
 	buf := &testStream{err: errExpected}
 
-	var level int
+	var level string
 	var strs []string
-	logs.SetSignal(func(i int, s []string) {
-		level, strs = i, s
+	logs.SetSignal(func(ll string, s []string) {
+		level, strs = ll, s
 	})
-	defer logs.SetSignal(func(i int, s []string) {})
+	defer logs.SetSignal(func(l string, s []string) {})
 
 	go func() {
 		userChooseUpdate(buf)
@@ -115,7 +115,7 @@ func TestUserChooseUpdate_Error(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	err := []string{"Could not read input", errExpected.Error()}
-	if level != int(logrus.ErrorLevel) {
+	if level != logrus.ErrorLevel.String() {
 		t.Fatal("Function did not log an error")
 	}
 	if !reflect.DeepEqual(strs, err) {

@@ -16,7 +16,6 @@ import (
 const constantError = "some error"
 
 type mockSubmitter struct {
-	submittable
 	mockURLOK    string
 	mockDatasets []string
 	mockFiles    []Metadata
