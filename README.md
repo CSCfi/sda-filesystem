@@ -101,6 +101,8 @@ Usage of ./go-fuse:
     	log to standard error instead of files
   -mount string
     	Path to Data Gateway mount point
+  -project string
+    	SD Connect project if it differs from that in the VM
   -stderrthreshold value
     	logs at or above this threshold go to stderr
   -v value
@@ -121,6 +123,7 @@ go build -o ./airlock ./cmd/airlock/main.go
 ```
 Test install.
 ```
+./airlock -help
 Usage of ./airlock:
   -alsologtostderr
     	log to standard error as well as files
@@ -136,6 +139,8 @@ Usage of ./airlock:
     	log to standard error instead of files
   -original-file string
     	Filename of original unecrypted file when uploading pre-encrypted file from Findata vm
+  -project string
+    	SD Connect project if it differs from that in the VM
   -quiet
     	Print only errors
   -segment-size int
