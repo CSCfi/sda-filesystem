@@ -176,7 +176,7 @@ func processFlags() error {
 
 func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
-	flag.StringVar(&project, "project", "", "The SD Connect project when using Hopsworks")
+	flag.StringVar(&project, "project", "", "SD Connect project if it differs from that in the VM")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }

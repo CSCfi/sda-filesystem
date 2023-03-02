@@ -35,7 +35,7 @@ func main() {
 		"Journal Number/Name specific for Findata uploads")
 	originalFilename := flag.String("original-file", "",
 		"Filename of original unecrypted file when uploading pre-encrypted file from Findata vm")
-	project := flag.String("project", "", "The SD Connect project when using Hopsworks")
+	project := flag.String("project", "", "SD Connect project if it differs from that in the VM")
 	quiet := flag.Bool("quiet", false, "Print only errors")
 	debug := flag.Bool("debug", false, "Enable debug prints")
 
