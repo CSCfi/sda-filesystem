@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { CToastMessage, CToastType } from 'csc-ui/dist/types'
 import { ref, computed, onMounted } from 'vue'
-import { EventsOn, EventsEmit, Quit } from '../wailsjs/runtime'
-import { InitializeAPI } from '../wailsjs/go/main/App'
+import { EventsOn, EventsEmit } from '../wailsjs/runtime'
+import { InitializeAPI, InitFuse, Quit } from '../wailsjs/go/main/App'
 
 interface ComponentType {
     name: string
@@ -16,13 +16,18 @@ const disabled = ref(false)
 const initialized = ref(false)
 const loggedIn = ref(false)
 const accessed = ref(false)
+const canSkip = ref(false)
 
 const currentPage = ref("Login")
 const componentData = computed<ComponentType[]>(() => ([
     {
         name: "Login",
         visible: !loggedIn.value,
-        props: {initialized: initialized.value, disabled: disabled.value},
+        props: {
+            initialized: initialized.value, 
+            disabled: disabled.value,
+            canSkip: canSkip.value,
+        },
     },
     { name: "Access", visible: loggedIn.value, active: loggedIn.value },
     { name: "Export", visible: loggedIn.value, disabled: !accessed.value },
@@ -34,9 +39,10 @@ const visibleTabs = computed(() => componentData.value.filter(data => data.visib
 const toasts = ref<HTMLCToastsElement | null>(null);
 
 onMounted(() => {
-    InitializeAPI().then(() => {
+    InitializeAPI().then((skip: boolean) => {
         console.log("Initializing Data Gateway finished");
         initialized.value = true;
+        canSkip.value = skip;
     }).catch(e => {
         disabled.value = true;
         EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
@@ -54,7 +60,11 @@ EventsOn('showToast', function(title: string, err: string) {
     toasts.value?.addToast(message);
 })
 
-EventsOn('loggedIn', () => {loggedIn.value = true; currentPage.value = 'Access'})
+EventsOn('loggedIn', () => {
+    loggedIn.value = true; 
+    currentPage.value = 'Access';
+    InitFuse();
+})
 
 EventsOn('fuseReady', () => (accessed.value = true))
 </script>

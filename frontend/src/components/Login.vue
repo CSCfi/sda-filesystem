@@ -6,6 +6,7 @@ import { EventsEmit } from '../../wailsjs/runtime'
 const props = defineProps<{
     initialized: boolean,
     disabled: boolean,
+    canSkip: boolean,
 }>()
 
 const username = ref("") 
@@ -35,6 +36,12 @@ function login() {
         error401.value = false;
     }
 }
+
+function skip() {
+    if (!props.disabled) {
+        EventsEmit("loggedIn");
+    }
+}
 </script>
 
 <template>
@@ -51,13 +58,22 @@ function login() {
                 If you have forgotten your password, visit https://my.csc.fi/forgot-password.
             </c-alert>
          
-            <c-button 
-                size="large" 
-                :loading="loading" 
-                :disabled="props.disabled || !username || !password"
-                @click="login">
-                Login
-            </c-button>
+            <c-row justify="end" gap="20px">
+                <c-button
+                    size="large" 
+                    :disabled="!canSkip"
+                    outlined
+                    @click="skip">
+                    Skip
+                </c-button>
+                <c-button 
+                    size="large" 
+                    :loading="loading" 
+                    :disabled="props.disabled || !username || !password"
+                    @click="login">
+                    Login
+                </c-button>
+            </c-row>
         </form>
     </c-container>
 </template>
@@ -75,5 +91,9 @@ function login() {
 
 c-alert > div {
     font-size: 16px;
+}
+
+c-alert {
+    margin-bottom: 10px;
 }
 </style>

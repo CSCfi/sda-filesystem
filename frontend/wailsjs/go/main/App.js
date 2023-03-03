@@ -18,6 +18,10 @@ export function GetDefaultMountPoint() {
   return window['go']['main']['App']['GetDefaultMountPoint']();
 }
 
+export function InitFuse() {
+  return window['go']['main']['App']['InitFuse']();
+}
+
 export function InitializeAPI() {
   return window['go']['main']['App']['InitializeAPI']();
 }
@@ -36,6 +40,10 @@ export function OpenFuse() {
 
 export function Panic() {
   return window['go']['main']['App']['Panic']();
+}
+
+export function Quit() {
+  return window['go']['main']['App']['Quit']();
 }
 
 export function RefreshFuse() {

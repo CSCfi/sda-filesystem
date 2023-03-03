@@ -321,7 +321,7 @@ func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "SD Apply authorization failed: API responded with status 401 Unauthorized"
+	expectedError := "SD Apply authorization failed"
 	err := s.validateLogin()
 
 	if err == nil {
@@ -370,7 +370,7 @@ func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "Error(s) occurred for SD Apply"
+	expectedError := "SD Apply APIs failed to retrieve any data"
 	err := s.validateLogin()
 
 	if err == nil {

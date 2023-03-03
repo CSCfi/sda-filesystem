@@ -153,7 +153,7 @@ func TestAskForLogin(t *testing.T) {
 			os.Stdout = null
 
 			r := newTestReader([]string{tt.username}, tt.password, tt.streamError, tt.readerError)
-			str1, str2, err := askForLogin(r)
+			str1, str2, exists, err := askForLogin(r)
 
 			os.Stdout = sout
 			null.Close()
@@ -167,6 +167,8 @@ func TestAskForLogin(t *testing.T) {
 				}
 			case err != nil:
 				t.Errorf("Function returned error: %s", err.Error())
+			case exists:
+				t.Errorf("Function says the environment variables exist.")
 			case str1 != tt.username:
 				t.Errorf("Username incorrect. Expected=%s, received=%s", tt.username, str1)
 			case str2 != tt.password:
@@ -189,7 +191,7 @@ func TestAskForLogin_Envs(t *testing.T) {
 	os.Setenv("CSC_PASSWORD", password)
 
 	r := newTestReader([]string{}, "", errors.New("stream error"), errors.New("reader error"))
-	str1, str2, err := askForLogin(r)
+	str1, str2, exists, err := askForLogin(r)
 
 	os.Unsetenv("CSC_USERNAME")
 	os.Unsetenv("CSC_PASSWORD")
@@ -200,6 +202,8 @@ func TestAskForLogin_Envs(t *testing.T) {
 	switch {
 	case err != nil:
 		t.Errorf("Function returned error: %s", err.Error())
+	case !exists:
+		t.Errorf("Function says the environment variables do not exist.")
 	case str1 != username:
 		t.Errorf("Username incorrect. Expected=%s, received=%s", username, str1)
 	case str2 != password:
@@ -213,26 +217,23 @@ func TestLogin(t *testing.T) {
 		testname          string
 		readerError       error
 		errorText         string
-		mockAskForLogin   func(loginReader) (string, string, error)
-		mockValidateLogin func(string, string, string) (bool, error)
+		mockAskForLogin   func(loginReader) (string, string, bool, error)
+		mockValidateLogin func(string, ...string) (bool, error)
 	}{
 		{
 			"OK", nil, "",
-			func(lr loginReader) (string, string, error) {
+			func(lr loginReader) (string, string, bool, error) {
 				if count > 0 {
-					return "", "", fmt.Errorf("Function did not approve login during first loop")
+					return "", "", false, fmt.Errorf("Function did not approve login during first loop")
 				}
 				count++
 
-				return "dumbledore", "345fgj78", nil
+				return "dumbledore", "345fgj78", false, nil
 			},
-			func(uname, pwd, pr string) (bool, error) {
-				username, password := "dumbledore", "345fgj78"
-				if uname != username {
-					return false, fmt.Errorf("Incorrect username. Expected=%s, received=%s", username, uname)
-				}
-				if pwd != password {
-					return false, fmt.Errorf("Incorrect password. Expected=%s, received=%s", password, pwd)
+			func(tkn string, rest ...string) (bool, error) {
+				token := ""
+				if tkn != token {
+					return false, fmt.Errorf("Incorrect token. Expected=%s, received=%s", token, tkn)
 				}
 
 				return true, nil

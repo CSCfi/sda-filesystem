@@ -200,26 +200,18 @@ var testURL = func(url string) error {
 	return nil
 }
 
-var SetBasicToken = func(username, password string) {
+var BasicToken = func(username, password string) string {
 	hi.basicToken = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	return hi.basicToken
 }
 
-// ValidateLogin checks if user is able to log in with given input
-var ValidateLogin = func(username, password, project string) (bool, error) {
-	SetBasicToken(username, password)
-	err := allRepositories[SDConnect].validateLogin(hi.basicToken, project)
-	if err != nil {
-		return false, err
-	}
-	hi.repositories[SDConnect] = allRepositories[SDConnect]
-
-	// SDSubmit not necessary if it is unavailable
-	err = allRepositories[SDSubmit].validateLogin()
+var ValidateLogin = func(rep string, auth ...string) error {
+	err := allRepositories[rep].validateLogin(auth...)
 	if err == nil {
-		hi.repositories[SDSubmit] = allRepositories[SDSubmit]
+		hi.repositories[rep] = allRepositories[rep]
 	}
 
-	return true, err
+	return err
 }
 
 // LevelCount returns the amount of levels repository 'rep' has

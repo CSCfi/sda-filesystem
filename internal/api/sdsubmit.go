@@ -137,14 +137,13 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && re.StatusCode == 401 {
-				return fmt.Errorf("%s authorization failed: %w", SDSubmit, err)
+				return fmt.Errorf("%s authorization failed", SDSubmit)
 			}
 
+			logs.Warning(err)
 			if errors.As(err, &re) && re.StatusCode == 500 {
-				logs.Warningf("Cannot connect to %s API %s: %w", SDSubmit, s.urls[i], err)
 				count500++
 			} else {
-				logs.Warningf("Something went wrong when fetching %s datasets from API %s: %w", SDSubmit, s.urls[i], err)
 				count++
 			}
 		} else {
@@ -159,7 +158,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		case count500 > 0:
 			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmit)
 		case count > 0:
-			return fmt.Errorf("Error(s) occurred for %s", SDSubmit)
+			return fmt.Errorf("%s APIs failed to retrieve any data", SDSubmit)
 		default:
 			return fmt.Errorf("No datasets found for %s", SDSubmit)
 		}

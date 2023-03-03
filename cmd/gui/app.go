@@ -28,7 +28,7 @@ type App struct {
 	fs          *filesystem.Fuse
 	mountpoint  string
 	paniced     bool
-	initialized bool
+	preventQuit bool
 }
 
 // NewApp creates a new App application struct
@@ -45,6 +45,15 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	filesystem.UnmountFilesystem()
+}
+
+func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+	return a.preventQuit
+}
+
+func (a *App) Quit() {
+	a.preventQuit = false
+	wailsruntime.Quit(a.ctx)
 }
 
 func (a *App) Panic() {
@@ -80,52 +89,60 @@ func (a *App) GetDefaultMountPoint() string {
 	return a.mountpoint
 }
 
-func (a *App) InitializeAPI() error {
+func (a *App) InitializeAPI() (bool, error) {
 	err := api.GetCommonEnvs()
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Errorf("Required environmental variables missing")
+		return false, fmt.Errorf("Required environmental variables missing")
 	}
 
 	err = api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Errorf("Initializing cache failed")
+		return false, fmt.Errorf("Initializing cache failed")
 	}
 
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Errorf("Initializing HTTP client failed")
+		return false, fmt.Errorf("Initializing HTTP client failed")
 	}
 
-	noneAvailable := true
-	for _, rep := range api.GetAllRepositories() {
+	allRepos := api.GetAllRepositories()
+	repoMap := make(map[string]struct{})
+	for i := range allRepos {
+		repoMap[allRepos[i]] = struct{}{}
+	}
+
+	for _, rep := range allRepos {
 		if err := api.GetEnvs(rep); err != nil {
+			delete(repoMap, rep)
 			logs.Error(err)
-		} else {
-			noneAvailable = false
 		}
 	}
 
-	if noneAvailable {
-		return fmt.Errorf("No services available")
+	if _, ok := repoMap[api.SDSubmit]; ok {
+		if err = api.ValidateLogin(api.SDSubmit); err != nil {
+			delete(repoMap, api.SDSubmit)
+			logs.Error(err)
+		}
 	}
 
-	a.initialized = true
+	if len(repoMap) == 0 {
+		return false, fmt.Errorf("No services available")
+	}
 
-	return nil
+	_, ok := repoMap[api.SDSubmit]
+	return ok, nil
 }
 
 func (a *App) Login(username, password string) (bool, error) {
-	success, err := api.ValidateLogin(username, password, "")
-	if err != nil {
+	token := api.BasicToken(username, password)
+	if err := api.ValidateLogin(api.SDConnect, token, ""); err != nil {
 		logs.Error(err)
-	}
-	if !success {
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			return false, nil
@@ -134,6 +151,8 @@ func (a *App) Login(username, password string) (bool, error) {
 
 		return false, fmt.Errorf(message)
 	}
+
+	logs.Info("Login successful")
 
 	isManager, err := airlock.IsProjectManager("")
 	switch {
@@ -150,11 +169,13 @@ func (a *App) Login(username, password string) (bool, error) {
 		}
 	}
 
+	return true, nil
+}
+
+func (a *App) InitFuse() {
+	a.preventQuit = true
 	a.fs = filesystem.InitializeFileSystem(a.ph.AddProject)
 	a.ph.sendProjects()
-	logs.Info("Login successful")
-
-	return true, nil
 }
 
 func (a *App) ChangeMountPoint() (string, error) {

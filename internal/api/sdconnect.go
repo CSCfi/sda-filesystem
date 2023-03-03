@@ -169,7 +169,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 		return fmt.Errorf("%s is not available, please contact CSC servicedesk: %w", SDConnect, err)
 	}
 
-	return fmt.Errorf("Error occurred for %s: %w", SDConnect, err)
+	return err
 }
 
 func (c *sdConnectInfo) levelCount() int {

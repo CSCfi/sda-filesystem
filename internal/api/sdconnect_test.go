@@ -321,7 +321,7 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 	mockC := &mockConnecter{projectsErr: errors.New("Error occurred")}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "Error occurred for SD Connect: getProjects error: Error occurred"
+	expectedError := "getProjects error: Error occurred"
 	err := sd.validateLogin("u7c9Cstlv7", "")
 	if err == nil {
 		t.Error("Function did not return error")
@@ -334,7 +334,7 @@ func Test_SDConnect_ValidateLogin_Fail_GetToken(t *testing.T) {
 	mockC := &mockConnecter{tokenErr: errors.New("Error occurred")}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "Error occurred for SD Connect: getToken error: Error occurred"
+	expectedError := "getToken error: Error occurred"
 	err := sd.validateLogin("vhy9pcr7til", "project")
 	if err == nil {
 		t.Error("Function did not return error")
