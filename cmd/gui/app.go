@@ -136,6 +136,7 @@ func (a *App) InitializeAPI() (bool, error) {
 	}
 
 	_, ok := repoMap[api.SDSubmit]
+
 	return ok, nil
 }
 

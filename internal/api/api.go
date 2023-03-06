@@ -202,6 +202,7 @@ var testURL = func(url string) error {
 
 var BasicToken = func(username, password string) string {
 	hi.basicToken = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+
 	return hi.basicToken
 }
 

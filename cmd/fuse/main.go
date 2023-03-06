@@ -148,6 +148,7 @@ var login = func(lr loginReader) error {
 			err = fmt.Errorf("Incorrect username or password")
 			if !exists {
 				logs.Error(err)
+
 				continue
 			}
 		}

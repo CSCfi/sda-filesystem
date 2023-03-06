@@ -17,11 +17,11 @@ const error401 = ref(false)
 watch(() => props.initialized && loading.value, (ready: boolean) => { 
     if (ready) {
         Login(username.value, password.value).then((result: boolean) => {
-            loading.value = false;
             if (result) {
                 EventsEmit("loggedIn");
             } else {
                 error401.value = true;
+                loading.value = false;
             }
         }).catch(e => {
             loading.value = false;
