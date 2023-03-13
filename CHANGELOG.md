@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Refactor GUI to use Wails
+- Renamed:
+  - `SD Connect` to `SD-Connect` in the filesystem
+  - `SD Apply` to `SD-Apply` in the filesystem
 
 ### Added
 

@@ -14,7 +14,8 @@ import (
 
 // This file contains structs and functions that are strictly for SD Connect
 
-const SDConnect string = "SD Connect"
+const SDConnect string = "SD-Connect"
+const SDConnectPrnt string = "SD Connect"
 
 // This exists for unit test mocking
 type connectable interface {
@@ -70,7 +71,7 @@ func (c *connecter) getProjects() ([]Metadata, error) {
 	headers := map[string]string{"X-Authorization": "Basic " + *c.token}
 	err := MakeRequest(*c.url+"/projects", nil, headers, nil, &projects)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnect, err)
+		return nil, fmt.Errorf("Failed to retrieve %s projects: %w", SDConnectPrnt, err)
 	}
 
 	return projects, nil
@@ -99,16 +100,16 @@ func (c *connecter) getSTokens(projects []Metadata) map[string]sToken {
 	for i := range projects {
 		projectToken, err := c.getToken(projects[i].Name)
 		if err != nil {
-			logs.Warningf("Failed to retrieve %s scoped token for %s: %w", SDConnect, projects[i].Name, err)
+			logs.Warningf("Failed to retrieve %s scoped token for %s: %w", SDConnectPrnt, projects[i].Name, err)
 
 			continue
 		}
 
-		logs.Debugf("Retrieved %s scoped token for %s", SDConnect, projects[i].Name)
+		logs.Debugf("Retrieved %s scoped token for %s", SDConnectPrnt, projects[i].Name)
 		newSTokens[projects[i].Name] = sToken{Token: projectToken.Token, ProjectID: projectToken.ProjectID}
 	}
 
-	logs.Infof("Fetching %s tokens finished", SDConnect)
+	logs.Infof("Fetching %s tokens finished", SDConnectPrnt)
 
 	return newSTokens
 }
@@ -124,7 +125,7 @@ func (c *sdConnectInfo) getEnvs() error {
 	}
 	c.url = strings.TrimRight(api, "/")
 	if err := testURL(c.url); err != nil {
-		return fmt.Errorf("Cannot connect to %s API: %w", SDConnect, err)
+		return fmt.Errorf("Cannot connect to %s API: %w", SDConnectPrnt, err)
 	}
 
 	return nil
@@ -153,9 +154,9 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 		}
 	} else if c.projects, err = c.getProjects(); err == nil {
 		if len(c.projects) == 0 {
-			return fmt.Errorf("No projects found for %s", SDConnect)
+			return fmt.Errorf("No projects found for %s", SDConnectPrnt)
 		}
-		logs.Infof("Retrieved %d %s project(s)", len(c.projects), SDConnect)
+		logs.Infof("Retrieved %d %s project(s)", len(c.projects), SDConnectPrnt)
 		c.sTokens = c.getSTokens(c.projects)
 
 		return nil
@@ -163,13 +164,13 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 
 	var re *RequestError
 	if errors.As(err, &re) && re.StatusCode == 401 {
-		return fmt.Errorf("%s login failed: %w", SDConnect, err)
+		return fmt.Errorf("%s login failed: %w", SDConnectPrnt, err)
 	}
 	if errors.As(err, &re) && re.StatusCode == 500 {
-		return fmt.Errorf("%s is not available, please contact CSC servicedesk: %w", SDConnect, err)
+		return fmt.Errorf("%s is not available, please contact CSC servicedesk: %w", SDConnectPrnt, err)
 	}
 
-	return fmt.Errorf("Error occurred for %s: %w", SDConnect, err)
+	return fmt.Errorf("Error occurred for %s: %w", SDConnectPrnt, err)
 }
 
 func (c *sdConnectInfo) levelCount() int {
@@ -209,7 +210,7 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 func (c *sdConnectInfo) tokenExpired(err error) bool {
 	var re *RequestError
 	if errors.As(err, &re) && re.StatusCode == 401 {
-		logs.Infof("%s tokens no longer valid. Fetching them again", SDConnect)
+		logs.Infof("%s tokens no longer valid. Fetching them again", SDConnectPrnt)
 		c.sTokens = c.getSTokens(c.projects)
 
 		return true
@@ -226,7 +227,7 @@ func (c *sdConnectInfo) updateAttributes(nodes []string, path string, attr any) 
 	size, ok := attr.(*int64)
 	if !ok {
 		return fmt.Errorf("%s updateAttributes() was called with incorrect attribute. Expected type *int64, received %v",
-			SDConnect, reflect.TypeOf(attr))
+			SDConnectPrnt, reflect.TypeOf(attr))
 	}
 
 	var headers SpecialHeaders
