@@ -91,7 +91,7 @@ func InitializeFileSystem(send func(Project)) *Fuse {
 	fs.root.stat.Size = -1
 
 	for _, enabled := range api.GetEnabledRepositories() {
-		logs.Info("Beginning filling in ", enabled)
+		logs.Info("Beginning filling in ", strings.ReplaceAll(enabled, "-", " "))
 
 		// Create folders for each repository
 		md := api.Metadata{Name: enabled, Bytes: -1}

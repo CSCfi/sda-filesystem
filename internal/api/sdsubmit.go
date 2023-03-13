@@ -15,7 +15,8 @@ import (
 // We name it SD Apply as that is where the datasets access is registered
 // However the datasets are mostly in SD Submit backend
 
-const SDSubmit string = "SD Apply"
+const SDSubmit string = "SD-Apply"
+const SDSubmitPrnt string = "SD Apply"
 
 // This exists for unit test mocking
 type submittable interface {
@@ -62,10 +63,10 @@ func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	var datasets []string
 	err := MakeRequest(urlStr+"/metadata/datasets", nil, nil, nil, &datasets)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmit, urlStr, err)
+		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmitPrnt, urlStr, err)
 	}
 
-	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmit, urlStr)
+	logs.Infof("Retrieved %d %s dataset(s) from API %s", len(datasets), SDSubmitPrnt, urlStr)
 
 	return datasets, nil
 }
@@ -117,11 +118,11 @@ func (s *sdSubmitInfo) getEnvs() error {
 	s.urls = []string{}
 	for i, u := range strings.Split(urls, ",") {
 		if err = validURL(u); err != nil {
-			return fmt.Errorf("%s API not a valid URL: %w", SDSubmit, err)
+			return fmt.Errorf("%s API not a valid URL: %w", SDSubmitPrnt, err)
 		}
 		s.urls = append(s.urls, strings.TrimRight(u, "/"))
 		if err := testURL(s.urls[i]); err != nil {
-			return fmt.Errorf("Cannot connect to %s registered API: %w", SDSubmit, err)
+			return fmt.Errorf("Cannot connect to %s registered API: %w", SDSubmitPrnt, err)
 		}
 	}
 
@@ -137,7 +138,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && re.StatusCode == 401 {
-				return fmt.Errorf("%s authorization failed", SDSubmit)
+				return fmt.Errorf("%s authorization failed", SDSubmitPrnt)
 			}
 
 			logs.Warning(err)
@@ -156,11 +157,11 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 	if len(s.datasets) == 0 {
 		switch {
 		case count500 > 0:
-			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmit)
+			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmitPrnt)
 		case count > 0:
-			return fmt.Errorf("%s APIs failed to retrieve any data", SDSubmit)
+			return fmt.Errorf("%s APIs failed to retrieve any data", SDSubmitPrnt)
 		default:
-			return fmt.Errorf("No datasets found for %s", SDSubmit)
+			return fmt.Errorf("No datasets found for %s", SDSubmitPrnt)
 		}
 	}
 
@@ -202,7 +203,7 @@ func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr any) e
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer any, start, end int64) error {
 	idx, ok := s.datasets[nodes[0]]
 	if !ok {
-		return fmt.Errorf("Tried to request content of %s file %s with invalid dataset %s", SDSubmit, nodes[1], nodes[0])
+		return fmt.Errorf("Tried to request content of %s file %s with invalid dataset %s", SDSubmitPrnt, nodes[1], nodes[0])
 	}
 
 	// Query params

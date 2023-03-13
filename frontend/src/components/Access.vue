@@ -55,6 +55,7 @@ onMounted(() => {
 EventsOn('sendProjects', function(projects: filesystem.Project[]) {
     let tableData: CDataTableData[] = projects.map(project => {
         let item: CDataTableData = Object.fromEntries(Object.entries(project).map(([k, v]) => [k, {"value": v}]));
+        item['repository'].formattedValue = project.repository.replace("-", " ");
         item['progress'] = {"value": 0};
         return item;
     });
