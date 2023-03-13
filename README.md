@@ -60,7 +60,7 @@ To build for production:
 ```
 cd cmd/gui
 
-# For Linx and macOS
+# For Linux and macOS
 wails build -upx -trimpath -clean -s
 
 # For Windows
@@ -103,6 +103,8 @@ Usage of ./go-fuse:
     	Path to Data Gateway mount point
   -project string
     	SD Connect project if it differs from that in the VM
+  -sdapply
+      Connect only to SD Apply
   -stderrthreshold value
     	logs at or above this threshold go to stderr
   -v value
