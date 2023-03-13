@@ -78,7 +78,7 @@ function skip() {
     </c-container>
 </template>
 
-<style>
+<style scoped>
 #login-form {
     width: 500px;
     display: flex;

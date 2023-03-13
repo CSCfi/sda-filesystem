@@ -212,7 +212,7 @@ function containsFilterString(str: string): boolean {
     </c-container>
 </template>
 
-<style>
+<style scoped>
 c-autocomplete {
     width: 500px;
 }

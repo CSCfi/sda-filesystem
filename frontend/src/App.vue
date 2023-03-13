@@ -109,7 +109,7 @@ EventsOn('fuseReady', () => (accessed.value = true))
     </c-main>
 </template>
 
-<style>
+<style scoped>
 c-main {
     background-color: white;
 }

@@ -152,7 +152,7 @@ function refresh() {
     </c-container>
 </template>
 
-<style>
+<style scoped>
 #choose-dir-input {
     width: 400px;
 }
