@@ -8,7 +8,7 @@ require (
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/neicnordic/crypt4gh v1.7.1
 	github.com/sirupsen/logrus v1.9.0
-	github.com/wailsapp/wails/v2 v2.3.1
+	github.com/wailsapp/wails/v2 v2.4.0
 	golang.org/x/crypto v0.7.0
 	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
 	golang.org/x/sys v0.6.0
@@ -24,7 +24,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/labstack/echo/v4 v4.10.0 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
