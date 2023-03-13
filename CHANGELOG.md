@@ -12,10 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed:
   - `SD Connect` to `SD-Connect` in the filesystem
   - `SD Apply` to `SD-Apply` in the filesystem
+- User can choose to skip CSC login if data was successfully fetched from SD Apply
 
 ### Added
 
 - `-project` parameter, which can be used to override the SD Connect project in the VM
+- `-sdapply` parameter, which indicates the user only wants to access SD Apply
 
 ## [v1.4.1] - 2023-01-09
 
