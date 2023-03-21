@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed:
   - `SD Connect` to `SD-Connect` in the filesystem
   - `SD Apply` to `SD-Apply` in the filesystem
-- User can choose to skip CSC login if data was successfully fetched from SD Apply
+- In GUI, user can choose to access SD Connect, SD Apply or both.
+- User has the option to login to SD Connect in export tab if they had originally only chosen SD Apply.
 
 ### Added
 
