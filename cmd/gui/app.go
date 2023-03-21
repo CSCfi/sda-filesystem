@@ -183,6 +183,7 @@ func (a *App) Login(username, password string) (bool, error) {
 
 func (a *App) InitFuse() {
 	a.preventQuit = true
+	api.SettleRepositories()
 	a.fs = filesystem.InitializeFileSystem(a.ph.AddProject)
 	a.ph.sendProjects()
 }

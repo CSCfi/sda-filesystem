@@ -36,6 +36,7 @@ type httpInfo struct {
 	basicToken     string
 	sdsToken       string
 	client         *http.Client
+	preventEnable  bool
 	repositories   map[string]fuseInfo
 }
 
@@ -208,11 +209,15 @@ var BasicToken = func(username, password string) string {
 
 var Authenticate = func(rep string, auth ...string) error {
 	err := allRepositories[rep].authenticate(auth...)
-	if err == nil {
+	if err == nil && !hi.preventEnable {
 		hi.repositories[rep] = allRepositories[rep]
 	}
 
 	return err
+}
+
+func SettleRepositories() {
+	hi.preventEnable = true
 }
 
 // LevelCount returns the amount of levels repository 'rep' has
