@@ -16,6 +16,10 @@ c-steps {
     margin-bottom: 20px;
 }
 
+c-loader {
+    pointer-events: none;
+}
+
 .fill-width {
     width: 100%;
 }

@@ -129,7 +129,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 	return nil
 }
 
-func (s *sdSubmitInfo) validateLogin(auth ...string) error {
+func (s *sdSubmitInfo) authenticate(auth ...string) error {
 	s.datasets = make(map[string]int)
 	count, count500 := 0, 0
 

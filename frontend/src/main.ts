@@ -3,10 +3,10 @@ import { applyPolyfills, defineCustomElements } from 'csc-ui/loader';
 import { vControl } from 'csc-ui-vue-directive';
 
 import App from './App.vue';
-import Access from './components/Access.vue'
-import Export from './components/Export.vue'
-import Login from './components/Login.vue'
-import Logs from './components/Logs.vue'
+import Access from './pages/AccessPage.vue'
+import Export from './pages/ExportPage.vue'
+import Login from './pages/LoginPage.vue'
+import Logs from './pages/LogsPage.vue'
 
 const app = createApp(App);
 app.component('Access', Access);

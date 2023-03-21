@@ -419,7 +419,7 @@ func TestValidateLogin_Success(t *testing.T) {
 	allRepositories = map[string]fuseInfo{"Repo": mockRepo}
 	hi.repositories = make(map[string]fuseInfo)
 
-	err := ValidateLogin("Repo")
+	err := Authenticate("Repo")
 	if err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
@@ -440,7 +440,7 @@ func TestValidateLogin_Fail(t *testing.T) {
 	allRepositories = map[string]fuseInfo{"Repo": mockRepo}
 	hi.repositories = make(map[string]fuseInfo)
 
-	err := ValidateLogin("Repo")
+	err := Authenticate("Repo")
 	if err == nil {
 		t.Fatal("Function did not return error")
 	}

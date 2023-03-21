@@ -42,7 +42,7 @@ type httpInfo struct {
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
-	validateLogin(...string) error
+	authenticate(...string) error
 	levelCount() int
 	getNthLevel(string, ...string) ([]Metadata, error)
 	updateAttributes([]string, string, any) error
@@ -206,8 +206,8 @@ var BasicToken = func(username, password string) string {
 	return hi.basicToken
 }
 
-var ValidateLogin = func(rep string, auth ...string) error {
-	err := allRepositories[rep].validateLogin(auth...)
+var Authenticate = func(rep string, auth ...string) error {
+	err := allRepositories[rep].authenticate(auth...)
 	if err == nil {
 		hi.repositories[rep] = allRepositories[rep]
 	}

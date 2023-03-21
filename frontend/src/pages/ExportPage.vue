@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime'
+import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist/types';
 import { SelectFile, CheckEncryption, ExportFile } from '../../wailsjs/go/main/App'
 import { mdiTrashCanOutline } from '@mdi/js'

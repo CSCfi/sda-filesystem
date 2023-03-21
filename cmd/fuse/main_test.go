@@ -349,18 +349,18 @@ func TestLogin(t *testing.T) {
 	}
 
 	origAskForLogin := askForLogin
-	origValidateLogin := api.ValidateLogin
+	origValidateLogin := api.Authenticate
 
 	defer func() {
 		askForLogin = origAskForLogin
-		api.ValidateLogin = origValidateLogin
+		api.Authenticate = origValidateLogin
 	}()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			count = 0
 			askForLogin = tt.mockAskForLogin
-			api.ValidateLogin = tt.mockValidateLogin
+			api.Authenticate = tt.mockValidateLogin
 
 			// Ignore prints to stdout
 			null, _ := os.Open(os.DevNull)
@@ -406,12 +406,12 @@ func TestDetermineAccess(t *testing.T) {
 
 	origSDSubmit := sdsubmit
 	origLogin := login
-	origValidateLogin := api.ValidateLogin
+	origValidateLogin := api.Authenticate
 
 	defer func() {
 		sdsubmit = origSDSubmit
 		login = origLogin
-		api.ValidateLogin = origValidateLogin
+		api.Authenticate = origValidateLogin
 	}()
 
 	for _, tt := range tests {
@@ -420,7 +420,7 @@ func TestDetermineAccess(t *testing.T) {
 			login = func(lr loginReader) error {
 				return tt.connectErr
 			}
-			api.ValidateLogin = func(rep string, auth ...string) error {
+			api.Authenticate = func(rep string, auth ...string) error {
 				return tt.submitErr
 			}
 

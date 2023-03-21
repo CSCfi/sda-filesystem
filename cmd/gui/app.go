@@ -89,60 +89,63 @@ func (a *App) GetDefaultMountPoint() string {
 	return a.mountpoint
 }
 
-func (a *App) InitializeAPI() (bool, error) {
+func (a *App) InitializeAPI() error {
 	err := api.GetCommonEnvs()
 	if err != nil {
 		logs.Error(err)
 
-		return false, fmt.Errorf("Required environmental variables missing")
+		return fmt.Errorf("Required environmental variables missing")
 	}
 
 	err = api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
 
-		return false, fmt.Errorf("Initializing cache failed")
+		return fmt.Errorf("Initializing cache failed")
 	}
 
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Error(err)
 
-		return false, fmt.Errorf("Initializing HTTP client failed")
+		return fmt.Errorf("Initializing HTTP client failed")
 	}
 
-	allRepos := api.GetAllRepositories()
-	repoMap := make(map[string]struct{})
-	for i := range allRepos {
-		repoMap[allRepos[i]] = struct{}{}
-	}
+	noneAvailable := true
+	reps := make(map[string][2]bool)
 
-	for _, rep := range allRepos {
-		if err := api.GetEnvs(rep); err != nil {
-			delete(repoMap, rep)
+	for _, r := range api.GetAllRepositories() {
+		if err = api.GetEnvs(r); err != nil {
 			logs.Error(err)
+		} else {
+			noneAvailable = false
 		}
+		reps[r] = [2]bool{err != nil, r == api.SDConnect}
 	}
 
-	if _, ok := repoMap[api.SDSubmit]; ok {
-		if err = api.ValidateLogin(api.SDSubmit); err != nil {
-			delete(repoMap, api.SDSubmit)
-			logs.Error(err)
-		}
+	wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
+
+	if noneAvailable {
+		return fmt.Errorf("No services available")
 	}
 
-	if len(repoMap) == 0 {
-		return false, fmt.Errorf("No services available")
-	}
-
-	_, ok := repoMap[api.SDSubmit]
-
-	return ok, nil
+	return nil
 }
 
-func (a *App) Login(username, password string) (bool, error) {
+func (a *App) Authenticate(repository string) error {
+	if err := api.Authenticate(repository); err != nil {
+		logs.Error(err)
+		message, _ := logs.Wrapper(err)
+
+		return fmt.Errorf(message)
+	}
+
+	return nil
+}
+
+func (a *App) Login(repository, username, password string) (bool, error) {
 	token := api.BasicToken(username, password)
-	if err := api.ValidateLogin(api.SDConnect, token, ""); err != nil {
+	if err := api.Authenticate(repository, token, ""); err != nil {
 		logs.Error(err)
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {

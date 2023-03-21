@@ -131,7 +131,7 @@ func (c *sdConnectInfo) getEnvs() error {
 	return nil
 }
 
-func (c *sdConnectInfo) validateLogin(auth ...string) error {
+func (c *sdConnectInfo) authenticate(auth ...string) error {
 	if len(auth) < 2 {
 		return fmt.Errorf("validateLogin() called with too few parameters")
 	}

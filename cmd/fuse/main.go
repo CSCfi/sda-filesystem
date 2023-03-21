@@ -138,7 +138,7 @@ var login = func(lr loginReader) error {
 		}
 
 		token := api.BasicToken(username, password)
-		err = api.ValidateLogin(api.SDConnect, token, project)
+		err = api.Authenticate(api.SDConnect, token, project)
 		if err == nil {
 			return nil
 		}
@@ -159,7 +159,7 @@ var login = func(lr loginReader) error {
 
 func determineAccess() error {
 	submitSuccess := true
-	if err := api.ValidateLogin(api.SDSubmit); err != nil {
+	if err := api.Authenticate(api.SDSubmit); err != nil {
 		if sdsubmit {
 			return err
 		}

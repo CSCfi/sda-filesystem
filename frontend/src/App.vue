@@ -16,7 +16,6 @@ const disabled = ref(false)
 const initialized = ref(false)
 const loggedIn = ref(false)
 const accessed = ref(false)
-const canSkip = ref(false)
 
 const currentPage = ref("Login")
 const componentData = computed<ComponentType[]>(() => ([
@@ -26,7 +25,6 @@ const componentData = computed<ComponentType[]>(() => ([
         props: {
             initialized: initialized.value, 
             disabled: disabled.value,
-            canSkip: canSkip.value,
         },
     },
     { name: "Access", visible: loggedIn.value, active: loggedIn.value },
@@ -39,10 +37,9 @@ const visibleTabs = computed(() => componentData.value.filter(data => data.visib
 const toasts = ref<HTMLCToastsElement | null>(null);
 
 onMounted(() => {
-    InitializeAPI().then((skip: boolean) => {
+    InitializeAPI().then(() => {
         console.log("Initializing Data Gateway finished");
         initialized.value = true;
-        canSkip.value = skip;
     }).catch(e => {
         disabled.value = true;
         EventsEmit("showToast", "Initializing Data Gateway failed", e as string);

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
-import { EventsOn } from '../../wailsjs/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
 import { reactive, ref, computed } from 'vue';
 
