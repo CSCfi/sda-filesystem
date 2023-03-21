@@ -17,19 +17,21 @@ const emit = defineEmits(['selected'])
 const selected = ref(false)
 const loading = ref(false)
 
-watch(() => selected.value, (selected: boolean) => { 
-    loading.value = selected;
-    if (selected && !props.useForm) {
+watch(() => selected.value, (sel: boolean) => { 
+    loading.value = sel;
+    if (sel && !props.useForm) {
         Authenticate(props.repository).then(() => {
             success();
         }).catch(e => {
+            selected.value = false;
             EventsEmit("showToast", "Access refused", e as string);
+        }).finally(() => {
+            loading.value = false;
         });
     }
 })
 
 function success() {
-    loading.value = false;
     emit("selected");
 }
 </script>
