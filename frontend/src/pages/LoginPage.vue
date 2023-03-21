@@ -22,7 +22,7 @@ EventsOn('setRepositories', function(reps: {[key: string]: [boolean, boolean]}) 
         <c-login-card-title>Log in to Data Gateway</c-login-card-title>
         <p style="width: 500px;">
             Data Gateway gives you secure access to your data folders.
-            Please select the service you would like to access data from. 
+            Select from which service you want to access data securely.
         </p>
 
         <c-loader :hide="initialized || disabled"></c-loader>

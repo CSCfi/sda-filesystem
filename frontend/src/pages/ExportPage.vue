@@ -40,7 +40,7 @@ const bucketItems = ref<CAutocompleteItem[]>([])
 const filteredBucketItems = ref<CAutocompleteItem[]>([])
 
 const skipLogin = ref(false)
-const pageIdx = ref(0)
+const pageIdx = ref(1)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
 const repository = ref("")
@@ -144,8 +144,11 @@ function containsFilterString(str: string): boolean {
 
         <c-flex v-show="pageIdx == 0" id="no-export-page">
             <h2>Export is not possible</h2>
-            <p v-if="skipLogin">You need to be project manager to export files.</p>
-            <p v-else>You need to login with your SD Connect credentials and have project manager rights to export files.</p>
+            <p v-if="skipLogin">You need to have project manager rights to export files.</p>
+            <p v-else>
+                Please log in to SD Connect with your CSC credentials. 
+                Note that only CSC project managers have export rights.
+            </p>
             <LoginForm v-if="!skipLogin" initialized></LoginForm>
         </c-flex>
         <c-flex v-show="pageIdx == 1">
@@ -184,6 +187,11 @@ function containsFilterString(str: string): boolean {
                     <c-button outlined @click="selectFile()">Select file</c-button>
                 </c-row>
                 <p>If you wish to export multiple files, please create a tar/zip file.</p>
+                <p>
+                    Unencrypted file will be encrypted by default with service encryption key 
+                    and will be accessible only via SD Desktop.<br>If you want to access the file 
+                    otherwise, please encrypt it before exporting.
+                </p>
             </div>
             <c-data-table v-else
                 id="export-table"
@@ -210,8 +218,10 @@ function containsFilterString(str: string): boolean {
         </c-flex>
         <c-flex v-show="pageIdx == 4">
             <h2>Export complete</h2>
-            <p>All files have been uploaded to SD Connect. You can now 
-                close or minimise the window to continue working.</p>
+            <p>
+                All files have been uploaded to SD Connect. You can now 
+                close or minimise the window to continue working.
+            </p>
             <c-button
                 class="continue-button" 
                 size="large" 
@@ -233,13 +243,17 @@ c-autocomplete {
 
 #drop-area {
     border: 3px solid var(--csc-primary);
-    height: 200px;
     margin-top: 20px;
     margin-bottom: 20px;
+    padding: 40px;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-direction: column;
+}
+
+#drop-area > p {
+    text-align: center;
 }
 
 #export-table {

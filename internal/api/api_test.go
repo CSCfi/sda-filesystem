@@ -58,7 +58,7 @@ func (r *mockRepository) downloadData(nodes []string, buf any, start, end int64)
 	return r.mockDownloadDataError
 }
 
-func (r *mockRepository) validateLogin(...string) error {
+func (r *mockRepository) authenticate(...string) error {
 	return r.loginError
 }
 
