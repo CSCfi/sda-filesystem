@@ -40,7 +40,7 @@ const bucketItems = ref<CAutocompleteItem[]>([])
 const filteredBucketItems = ref<CAutocompleteItem[]>([])
 
 const skipLogin = ref(false)
-const pageIdx = ref(1)
+const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
 const repository = ref("")
