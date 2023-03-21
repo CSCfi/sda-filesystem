@@ -5,7 +5,7 @@ import { EventsEmit } from '../../wailsjs/runtime/runtime'
 
 const props = defineProps<{
     initialized: boolean,
-    repository: string,
+    small?: boolean
 }>()
 
 const emit = defineEmits(['loggedIn'])
@@ -17,7 +17,7 @@ const password = ref("")
 
 watch(() => props.initialized && loading.value, (ready: boolean) => { 
     if (ready) {
-        Login(props.repository, username.value, password.value).then((result: boolean) => {
+        Login(username.value, password.value).then((result: boolean) => {
             if (result) {
                 emit("loggedIn");
             } else {
@@ -38,10 +38,23 @@ function login() {
 </script>
 
 <template>
-    <form id="login-form" v-on:submit.prevent>
-        <div>Please log in with your CSC credentials.</div>
-        <c-text-field label="Username" v-model="username" hide-details></c-text-field>
-        <c-text-field label="Password" v-model="password" hide-details type="password"></c-text-field>
+    <form id="login-form" 
+        v-on:submit.prevent
+        :style="{transform: props.small ? 'translate(-5%, -5%) scale(0.9)' : 'none', gap: props.small ? '10px' : '20px'}">
+        <div :class="{'smaller-text': !props.small}">
+            Please log in with your CSC credentials.
+        </div>
+        <c-text-field 
+            label="Username" 
+            v-model="username" 
+            hide-details>
+        </c-text-field>
+        <c-text-field 
+            label="Password" 
+            v-model="password" 
+            hide-details 
+            type="password">
+        </c-text-field>
 
         <c-alert type="error" v-if="error401">
             <div slot="title">Username or password is incorrect</div>
@@ -58,12 +71,14 @@ function login() {
 #login-form {
     display: flex;
     flex-direction: column;
-    gap: 10px;
     padding-top: 10px;
-    transform: translate(-5%, -5%) scale(0.9);
 }
 
 c-button {
     align-self: self-start;
+}
+
+c-alert > div {
+    font-size: 16px;
 }
 </style>

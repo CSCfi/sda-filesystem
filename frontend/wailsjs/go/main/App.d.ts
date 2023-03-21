@@ -17,7 +17,7 @@ export function InitializeAPI():Promise<void>;
 
 export function LoadFuse():Promise<void>;
 
-export function Login(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+export function Login(arg1:string,arg2:string):Promise<boolean>;
 
 export function OpenFuse():Promise<void>;
 

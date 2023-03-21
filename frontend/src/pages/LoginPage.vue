@@ -10,7 +10,7 @@ const props = defineProps<{
 }>()
 
 const repositories = ref<{[key: string]: [boolean, boolean]}>({})
-const repositorySelected = ref<boolean>(false)
+const repositorySelected = ref(false)
 
 EventsOn('setRepositories', function(reps: {[key: string]: [boolean, boolean]}) {
     repositories.value = reps;
@@ -25,7 +25,7 @@ EventsOn('setRepositories', function(reps: {[key: string]: [boolean, boolean]}) 
             Please select the service you would like to access data from. 
         </p>
 
-        <c-loader :hide="initialized"></c-loader>
+        <c-loader :hide="initialized || disabled"></c-loader>
         <RepositorySelect 
             v-for="([repositoryDisabled, useForm], rep) in repositories" 
             @selected="repositorySelected = true"

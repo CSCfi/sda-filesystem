@@ -5,6 +5,8 @@ import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist
 import { SelectFile, CheckEncryption, ExportFile } from '../../wailsjs/go/main/App'
 import { mdiTrashCanOutline } from '@mdi/js'
 
+import LoginForm from '../components/LoginForm.vue';
+
 const exportHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name', sortable: false },
     { key: 'folder', value: 'Target Folder', sortable: false },
@@ -37,14 +39,20 @@ const exportData = ref<CDataTableData[]>([])
 const bucketItems = ref<CAutocompleteItem[]>([])
 const filteredBucketItems = ref<CAutocompleteItem[]>([])
 
+const skipLogin = ref(false)
 const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
+const repository = ref("")
 
 const file = ref("")
 const fileEncrypted = ref("")
 const showModal = ref(false)
 const chooseToContinue = ref(false)
+
+EventsOn('sdconnectAvailable', () => {
+    skipLogin.value = true;
+})
 
 EventsOn('isProjectManager', () => {
     pageIdx.value = 1;
@@ -134,9 +142,11 @@ function containsFilterString(str: string): boolean {
             </c-card>
         </c-modal>
 
-        <c-flex v-show="pageIdx == 0">
+        <c-flex v-show="pageIdx == 0" id="no-export-page">
             <h2>Export is not possible</h2>
-            <p>You need to be project manager to export files.</p>
+            <p v-if="skipLogin">You need to be project manager to export files.</p>
+            <p v-else>You need to login with your SD Connect credentials and have project manager rights to export files.</p>
+            <LoginForm v-if="!skipLogin" initialized></LoginForm>
         </c-flex>
         <c-flex v-show="pageIdx == 1">
             <h2>Select a destination folder for your export</h2>
@@ -214,6 +224,10 @@ function containsFilterString(str: string): boolean {
 
 <style scoped>
 c-autocomplete {
+    width: 500px;
+}
+
+#no-export-page {
     width: 500px;
 }
 

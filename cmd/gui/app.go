@@ -27,13 +27,14 @@ type App struct {
 	lh          *LogHandler
 	fs          *filesystem.Fuse
 	mountpoint  string
+	loginRepo   string
 	paniced     bool
 	preventQuit bool
 }
 
 // NewApp creates a new App application struct
 func NewApp(ph *ProjectHandler, lh *LogHandler) *App {
-	return &App{ph: ph, lh: lh}
+	return &App{ph: ph, lh: lh, loginRepo: api.SDConnect}
 }
 
 // startup is called when the app starts. The context is saved
@@ -90,6 +91,13 @@ func (a *App) GetDefaultMountPoint() string {
 }
 
 func (a *App) InitializeAPI() error {
+	reps := make(map[string][2]bool)
+	defer wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
+
+	for _, r := range api.GetAllRepositories() {
+		reps[r] = [2]bool{true, r == a.loginRepo}
+	}
+
 	err := api.GetCommonEnvs()
 	if err != nil {
 		logs.Error(err)
@@ -112,18 +120,14 @@ func (a *App) InitializeAPI() error {
 	}
 
 	noneAvailable := true
-	reps := make(map[string][2]bool)
-
 	for _, r := range api.GetAllRepositories() {
 		if err = api.GetEnvs(r); err != nil {
 			logs.Error(err)
 		} else {
 			noneAvailable = false
 		}
-		reps[r] = [2]bool{err != nil, r == api.SDConnect}
+		reps[r] = [2]bool{err != nil, r == a.loginRepo}
 	}
-
-	wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 
 	if noneAvailable {
 		return fmt.Errorf("No services available")
@@ -143,9 +147,9 @@ func (a *App) Authenticate(repository string) error {
 	return nil
 }
 
-func (a *App) Login(repository, username, password string) (bool, error) {
+func (a *App) Login(username, password string) (bool, error) {
 	token := api.BasicToken(username, password)
-	if err := api.Authenticate(repository, token, ""); err != nil {
+	if err := api.Authenticate(a.loginRepo, token, ""); err != nil {
 		logs.Error(err)
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
@@ -157,6 +161,7 @@ func (a *App) Login(repository, username, password string) (bool, error) {
 	}
 
 	logs.Info("Login successful")
+	wailsruntime.EventsEmit(a.ctx, "sdconnectAvailable")
 
 	isManager, err := airlock.IsProjectManager("")
 	switch {

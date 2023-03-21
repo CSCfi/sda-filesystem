@@ -14,8 +14,8 @@ const props = defineProps<{
 
 const emit = defineEmits(['selected'])
 
-const selected = ref<boolean>(false)
-const loading = ref<boolean>(false)
+const selected = ref(false)
+const loading = ref(false)
 
 watch(() => selected.value, (selected: boolean) => { 
     loading.value = selected;
@@ -53,7 +53,7 @@ function success() {
                 v-if="useForm && selected && loading" 
                 @loggedIn="success()"
                 :initialized="props.initialized"
-                :repository="props.repository">
+                small>
             </LoginForm>
         </div>
     </c-row>
