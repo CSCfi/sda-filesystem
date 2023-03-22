@@ -7,7 +7,6 @@ import LoginForm from './LoginForm.vue';
 
 const props = defineProps<{
     disabled: boolean,
-    initialized: boolean,
     useForm: boolean,
     repository: string,
 }>()
@@ -55,7 +54,6 @@ function success() {
                 class="login-form"
                 v-if="useForm && selected && loading" 
                 @loggedIn="success()"
-                :initialized="props.initialized"
                 small>
             </LoginForm>
         </div>

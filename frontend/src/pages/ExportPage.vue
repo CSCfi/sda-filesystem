@@ -148,7 +148,7 @@ function containsFilterString(str: string): boolean {
                 Please log in to SD Connect with your CSC credentials. 
                 Note that only CSC project managers have export rights.
             </p>
-            <LoginForm v-if="!skipLogin" initialized></LoginForm>
+            <LoginForm v-if="!skipLogin"></LoginForm>
         </c-flex>
         <c-flex v-show="pageIdx == 1">
             <h2>Select a destination folder for your export</h2>

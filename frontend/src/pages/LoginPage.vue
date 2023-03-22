@@ -30,7 +30,6 @@ EventsOn('setRepositories', function(reps: {[key: string]: [boolean, boolean]}) 
             v-for="([repositoryDisabled, useForm], rep) in repositories" 
             @selected="repositorySelected = true"
             :disabled="props.disabled || repositoryDisabled"
-            :initialized="props.initialized" 
             :repository="(rep as string)"
             :useForm="useForm">
         </RepositorySelect>

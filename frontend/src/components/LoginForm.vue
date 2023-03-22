@@ -4,7 +4,6 @@ import { Login } from '../../wailsjs/go/main/App'
 import { EventsEmit } from '../../wailsjs/runtime/runtime'
 
 const props = defineProps<{
-    initialized: boolean,
     small?: boolean
 }>()
 
@@ -15,7 +14,7 @@ const error401 = ref(false)
 const username = ref("") 
 const password = ref("")
 
-watch(() => props.initialized && loading.value, (ready: boolean) => { 
+watch(() => loading.value, (ready: boolean) => { 
     if (ready) {
         Login(username.value, password.value).then((result: boolean) => {
             if (result) {
