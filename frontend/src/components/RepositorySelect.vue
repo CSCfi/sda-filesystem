@@ -32,6 +32,7 @@ watch(() => selected.value, (sel: boolean) => {
 })
 
 function success() {
+    loading.value = false;
     emit("selected");
 }
 </script>

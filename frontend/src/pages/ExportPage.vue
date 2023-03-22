@@ -26,7 +26,7 @@ const exportHeadersModifiable: CDataTableHeader[] = [
                 size: 'small',
                 title: 'Remove',
                 path: mdiTrashCanOutline,
-                onClick: ({ data }) =>
+                onClick: () =>
                     { exportData.value.pop(); chooseToContinue.value = false }
                 },
             },
@@ -43,7 +43,6 @@ const skipLogin = ref(false)
 const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
-const repository = ref("")
 
 const file = ref("")
 const fileEncrypted = ref("")
