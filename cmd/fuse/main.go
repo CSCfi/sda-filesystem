@@ -22,6 +22,7 @@ import (
 
 var mount, project, logLevel string
 var requestTimeout int
+var sdsubmit bool
 
 type loginReader interface {
 	readPassword() (string, error)
@@ -69,34 +70,33 @@ func userChooseUpdate(r io.Reader) {
 	}
 }
 
-var askForLogin = func(lr loginReader) (string, string, error) {
-
+var askForLogin = func(lr loginReader) (string, string, bool, error) {
 	username, password, exist := checkEnvVars()
 	if exist {
 		logs.Info("Using username and password from environment variables CSC_USERNAME and CSC_PASSWORD")
-	} else {
-		fmt.Printf("Log in with your CSC credentials\n")
-		fmt.Print("Enter username: ")
-		scanner := bufio.NewScanner(lr.getStream())
 
-		if scanner.Scan() {
-			username = scanner.Text()
-		}
-		if err := scanner.Err(); err != nil {
-			return "", "", fmt.Errorf("Could not read username: %w", err)
-		}
-
-		fmt.Print("Enter password: ")
-		password, err := lr.readPassword()
-		fmt.Println()
-		if err != nil {
-			return "", "", fmt.Errorf("Could not read password: %w", err)
-		}
-
-		return username, password, nil
+		return username, password, true, nil
 	}
 
-	return username, password, nil
+	fmt.Printf("\nLog in with your CSC credentials\n")
+	fmt.Print("Enter username: ")
+	scanner := bufio.NewScanner(lr.getStream())
+
+	if scanner.Scan() {
+		username = scanner.Text()
+	}
+	if err := scanner.Err(); err != nil {
+		return "", "", false, fmt.Errorf("Could not read username: %w", err)
+	}
+
+	fmt.Print("Enter password: ")
+	password, err := lr.readPassword()
+	fmt.Println()
+	if err != nil {
+		return "", "", false, fmt.Errorf("Could not read password: %w", err)
+	}
+
+	return username, password, false, nil
 }
 
 func checkEnvVars() (string, string, bool) {
@@ -132,28 +132,52 @@ var login = func(lr loginReader) error {
 	}()
 
 	for {
-		username, password, err := askForLogin(lr)
+		username, password, exists, err := askForLogin(lr)
 		if err != nil {
 			return err
 		}
 
-		success, err := api.ValidateLogin(username, password, project)
+		token := api.BasicToken(username, password)
+		err = api.Authenticate(api.SDConnect, token, project)
 		if err == nil {
-			return nil
-		}
-		if success {
-			logs.Error(err) // If SD Submit authorization fails
-
 			return nil
 		}
 
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
-			logs.Errorf("Incorrect username or password")
-		} else {
+			err = fmt.Errorf("Incorrect username or password")
+			if !exists {
+				logs.Error(err)
+
+				continue
+			}
+		}
+
+		return err
+	}
+}
+
+func determineAccess() error {
+	submitSuccess := true
+	if err := api.Authenticate(api.SDSubmit); err != nil {
+		if sdsubmit {
 			return err
 		}
+		submitSuccess = false
+		logs.Error(err)
 	}
+
+	if !sdsubmit {
+		if err := login(&stdinReader{}); err != nil {
+			if !submitSuccess {
+				return err
+			}
+			logs.Error(err)
+			logs.Infof("Dropping %s", api.SDConnect)
+		}
+	}
+
+	return nil
 }
 
 func processFlags() error {
@@ -178,6 +202,7 @@ func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&project, "project", "", "SD Connect project if it differs from that in the VM")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
+	flag.BoolVar(&sdsubmit, "sdapply", false, "Connect only to SD Apply")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
@@ -220,7 +245,7 @@ func main() {
 		}
 	}
 
-	err = login(&stdinReader{})
+	err = determineAccess()
 	if err != nil {
 		logs.Fatal(err)
 	}

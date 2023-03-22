@@ -28,16 +28,16 @@ func main() {
 			projectHandler.SetContext(ctx)
 			app.startup(ctx)
 		},
-		OnShutdown: app.shutdown,
+		OnShutdown:    app.shutdown,
+		OnBeforeClose: app.beforeClose,
 		Bind: []interface{}{
 			app,
 			logHandler,
 			projectHandler,
 		},
-		MinWidth:          800,
-		Width:             800,
-		Height:            575,
-		HideWindowOnClose: app.initialized,
+		MinWidth: 800,
+		Width:    800,
+		Height:   575,
 		Linux: &linux.Options{
 			Icon: build.Icon,
 		},

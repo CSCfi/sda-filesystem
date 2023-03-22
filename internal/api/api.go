@@ -36,13 +36,14 @@ type httpInfo struct {
 	basicToken     string
 	sdsToken       string
 	client         *http.Client
+	preventEnable  bool
 	repositories   map[string]fuseInfo
 }
 
 // If you wish to add a new repository, it must implement the following functions
 type fuseInfo interface {
 	getEnvs() error
-	validateLogin(...string) error
+	authenticate(...string) error
 	levelCount() int
 	getNthLevel(string, ...string) ([]Metadata, error)
 	updateAttributes([]string, string, any) error
@@ -200,26 +201,23 @@ var testURL = func(url string) error {
 	return nil
 }
 
-var SetBasicToken = func(username, password string) {
+var BasicToken = func(username, password string) string {
 	hi.basicToken = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+
+	return hi.basicToken
 }
 
-// ValidateLogin checks if user is able to log in with given input
-var ValidateLogin = func(username, password, project string) (bool, error) {
-	SetBasicToken(username, password)
-	err := allRepositories[SDConnect].validateLogin(hi.basicToken, project)
-	if err != nil {
-		return false, err
-	}
-	hi.repositories[SDConnect] = allRepositories[SDConnect]
-
-	// SDSubmit not necessary if it is unavailable
-	err = allRepositories[SDSubmit].validateLogin()
-	if err == nil {
-		hi.repositories[SDSubmit] = allRepositories[SDSubmit]
+var Authenticate = func(rep string, auth ...string) error {
+	err := allRepositories[rep].authenticate(auth...)
+	if err == nil && !hi.preventEnable {
+		hi.repositories[rep] = allRepositories[rep]
 	}
 
-	return true, err
+	return err
+}
+
+func SettleRepositories() {
+	hi.preventEnable = true
 }
 
 // LevelCount returns the amount of levels repository 'rep' has

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v2.0.0] 2023-03-22
 
 ### Changed
 
@@ -12,10 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed:
   - `SD Connect` to `SD-Connect` in the filesystem
   - `SD Apply` to `SD-Apply` in the filesystem
+- In GUI, user can choose to access SD Connect, SD Apply or both.
+- User has the option to login to SD Connect in export tab if they had originally only chosen SD Apply.
 
 ### Added
 
 - `-project` parameter, which can be used to override the SD Connect project in the VM
+- `-sdapply` parameter, which indicates the user only wants to access SD Apply
 
 ## [v1.4.1] - 2023-01-09
 

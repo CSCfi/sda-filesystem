@@ -266,7 +266,7 @@ func Test_SDConnect_ValidateLogin_OK(t *testing.T) {
 	mockC := &mockConnecter{sTokens: map[string]sToken{"s1": {"sToken", "proj1"}}, projects: projects}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	err := sd.validateLogin("dXNlcjpwYXNz", "")
+	err := sd.authenticate("dXNlcjpwYXNz", "")
 	if err != nil {
 		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
@@ -296,7 +296,7 @@ func Test_SDConnect_ValidateLogin_Override_OK(t *testing.T) {
 	}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	err := sd.validateLogin("vfylxr7pckgh", project)
+	err := sd.authenticate("vfylxr7pckgh", project)
 	if err != nil {
 		t.Fatalf("Function failed, expected no error, received=%v", err)
 	}
@@ -321,8 +321,8 @@ func Test_SDConnect_ValidateLogin_Fail_GetProjects(t *testing.T) {
 	mockC := &mockConnecter{projectsErr: errors.New("Error occurred")}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "Error occurred for SD Connect: getProjects error: Error occurred"
-	err := sd.validateLogin("u7c9Cstlv7", "")
+	expectedError := "getProjects error: Error occurred"
+	err := sd.authenticate("u7c9Cstlv7", "")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {
@@ -334,8 +334,8 @@ func Test_SDConnect_ValidateLogin_Fail_GetToken(t *testing.T) {
 	mockC := &mockConnecter{tokenErr: errors.New("Error occurred")}
 	sd := &sdConnectInfo{connectable: mockC}
 
-	expectedError := "Error occurred for SD Connect: getToken error: Error occurred"
-	err := sd.validateLogin("vhy9pcr7til", "project")
+	expectedError := "getToken error: Error occurred"
+	err := sd.authenticate("vhy9pcr7til", "project")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {
@@ -347,7 +347,7 @@ func Test_SDConnect_ValidateLogin_Fail_Parameters(t *testing.T) {
 	sd := &sdConnectInfo{}
 	expectedError := "validateLogin() called with too few parameters"
 
-	err := sd.validateLogin("one-param")
+	err := sd.authenticate("one-param")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {
@@ -360,7 +360,7 @@ func Test_SDConnect_ValidateLogin_No_Projects(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "No projects found for SD Connect"
-	err := sd.validateLogin("f60ovguTit7", "")
+	err := sd.authenticate("f60ovguTit7", "")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {
@@ -373,7 +373,7 @@ func Test_SDConnect_ValidateLogin_401_Error(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "SD Connect login failed: getProjects error: API responded with status 401 Unauthorized"
-	err := sd.validateLogin("69vdtulvf6", "")
+	err := sd.authenticate("69vdtulvf6", "")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {
@@ -386,7 +386,7 @@ func Test_SDConnect_ValidateLogin_500_Error(t *testing.T) {
 	sd := &sdConnectInfo{connectable: mockC}
 
 	expectedError := "SD Connect is not available, please contact CSC servicedesk: getProjects error: API responded with status 500 Internal Server Error"
-	err := sd.validateLogin("7vr6lvgil", "")
+	err := sd.authenticate("7vr6lvgil", "")
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != expectedError {

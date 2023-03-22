@@ -129,7 +129,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 	return nil
 }
 
-func (s *sdSubmitInfo) validateLogin(auth ...string) error {
+func (s *sdSubmitInfo) authenticate(auth ...string) error {
 	s.datasets = make(map[string]int)
 	count, count500 := 0, 0
 
@@ -138,14 +138,13 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		if err != nil {
 			var re *RequestError
 			if errors.As(err, &re) && re.StatusCode == 401 {
-				return fmt.Errorf("%s authorization failed: %w", SDSubmitPrnt, err)
+				return fmt.Errorf("%s authorization failed", SDSubmitPrnt)
 			}
 
+			logs.Warning(err)
 			if errors.As(err, &re) && re.StatusCode == 500 {
-				logs.Warningf("Cannot connect to %s API %s: %w", SDSubmitPrnt, s.urls[i], err)
 				count500++
 			} else {
-				logs.Warningf("Something went wrong when fetching %s datasets from API %s: %w", SDSubmitPrnt, s.urls[i], err)
 				count++
 			}
 		} else {
@@ -160,7 +159,7 @@ func (s *sdSubmitInfo) validateLogin(auth ...string) error {
 		case count500 > 0:
 			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmitPrnt)
 		case count > 0:
-			return fmt.Errorf("Error(s) occurred for %s", SDSubmitPrnt)
+			return fmt.Errorf("%s APIs failed to retrieve any data", SDSubmitPrnt)
 		default:
 			return fmt.Errorf("No datasets found for %s", SDSubmitPrnt)
 		}

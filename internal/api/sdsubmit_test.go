@@ -321,8 +321,8 @@ func Test_SDSubmit_ValidateLogin_401_Error(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "SD Apply authorization failed: API responded with status 401 Unauthorized"
-	err := s.validateLogin()
+	expectedError := "SD Apply authorization failed"
+	err := s.authenticate()
 
 	if err == nil {
 		t.Error("Function did not return error")
@@ -337,7 +337,7 @@ func Test_SDSubmit_ValidateLogin_500_Error(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	expectedError := "SD Apply is not available, please contact CSC servicedesk"
-	err := s.validateLogin()
+	err := s.authenticate()
 
 	if err == nil {
 		t.Error("Function did not return error")
@@ -354,7 +354,7 @@ func Test_SDSubmit_ValidateLogin_500_And_Pass(t *testing.T) {
 
 	// Test
 	expectedDatasets := map[string]int{"dataset1": 0, "dataset2": 1, "dataset3": 2}
-	err := s.validateLogin()
+	err := s.authenticate()
 
 	if err != nil {
 		t.Fatalf("Function failed, expected no error, received=%v", err)
@@ -370,8 +370,8 @@ func Test_SDSubmit_ValidateLogin_No_Responses(t *testing.T) {
 	s := &sdSubmitInfo{submittable: ms, urls: []string{"bad"}}
 
 	// Test
-	expectedError := "Error(s) occurred for SD Apply"
-	err := s.validateLogin()
+	expectedError := "SD Apply APIs failed to retrieve any data"
+	err := s.authenticate()
 
 	if err == nil {
 		t.Error("Function did not return error")
@@ -387,7 +387,7 @@ func Test_SDSubmit_ValidateLogin_Pass_Found(t *testing.T) {
 
 	// Test
 	expectedDatasets := map[string]int{"dataset1": 0, "dataset2": 1, "dataset3": 2}
-	err := s.validateLogin()
+	err := s.authenticate()
 
 	if err != nil {
 		t.Fatalf("Function failed, expected no error, received=%v", err)
@@ -404,7 +404,7 @@ func Test_SDSubmit_ValidateLogin_Pass_None(t *testing.T) {
 
 	// Test
 	expectedError := "No datasets found for SD Apply"
-	err := s.validateLogin()
+	err := s.authenticate()
 
 	if err == nil {
 		t.Error("Function did not return error")

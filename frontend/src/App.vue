@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { CToastMessage, CToastType } from 'csc-ui/dist/types'
 import { ref, computed, onMounted } from 'vue'
-import { EventsOn, EventsEmit, Quit } from '../wailsjs/runtime'
-import { InitializeAPI } from '../wailsjs/go/main/App'
+import { EventsOn, EventsEmit } from '../wailsjs/runtime'
+import { InitializeAPI, InitFuse, Quit } from '../wailsjs/go/main/App'
 
 interface ComponentType {
     name: string
@@ -22,7 +22,10 @@ const componentData = computed<ComponentType[]>(() => ([
     {
         name: "Login",
         visible: !loggedIn.value,
-        props: {initialized: initialized.value, disabled: disabled.value},
+        props: {
+            initialized: initialized.value, 
+            disabled: disabled.value,
+        },
     },
     { name: "Access", visible: loggedIn.value, active: loggedIn.value },
     { name: "Export", visible: loggedIn.value, disabled: !accessed.value },
@@ -54,7 +57,11 @@ EventsOn('showToast', function(title: string, err: string) {
     toasts.value?.addToast(message);
 })
 
-EventsOn('loggedIn', () => {loggedIn.value = true; currentPage.value = 'Access'})
+EventsOn('loggedIn', () => {
+    loggedIn.value = true; 
+    currentPage.value = 'Access';
+    InitFuse();
+})
 
 EventsOn('fuseReady', () => (accessed.value = true))
 </script>
@@ -99,7 +106,7 @@ EventsOn('fuseReady', () => (accessed.value = true))
     </c-main>
 </template>
 
-<style>
+<style scoped>
 c-main {
     background-color: white;
 }

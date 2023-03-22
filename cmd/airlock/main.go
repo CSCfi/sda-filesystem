@@ -93,7 +93,7 @@ func main() {
 		password = string(bytePassword)
 	}
 
-	api.SetBasicToken(username, password)
+	_ = api.BasicToken(username, password)
 
 	var encrypted bool
 	if encrypted, err = airlock.CheckEncryption(filename); err != nil {

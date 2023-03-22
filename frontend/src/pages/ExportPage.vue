@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime'
+import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist/types';
 import { SelectFile, CheckEncryption, ExportFile } from '../../wailsjs/go/main/App'
 import { mdiTrashCanOutline } from '@mdi/js'
+
+import LoginForm from '../components/LoginForm.vue';
 
 const exportHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name', sortable: false },
@@ -24,7 +26,7 @@ const exportHeadersModifiable: CDataTableHeader[] = [
                 size: 'small',
                 title: 'Remove',
                 path: mdiTrashCanOutline,
-                onClick: ({ data }) =>
+                onClick: () =>
                     { exportData.value.pop(); chooseToContinue.value = false }
                 },
             },
@@ -37,6 +39,7 @@ const exportData = ref<CDataTableData[]>([])
 const bucketItems = ref<CAutocompleteItem[]>([])
 const filteredBucketItems = ref<CAutocompleteItem[]>([])
 
+const skipLogin = ref(false)
 const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
@@ -45,6 +48,10 @@ const file = ref("")
 const fileEncrypted = ref("")
 const showModal = ref(false)
 const chooseToContinue = ref(false)
+
+EventsOn('sdconnectAvailable', () => {
+    skipLogin.value = true;
+})
 
 EventsOn('isProjectManager', () => {
     pageIdx.value = 1;
@@ -134,9 +141,14 @@ function containsFilterString(str: string): boolean {
             </c-card>
         </c-modal>
 
-        <c-flex v-show="pageIdx == 0">
+        <c-flex v-show="pageIdx == 0" id="no-export-page">
             <h2>Export is not possible</h2>
-            <p>You need to be project manager to export files.</p>
+            <p v-if="skipLogin">You need to have project manager rights to export files.</p>
+            <p v-else>
+                Please log in to SD Connect with your CSC credentials. 
+                Note that only CSC project managers have export rights.
+            </p>
+            <LoginForm v-if="!skipLogin"></LoginForm>
         </c-flex>
         <c-flex v-show="pageIdx == 1">
             <h2>Select a destination folder for your export</h2>
@@ -174,6 +186,11 @@ function containsFilterString(str: string): boolean {
                     <c-button outlined @click="selectFile()">Select file</c-button>
                 </c-row>
                 <p>If you wish to export multiple files, please create a tar/zip file.</p>
+                <p>
+                    Unencrypted file will be encrypted by default with service encryption key 
+                    and will be accessible only via SD Desktop.<br>If you want to access the file 
+                    otherwise, please encrypt it before exporting.
+                </p>
             </div>
             <c-data-table v-else
                 id="export-table"
@@ -200,8 +217,10 @@ function containsFilterString(str: string): boolean {
         </c-flex>
         <c-flex v-show="pageIdx == 4">
             <h2>Export complete</h2>
-            <p>All files have been uploaded to SD Connect. You can now 
-                close or minimise the window to continue working.</p>
+            <p>
+                All files have been uploaded to SD Connect. You can now 
+                close or minimise the window to continue working.
+            </p>
             <c-button
                 class="continue-button" 
                 size="large" 
@@ -212,20 +231,28 @@ function containsFilterString(str: string): boolean {
     </c-container>
 </template>
 
-<style>
+<style scoped>
 c-autocomplete {
+    width: 500px;
+}
+
+#no-export-page {
     width: 500px;
 }
 
 #drop-area {
     border: 3px solid var(--csc-primary);
-    height: 200px;
     margin-top: 20px;
     margin-bottom: 20px;
+    padding: 40px;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-direction: column;
+}
+
+#drop-area > p {
+    text-align: center;
 }
 
 #export-table {

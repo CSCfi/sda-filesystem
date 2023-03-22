@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
-import { EventsOn } from '../../wailsjs/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
 import { reactive, ref, computed } from 'vue';
 
@@ -59,7 +59,7 @@ function containsFilterString(str: string): boolean {
 <template>
     <c-container class="fill-width">
         <c-row id="log-title-row" justify="space-between" align="center">
-            <h2 id="log-title">Logs</h2>
+            <h2>Logs</h2>
             <c-button id="export-button" text no-radius @click="SaveLogs">
                 <i class="material-icons" slot="icon">logout</i>
                 Export detailed logs
@@ -84,13 +84,13 @@ function containsFilterString(str: string): boolean {
     </c-container>
 </template>
 
-<style>
+<style scoped>
 #log-title-row {
     display: block;
     margin-bottom: 20px;
 }
 
-#log-title {
+#log-title-row > h2 {
     margin-bottom: 0px;
 }
 

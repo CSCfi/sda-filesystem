@@ -131,7 +131,7 @@ func (c *sdConnectInfo) getEnvs() error {
 	return nil
 }
 
-func (c *sdConnectInfo) validateLogin(auth ...string) error {
+func (c *sdConnectInfo) authenticate(auth ...string) error {
 	if len(auth) < 2 {
 		return fmt.Errorf("validateLogin() called with too few parameters")
 	}
@@ -170,7 +170,7 @@ func (c *sdConnectInfo) validateLogin(auth ...string) error {
 		return fmt.Errorf("%s is not available, please contact CSC servicedesk: %w", SDConnectPrnt, err)
 	}
 
-	return fmt.Errorf("Error occurred for %s: %w", SDConnectPrnt, err)
+	return err
 }
 
 func (c *sdConnectInfo) levelCount() int {

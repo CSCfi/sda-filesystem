@@ -27,13 +27,14 @@ type App struct {
 	lh          *LogHandler
 	fs          *filesystem.Fuse
 	mountpoint  string
+	loginRepo   string
 	paniced     bool
-	initialized bool
+	preventQuit bool
 }
 
 // NewApp creates a new App application struct
 func NewApp(ph *ProjectHandler, lh *LogHandler) *App {
-	return &App{ph: ph, lh: lh}
+	return &App{ph: ph, lh: lh, loginRepo: api.SDConnect}
 }
 
 // startup is called when the app starts. The context is saved
@@ -45,6 +46,15 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	filesystem.UnmountFilesystem()
+}
+
+func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+	return a.preventQuit
+}
+
+func (a *App) Quit() {
+	a.preventQuit = false
+	wailsruntime.Quit(a.ctx)
 }
 
 func (a *App) Panic() {
@@ -81,6 +91,13 @@ func (a *App) GetDefaultMountPoint() string {
 }
 
 func (a *App) InitializeAPI() error {
+	reps := make(map[string][2]bool)
+	defer wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
+
+	for _, r := range api.GetAllRepositories() {
+		reps[r] = [2]bool{true, r == a.loginRepo}
+	}
+
 	err := api.GetCommonEnvs()
 	if err != nil {
 		logs.Error(err)
@@ -103,29 +120,37 @@ func (a *App) InitializeAPI() error {
 	}
 
 	noneAvailable := true
-	for _, rep := range api.GetAllRepositories() {
-		if err := api.GetEnvs(rep); err != nil {
+	for _, r := range api.GetAllRepositories() {
+		if err = api.GetEnvs(r); err != nil {
 			logs.Error(err)
 		} else {
 			noneAvailable = false
 		}
+		reps[r] = [2]bool{err != nil, r == a.loginRepo}
 	}
 
 	if noneAvailable {
 		return fmt.Errorf("No services available")
 	}
 
-	a.initialized = true
+	return nil
+}
+
+func (a *App) Authenticate(repository string) error {
+	if err := api.Authenticate(repository); err != nil {
+		logs.Error(err)
+		message, _ := logs.Wrapper(err)
+
+		return fmt.Errorf(message)
+	}
 
 	return nil
 }
 
 func (a *App) Login(username, password string) (bool, error) {
-	success, err := api.ValidateLogin(username, password, "")
-	if err != nil {
+	token := api.BasicToken(username, password)
+	if err := api.Authenticate(a.loginRepo, token, ""); err != nil {
 		logs.Error(err)
-	}
-	if !success {
 		var re *api.RequestError
 		if errors.As(err, &re) && re.StatusCode == 401 {
 			return false, nil
@@ -134,6 +159,9 @@ func (a *App) Login(username, password string) (bool, error) {
 
 		return false, fmt.Errorf(message)
 	}
+
+	logs.Info("Login successful")
+	wailsruntime.EventsEmit(a.ctx, "sdconnectAvailable")
 
 	isManager, err := airlock.IsProjectManager("")
 	switch {
@@ -150,11 +178,14 @@ func (a *App) Login(username, password string) (bool, error) {
 		}
 	}
 
+	return true, nil
+}
+
+func (a *App) InitFuse() {
+	a.preventQuit = true
+	api.SettleRepositories()
 	a.fs = filesystem.InitializeFileSystem(a.ph.AddProject)
 	a.ph.sendProjects()
-	logs.Info("Login successful")
-
-	return true, nil
 }
 
 func (a *App) ChangeMountPoint() (string, error) {
