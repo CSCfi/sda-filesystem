@@ -161,7 +161,6 @@ func (a *App) Login(username, password string) (bool, error) {
 	}
 
 	logs.Info("Login successful")
-	wailsruntime.EventsEmit(a.ctx, "sdconnectAvailable")
 
 	isManager, err := airlock.IsProjectManager("")
 	switch {
@@ -177,6 +176,8 @@ func (a *App) Login(username, password string) (bool, error) {
 			wailsruntime.EventsEmit(a.ctx, "isProjectManager")
 		}
 	}
+
+	wailsruntime.EventsEmit(a.ctx, "sdconnectAvailable")
 
 	return true, nil
 }
