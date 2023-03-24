@@ -178,6 +178,7 @@ func (a *App) Login(username, password string) (bool, error) {
 	}
 
 	wailsruntime.EventsEmit(a.ctx, "sdconnectAvailable")
+
 	return true, nil
 }
 
