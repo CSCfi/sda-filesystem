@@ -42,12 +42,14 @@ For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/loc
 
 Install [Wails](https://wails.io/docs/gettingstarted/installation) and its dependencies.
 
+Install [pnpm](https://pnpm.io/installation)
+
 ### Build and Run
 
 Before running/building the repository for the first time, generate the frontend assests by running:
 ```
-npm install --prefix frontend
-npm run build --prefix frontend
+pnpm install --prefix frontend
+pnpm --prefix frontend run build
 ```
 
 To run in development mode:
