@@ -9,9 +9,9 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "info": {
-        "companyName": "CSC",
-        "productName": "Data Gateway",
-        "productVersion": "2.0.0",
-        "copyright": "MIT"
-    }
+    "companyName": "CSC",
+    "productName": "Data Gateway",
+    "productVersion": "2.0.2",
+    "copyright": "MIT"
+  }
 }

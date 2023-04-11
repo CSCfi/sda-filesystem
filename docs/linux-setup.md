@@ -10,7 +10,7 @@ or download the release:
 ```
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=v2.0.0
+export version=v2.0.2
 wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.20-linux-amd64.zip"
 ```
 
@@ -23,7 +23,7 @@ sudo ln -s /etc/sda-fuse/sda-fuse /usr/bin/sda-fuse
 sudo wget https://raw.githubusercontent.com/CSCfi/sda-filesystem/refactor/wails-gui/build/appicon.png --directory-prefix=/etc/sda-fuse
 sudo cat > /etc/skel/Desktop/filesystem.desktop << EOF
 [Desktop Entry]
-Version=2.0.0
+Version=2.0.2
 Type=Application
 Terminal=false
 Exec=/usr/bin/sda-fuse

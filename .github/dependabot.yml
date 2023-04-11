@@ -14,3 +14,12 @@ updates:
     labels:
       - "github actions"
     open-pull-requests-limit: 10
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+    labels:
+      - "npm dependencies"
+    target-branch: "devel"
+    open-pull-requests-limit: 10
