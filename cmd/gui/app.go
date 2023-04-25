@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"sda-filesystem/internal/airlock"
@@ -185,7 +187,7 @@ func (a *App) Login(username, password string) (bool, error) {
 func (a *App) InitFuse() {
 	a.preventQuit = true
 	api.SettleRepositories()
-	a.fs = filesystem.InitializeFileSystem(a.ph.AddProject)
+	a.fs = filesystem.InitializeFilesystem(a.ph.AddProject)
 	a.ph.sendProjects()
 }
 
@@ -231,6 +233,15 @@ func (a *App) LoadFuse() {
 			wailsruntime.EventsEmit(a.ctx, "fuseReady")
 		}()
 
+		s := make(chan os.Signal, 1)
+		signal.Notify(s, syscall.SIGUSR1)
+		go func() {
+			for {
+				<-s
+				wailsruntime.EventsEmit(a.ctx, "refresh")
+			}
+		}()
+
 		filesystem.MountFilesystem(a.fs, a.mountpoint)
 		os.Exit(0)
 	}()
@@ -273,7 +284,7 @@ func (a *App) RefreshFuse() error {
 	time.Sleep(200 * time.Millisecond)
 
 	a.ph.deleteProjects()
-	newFs := filesystem.InitializeFileSystem(a.ph.AddProject)
+	newFs := filesystem.InitializeFilesystem(a.ph.AddProject)
 	newFs.PopulateFilesystem(a.ph.trackContainers)
 	a.fs.RefreshFilesystem(newFs)
 

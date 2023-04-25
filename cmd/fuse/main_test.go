@@ -84,9 +84,13 @@ func TestUserChooseUpdate(t *testing.T) {
 	finished := false
 	reader := strings.NewReader("continue\nhello\nupdate")
 
+	var ch = make(chan bool)
 	go func() {
-		userChooseUpdate(reader)
+		userChooseUpdate(reader, ch)
 		finished = true
+	}()
+	go func() {
+		finished = <-ch
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -107,9 +111,12 @@ func TestUserChooseUpdate_Error(t *testing.T) {
 	})
 	defer logs.SetSignal(func(l string, s []string) {})
 
+	var ch = make(chan bool)
 	go func() {
-		userChooseUpdate(buf)
-		finished = true
+		userChooseUpdate(buf, ch)
+	}()
+	go func() {
+		finished = <-ch
 	}()
 
 	time.Sleep(10 * time.Millisecond)

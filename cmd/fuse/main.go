@@ -56,17 +56,29 @@ func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
-func userChooseUpdate(r io.Reader) {
+func userChooseUpdate(r io.Reader, ch chan<- bool) {
 	scanner := bufio.NewScanner(r)
 	var answer string
 
-	for !strings.EqualFold(answer, "update") {
+	for {
 		if scanner.Scan() {
 			answer = scanner.Text()
 		}
 		if err := scanner.Err(); err != nil {
 			logs.Errorf("Could not read input: %w", err)
 		}
+		if strings.EqualFold(answer, "update") {
+			ch <- true
+		}
+	}
+}
+
+func waitForUpdateSignal(ch chan<- bool) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGUSR1)
+	for {
+		<-s
+		ch <- true
 	}
 }
 
@@ -251,18 +263,21 @@ func main() {
 	}
 
 	done := shutdown()
-	fs := filesystem.InitializeFileSystem(nil)
+	fs := filesystem.InitializeFilesystem(nil)
 	fs.PopulateFilesystem(nil)
 
+	var wait = make(chan bool)
+	go waitForUpdateSignal(wait)
+	go userChooseUpdate(os.Stdin, wait)
 	go func() {
 		for {
-			userChooseUpdate(os.Stdin)
+			<-wait
 			if fs.FilesOpen(mount) {
-				logs.Warningf("You have files in use and thus updating is not possible")
+				logs.Warningf("You have files in use which prevents updating Data Gateway")
 
 				continue
 			}
-			newFs := filesystem.InitializeFileSystem(nil)
+			newFs := filesystem.InitializeFilesystem(nil)
 			newFs.PopulateFilesystem(nil)
 			fs.RefreshFilesystem(newFs)
 		}

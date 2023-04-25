@@ -73,13 +73,15 @@ EventsOn('updateGlobalProgress', function(nom: number, denom: number) {
 
 EventsOn('updateProjectProgress', function(project: filesystem.Project, progress: number) {
     let idx: number = projectData.findIndex(row => row['name'].value === project.name && row['repository'].value === project.repository);
-    if (progress > projectData[idx]['progress'].value) {
+    if (progress > (projectData[idx]['progress'].value as number)) {
         projectData[idx]['progress'].value = progress;
         projectKey.value++;
     }
 })
 
 EventsOn('fuseReady', () => {pageIdx.value = 4; updating.value = false})
+
+EventsOn('refresh', () => refresh())
 
 function changeMountPoint() {
     ChangeMountPoint().then((dir: string) => {
