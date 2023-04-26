@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"time"
 
 	"sda-filesystem/internal/airlock"
@@ -233,11 +231,11 @@ func (a *App) LoadFuse() {
 			wailsruntime.EventsEmit(a.ctx, "fuseReady")
 		}()
 
-		s := make(chan os.Signal, 1)
-		signal.Notify(s, syscall.SIGUSR1)
+		var wait = make(chan bool)
+		go mountpoint.WaitForUpdateSignal(wait)
 		go func() {
 			for {
-				<-s
+				<-wait
 				wailsruntime.EventsEmit(a.ctx, "refresh")
 			}
 		}()

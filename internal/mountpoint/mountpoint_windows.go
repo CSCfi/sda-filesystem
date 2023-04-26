@@ -27,3 +27,6 @@ var CheckMountPoint = func(mount string) error {
 
 	return nil
 }
+
+func WaitForUpdateSignal(ch chan<- bool) {
+}
