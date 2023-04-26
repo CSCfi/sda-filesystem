@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v2.1.0] 2023-04-26
 
-- User can update the filesystem by sending the SIGUSR1 signal to the process.
+- User can update the filesystem by sending the SIGUSR1 signal to the process. Does not work for Windows.
 
 ## [v2.0.2] 2023-04-11
 

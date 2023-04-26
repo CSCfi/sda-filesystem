@@ -73,15 +73,6 @@ func userChooseUpdate(r io.Reader, ch chan<- bool) {
 	}
 }
 
-func waitForUpdateSignal(ch chan<- bool) {
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGUSR1)
-	for {
-		<-s
-		ch <- true
-	}
-}
-
 var askForLogin = func(lr loginReader) (string, string, bool, error) {
 	username, password, exist := checkEnvVars()
 	if exist {
@@ -267,7 +258,7 @@ func main() {
 	fs.PopulateFilesystem(nil)
 
 	var wait = make(chan bool)
-	go waitForUpdateSignal(wait)
+	go mountpoint.WaitForUpdateSignal(wait)
 	go userChooseUpdate(os.Stdin, wait)
 	go func() {
 		for {
@@ -277,6 +268,7 @@ func main() {
 
 				continue
 			}
+			logs.Info("Updating Data Gateway")
 			newFs := filesystem.InitializeFilesystem(nil)
 			newFs.PopulateFilesystem(nil)
 			fs.RefreshFilesystem(newFs)

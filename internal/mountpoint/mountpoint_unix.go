@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"sda-filesystem/internal/logs"
 
@@ -53,4 +55,13 @@ var CheckMountPoint = func(mount string) error {
 	logs.Debugf("Directory %s is a valid mount point", mount)
 
 	return nil
+}
+
+func WaitForUpdateSignal(ch chan<- bool) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGUSR1)
+	for {
+		<-s
+		ch <- true
+	}
 }
