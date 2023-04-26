@@ -4,9 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.1.0] 2023-04-25
+## [v2.1.0] 2023-04-26
 
 - User can update the filesystem by sending the SIGUSR1 signal to the process.
+
+## [v2.0.2] 2023-04-11
+
+### Changed
+
+- Update pnpm dependencies
+- switch to pnpm v8
+
+### Added
+
+- dependabot for pnpm
+- `csc-ui-vue` and deprecated `csc-ui-vue-directive`
 
 ## [v2.0.0] 2023-03-22
 
