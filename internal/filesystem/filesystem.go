@@ -81,7 +81,7 @@ var CheckPanic = func() {
 }
 
 // InitializeFileSystem initializes the in-memory filesystem database
-func InitializeFileSystem(send func(Project)) *Fuse {
+func InitializeFilesystem(send func(Project)) *Fuse {
 	logs.Info("Initializing in-memory Data Gateway database")
 	timestamp := fuse.Now()
 	fs := Fuse{}

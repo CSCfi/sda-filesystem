@@ -394,7 +394,7 @@ func TestInitializeFilesystem(t *testing.T) {
 		return strings.ReplaceAll(str, "+", "_")
 	}
 
-	ret := InitializeFileSystem(nil)
+	ret := InitializeFilesystem(nil)
 	if ret == nil || ret.root == nil {
 		t.Fatal("Filesystem or root is nil")
 	}
