@@ -88,7 +88,7 @@ EventsOn('fuseReady', () => (accessed.value = true))
                 icon-end 
                 @click="Quit"
                 :style="{visibility: loggedIn ? 'visible' : 'hidden'}">
-                <i class="material-icons" slot="icon">logout</i>
+                <i class="mdi mdi-logout-variant" slot="icon"></i>
                 Disconnect and sign out
             </c-button>
         </c-toolbar>
