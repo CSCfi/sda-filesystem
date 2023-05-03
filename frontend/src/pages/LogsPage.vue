@@ -61,12 +61,12 @@ function containsFilterString(str: string): boolean {
         <c-row id="log-title-row" justify="space-between" align="center">
             <h2>Logs</h2>
             <c-button id="export-button" text no-radius @click="SaveLogs">
-                <i class="material-icons" slot="icon">logout</i>
+                <i class="mdi mdi-tray-arrow-down" slot="icon"></i>
                 Export detailed logs
             </c-button>
         </c-row>
         <c-text-field label="Filter items" v-model="filterStr">
-            <i class="material-icons" slot="pre">filter_list</i>
+            <i class="mdi mdi-filter-variant" slot="pre"></i>
         </c-text-field>
         <c-data-table 
             id="log-table"

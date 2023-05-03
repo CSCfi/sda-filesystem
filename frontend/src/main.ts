@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import { applyPolyfills, defineCustomElements } from 'csc-ui/loader';
 import { vControl } from '@cscfi/csc-ui-vue';
+import '@mdi/font/css/materialdesignicons.css';
 
 import App from './App.vue';
 import Access from './pages/AccessPage.vue'
