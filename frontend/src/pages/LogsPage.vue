@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { main } from "../../wailsjs/go/models";
+import { Quit } from '../../wailsjs/go/main/App'
 import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, onUnmounted } from 'vue';
 
 const logHeaders: CDataTableHeader[] = [
     { key: 'loglevel', value: 'Level', sortable: false },
@@ -10,6 +12,7 @@ const logHeaders: CDataTableHeader[] = [
     { key: 'message', value: 'Message', sortable: false },
 ]
 
+const logData = reactive<main.Log[]>([])
 const logDataTable = reactive<CDataTableData[]>([])
 const logDataTableFiltered = computed(() => logDataTable.filter(row => {
     logsKey.value++;
@@ -21,6 +24,7 @@ const logDataTableFiltered = computed(() => logDataTable.filter(row => {
 
 const logsKey = ref(0)
 const filterStr = ref("") 
+const interval = ref(setInterval(() => addLogsToTable(), 1000))
 
 const footerOptions: CDataTableFooterOptions = {
     itemsPerPageOptions: [5, 10, 15, 20],
@@ -33,23 +37,41 @@ const paginationOptions: CPaginationOptions = {
     endTo: 4,
 }
 
-EventsOn('newLogEntry', function(lvl: string, tsmp: string, ms: string) {
-    let timestamp: CDataTableDataItem = {
-        "value": tsmp, 
-        "formattedValue": tsmp.split(".")[0],
-    };
-    let level: CDataTableDataItem = {
-        "component": {
-            tag: 'c-status', 
-            params: { type: lvl },
-        },
-        "value": lvl.charAt(0).toUpperCase() + lvl.slice(1)
-    };
-    let message: CDataTableDataItem = {"value": ms};
-
-    let logRow: CDataTableData = {'loglevel': level, 'timestamp': timestamp, 'message': message}
-    logDataTable.push(logRow);
+onUnmounted(() => {
+    clearInterval(interval.value);
 })
+
+EventsOn('newLogEntry', function(entry: main.Log) {
+    logData.push(entry);
+})
+
+EventsOn('saveLogsAndQuit', function(entry: main.Log) {
+    SaveLogs(logData).then(() => Quit());
+})
+
+function addLogsToTable() {
+    if (logData.length <= logDataTable.length) {
+        return;
+    }
+
+    let tableData: CDataTableData[] = logData.slice(logDataTable.length).map((logRow: main.Log) => {
+        let timestamp: CDataTableDataItem = {
+            "value": logRow.timestamp, 
+            "formattedValue": logRow.timestamp.split(".")[0],
+        };
+        let level: CDataTableDataItem = {
+            "component": {
+                tag: 'c-status', 
+                params: { type: logRow.loglevel },
+            },
+            "value": logRow.loglevel.charAt(0).toUpperCase() + logRow.loglevel.slice(1)
+        };
+        let message: CDataTableDataItem = {"value": logRow.message[0]};
+        return {'loglevel': level, 'timestamp': timestamp, 'message': message};
+    });
+
+    logDataTable.push(...tableData);
+}
 
 function containsFilterString(str: string): boolean {
     return str.toLowerCase().includes(filterStr.value.toLowerCase());
@@ -60,7 +82,7 @@ function containsFilterString(str: string): boolean {
     <c-container class="fill-width">
         <c-row id="log-title-row" justify="space-between" align="center">
             <h2>Logs</h2>
-            <c-button id="export-button" text no-radius @click="SaveLogs">
+            <c-button id="export-button" text no-radius @click="SaveLogs(logData)">
                 <i class="mdi mdi-tray-arrow-down" slot="icon"></i>
                 Export detailed logs
             </c-button>
