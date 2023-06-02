@@ -69,14 +69,13 @@ func (a *App) Panic() {
 		Buttons:       []string{quitButton, "Ignore"},
 		DefaultButton: quitButton,
 		Title:         "Data Gateway failed to load correctly",
-		Message:       "Save logs to find out why this happened and quit the application or continue at your own peril...",
+		Message:       "Save logs to find out why this happened and quit the application, or continue at your own peril...",
 	}
 	result, err := wailsruntime.MessageDialog(a.ctx, options)
 	if err != nil {
 		logs.Error(fmt.Errorf("Dialog gave an error, could not respond to user decision: %w", err))
 	} else if result == quitButton {
-		a.lh.SaveLogs()
-		wailsruntime.Quit(a.ctx)
+		wailsruntime.EventsEmit(a.ctx, "saveLogsAndQuit")
 	}
 }
 
