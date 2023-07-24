@@ -5,9 +5,9 @@ export function Authenticate(arg1:string):Promise<void>;
 
 export function ChangeMountPoint():Promise<string>;
 
-export function CheckEncryption(arg1:string,arg2:string):Promise<boolean>;
+export function CheckEncryption(arg1:string,arg2:string):Promise<any>;
 
-export function ExportFile(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function ExportFile(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function GetDefaultMountPoint():Promise<string>;
 
