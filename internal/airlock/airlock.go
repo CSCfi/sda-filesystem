@@ -18,6 +18,7 @@ import (
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
 
 	"github.com/neicnordic/crypt4gh/keys"
 	"github.com/neicnordic/crypt4gh/model/headers"
@@ -311,6 +312,18 @@ var getFileDetailsEncrypt = func(filename string) (encFile *os.File, checksum st
 	}
 	defer file.Close()
 
+	fileInfo, _ := file.Stat()
+	fileSize := fileInfo.Size()
+
+	memLeft, err := mountpoint.BytesAvailable(os.TempDir())
+	if err != nil {
+		return
+	}
+	if int64(memLeft) < fileSize {
+		err = fmt.Errorf("Not enough space for airlock export operation, consider using a volume or splinting the file")
+		return
+	}
+
 	encFile, err = os.CreateTemp("", "encrypted.*.c4gh")
 	if err != nil {
 		return
@@ -323,8 +336,7 @@ var getFileDetailsEncrypt = func(filename string) (encFile *os.File, checksum st
 	if err != nil {
 		return
 	}
-	bytes_written, err = io.Copy(c4ghWriter, file)
-	if err != nil {
+	if _, err = io.Copy(c4ghWriter, file); err != nil {
 		return
 	}
 	if err = c4ghWriter.Close(); err != nil {
@@ -332,6 +344,10 @@ var getFileDetailsEncrypt = func(filename string) (encFile *os.File, checksum st
 	}
 
 	checksum = hex.EncodeToString(hash.Sum(nil))
+
+	if bytes_written, err = encFile.Seek(0, io.SeekCurrent); err != nil {
+		return
+	}
 	if _, err = encFile.Seek(0, io.SeekStart); err != nil {
 		return
 	}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"sda-filesystem/internal/logs"
+
+	"golang.org/x/sys/windows"
 )
 
 var CheckMountPoint = func(mount string) error {
@@ -29,4 +31,24 @@ var CheckMountPoint = func(mount string) error {
 }
 
 func WaitForUpdateSignal(ch chan<- bool) {
+}
+
+func BytesAvailable(dir string) (uint64, error) {
+	h, err := windows.LoadDLL("kernel32.dll")
+	if err != nil {
+		return 0, err
+	}
+	c, err := h.FindProc("GetDiskFreeSpaceExW")
+	if err != nil {
+		return 0, err
+	}
+
+	var freeBytes int64
+
+	_, _, err := c.Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(dir))),
+		uintptr(unsafe.Pointer(&freeBytes)), nil, nil)
+	if err != nil {
+		return 0, err
+	}
+	return freeBytes, nil
 }

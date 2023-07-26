@@ -79,8 +79,6 @@ watch(() => bucketQuery.value, (query: string) => {
 function selectFile() {
     SelectFile().then((filename: string) => {
         CheckEncryption(filename, selectedBucket.value).then((checks: Array<boolean>) => {
-            console.log(checks)
-            console.log(typeof checks)
             selectedFile.value = filename
             encrypted.value = checks[0]
 

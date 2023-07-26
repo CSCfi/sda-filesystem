@@ -285,7 +285,7 @@ func (c *sdConnectInfo) downloadData(nodes []string, buffer any, start, end int6
 	return err
 }
 
-// calculateDecryptedSize calculates the decrypted size of an encrypted file size
+// calculateDecryptedSize calculates the decrypted size of an encrypted file
 var calculateDecryptedSize = func(fileSize, headerSize int64) int64 {
 	// Crypt4GH settings
 	var blockSize int64 = 65536
