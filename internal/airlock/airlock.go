@@ -98,7 +98,6 @@ var IsProjectManager = func(project string) (bool, error) {
 	}
 
 	return false, nil
-
 }
 
 // GetPublicKey retrieves the public key from the proxy URL and checks its validity
@@ -321,6 +320,7 @@ var getFileDetailsEncrypt = func(filename string) (encFile *os.File, checksum st
 	}
 	if int64(memLeft) < fileSize {
 		err = fmt.Errorf("Not enough space for airlock export operation, consider using a volume or splinting the file")
+
 		return
 	}
 
