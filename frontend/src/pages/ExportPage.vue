@@ -44,8 +44,8 @@ const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
 
-const file = ref("")
-const fileEncrypted = ref("")
+const selectedFile = ref("")
+const encrypted = ref(false)
 const showModal = ref(false)
 const chooseToContinue = ref(false)
 
@@ -65,17 +65,6 @@ EventsOn('setBuckets', (buckets: string[]) => {
     filteredBucketItems.value = bucketItems.value;
 })
 
-EventsOn('setExportFilenames', (fileOrig: string, fileEnc: string) => { 
-    file.value = fileOrig;
-    fileEncrypted.value = fileEnc;
-    let exportRow: CDataTableData = {
-        'name': {'value': fileEnc.split('/').reverse()[0]}, 
-        'folder': {'value': selectedBucket.value}
-    };
-    exportData.value = [];
-    exportData.value.push(exportRow);
-})
-
 watch(() => bucketQuery.value, (query: string) => { 
     selectedBucket.value = query;
     filteredBucketItems.value = bucketItems.value.filter((item: CAutocompleteItem) => {
@@ -89,8 +78,18 @@ watch(() => bucketQuery.value, (query: string) => {
 
 function selectFile() {
     SelectFile().then((filename: string) => {
-        CheckEncryption(filename, selectedBucket.value).then((exists: boolean) => {
-            if (exists) {
+        CheckEncryption(filename, selectedBucket.value).then((checks: Array<boolean>) => {
+            selectedFile.value = filename
+            encrypted.value = checks[0]
+
+            let exportRow: CDataTableData = {
+                'name': {'value': filename.split('/').reverse()[0] + (!checks[0] ? ".c4gh" : "")}, 
+                'folder': {'value': selectedBucket.value}
+            };
+            exportData.value = [];
+            exportData.value.push(exportRow);
+
+            if (checks[1]) { // If exists
                 showModal.value = true;
             } else {
                 chooseToContinue.value = true;
@@ -104,7 +103,7 @@ function selectFile() {
 }
 
 function exportFile() {
-    ExportFile(selectedBucket.value, file.value, fileEncrypted.value).then(() => {
+    ExportFile(selectedFile.value, selectedBucket.value, encrypted.value).then(() => {
         pageIdx.value = 4;
     }).catch(e => {
         pageIdx.value = 2;

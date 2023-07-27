@@ -95,15 +95,12 @@ func main() {
 
 	_ = api.BasicToken(username, password)
 
-	var encrypted bool
-	if encrypted, err = airlock.CheckEncryption(filename); err != nil {
+	encrypted, err := airlock.CheckEncryption(filename)
+	if err != nil {
 		logs.Fatalf("Failed to check if file is encrypted: %s", err.Error())
-	} else if !encrypted {
-		*originalFilename = filename
-		filename += ".c4gh"
 	}
 
-	err = airlock.Upload(*originalFilename, filename, container, *journalNumber, uint64(*segmentSizeMb), !encrypted)
+	err = airlock.Upload(filename, container, uint64(*segmentSizeMb), *journalNumber, *originalFilename, encrypted)
 	if err != nil {
 		logs.Fatal(err)
 	}

@@ -307,30 +307,27 @@ func (a *App) SelectFile() (string, error) {
 	return file, nil
 }
 
-func (a *App) CheckEncryption(file, bucket string) (exists bool, err error) {
-	var encrypted bool
-	if encrypted, err = airlock.CheckEncryption(file); err != nil {
+func (a *App) CheckEncryption(file, bucket string) (checks [2]bool, err error) {
+	if checks[0], err = airlock.CheckEncryption(file); err != nil {
 		logs.Error(err)
 
 		return
 	}
 
-	chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
-	if encrypted {
-		exists = slices.Contains(chld, filepath.Base(file))
-		wailsruntime.EventsEmit(a.ctx, "setExportFilenames", "", file)
-	} else {
-		fileEncrypted := file + ".c4gh"
-		exists = slices.Contains(chld, filepath.Base(fileEncrypted))
-		wailsruntime.EventsEmit(a.ctx, "setExportFilenames", file, fileEncrypted)
+	extension := ""
+	if !checks[0] {
+		extension = ".c4gh"
 	}
+
+	chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
+	checks[1] = slices.Contains(chld, filepath.Base(file+extension))
 
 	return
 }
 
-func (a *App) ExportFile(folder, origFile, encFile string) error {
+func (a *App) ExportFile(file, folder string, encrypted bool) error {
 	time.Sleep(1000 * time.Millisecond)
-	err := airlock.Upload(origFile, encFile, folder, "", 4000, origFile != "")
+	err := airlock.Upload(file, folder, 4000, "", "", encrypted)
 	if err != nil {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)

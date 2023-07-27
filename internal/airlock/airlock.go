@@ -18,6 +18,7 @@ import (
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
 
 	"github.com/neicnordic/crypt4gh/keys"
 	"github.com/neicnordic/crypt4gh/model/headers"
@@ -34,13 +35,6 @@ type airlockInfo struct {
 	proxy      string
 	project    string
 	overridden bool
-}
-
-type readCloser struct {
-	io.Reader
-	io.Closer
-
-	errc chan error
 }
 
 var GetProjectName = func() string {
@@ -104,7 +98,6 @@ var IsProjectManager = func(project string) (bool, error) {
 	}
 
 	return false, nil
-
 }
 
 // GetPublicKey retrieves the public key from the proxy URL and checks its validity
@@ -152,32 +145,36 @@ func GetPublicKey() error {
 }
 
 // Upload uploads a file to SD Connect
-func Upload(originalFilename, filename, container, journalNumber string, segmentSizeMb uint64, encrypt bool) error {
+func Upload(filename, container string, segmentSizeMb uint64, journalNumber, originalFilename string, encrypted bool) error {
 	var err error
-	var encryptedFile io.ReadCloser
+	var encryptedFile *os.File
 	var encryptedChecksum string
 	var encryptedFileSize int64
-	var errc chan error
-	var printFilename = originalFilename
 
-	if encrypt {
-		var rc *readCloser
-		logs.Info("Encrypting file ", originalFilename)
-		rc, encryptedChecksum, encryptedFileSize, err = getFileDetailsEncrypt(originalFilename)
-		encryptedFile = rc
-		if rc != nil {
-			errc = rc.errc
+	defer func() {
+		if encryptedFile != nil {
+			encryptedFile.Close()
+			if !encrypted {
+				os.Remove(encryptedFile.Name())
+			}
 		}
+	}()
+
+	if !encrypted {
+		logs.Info("Encrypting file ", filename)
+		encryptedFile, encryptedChecksum, encryptedFileSize, err = getFileDetailsEncrypt(filename)
 	} else {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
 		encryptedFile, encryptedChecksum, encryptedFileSize, err = getFileDetails(filename)
-		printFilename = filename
 	}
 
 	if err != nil {
-		return fmt.Errorf("Failed to get details for file %s: %w", printFilename, err)
+		return fmt.Errorf("Failed to get details for file %s: %w", filename, err)
 	}
-	defer encryptedFile.Close()
+
+	if !encrypted {
+		filename += ".c4gh"
+	}
 
 	logs.Debugf("File size %v", encryptedFileSize)
 	segmentSize := segmentSizeMb * uint64(minimumSegmentSize)
@@ -187,7 +184,7 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 	segmentNro := uint64(math.Ceil(float64(encryptedFileSize) / float64(segmentSize)))
 
 	object, container := reorderNames(filename, container)
-	logs.Info("Uploading object " + object + " to container " + container)
+	logs.Info("Beginning to upload object " + object + " to container " + container)
 
 	query := map[string]string{
 		"filename":  object,
@@ -196,8 +193,10 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 	}
 
 	if originalFilename != "" {
-		rc, originalChecksum, originalFilesize, err := getFileDetails(originalFilename)
-		rc.Close()
+		file, originalChecksum, originalFilesize, err := getFileDetails(originalFilename)
+		if file != nil {
+			file.Close()
+		}
 		if err != nil {
 			return fmt.Errorf("Failed to get details for file %s: %w", originalFilename, err)
 		}
@@ -216,7 +215,7 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 	if segmentNro < 2 {
 		err = put("", 1, 1, encryptedFile, query)
 		if err != nil {
-			return fmt.Errorf("Uploading file failed: %w", err)
+			return fmt.Errorf("Uploading file %s failed: %w", filepath.Base(filename), err)
 		}
 	} else {
 		uploadDir := ".segments/" + object + "/"
@@ -236,26 +235,17 @@ func Upload(originalFilename, filename, container, journalNumber string, segment
 			err = put(container+"/"+uploadDir, int(i+1), int(segmentNro),
 				io.LimitReader(encryptedFile, thisSegmentSize), query)
 			if err != nil {
-				return fmt.Errorf("Uploading file failed: %w", err)
+				return fmt.Errorf("Uploading file %s failed: %w", filepath.Base(filename), err)
 			}
 
 		}
-		logs.Info("Uploading manifest file for object " + object + " to container " +
-			container)
+		logs.Info("Uploading manifest file")
 
 		var empty *os.File
 		err = put(container+"/"+uploadDir, -1, -1, empty, query)
 		if err != nil {
 			return fmt.Errorf("Uploading manifest file failed: %w", err)
 		}
-	}
-
-	if errc == nil {
-		return nil
-	}
-
-	if err = <-errc; err != nil {
-		return fmt.Errorf("Streaming file failed: %w", err)
 	}
 
 	return nil
@@ -294,13 +284,13 @@ var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 	hash := md5.New() // #nosec
 	_, err = io.Copy(hash, file)
 	if err != nil {
-		return nil, "", 0, err
+		return file, "", 0, err
 	}
 	checksum := hex.EncodeToString(hash.Sum(nil))
 
 	// Need to move file pointer to the beginning so that its content can be read again
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return nil, "", 0, err
+		return file, "", 0, err
 	}
 
 	return file, checksum, fileSize, nil
@@ -313,58 +303,54 @@ var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
 	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, pubkeyList, nil)
 }
 
-var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
-	defer pw.Close()
-	c4ghWriter, err := newCrypt4GHWriter(pw)
-	if err != nil {
-		errc <- err
-
-		return
-	}
-	if _, err = io.Copy(c4ghWriter, file); err != nil {
-		errc <- err
-
-		return
-	}
-	errc <- c4ghWriter.Close()
-}
-
 // getFileDetailsEncrypt is similar to getFileDetails() except the file has to be encrypted before it is read
-var getFileDetailsEncrypt = func(filename string) (rc *readCloser, checksum string, bytes_written int64, err error) {
+var getFileDetailsEncrypt = func(filename string) (encFile *os.File, checksum string, bytes_written int64, err error) {
 	var file *os.File
 	if file, err = os.Open(filename); err != nil {
 		return
 	}
-	defer func() {
-		// If error occurs, close file
-		if rc == nil {
-			file.Close()
-		}
-	}()
+	defer file.Close()
 
-	// The file needs to be read twice. Once for determiming checksum, once for http request.
-	// Both times file needs to be encrypted
-	errc := make(chan error, 1)
-	pr, pw := io.Pipe()        // So that 'c4ghWriter' can pass its contents to an io.Reader
-	go encrypt(file, pw, errc) // Writing from file to 'c4ghWriter' will not happen until 'pr' is being read. Code will hang without goroutine.
+	fileInfo, _ := file.Stat()
+	fileSize := fileInfo.Size()
+
+	memLeft, err := mountpoint.BytesAvailable(os.TempDir())
+	if err != nil {
+		return
+	}
+	if int64(memLeft) < fileSize {
+		err = fmt.Errorf("Not enough space for airlock export operation, consider using a volume or splinting the file")
+
+		return
+	}
+
+	encFile, err = os.CreateTemp("", "encrypted.*.c4gh")
+	if err != nil {
+		return
+	}
 
 	hash := md5.New() // #nosec
-	if bytes_written, err = io.Copy(hash, pr); err != nil {
+	mwr := io.MultiWriter(encFile, hash)
+
+	c4ghWriter, err := newCrypt4GHWriter(mwr)
+	if err != nil {
 		return
 	}
+	if _, err = io.Copy(c4ghWriter, file); err != nil {
+		return
+	}
+	if err = c4ghWriter.Close(); err != nil {
+		return
+	}
+
 	checksum = hex.EncodeToString(hash.Sum(nil))
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
+
+	if bytes_written, err = encFile.Seek(0, io.SeekCurrent); err != nil {
 		return
 	}
-	if err = <-errc; err != nil {
+	if _, err = encFile.Seek(0, io.SeekStart); err != nil {
 		return
 	}
-
-	errc = make(chan error, 1) // This error will be checked at the end of Upload()
-	pr, pw = io.Pipe()
-	go encrypt(file, pw, errc)
-
-	rc = &readCloser{pr, file, errc}
 
 	return
 }
