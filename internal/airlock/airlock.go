@@ -18,7 +18,6 @@ import (
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
-	"sda-filesystem/internal/mountpoint"
 
 	"github.com/neicnordic/crypt4gh/keys"
 	"github.com/neicnordic/crypt4gh/model/headers"
@@ -35,6 +34,13 @@ type airlockInfo struct {
 	proxy      string
 	project    string
 	overridden bool
+}
+
+type readCloser struct {
+	io.Reader
+	io.Closer
+
+	errc chan error
 }
 
 var GetProjectName = func() string {
@@ -147,22 +153,19 @@ func GetPublicKey() error {
 // Upload uploads a file to SD Connect
 func Upload(filename, container string, segmentSizeMb uint64, journalNumber, originalFilename string, encrypted bool) error {
 	var err error
-	var encryptedFile *os.File
+	var encryptedFile io.ReadCloser
 	var encryptedChecksum string
 	var encryptedFileSize int64
-
-	defer func() {
-		if encryptedFile != nil {
-			encryptedFile.Close()
-			if !encrypted {
-				os.Remove(encryptedFile.Name())
-			}
-		}
-	}()
+	var errc chan error
 
 	if !encrypted {
+		var rc *readCloser
 		logs.Info("Encrypting file ", filename)
-		encryptedFile, encryptedChecksum, encryptedFileSize, err = getFileDetailsEncrypt(filename)
+		rc, encryptedChecksum, encryptedFileSize, err = getFileDetailsEncrypt(filename)
+		encryptedFile = rc
+		if rc != nil {
+			errc = rc.errc
+		}
 	} else {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
 		encryptedFile, encryptedChecksum, encryptedFileSize, err = getFileDetails(filename)
@@ -171,6 +174,7 @@ func Upload(filename, container string, segmentSizeMb uint64, journalNumber, ori
 	if err != nil {
 		return fmt.Errorf("Failed to get details for file %s: %w", filename, err)
 	}
+	defer encryptedFile.Close()
 
 	if !encrypted {
 		filename += ".c4gh"
@@ -194,12 +198,10 @@ func Upload(filename, container string, segmentSizeMb uint64, journalNumber, ori
 
 	if originalFilename != "" {
 		file, originalChecksum, originalFilesize, err := getFileDetails(originalFilename)
-		if file != nil {
-			file.Close()
-		}
 		if err != nil {
 			return fmt.Errorf("Failed to get details for file %s: %w", originalFilename, err)
 		}
+		file.Close()
 
 		query["filesize"] = strconv.FormatInt(originalFilesize, 10)
 		query["checksum"] = originalChecksum
@@ -248,6 +250,14 @@ func Upload(filename, container string, segmentSizeMb uint64, journalNumber, ori
 		}
 	}
 
+	if errc != nil {
+		if err = <-errc; err != nil {
+			return fmt.Errorf("Streaming file failed: %w", err)
+		}
+	}
+
+	logs.Info("Upload complete")
+
 	return nil
 }
 
@@ -284,73 +294,86 @@ var getFileDetails = func(filename string) (*os.File, string, int64, error) {
 	hash := md5.New() // #nosec
 	_, err = io.Copy(hash, file)
 	if err != nil {
-		return file, "", 0, err
+		file.Close()
+		return nil, "", 0, err
 	}
 	checksum := hex.EncodeToString(hash.Sum(nil))
 
 	// Need to move file pointer to the beginning so that its content can be read again
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return file, "", 0, err
+		file.Close()
+		return nil, "", 0, err
 	}
 
 	return file, checksum, fileSize, nil
 }
 
-var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
+var newCrypt4GHWriter = func(w io.Writer, privkey [chacha20poly1305.KeySize]byte) (io.WriteCloser, error) {
 	pubkeyList := [][chacha20poly1305.KeySize]byte{}
 	pubkeyList = append(pubkeyList, ai.publicKey)
 
-	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, pubkeyList, nil)
+	return streaming.NewCrypt4GHWriter(w, privkey, pubkeyList, nil)
+}
+
+var encrypt = func(file *os.File, pw *io.PipeWriter, prKey [chacha20poly1305.KeySize]byte, errc chan error) {
+	defer pw.Close()
+	c4ghWriter, err := newCrypt4GHWriter(pw, prKey)
+	if err != nil {
+		errc <- err
+
+		return
+	}
+	if _, err = io.Copy(c4ghWriter, file); err != nil {
+		errc <- err
+
+		return
+	}
+	errc <- c4ghWriter.Close()
 }
 
 // getFileDetailsEncrypt is similar to getFileDetails() except the file has to be encrypted before it is read
-var getFileDetailsEncrypt = func(filename string) (encFile *os.File, checksum string, bytes_written int64, err error) {
+var getFileDetailsEncrypt = func(filename string) (rc *readCloser, checksum string, bytes_written int64, err error) {
 	var file *os.File
 	if file, err = os.Open(filename); err != nil {
 		return
 	}
-	defer file.Close()
+	defer func() {
+		// If error occurs, close file
+		if rc == nil {
+			file.Close()
+		}
+	}()
 
-	fileInfo, _ := file.Stat()
-	fileSize := fileInfo.Size()
-
-	memLeft, err := mountpoint.BytesAvailable(os.TempDir())
+	var privateKey [chacha20poly1305.KeySize]byte
+	_, privateKey, err = keys.GenerateKeyPair()
 	if err != nil {
 		return
 	}
-	if int64(memLeft) < fileSize {
-		err = fmt.Errorf("Not enough space for airlock export operation, consider using a volume or splinting the file")
 
-		return
-	}
-
-	encFile, err = os.CreateTemp("", "encrypted.*.c4gh")
-	if err != nil {
-		return
-	}
+	// The file needs to be read twice. Once for determiming checksum, once for http request.
+	// Both times file needs to be encrypted
+	errc := make(chan error, 1)
+	pr, pw := io.Pipe()                    // So that 'c4ghWriter' can pass its contents to an io.Reader
+	go encrypt(file, pw, privateKey, errc) // Writing from file to 'c4ghWriter' will not happen until 'pr' is being read. Code will hang without goroutine.
 
 	hash := md5.New() // #nosec
-	mwr := io.MultiWriter(encFile, hash)
-
-	c4ghWriter, err := newCrypt4GHWriter(mwr)
-	if err != nil {
+	if bytes_written, err = io.Copy(hash, pr); err != nil {
 		return
 	}
-	if _, err = io.Copy(c4ghWriter, file); err != nil {
-		return
-	}
-	if err = c4ghWriter.Close(); err != nil {
-		return
-	}
-
+	fmt.Println(bytes_written)
 	checksum = hex.EncodeToString(hash.Sum(nil))
+	if _, err = file.Seek(0, io.SeekStart); err != nil {
+		return
+	}
+	if err = <-errc; err != nil {
+		return
+	}
 
-	if bytes_written, err = encFile.Seek(0, io.SeekCurrent); err != nil {
-		return
-	}
-	if _, err = encFile.Seek(0, io.SeekStart); err != nil {
-		return
-	}
+	errc = make(chan error, 1) // This error will be checked at the end of Upload()
+	pr, pw = io.Pipe()
+	go encrypt(file, pw, privateKey, errc)
+
+	rc = &readCloser{pr, file, errc}
 
 	return
 }
