@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"math"
 	"os"
@@ -40,6 +41,7 @@ type readCloser struct {
 	io.Reader
 	io.Closer
 
+	hash hash.Hash
 	errc chan error
 }
 
@@ -153,35 +155,27 @@ func GetPublicKey() error {
 // Upload uploads a file to SD Connect
 func Upload(filename, container string, segmentSizeMb uint64, journalNumber, originalFilename string, encrypted bool) error {
 	var err error
-	var encryptedFile io.ReadCloser
-	var encryptedChecksum string
+	var encryptedRC *readCloser
 	var encryptedFileSize int64
-	var errc chan error
 
-	if !encrypted {
-		var rc *readCloser
-		logs.Info("Encrypting file ", filename)
-		rc, encryptedChecksum, encryptedFileSize, err = getFileDetailsEncrypt(filename)
-		encryptedFile = rc
-		if rc != nil {
-			errc = rc.errc
-		}
-	} else {
+	if encrypted {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
-		encryptedFile, encryptedChecksum, encryptedFileSize, err = getFileDetails(filename)
+	} else {
+		logs.Info("Encrypting file ", filename)
 	}
 
+	encryptedRC, encryptedFileSize, err = getFileDetails(filename, !encrypted)
 	if err != nil {
 		return fmt.Errorf("Failed to get details for file %s: %w", filename, err)
 	}
-	defer encryptedFile.Close()
+	defer encryptedRC.Close()
 
 	if !encrypted {
 		filename += ".c4gh"
 	}
 
-	logs.Debugf("File size %v", encryptedFileSize)
 	segmentSize := segmentSizeMb * uint64(minimumSegmentSize)
+	logs.Debugf("File size %v", encryptedFileSize)
 	logs.Debugf("Segment size %v", segmentSize)
 
 	// Get total number of segments
@@ -196,62 +190,52 @@ func Upload(filename, container string, segmentSizeMb uint64, journalNumber, ori
 		"timestamp": time.Now().Format(time.RFC3339),
 	}
 
-	if originalFilename != "" {
-		file, originalChecksum, originalFilesize, err := getFileDetails(originalFilename)
-		if err != nil {
-			return fmt.Errorf("Failed to get details for file %s: %w", originalFilename, err)
-		}
-		file.Close()
-
-		query["filesize"] = strconv.FormatInt(originalFilesize, 10)
-		query["checksum"] = originalChecksum
-		query["encfilesize"] = strconv.FormatInt(encryptedFileSize, 10)
-		query["encchecksum"] = encryptedChecksum
-	}
-
 	if journalNumber != "" {
 		query["journal"] = journalNumber
 	}
 
-	// If number of segments is 1, do regular upload, else upload file in segments
-	if segmentNro < 2 {
-		err = put("", 1, 1, encryptedFile, query)
+	uploadDir := container + "_segments/" + object + "/"
+
+	for i := uint64(0); i < segmentNro; i++ {
+		segmentStart := int64(float64(i * segmentSize))
+		segmentEnd := int64(math.Min(float64(encryptedFileSize),
+			float64((i+1)*segmentSize)))
+
+		thisSegmentSize := segmentEnd - segmentStart
+		logs.Debugf("Segment start %v", segmentStart)
+		logs.Debugf("Segment end %v", segmentEnd)
+
+		logs.Infof("Uploading segment %v/%v", i+1, segmentNro)
+
+		// Send thisSegmentSize number of bytes to airlock
+		err = put(uploadDir, int(i+1), int(segmentNro), io.LimitReader(encryptedRC, thisSegmentSize), query)
 		if err != nil {
 			return fmt.Errorf("Uploading file %s failed: %w", filepath.Base(filename), err)
 		}
-	} else {
-		uploadDir := ".segments/" + object + "/"
-
-		for i := uint64(0); i < segmentNro; i++ {
-			segmentStart := int64(float64(i * segmentSize))
-			segmentEnd := int64(math.Min(float64(encryptedFileSize),
-				float64((i+1)*segmentSize)))
-
-			thisSegmentSize := segmentEnd - segmentStart
-			logs.Debugf("Segment start %v", segmentStart)
-			logs.Debugf("Segment end %v", segmentEnd)
-
-			logs.Infof("Uploading segment %v/%v", i+1, segmentNro)
-
-			// Send thisSegmentSize number of bytes to airlock
-			err = put(container+"/"+uploadDir, int(i+1), int(segmentNro),
-				io.LimitReader(encryptedFile, thisSegmentSize), query)
-			if err != nil {
-				return fmt.Errorf("Uploading file %s failed: %w", filepath.Base(filename), err)
-			}
-
-		}
-		logs.Info("Uploading manifest file")
-
-		var empty *os.File
-		err = put(container+"/"+uploadDir, -1, -1, empty, query)
-		if err != nil {
-			return fmt.Errorf("Uploading manifest file failed: %w", err)
-		}
 	}
 
-	if errc != nil {
-		if err = <-errc; err != nil {
+	logs.Info("Uploading manifest file")
+
+	if originalFilename != "" {
+		originalChecksum, originalFilesize, err := getOriginalFileDetails(originalFilename)
+		if err != nil {
+			return fmt.Errorf("Failed to get details for file %s: %w", originalFilename, err)
+		}
+
+		query["filesize"] = strconv.FormatInt(originalFilesize, 10)
+		query["checksum"] = originalChecksum
+		query["encfilesize"] = strconv.FormatInt(encryptedFileSize, 10)
+		query["encchecksum"] = hex.EncodeToString(encryptedRC.hash.Sum(nil))
+	}
+
+	var empty *os.File
+	err = put(uploadDir, -1, -1, empty, query)
+	if err != nil {
+		return fmt.Errorf("Uploading manifest file failed: %w", err)
+	}
+
+	if encryptedRC.errc != nil {
+		if err = <-encryptedRC.errc; err != nil {
 			return fmt.Errorf("Streaming file failed: %w", err)
 		}
 	}
@@ -281,43 +265,16 @@ var CheckEncryption = func(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-// getFileDetails opens file, calculates its size and checksum, and returns them and the file pointer itself
-var getFileDetails = func(filename string) (*os.File, string, int64, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, "", 0, err
-	}
-
-	fileInfo, _ := file.Stat()
-	fileSize := fileInfo.Size()
-
-	hash := md5.New() // #nosec
-	_, err = io.Copy(hash, file)
-	if err != nil {
-		file.Close()
-		return nil, "", 0, err
-	}
-	checksum := hex.EncodeToString(hash.Sum(nil))
-
-	// Need to move file pointer to the beginning so that its content can be read again
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		file.Close()
-		return nil, "", 0, err
-	}
-
-	return file, checksum, fileSize, nil
-}
-
-var newCrypt4GHWriter = func(w io.Writer, privkey [chacha20poly1305.KeySize]byte) (io.WriteCloser, error) {
+var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
 	pubkeyList := [][chacha20poly1305.KeySize]byte{}
 	pubkeyList = append(pubkeyList, ai.publicKey)
 
-	return streaming.NewCrypt4GHWriter(w, privkey, pubkeyList, nil)
+	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, pubkeyList, nil)
 }
 
-var encrypt = func(file *os.File, pw *io.PipeWriter, prKey [chacha20poly1305.KeySize]byte, errc chan error) {
+var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
 	defer pw.Close()
-	c4ghWriter, err := newCrypt4GHWriter(pw, prKey)
+	c4ghWriter, err := newCrypt4GHWriter(pw)
 	if err != nil {
 		errc <- err
 
@@ -331,51 +288,63 @@ var encrypt = func(file *os.File, pw *io.PipeWriter, prKey [chacha20poly1305.Key
 	errc <- c4ghWriter.Close()
 }
 
-// getFileDetailsEncrypt is similar to getFileDetails() except the file has to be encrypted before it is read
-var getFileDetailsEncrypt = func(filename string) (rc *readCloser, checksum string, bytes_written int64, err error) {
-	var file *os.File
-	if file, err = os.Open(filename); err != nil {
-		return
-	}
-	defer func() {
-		// If error occurs, close file
-		if rc == nil {
-			file.Close()
-		}
-	}()
+var encryptedSize = func(decryptedSize int64) int64 {
+	var magicNumber int64 = 16
+	var blockSize int64 = 65536
+	var macSize int64 = 28
+	var keySize int64 = 108
+	var nKeys int64 = 1
 
-	var privateKey [chacha20poly1305.KeySize]byte
-	_, privateKey, err = keys.GenerateKeyPair()
+	nBlocks := math.Ceil(float64(decryptedSize) / float64(blockSize))
+	bodySize := decryptedSize + int64(nBlocks)*macSize
+	headerSize := int64(magicNumber + nKeys*keySize)
+
+	return headerSize + bodySize
+}
+
+var getFileDetails = func(filename string, performEncryption bool) (*readCloser, int64, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		return
+		return nil, 0, err
 	}
 
-	// The file needs to be read twice. Once for determiming checksum, once for http request.
-	// Both times file needs to be encrypted
-	errc := make(chan error, 1)
-	pr, pw := io.Pipe()                    // So that 'c4ghWriter' can pass its contents to an io.Reader
-	go encrypt(file, pw, privateKey, errc) // Writing from file to 'c4ghWriter' will not happen until 'pr' is being read. Code will hang without goroutine.
+	fileInfo, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, 0, err
+	}
+	fileSize := fileInfo.Size()
+
+	var source io.Reader = file
+	var errc chan error = nil
+	if performEncryption {
+		errc = make(chan error, 1) // This error will be checked at the end of Upload()
+		pr, pw := io.Pipe()        // So that 'c4ghWriter' can pass its contents to an io.Reader
+		go encrypt(file, pw, errc) // Writing from file to 'c4ghWriter' will not happen until 'pr' is being read. Code will hang without goroutine.
+		source = pr
+		fileSize = encryptedSize(fileSize)
+	}
 
 	hash := md5.New() // #nosec
-	if bytes_written, err = io.Copy(hash, pr); err != nil {
-		return
+	tr := io.TeeReader(source, hash)
+
+	return &readCloser{tr, file, hash, errc}, fileSize, nil
+}
+
+var getOriginalFileDetails = func(filename string) (string, int64, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", 0, err
 	}
-	fmt.Println(bytes_written)
-	checksum = hex.EncodeToString(hash.Sum(nil))
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return
-	}
-	if err = <-errc; err != nil {
-		return
+	defer file.Close()
+
+	hash := md5.New() // #nosec
+	bytes_written, err := io.Copy(hash, file)
+	if err != nil {
+		return "", 0, err
 	}
 
-	errc = make(chan error, 1) // This error will be checked at the end of Upload()
-	pr, pw = io.Pipe()
-	go encrypt(file, pw, privateKey, errc)
-
-	rc = &readCloser{pr, file, errc}
-
-	return
+	return hex.EncodeToString(hash.Sum(nil)), bytes_written, nil
 }
 
 var put = func(manifest string, segmentNro, segment_total int,
