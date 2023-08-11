@@ -21,6 +21,7 @@ func (k *keyFlags) String() string {
 
 func (k *keyFlags) Set(value string) error {
 	*k = append(*k, value)
+
 	return nil
 }
 

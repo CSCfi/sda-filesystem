@@ -31,7 +31,7 @@ func (s *mockSubmitter) getDatasets(urlStr string) ([]string, error) {
 
 }
 
-func (s *mockSubmitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error) {
+func (s *mockSubmitter) getFiles(_, urlStr, _ string) ([]Metadata, error) {
 	if urlStr == s.mockURLOK {
 		return s.mockFiles, nil
 	}

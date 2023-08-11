@@ -313,7 +313,7 @@ func TestPublicKey_Error(t *testing.T) {
 		},
 		{
 			"READ_FILE_FAIL",
-			fmt.Sprintf("Could not use key test-key.pub: open test-key.pub: no such file or directory"),
+			"Could not use key test-key.pub: open test-key.pub: no such file or directory",
 			[]string{"test-key.pub"}, errExpected, nil,
 		},
 		{
@@ -698,18 +698,19 @@ func TestEncrypt_Error(t *testing.T) {
 	os.RemoveAll(file.Name())
 
 	errc := make(chan error, 2)
-	pr, pw := io.Pipe()
+	_, pw := io.Pipe()
 	pw.Close()
 
 	go encrypt(file, pw, errc)
 
-	errStr := fmt.Sprintf("io: read/write on closed pipe")
+	errStr := "io: read/write on closed pipe"
 	if err = <-errc; err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 
+	var pr *io.PipeReader
 	pr, pw = io.Pipe()
 	file.Close()
 
@@ -896,21 +897,23 @@ type Testfs struct {
 	filename string
 }
 
-func (t *Testfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc int) {
+func (t *Testfs) Getattr(path string, stat *fuse.Stat_t, _ uint64) (errc int) {
 	switch path {
 	case "/":
 		stat.Mode = fuse.S_IFDIR | 0755
+
 		return
 	case "/" + t.filename:
 		stat.Mode = fuse.S_IFREG | 0755
 		stat.Size = int64(10)
+
 		return
 	default:
 		return -fuse.ENOENT
 	}
 }
 
-func (t *Testfs) Open(path string, flags int) (errc int, fh uint64) {
+func (t *Testfs) Open(path string, _ int) (errc int, fh uint64) {
 	switch path {
 	case "/" + t.filename:
 		return
@@ -919,7 +922,7 @@ func (t *Testfs) Open(path string, flags int) (errc int, fh uint64) {
 	}
 }
 
-func (t *Testfs) Read(path string, buff []byte, ofst int64, fh uint64) (n int) {
+func (t *Testfs) Read(_ string, _ []byte, _ int64, _ uint64) int {
 	return -fuse.EIO
 }
 
