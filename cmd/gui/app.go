@@ -169,7 +169,9 @@ func (a *App) Login(username, password string) (bool, error) {
 		logs.Info("You are not the project manager")
 	default:
 		logs.Info("You are the project manager")
-		if err = airlock.GetPublicKey(); err != nil {
+		if err = airlock.GetProxy(); err != nil {
+			logs.Error(err)
+		} else if err = airlock.GetPublicKey(nil); err != nil {
 			logs.Error(err)
 		} else {
 			wailsruntime.EventsEmit(a.ctx, "isProjectManager")
