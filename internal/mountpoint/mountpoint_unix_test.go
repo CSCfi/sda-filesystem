@@ -119,15 +119,15 @@ type Testfs struct {
 	fuse.FileSystemBase
 }
 
-func (t *Testfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc int) {
+func (t *Testfs) Getattr(_ string, stat *fuse.Stat_t, _ uint64) (errc int) {
 	stat.Mode = fuse.S_IFDIR | 0755
 
 	return 0
 }
 
-func (t *Testfs) Readdir(path string,
-	fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
-	ofst int64, fh uint64) (errc int) {
+func (t *Testfs) Readdir(_ string,
+	_ func(name string, stat *fuse.Stat_t, _ int64) bool,
+	_ int64, _ uint64) (errc int) {
 	return -fuse.EIO
 }
 
