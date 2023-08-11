@@ -4,7 +4,6 @@ package mountpoint
 
 import (
 	"os"
-	"runtime"
 	"testing"
 	"time"
 
@@ -133,24 +132,15 @@ func (t *Testfs) Readdir(path string,
 }
 
 func TestCheckMountPoint_Fail_Read(t *testing.T) {
-	basepath, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Could not retrieve working directory: %s", err.Error())
-	}
-	node, err := os.MkdirTemp(basepath, "filesystem")
+	node, err := os.MkdirTemp("../../test", "filesystem")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
 	defer os.RemoveAll(node)
 
-	options := []string{}
-	if runtime.GOOS == "darwin" {
-		options = append(options, "-o", "defer_permissions")
-	}
-
 	testfs := &Testfs{}
 	host := fuse.NewFileSystemHost(testfs)
-	go host.Mount(node, options)
+	go host.Mount(node, nil)
 	defer host.Unmount()
 
 	time.Sleep(2 * time.Second)
