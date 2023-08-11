@@ -31,7 +31,7 @@ var infoFile = "/etc/pam_userinfo/config.json"
 var minimumSegmentSize = 1 << 20
 
 type airlockInfo struct {
-	publicKey  [chacha20poly1305.KeySize]byte
+	publicKeys [][chacha20poly1305.KeySize]byte
 	proxy      string
 	project    string
 	overridden bool
@@ -47,6 +47,16 @@ type readCloser struct {
 
 var GetProjectName = func() string {
 	return ai.project
+}
+
+var GetProxy = func() error {
+	var err error
+	ai.proxy, err = api.GetEnv("PROXY_URL", true)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // IsProjectManager uses file '/etc/pam_userinfo/config.json' and SDS AAI to determine if the user is the
@@ -108,45 +118,63 @@ var IsProjectManager = func(project string) (bool, error) {
 	return false, nil
 }
 
-// GetPublicKey retrieves the public key from the proxy URL and checks its validity
-func GetPublicKey() error {
-	var err error
-	var publicKeySlice []byte
-
-	ai.proxy, err = api.GetEnv("PROXY_URL", true)
-	if err != nil {
-		return err
-	}
-
-	errStr := "Failed to get public key for Airlock"
-	url := ai.proxy + "/public-key/crypt4gh.pub"
-	err = api.MakeRequest(url, nil, nil, nil, &publicKeySlice)
-	if err != nil {
-		return fmt.Errorf("%s: %w", errStr, err)
-	}
-
-	publicKeyStr := string(publicKeySlice)
-	publicKeyStr = strings.TrimSuffix(publicKeyStr, "\n")
-	parts := strings.Split(publicKeyStr, "\n")
+var extractKey = func(keySlice []byte) ([32]byte, error) {
+	keyStr := string(keySlice)
+	keyStr = strings.TrimSuffix(keyStr, "\n")
+	parts := strings.Split(keyStr, "\n")
 
 	if len(parts) != 3 ||
 		!strings.HasPrefix(parts[0], "-----BEGIN CRYPT4GH PUBLIC KEY-----") ||
 		!strings.HasSuffix(parts[2], "-----END CRYPT4GH PUBLIC KEY-----") {
-		return fmt.Errorf("Invalid public key format %q", publicKeyStr)
+		return [32]byte{}, fmt.Errorf("Invalid public key format %q", keyStr)
 	}
 
 	data, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
-		return fmt.Errorf("Could not decode public key: %w", err)
+		return [32]byte{}, fmt.Errorf("Could not decode public key: %w", err)
 	}
 	if len(data) < chacha20poly1305.KeySize {
-		return fmt.Errorf("Invalid length of decoded public key (%v)", len(data))
+		return [32]byte{}, fmt.Errorf("Invalid length of decoded public key (%v)", len(data))
 	}
 
-	logs.Debugf("Encryption key: %s", publicKeySlice)
-	ai.publicKey, err = keys.ReadPublicKey(bytes.NewReader(publicKeySlice))
-	if err != nil {
-		return fmt.Errorf("%s: %w", errStr, err)
+	logs.Debugf("Encryption key: %s", keySlice)
+
+	return keys.ReadPublicKey(bytes.NewReader(keySlice))
+}
+
+// GetPublicKey retrieves the public key from the proxy URL and checks its validity
+func GetPublicKey(keyFlags []string) error {
+	ai.publicKeys = nil
+
+	if len(keyFlags) == 0 {
+		var publicKey []byte
+
+		url := ai.proxy + "/public-key/crypt4gh.pub"
+		err := api.MakeRequest(url, nil, nil, nil, &publicKey)
+		if err != nil {
+			return fmt.Errorf("Failed to get public key for Airlock: %w", err)
+		}
+
+		allasKey, err := extractKey(publicKey)
+		if err != nil {
+			return fmt.Errorf("Failed to get public key for Airlock: %w", err)
+		}
+		ai.publicKeys = append(ai.publicKeys, allasKey)
+
+		return nil
+	}
+
+	for i := range keyFlags {
+		keyBytes, err := os.ReadFile(keyFlags[i])
+		if err != nil {
+			return fmt.Errorf("Could not use key %s: %w", keyFlags[i], err)
+		}
+
+		nextKey, err := extractKey(keyBytes)
+		if err != nil {
+			return fmt.Errorf("Could not use key %s: %w", keyFlags[i], err)
+		}
+		ai.publicKeys = append(ai.publicKeys, nextKey)
 	}
 
 	return nil
@@ -265,16 +293,9 @@ var CheckEncryption = func(filename string) (bool, error) {
 	return err == nil, nil
 }
 
-var newCrypt4GHWriter = func(w io.Writer) (io.WriteCloser, error) {
-	pubkeyList := [][chacha20poly1305.KeySize]byte{}
-	pubkeyList = append(pubkeyList, ai.publicKey)
-
-	return streaming.NewCrypt4GHWriterWithoutPrivateKey(w, pubkeyList, nil)
-}
-
 var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
 	defer pw.Close()
-	c4ghWriter, err := newCrypt4GHWriter(pw)
+	c4ghWriter, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(pw, ai.publicKeys, nil)
 	if err != nil {
 		errc <- err
 
@@ -293,11 +314,11 @@ var encryptedSize = func(decryptedSize int64) int64 {
 	var blockSize int64 = 65536
 	var macSize int64 = 28
 	var keySize int64 = 108
-	var nKeys int64 = 1
+	var nKeys int64 = int64(len(ai.publicKeys))
 
 	nBlocks := math.Ceil(float64(decryptedSize) / float64(blockSize))
 	bodySize := decryptedSize + int64(nBlocks)*macSize
-	headerSize := int64(magicNumber + nKeys*keySize)
+	headerSize := magicNumber + nKeys*keySize
 
 	return headerSize + bodySize
 }
@@ -308,11 +329,7 @@ var getFileDetails = func(filename string, performEncryption bool) (*readCloser,
 		return nil, 0, err
 	}
 
-	fileInfo, err := file.Stat()
-	if err != nil {
-		file.Close()
-		return nil, 0, err
-	}
+	fileInfo, _ := file.Stat()
 	fileSize := fileInfo.Size()
 
 	var source io.Reader = file
@@ -339,25 +356,25 @@ var getOriginalFileDetails = func(filename string) (string, int64, error) {
 	defer file.Close()
 
 	hash := md5.New() // #nosec
-	bytes_written, err := io.Copy(hash, file)
+	bytesWritten, err := io.Copy(hash, file)
 	if err != nil {
 		return "", 0, err
 	}
 
-	return hex.EncodeToString(hash.Sum(nil)), bytes_written, nil
+	return hex.EncodeToString(hash.Sum(nil)), bytesWritten, nil
 }
 
-var put = func(manifest string, segmentNro, segment_total int,
-	upload_data io.Reader, query map[string]string) error {
+var put = func(manifest string, segmentNro, segmentTotal int,
+	uploadData io.Reader, query map[string]string) error {
 
 	headers := map[string]string{"SDS-Access-Token": api.GetSDSToken(),
 		"SDS-Segment":       fmt.Sprintf("%d", segmentNro),
-		"SDS-Total-Segment": fmt.Sprintf("%d", segment_total),
+		"SDS-Total-Segment": fmt.Sprintf("%d", segmentTotal),
 	}
 
 	logs.Debug("Setting header: SDS-Access-Token << redacted >>")
 	logs.Debugf("Setting header: SDS-Segment %d", segmentNro)
-	logs.Debugf("Setting header: SDS-Total-Segment %d", segment_total)
+	logs.Debugf("Setting header: SDS-Total-Segment %d", segmentTotal)
 
 	if segmentNro == -1 {
 		headers["X-Object-Manifest"] = manifest
@@ -369,7 +386,7 @@ var put = func(manifest string, segmentNro, segment_total int,
 
 	var bodyBytes []byte
 	url := ai.proxy + "/airlock"
-	if err := api.MakeRequest(url, query, headers, upload_data, &bodyBytes); err != nil {
+	if err := api.MakeRequest(url, query, headers, uploadData, &bodyBytes); err != nil {
 		var re *api.RequestError
 		if errors.As(err, &re) && string(bodyBytes) != "" {
 			return errors.New(string(bodyBytes))
