@@ -45,7 +45,7 @@ function success() {
                 :disabled="props.disabled"
                 @changeValue="selected = $event.target.value">
             </c-switch>
-            <c-loader :hide="!loading"></c-loader>
+            <c-loader :hide="!loading || useForm"></c-loader>
             <div class="repository-name">{{ props.repository.replace("-", " ") }}</div>
         </c-row>
         <div>
