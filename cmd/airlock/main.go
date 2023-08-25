@@ -30,15 +30,15 @@ func usage(selfPath string) {
 	fmt.Println("If this variable is empty airlock requests the password interactively")
 	fmt.Println("Usage:")
 	fmt.Println(" ", selfPath, "[-segment-size=sizeInMb] "+
-		"[-journal-number=journalNumber] [-original-file=unecryptedFilename] "+
-		"[-public-key=publicKeyFile] [-quiet] username container filename")
+		"[-journal-number=journalNumber] [-public-key=publicKeyFile] "+
+		"[-original] [-quiet] username container file-or-folder")
 	fmt.Println("Examples:")
 	fmt.Println(" ", selfPath, "testuser testcontainer path/to/file")
 	fmt.Println(" ", selfPath, "-segment-size=100 -public-key=encryption-key.pub "+
 		"testuser testcontainer path/to/file")
-	fmt.Println(" ", selfPath, "-segment-size=100 "+
-		"-original-file=/path/to/original/unecrypted/file -journal-number=example124 "+
-		"-public-key=encryption-key.pub -public-key=another-key.pub testuser testcontainer path/to/file")
+	fmt.Println(" ", selfPath, "-segment-size=100 -journal-number=example124 "+
+		"-public-key=encryption-key.pub -public-key=another-key.pub "+
+		"-original testuser testcontainer path/to/file")
 }
 
 func main() {
@@ -49,9 +49,9 @@ func main() {
 		"Maximum size of segments in Mb used to upload data. Valid range is 10-4000.")
 	journalNumber := flag.String("journal-number", "",
 		"Journal Number/Name specific for Findata uploads")
-	originalFilename := flag.String("original-file", "",
-		"Filename of original unecrypted file when uploading pre-encrypted file from Findata VM")
 	project := flag.String("project", "", "SD Connect project if it differs from that in the VM")
+	useOriginal := flag.Bool("original", false,
+		"Include information of the original file(s) when uploading pre-encrypted file(s) from Findata VM")
 	quiet := flag.Bool("quiet", false, "Print only errors")
 	debug := flag.Bool("debug", false, "Enable debug prints")
 
@@ -92,26 +92,7 @@ func main() {
 		logs.Fatal("You cannot use Airlock as you are not the project manager")
 	}
 
-	if err = airlock.GetProxy(); err != nil {
-		logs.Fatal(err)
-	}
-
-	encrypted, err := airlock.CheckEncryption(filename)
-	if err != nil {
-		logs.Fatalf("Failed to check if file is encrypted: %s", err.Error())
-	}
-
-	if !encrypted {
-		err = airlock.GetPublicKey(publicKeys)
-		if err != nil {
-			logs.Fatal(err)
-		}
-	} else if encrypted && len(publicKeys) > 0 {
-		logs.Warningf("Public key arguments ignored, file already encrypted")
-	}
-
 	password, passwordFromEnv := os.LookupEnv("CSC_PASSWORD")
-
 	if passwordFromEnv {
 		logs.Info("Using password from environment variable CSC_PASSWORD")
 	} else {
@@ -125,7 +106,16 @@ func main() {
 
 	_ = api.BasicToken(username, password)
 
-	err = airlock.Upload(filename, container, uint64(*segmentSizeMb), *journalNumber, *originalFilename, encrypted)
+	if err = airlock.GetProxy(); err != nil {
+		logs.Fatal(err)
+	}
+
+	err = airlock.GetPublicKey(publicKeys)
+	if err != nil {
+		logs.Fatal(err)
+	}
+
+	err = airlock.Upload(filename, container, uint64(*segmentSizeMb), *journalNumber, *useOriginal)
 	if err != nil {
 		logs.Fatal(err)
 	}

@@ -180,14 +180,47 @@ func GetPublicKey(keyFlags []string) error {
 	return nil
 }
 
+func Upload(filename, container string, segmentSizeMb uint64, journalNumber string, useOriginal bool) error {
+	stat, err := os.Stat(filename)
+	if err != nil {
+		return err
+	}
+
+	switch mode := stat.Mode(); {
+	case mode.IsDir():
+		content, _ := os.ReadDir(filename)
+		for _, c := range content {
+			err = Upload(filepath.Join(filename, c.Name()), container, segmentSizeMb, journalNumber, useOriginal)
+			if err != nil {
+				logs.Warning(err)
+			}
+		}
+
+		return nil
+	default:
+		encrypted, err := CheckEncryption(filename)
+		if err != nil {
+			return err
+		}
+
+		return UploadFile(filename, container, segmentSizeMb, journalNumber, useOriginal, encrypted)
+	}
+}
+
 // Upload uploads a file to SD Connect
-func Upload(filename, container string, segmentSizeMb uint64, journalNumber, originalFilename string, encrypted bool) error {
+var UploadFile = func(filename, container string, segmentSizeMb uint64, journalNumber string, useOriginal, encrypted bool) error {
 	var err error
 	var encryptedRC *readCloser
 	var encryptedFileSize int64
 
+	originalFilename := filename
 	if encrypted {
 		logs.Info("File ", filename, " is already encrypted. Skipping encryption.")
+		extension := filepath.Ext(filename)
+		if extension != ".c4gh" {
+			logs.Warningf("Excrypted file %s should have an extension .c4gh, not %s", filename, extension)
+		}
+		originalFilename = strings.TrimSuffix(filename, extension)
 	} else {
 		logs.Info("Encrypting file ", filename)
 	}
@@ -244,7 +277,7 @@ func Upload(filename, container string, segmentSizeMb uint64, journalNumber, ori
 
 	logs.Info("Uploading manifest file")
 
-	if originalFilename != "" {
+	if useOriginal {
 		originalChecksum, originalFilesize, err := getOriginalFileDetails(originalFilename)
 		if err != nil {
 			return fmt.Errorf("Failed to get details for file %s: %w", originalFilename, err)
@@ -284,7 +317,7 @@ func reorderNames(filename, directory string) (string, string) {
 var CheckEncryption = func(filename string) (bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Failed to check if file is encrypted: %w", err)
 	}
 	defer file.Close()
 
