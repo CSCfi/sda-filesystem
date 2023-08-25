@@ -329,7 +329,7 @@ func (a *App) CheckEncryption(file, bucket string) (checks [2]bool, err error) {
 
 func (a *App) ExportFile(file, folder string, encrypted bool) error {
 	time.Sleep(1000 * time.Millisecond)
-	err := airlock.Upload(file, folder, 4000, "", "", encrypted)
+	err := airlock.UploadFile(file, folder, 4000, "", false, encrypted)
 	if err != nil {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)

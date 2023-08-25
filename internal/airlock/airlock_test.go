@@ -412,7 +412,151 @@ func TestPublicKey(t *testing.T) {
 	}
 }
 
-func TestUpload_FileDetails_Error(t *testing.T) {
+func TestUpload_Stat_Error(t *testing.T) {
+	file, err := os.CreateTemp("", "file")
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	os.RemoveAll(file.Name())
+
+	errStr := fmt.Sprintf("stat %s: no such file or directory", file.Name())
+	if err := Upload(file.Name(), "container", 30, "", false); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestUpload_File(t *testing.T) {
+	var tests = []struct {
+		testname              string
+		encError, uploadError error
+	}{
+		{"OK", nil, nil},
+		{"FAIL_ENCRYPTION", errExpected, nil},
+		{"FAIL_UPLOAD_FILE", nil, errExpected},
+	}
+
+	origCheckEncryption := CheckEncryption
+	origUploadFile := UploadFile
+	defer func() {
+		CheckEncryption = origCheckEncryption
+		UploadFile = origUploadFile
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			CheckEncryption = func(filename string) (bool, error) {
+				if filename != "../../test/sample.txt" {
+					t.Errorf("CheckEncryption() was called with incorrect file name %s", filename)
+				}
+
+				return false, tt.encError
+			}
+
+			count := 0
+			UploadFile = func(filename, container string, segmentSizeMb uint64, journalNumber string, useOriginal, encrypted bool) error {
+				if filename != "../../test/sample.txt" {
+					t.Errorf("UploadFile() was called with incorrect file name %s", filename)
+				}
+				count++
+				if count > 1 {
+					t.Errorf("UploadFile() was called too many times")
+				}
+
+				return tt.uploadError
+			}
+
+			err := Upload("../../test/sample.txt", "container", 30, "", false)
+			if tt.testname == "OK" {
+				if err != nil {
+					t.Errorf("Function returned unexpected error: %s", err.Error())
+				}
+			} else if err == nil {
+				t.Error("Function did not return error")
+			}
+		})
+	}
+}
+
+func TestUpload_Folder(t *testing.T) {
+	origCheckEncryption := CheckEncryption
+	origUploadFile := UploadFile
+	defer func() {
+		CheckEncryption = origCheckEncryption
+		UploadFile = origUploadFile
+	}()
+
+	dir, err := os.MkdirTemp("../../test/", "testdir")
+	if err != nil {
+		t.Fatalf("Failed to create folder: %s", err.Error())
+	}
+	defer os.RemoveAll(dir)
+
+	file1 := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file1, []byte("content"), 0600); err != nil {
+		t.Fatalf("Failed to write to file: %s", err.Error())
+	}
+	file2 := filepath.Join(dir, "tmpfile2")
+	if err := os.WriteFile(file2, []byte("more content"), 0600); err != nil {
+		t.Fatalf("Failed to write to file: %s", err.Error())
+	}
+
+	subdir := filepath.Join(dir, "subdir")
+	if err := os.MkdirAll(subdir, 0755); err != nil {
+		t.Fatalf("Failed to create folder: %s", err.Error())
+	}
+
+	file3 := filepath.Join(subdir, "file")
+	if err := os.WriteFile(file3, []byte("blaa blaa blaa"), 0600); err != nil {
+		t.Fatalf("Failed to write to file: %s", err.Error())
+	}
+	file4 := filepath.Join(subdir, "file2")
+	if err := os.WriteFile(file4, []byte("hello there"), 0600); err != nil {
+		t.Fatalf("Failed to write to file: %s", err.Error())
+	}
+
+	CheckEncryption = func(filename string) (bool, error) {
+		if filename == file2 {
+			return false, errExpected
+		}
+
+		return false, nil
+	}
+
+	checkNames := map[string]bool{file1: true, file3: true, file4: true}
+
+	UploadFile = func(filename, container string, segmentSizeMb uint64, journalNumber string, useOriginal, encrypted bool) error {
+		valid, ok := checkNames[filename]
+		if !ok {
+			t.Errorf("UploadFile() was called with incorrect file name %s", filename)
+
+			return nil
+		}
+		if !valid {
+			t.Errorf("UploadFile() was called too many times with file %s", filename)
+
+			return nil
+		}
+
+		checkNames[filename] = false
+
+		return nil
+	}
+
+	err = Upload(dir, "container", 300, "", false)
+	if err != nil {
+		t.Errorf("Function returned unexpected error: %s", err.Error())
+	}
+
+	for key := range checkNames {
+		if checkNames[key] {
+			t.Errorf("UploadFile was not called for file %s", key)
+		}
+	}
+}
+
+func TestUploadFile_FileDetails_Error(t *testing.T) {
 	origGetFileDetails := getFileDetails
 	defer func() { getFileDetails = origGetFileDetails }()
 
@@ -425,14 +569,14 @@ func TestUpload_FileDetails_Error(t *testing.T) {
 	}
 
 	errStr := fmt.Sprintf("Failed to get details for file test-file: %s", errExpected.Error())
-	if err := Upload("test-file", "container", 400, "", "", false); err == nil {
+	if err := UploadFile("test-file", "container", 400, "", false, false); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
-func TestUpload_OriginalFileDetails_Error(t *testing.T) {
+func TestUploadFile_OriginalFileDetails_Error(t *testing.T) {
 	origGetOriginalFileDetails := getOriginalFileDetails
 	defer func() { getOriginalFileDetails = origGetOriginalFileDetails }()
 
@@ -441,43 +585,43 @@ func TestUpload_OriginalFileDetails_Error(t *testing.T) {
 	}
 
 	errStr := fmt.Sprintf("Failed to get details for file ../../test/sample.txt: %s", errExpected.Error())
-	if err := Upload("../../test/sample.txt.enc", "container", 500, "", "../../test/sample.txt", true); err == nil {
+	if err := UploadFile("../../test/sample.txt.c4gh", "container", 500, "", true, true); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
-func TestUpload(t *testing.T) {
+func TestUploadFile(t *testing.T) {
 	var tests = []struct {
-		testname, container, file         string
-		journalNumber, origFile, manifest string
-		size                              int64
-		encrypted                         bool
-		query, manifestQuery              map[string]string
+		testname, container, file string
+		journalNumber, manifest   string
+		size                      int64
+		encrypted, useOrig        bool
+		query, manifestQuery      map[string]string
 	}{
 		{
-			"OK_1", "bucket937/dir/subdir/", "../../test/sample.txt.enc",
-			"", "../../test/sample.txt", "bucket937_segments/dir/subdir/sample.txt.enc/",
-			65688, true,
-			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937"},
-			map[string]string{"filename": "dir/subdir/sample.txt.enc", "bucket": "bucket937",
+			"OK_1", "bucket937/dir/subdir/", "../../test/sample.txt.c4gh",
+			"", "bucket937_segments/dir/subdir/sample.txt.c4gh/",
+			65688, true, true,
+			map[string]string{"filename": "dir/subdir/sample.txt.c4gh", "bucket": "bucket937"},
+			map[string]string{"filename": "dir/subdir/sample.txt.c4gh", "bucket": "bucket937",
 				"encfilesize": "65688", "encchecksum": "da385d93ae510bc91c9c8af7e670ac6f",
 				"filesize": "70224", "checksum": "a63d88b82003d96e1659070b253f891a"},
 		},
 		{
 			"OK_2", "bucket790/subdir", "../../test/sample.txt",
-			"9", "", "bucket790_segments/subdir/sample.txt/",
-			70224, true,
+			"9", "bucket790_segments/subdir/sample.txt/",
+			70224, true, false,
 			map[string]string{"filename": "subdir/sample.txt", "bucket": "bucket790", "journal": "9"},
 			map[string]string{"filename": "subdir/sample.txt", "bucket": "bucket790", "journal": "9"},
 		},
 		{
-			"OK_3", "bucket784/", "../../test/sample.txt.enc",
-			"", "", "bucket784_segments/sample.txt.enc.c4gh/",
-			65688, false,
-			map[string]string{"filename": "sample.txt.enc.c4gh", "bucket": "bucket784"},
-			map[string]string{"filename": "sample.txt.enc.c4gh", "bucket": "bucket784"},
+			"OK_3", "bucket784/", "../../test/sample.txt.c4gh",
+			"", "bucket784_segments/sample.txt.c4gh.c4gh/",
+			65688, false, false,
+			map[string]string{"filename": "sample.txt.c4gh.c4gh", "bucket": "bucket784"},
+			map[string]string{"filename": "sample.txt.c4gh.c4gh", "bucket": "bucket784"},
 		},
 	}
 
@@ -520,20 +664,20 @@ func TestUpload(t *testing.T) {
 				return nil
 			}
 
-			if err := Upload(tt.file, tt.container, 1, tt.journalNumber, tt.origFile, tt.encrypted); err != nil {
+			if err := UploadFile(tt.file, tt.container, 1, tt.journalNumber, tt.useOrig, tt.encrypted); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			}
 		})
 	}
 }
 
-func TestUpload_Error(t *testing.T) {
+func TestUploadFile_Error(t *testing.T) {
 	var tests = []struct {
 		testname, errStr string
 		count, size      int
 	}{
-		{"FAIL_1", "Uploading file sample.txt.enc failed: ", 1, 8469},
-		{"FAIL_2", "Uploading file sample.txt.enc failed: ", 2, 114857600},
+		{"FAIL_1", "Uploading file sample.txt.c4gh failed: ", 1, 8469},
+		{"FAIL_2", "Uploading file sample.txt.c4gh failed: ", 2, 114857600},
 		{"FAIL_3", "Uploading manifest file failed: ", 3, 164789600},
 	}
 
@@ -568,7 +712,7 @@ func TestUpload_Error(t *testing.T) {
 			}
 
 			errStr := tt.errStr + errExpected.Error()
-			err := Upload("../../test/sample.txt.enc", "bucket684", 100, "", "", true)
+			err := UploadFile("../../test/sample.txt.c4gh", "bucket684", 100, "", false, true)
 			switch {
 			case err == nil:
 				t.Error("Function did not return error")
@@ -583,7 +727,7 @@ func TestUpload_Error(t *testing.T) {
 	}
 }
 
-func TestUpload_FileContent(t *testing.T) {
+func TestUploadFile_FileContent(t *testing.T) {
 	var tests = []struct {
 		testname, content string
 		encrypted         bool
@@ -638,7 +782,7 @@ func TestUpload_FileContent(t *testing.T) {
 			}
 
 			filename := file.Name()
-			if err := Upload(filename, "bucket684", 1, "", "", tt.encrypted); err != nil {
+			if err := UploadFile(filename, "bucket684", 1, "", false, tt.encrypted); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			} else if tt.content != buf.String() {
 				t.Errorf("put() read incorrect content\nExpected=%v\nReceived=%v", []byte(tt.content), buf.Bytes())
@@ -649,7 +793,7 @@ func TestUpload_FileContent(t *testing.T) {
 	}
 }
 
-func TestUpload_Channel_Error(t *testing.T) {
+func TestUploadFile_Channel_Error(t *testing.T) {
 	origGetFileDetails := getFileDetails
 	origPut := put
 	defer func() {
@@ -683,7 +827,7 @@ func TestUpload_Channel_Error(t *testing.T) {
 	}
 
 	errStr := "Streaming file failed: " + errExpected.Error()
-	if err := Upload(file.Name(), "bucket407", 100, "", "", false); err == nil {
+	if err := UploadFile(file.Name(), "bucket407", 100, "", false, false); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -743,7 +887,7 @@ func TestFileDetails_NoFile(t *testing.T) {
 	}
 }
 
-func TestFileDetails_Stat_Error(t *testing.T) {
+func TestFileDetails_Open_Error(t *testing.T) {
 	file, err := os.CreateTemp("", "file")
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
@@ -984,7 +1128,7 @@ func TestCheckEncryption_NoFile(t *testing.T) {
 	}
 	os.RemoveAll(file.Name())
 
-	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
+	errStr := fmt.Sprintf("Failed to check if file is encrypted: open %s: no such file or directory", file.Name())
 	if _, err := CheckEncryption(file.Name()); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
@@ -993,7 +1137,7 @@ func TestCheckEncryption_NoFile(t *testing.T) {
 }
 
 func TestCheckEncryption(t *testing.T) {
-	if encrypted, err := CheckEncryption("../../test/sample.txt.enc"); err != nil {
+	if encrypted, err := CheckEncryption("../../test/sample.txt.c4gh"); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	} else if !encrypted {
 		t.Fatal("Function mistakenly determined file ../../test/sample.txt.enc to not be encrypted")

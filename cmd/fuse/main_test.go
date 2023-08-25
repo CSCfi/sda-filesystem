@@ -152,6 +152,9 @@ func TestAskForLogin(t *testing.T) {
 		},
 	}
 
+	os.Unsetenv("CSC_USERNAME")
+	os.Unsetenv("CSC_PASSWORD")
+
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			// Ignore prints to stdout
