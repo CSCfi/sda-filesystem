@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Remove the spinner above the toggle for SD Connect when logging in
+- Enable streaming of files in Airlock by sending the checksum after the file has been sent
+- Segments are in their own container now similar to how they work in the new SD Connect
+
+### Added
+- User can give their own public encryption keys in Airlock CLI with argument `public-key` 
 
 ## [v2.1.6] 2023-08-04
 
