@@ -481,10 +481,17 @@ func Test_SDConnect_GetNthLevel_Pass_1Node(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
+
+	count := 0
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy1"}]`))).Decode(ret)
+		if count == 0 {
+			count++
 
-		return nil
+			return nil
+		}
+
+		return fmt.Errorf("MakeRequest() called too many times")
 	}
 	sd := &sdConnectInfo{}
 
@@ -505,23 +512,32 @@ func Test_SDConnect_GetNthLevel_Pass_2Node(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
+
+	count := 0
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
-		_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy2"}]`))).Decode(ret)
+		switch count {
+		case 0:
+			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy2"}]`))).Decode(ret)
+		case 1:
+			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":674,"name":"thingy3"}]`))).Decode(ret)
+		case 2:
+		default:
+			return fmt.Errorf("MakeRequest() called too many times")
+		}
+		count++
 
 		return nil
 	}
 	sd := &sdConnectInfo{}
+	objects := []Metadata{{100, "thingy2"}, {674, "thingy3"}}
 
 	// Test
 	meta, err := sd.getNthLevel("fspath", "1", "2")
 	if err != nil {
 		t.Errorf("Function failed, expected no error, received=%v", err)
 	}
-	if meta[0].Bytes != 100 {
-		t.Errorf("Function failed, expected=%d, received=%d", 100, meta[0].Bytes)
-	}
-	if meta[0].Name != "thingy2" {
-		t.Errorf("Function failed, expected=%s, received=%s", "thingy2", meta[0].Name)
+	if !reflect.DeepEqual(meta, objects) {
+		t.Errorf("Function failed, expected=%v, received=%v", objects, meta)
 	}
 }
 
@@ -529,9 +545,17 @@ func Test_SDConnect_GetNthLevel_Pass_TokenExpired(t *testing.T) {
 	// Mock
 	origMakeRequest := MakeRequest
 	defer func() { MakeRequest = origMakeRequest }()
+
+	count := 0
 	MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
 		if token, ok := headers["X-Authorization"]; ok && token == "Bearer freshToken" {
-			_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy3"}]`))).Decode(ret)
+			if count == 0 {
+				_ = json.NewDecoder(bytes.NewReader([]byte(`[{"bytes":100,"name":"thingy3"}]`))).Decode(ret)
+			}
+			if count > 1 {
+				return fmt.Errorf("MakeRequest() called too many times")
+			}
+			count++
 
 			return nil
 		}

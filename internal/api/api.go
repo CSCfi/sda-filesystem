@@ -235,7 +235,7 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	var request *http.Request
 
 	if body != nil {
-		if reflect.ValueOf(body) == reflect.Zero(reflect.TypeOf(body)) {
+		if reflect.ValueOf(body) == reflect.Zero(reflect.TypeOf(body)) { // manifest file in airlock
 			request, err = http.NewRequest("PUT", url, nil)
 		} else {
 			request, err = http.NewRequest("PUT", url, body)
