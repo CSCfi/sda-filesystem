@@ -192,16 +192,19 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 		return nil, nil
 	}
 
-	var err error
 	var meta []Metadata
 	headers := map[string]string{}
 	query := map[string]string{}
 
 	for {
 		var tmpmeta []Metadata
-		err = c.makeRequest(path, nodes[0], query, headers, &tmpmeta)
+		err := c.makeRequest(path, nodes[0], query, headers, &tmpmeta)
 		if c.tokenExpired(err) {
 			err = c.makeRequest(path, nodes[0], query, headers, &tmpmeta)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
 		}
 
 		if len(tmpmeta) > 0 {
@@ -211,10 +214,6 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 		if len(tmpmeta) == 0 || len(nodes) == 1 {
 			break
 		}
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
 	}
 
 	logs.Infof("Retrieved metadata for %s", fsPath)
