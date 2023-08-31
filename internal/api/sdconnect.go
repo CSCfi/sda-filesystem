@@ -182,7 +182,6 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 		return c.projects, nil
 	}
 
-	headers := map[string]string{}
 	path := c.url + "/project/" + url.PathEscape(nodes[0])
 	switch len(nodes) {
 	case 1:
@@ -194,12 +193,27 @@ func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata,
 	}
 
 	var meta []Metadata
-	err := c.makeRequest(path, nodes[0], nil, headers, &meta)
-	if c.tokenExpired(err) {
-		err = c.makeRequest(path, nodes[0], nil, headers, &meta)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
+	headers := map[string]string{}
+	query := map[string]string{}
+
+	for {
+		var tmpmeta []Metadata
+		err := c.makeRequest(path, nodes[0], query, headers, &tmpmeta)
+		if c.tokenExpired(err) {
+			err = c.makeRequest(path, nodes[0], query, headers, &tmpmeta)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("Failed to retrieve metadata for %s: %w", fsPath, err)
+		}
+
+		if len(tmpmeta) > 0 {
+			meta = append(meta, tmpmeta...)
+			query["marker"] = tmpmeta[len(tmpmeta)-1].Name
+		}
+		if len(tmpmeta) == 0 || len(nodes) == 1 {
+			break
+		}
 	}
 
 	logs.Infof("Retrieved metadata for %s", fsPath)
