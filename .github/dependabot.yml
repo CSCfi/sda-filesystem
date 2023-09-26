@@ -21,5 +21,4 @@ updates:
       day: "monday"
     labels:
       - "npm dependencies"
-    target-branch: "devel"
     open-pull-requests-limit: 10
