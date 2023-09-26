@@ -12,7 +12,7 @@
     "@cscfi/csc-ui-vue": "^0.0.1",
     "@mdi/font": "^7.2.96",
     "@mdi/js": "^7.2.96",
-    "csc-ui": "^0.6.77",
+    "csc-ui": "^0.9.3",
     "vue": "^3.2.47"
   },
   "devDependencies": {

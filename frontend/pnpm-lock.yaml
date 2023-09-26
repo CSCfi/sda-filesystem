@@ -15,8 +15,8 @@ dependencies:
     specifier: ^7.2.96
     version: 7.2.96
   csc-ui:
-    specifier: ^0.6.77
-    version: 0.6.77
+    specifier: ^0.9.3
+    version: 0.9.3
   vue:
     specifier: ^3.2.47
     version: 3.2.47
@@ -93,14 +93,14 @@ packages:
     resolution: {integrity: sha512-paR9M9ZT7rKbh2boksNUynuSZMHhqRYnEZOm/KrZTjQ4/FzyhjLHuvw/8XYzP+E7fS4+/Ms/82EN1pl/OFsiIA==}
     dev: false
 
-  /@stencil/core@3.2.0:
-    resolution: {integrity: sha512-vAZiHg4h6hZn4GP6P4w/d7qJwovW0xroitVAn/Ay0rUOeMHqMDYTX5jq0Vy/bgKactKam5WL/to50esGe6lDUQ==}
-    engines: {node: '>=14.10.0', npm: '>=6.0.0'}
+  /@stencil/core@4.3.0:
+    resolution: {integrity: sha512-WYjftKg5fuqO7mf3nTl1aCRurkeMmfEF38WcBG4VLF6UPQ+MA76/koedGR2LGhATGByx+pbxR4iRxAr2Bspc9A==}
+    engines: {node: '>=16.0.0', npm: '>=7.10.0'}
     hasBin: true
     dev: false
 
-  /@types/node@18.15.11:
-    resolution: {integrity: sha512-E5Kwq2n4SbMzQOn6wnmBjuK9ouqlURrcZDVfbo9ftDDTFt3nk7ZKK4GMOzoYgnpQJKcxwQw+lGaBvvlMo0qN/Q==}
+  /@types/node@20.7.0:
+    resolution: {integrity: sha512-zI22/pJW2wUZOVyguFaUL1HABdmSVxpXrzIqkjsHmyUjNhPoWM1CKfvVuXfetHhIok4RY573cqS0mZ1SJEnoTg==}
     dev: false
 
   /@vitejs/plugin-vue@3.2.0(vite@3.2.7)(vue@3.2.47):
@@ -236,15 +236,16 @@ packages:
       balanced-match: 1.0.2
     dev: true
 
-  /csc-ui@0.6.77:
-    resolution: {integrity: sha512-63fxpT2rIhml+JS0bKSU6HA4F0XS8WxUI8xCu+BEDgdAxFpe04/sy6DpsZORzVFTlY750GC3bmAKVI/LxCctmg==}
+  /csc-ui@0.9.3:
+    resolution: {integrity: sha512-Pli29HPf51Us166s5vjJYJpz0jYZxwbkcm6D9pieXC4XgneijNT6q/Q6j4ecg/U70HmtcEARGbXsoeTEg98yJA==}
     dependencies:
       '@mdi/js': 7.2.96
-      '@stencil/core': 3.2.0
-      '@types/node': 18.15.11
-      stencil-click-outside: 1.8.0(@stencil/core@3.2.0)
-      swiper: 8.4.7
-      uuid: 8.3.2
+      '@stencil/core': 4.3.0
+      '@types/node': 20.7.0
+      normalize.css: 8.0.1
+      stencil-click-outside: 1.8.0(@stencil/core@4.3.0)
+      swiper: 9.4.1
+      uuid: 9.0.1
     dev: false
 
   /csstype@2.6.21:
@@ -253,12 +254,6 @@ packages:
   /de-indent@1.0.2:
     resolution: {integrity: sha512-e/1zu3xH5MQryN2zdVaF0OrdNLUbvWxzMbi+iNA6Bky7l1RoP8a2fIbRocyHclXt/arDrrR6lL3TqFD9pMQTsg==}
     dev: true
-
-  /dom7@4.0.6:
-    resolution: {integrity: sha512-emjdpPLhpNubapLFdjNL9tP06Sr+GZkrIHEXLWvOGsytACUrkbeIdjO5g77m00BrHTznnlcNqgmn7pCN192TBA==}
-    dependencies:
-      ssr-window: 4.0.2
-    dev: false
 
   /esbuild-android-64@0.15.18:
     resolution: {integrity: sha512-wnpt3OXRhcjfIDSZu9bnzT4/TNTDsOUvip0foZOUBG7QbSt//w3QV4FInVJxNhKc/ErhUxc5z4QjHtMi7/TbgA==}
@@ -524,6 +519,10 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  /normalize.css@8.0.1:
+    resolution: {integrity: sha512-qizSNPO93t1YUuUhP22btGOo3chcvDFqFaj2TRybP0DMxkHOCTYwp3n34fel4a31ORXy4m1Xq0Gyqpb5m33qIg==}
+    dev: false
+
   /path-parse@1.0.7:
     resolution: {integrity: sha512-LDJzPVEEEPR+y48z93A0Ed0yXb8pAByGWo/k5YYdYgpY2/2EsOsksJrq7lOHxryrVOn1ejG6oAp8ahvOIQD8sw==}
     dev: true
@@ -572,12 +571,12 @@ packages:
     resolution: {integrity: sha512-ISv/Ch+ig7SOtw7G2+qkwfVASzazUnvlDTwypdLoPoySv+6MqlOV10VwPSE6EWkGjhW50lUmghPmpYZXMu/+AQ==}
     dev: false
 
-  /stencil-click-outside@1.8.0(@stencil/core@3.2.0):
+  /stencil-click-outside@1.8.0(@stencil/core@4.3.0):
     resolution: {integrity: sha512-eJiZbAAj3sE1nMK+F5Ihi4GzU9/P2sZmy94JaDm5ehAaVaWraDsBsA5+zAuXwORPnphJVEY4zIxX1uXhU19MFQ==}
     peerDependencies:
       '@stencil/core': '>=1.9.0'
     dependencies:
-      '@stencil/core': 3.2.0
+      '@stencil/core': 4.3.0
     dev: false
 
   /supports-preserve-symlinks-flag@1.0.0:
@@ -585,12 +584,10 @@ packages:
     engines: {node: '>= 0.4'}
     dev: true
 
-  /swiper@8.4.7:
-    resolution: {integrity: sha512-VwO/KU3i9IV2Sf+W2NqyzwWob4yX9Qdedq6vBtS0rFqJ6Fa5iLUJwxQkuD4I38w0WDJwmFl8ojkdcRFPHWD+2g==}
+  /swiper@9.4.1:
+    resolution: {integrity: sha512-1nT2T8EzUpZ0FagEqaN/YAhRj33F2x/lN6cyB0/xoYJDMf8KwTFT3hMOeoB8Tg4o3+P/CKqskP+WX0Df046fqA==}
     engines: {node: '>= 4.7.0'}
-    requiresBuild: true
     dependencies:
-      dom7: 4.0.6
       ssr-window: 4.0.2
     dev: false
 
@@ -604,8 +601,8 @@ packages:
     hasBin: true
     dev: true
 
-  /uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+  /uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
     dev: false
 
