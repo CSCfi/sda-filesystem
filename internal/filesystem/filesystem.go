@@ -174,7 +174,8 @@ func (fs *Fuse) RefreshFilesystem(initFunc func(Project), populateFunc func(stri
 func (fs *Fuse) FilesOpen() bool {
 	switch runtime.GOOS {
 	case "linux":
-		_, err := exec.Command("fuser", "-m", fs.mount).Output()
+		mount := fs.mount
+		_, err := exec.Command("fuser", "-m", mount).Output()
 		if err == nil {
 			return true
 		}

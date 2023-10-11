@@ -44,11 +44,11 @@ func (a *App) startup(ctx context.Context) {
 	filesystem.SetSignalBridge(a.Panic)
 }
 
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) shutdown(_ context.Context) {
 	filesystem.UnmountFilesystem()
 }
 
-func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+func (a *App) beforeClose(_ context.Context) (prevent bool) {
 	return a.preventQuit
 }
 
