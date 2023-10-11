@@ -56,7 +56,7 @@ func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
-func userChooseUpdate(r io.Reader, ch chan<- bool) {
+func userInput(r io.Reader, ch chan<- []string) {
 	scanner := bufio.NewScanner(r)
 	var answer string
 
@@ -67,9 +67,7 @@ func userChooseUpdate(r io.Reader, ch chan<- bool) {
 		if err := scanner.Err(); err != nil {
 			logs.Errorf("Could not read input: %w", err)
 		}
-		if strings.EqualFold(answer, "update") {
-			ch <- true
-		}
+		ch <- strings.Fields(answer)
 	}
 }
 
@@ -257,21 +255,28 @@ func main() {
 	fs := filesystem.InitializeFilesystem(nil)
 	fs.PopulateFilesystem(nil)
 
-	var wait = make(chan bool)
+	var wait = make(chan []string)
 	go mountpoint.WaitForUpdateSignal(wait)
-	go userChooseUpdate(os.Stdin, wait)
+	go userInput(os.Stdin, wait)
 	go func() {
 		for {
-			<-wait
-			if fs.FilesOpen(mount) {
-				logs.Warningf("You have files in use which prevents updating Data Gateway")
-
-				continue
+			input := <-wait
+			if strings.EqualFold(input[0], "update") {
+				if fs.FilesOpen() {
+					logs.Warningf("You have files in use which prevents updating Data Gateway")
+				} else {
+					fs.RefreshFilesystem(nil, nil)
+				}
+			} else if strings.EqualFold(input[0], "clear") {
+				if len(input) > 1 {
+					path := filepath.Clean(input[1])
+					if err := fs.ClearPath(path); err != nil {
+						logs.Warning(err)
+					}
+				} else {
+					logs.Warningf("Cannot clear cache without path")
+				}
 			}
-			logs.Info("Updating Data Gateway")
-			newFs := filesystem.InitializeFilesystem(nil)
-			newFs.PopulateFilesystem(nil)
-			fs.RefreshFilesystem(newFs)
 		}
 	}()
 

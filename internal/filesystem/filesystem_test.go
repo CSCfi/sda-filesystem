@@ -18,6 +18,8 @@ import (
 	"github.com/billziss-gh/cgofuse/fuse"
 )
 
+var errExpected = errors.New("Expected error for test")
+
 var testFuse = `{
     "name": "",
     "nameSafe": "",
@@ -408,11 +410,19 @@ func TestRefreshFilesystem(t *testing.T) {
 	newFs := getTestFuse(t, false, 5)
 
 	origClearCache := api.ClearCache
+	origInitializeFilesystem := InitializeFilesystem
+
+	defer func() {
+		api.ClearCache = origClearCache
+		InitializeFilesystem = origInitializeFilesystem
+	}()
+
 	api.ClearCache = func() {}
+	InitializeFilesystem = func(send func(Project)) *Fuse {
+		return newFs
+	}
 
-	fs.RefreshFilesystem(newFs)
-
-	api.ClearCache = origClearCache
+	fs.RefreshFilesystem(nil, nil)
 
 	if fs.ino != newFs.ino {
 		t.Errorf("Ino was not correct. Expected=%d, received=%d", newFs.ino, fs.ino)
@@ -422,6 +432,94 @@ func TestRefreshFilesystem(t *testing.T) {
 	}
 	if reflect.ValueOf(fs.openmap).Pointer() != reflect.ValueOf(newFs.openmap).Pointer() {
 		t.Errorf("Openmap was not correct\nExpected=%v\nReceived=%v", newFs.openmap, fs.openmap)
+	}
+}
+
+func TestClearPath_Fail(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+	fs.root.chld[api.SDConnect] = fs.root.chld["Rep1"]
+	fs.root.chld[api.SDConnect].originalName = api.SDConnect
+
+	origNthLevel := api.GetNthLevel
+	defer func() { api.GetNthLevel = origNthLevel }()
+	api.GetNthLevel = func(rep, fsPath string, nodes ...string) ([]api.Metadata, error) {
+		return nil, errExpected
+	}
+
+	var tests = []struct {
+		testname, path, errStr string
+	}{
+		{
+			"INVALID_PATH", "not/a/valid/path", "Path not/a/valid/path is invalid",
+		},
+		{
+			"ONLY_SDCONNECT", "Rep2/example.com/tiedosto", "Clearing cache only enabled for " + api.SDConnect,
+		},
+		{
+			"PATH_TOO_SHORT", api.SDConnect + "/child_1", "Path needs to include a bucket",
+		},
+		{
+			"Nth_LEVEL_ERROR", api.SDConnect + "/child_1/kansio",
+			"Cache not cleared since new file sizes could not be obtained: " + errExpected.Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			err := fs.ClearPath(tt.path)
+			if err.Error() != tt.errStr {
+				t.Errorf("Function returned incorrect error\nExpected %v\nReceived %v", tt.errStr, err.Error())
+			}
+		})
+	}
+}
+
+func TestClearPath_Connect(t *testing.T) {
+	fs := getTestFuse(t, false, 5)
+	fs.root.chld[api.SDConnect] = fs.root.chld["Rep1"]
+	fs.root.chld[api.SDConnect].originalName = api.SDConnect
+	path := api.SDConnect + "/child_1/kansio"
+
+	traverse := map[string]bool{
+		api.SDConnect + "/child+1/kansio/file_1": true,
+		api.SDConnect + "/child+1/kansio/file_2": true,
+		api.SDConnect + "/child+1/kansio/file_3": true,
+	}
+
+	origDeleteFileFromCache := api.DeleteFileFromCache
+	origNthLevel := api.GetNthLevel
+	defer func() {
+		api.DeleteFileFromCache = origDeleteFileFromCache
+		api.GetNthLevel = origNthLevel
+	}()
+
+	api.DeleteFileFromCache = func(nodes []string, size int64) {
+		delete(traverse, strings.Join(nodes, "/"))
+	}
+	api.GetNthLevel = func(rep, fsPath string, nodes ...string) ([]api.Metadata, error) {
+		return []api.Metadata{{Bytes: 45, Name: "file_1"}, {Bytes: 6, Name: "file_2"}, {Bytes: 142, Name: "file_3"}}, nil
+	}
+
+	diff := int64(105)
+	origFs := getTestFuse(t, false, 5)
+	origFs.root.chld[api.SDConnect] = origFs.root.chld["Rep1"]
+	origFs.root.chld[api.SDConnect].originalName = api.SDConnect
+	origFs.root.chld[api.SDConnect].stat.Size += diff
+	origFs.root.chld[api.SDConnect].chld["child_1"].stat.Size += diff
+	origFs.root.chld[api.SDConnect].chld["child_1"].chld["kansio"].stat.Size += diff
+	origFs.root.chld[api.SDConnect].chld["child_1"].chld["kansio"].chld["file_1"].stat.Size = 45
+	origFs.root.chld[api.SDConnect].chld["child_1"].chld["kansio"].chld["file_2"].stat.Size = 6
+	origFs.root.chld[api.SDConnect].chld["child_1"].chld["kansio"].chld["file_3"].stat.Size = 142
+
+	err := fs.ClearPath(path)
+	if err != nil {
+		t.Errorf("Function returned unexpected error: %s", err.Error())
+	}
+	if err := isSameFuse(origFs.root, fs.root, "/"); err != nil {
+		t.Errorf("Clearing path changed filesystem: %s", err.Error())
+	}
+	if len(traverse) > 0 {
+		t.Errorf("Function did not clear files %v", reflect.ValueOf(traverse).MapKeys())
 	}
 }
 

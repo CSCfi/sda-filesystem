@@ -45,7 +45,7 @@ func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
 			return -fuse.EIO, ^uint64(0)
 
 		} else if n.node.stat.Size != newSize {
-			fs.updateNodeSizesAlongPath(path, n.node.stat.Size-newSize, fuse.Now())
+			fs.updateNodeSizesAlongPath(path, newSize-n.node.stat.Size, fuse.Now())
 		}
 		n.node.decryptionChecked = true
 	}

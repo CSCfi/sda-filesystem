@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -33,6 +34,7 @@ type Fuse struct {
 	ino     uint64
 	root    *node
 	openmap map[uint64]nodeAndPath
+	mount   string
 }
 
 // node represents one file or directory
@@ -81,7 +83,7 @@ var CheckPanic = func() {
 }
 
 // InitializeFileSystem initializes the in-memory filesystem database
-func InitializeFilesystem(send func(Project)) *Fuse {
+var InitializeFilesystem = func(send func(Project)) *Fuse {
 	logs.Info("Initializing in-memory Data Gateway database")
 	timestamp := fuse.Now()
 	fs := Fuse{}
@@ -126,6 +128,7 @@ func InitializeFilesystem(send func(Project)) *Fuse {
 // MountFilesystem mounts filesystem 'fs' to directory 'mount'
 func MountFilesystem(fs *Fuse, mount string) {
 	host = fuse.NewFileSystemHost(fs)
+	fs.mount = mount
 
 	options := []string{}
 	switch runtime.GOOS {
@@ -154,17 +157,24 @@ func UnmountFilesystem() {
 	}
 }
 
-func (fs *Fuse) RefreshFilesystem(newFs *Fuse) {
+// RefreshFilesystem clears cache and creates a new fileystem that will reflect any changes
+// that have occurred in the repositories. Does not unmount fuse at any point.
+func (fs *Fuse) RefreshFilesystem(initFunc func(Project), populateFunc func(string, string, int)) {
+	logs.Info("Updating Data Gateway")
 	api.ClearCache()
+
+	newFs := InitializeFilesystem(initFunc)
+	newFs.PopulateFilesystem(populateFunc)
 	fs.ino = newFs.ino
 	fs.root = newFs.root
 	fs.openmap = newFs.openmap
 }
 
-func (fs *Fuse) FilesOpen(mount string) bool {
+// FilesOpen checks if any of the files are being used by the user
+func (fs *Fuse) FilesOpen() bool {
 	switch runtime.GOOS {
 	case "linux":
-		_, err := exec.Command("fuser", "-m", mount).Output()
+		_, err := exec.Command("fuser", "-m", fs.mount).Output()
 		if err == nil {
 			return true
 		}
@@ -177,6 +187,67 @@ func (fs *Fuse) FilesOpen(mount string) bool {
 	}
 
 	return false
+}
+
+// ClearPath is desined for situations where a file is edited in the repository and the user wants to read this new data.
+// Function clears cache for `path` and updates all its file sizes.
+func (fs *Fuse) ClearPath(path string) error {
+	logs.Infof("Clearing path %s", path)
+	n := fs.getNode(path, ^uint64(0))
+	if n.node == nil {
+		return fmt.Errorf("Path %s is invalid", path)
+	}
+
+	if n.path[0] != api.SDConnect {
+		return fmt.Errorf("Clearing cache only enabled for %s", api.SDConnect)
+	}
+
+	if len(n.path) < 3 {
+		return fmt.Errorf("Path needs to include a bucket")
+	}
+
+	containerPath := strings.Join(strings.Split(path, string(os.PathSeparator))[:3], "/")
+	objects, err := api.GetNthLevel(n.path[0], containerPath, n.path[1], n.path[2])
+	if err != nil {
+		return fmt.Errorf("Cache not cleared since new file sizes could not be obtained: %w", err)
+	}
+
+	objMap := map[string]int64{}
+	for _, obj := range objects {
+		objMap[obj.Name] = obj.Bytes
+	}
+
+	oldSize := n.node.stat.Size
+	timestamp := fuse.Now()
+	clearNode(n, objMap, timestamp)
+	calculateFinalSize(n.node)
+	fs.updateNodeSizesAlongPath(filepath.Dir(path), n.node.stat.Size-oldSize, timestamp)
+
+	logs.Info("Path cleared")
+
+	return nil
+}
+
+func clearNode(n nodeAndPath, meta map[string]int64, timestamp fuse.Timespec) {
+	if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
+		api.DeleteFileFromCache(n.path, n.node.stat.Size)
+		size, ok := meta[strings.Join(n.path[3:], "/")]
+		if ok {
+			n.node.stat.Size = size
+			n.node.decryptionChecked = false
+			n.node.stat.Ctim = timestamp
+		}
+
+		return
+	}
+
+	if meta != nil {
+		n.node.stat.Size = -1
+	}
+
+	for _, chld := range n.node.chld {
+		clearNode(nodeAndPath{chld, append(n.path, chld.originalName)}, meta, timestamp)
+	}
 }
 
 // PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
@@ -264,7 +335,7 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 	wg.Wait()
 
 	// Calculate the size of higher level directories whose size currently is just -1.
-	calculateFinalSize(fs.root, "")
+	calculateFinalSize(fs.root)
 	logs.Info("Data Gateway database completed")
 }
 
@@ -279,13 +350,13 @@ var removeInvalidChars = func(str string) string {
 	return r.Replace(str)
 }
 
-func calculateFinalSize(n *node, path string) int64 {
+func calculateFinalSize(n *node) int64 {
 	if n.stat.Size != -1 {
 		return n.stat.Size
 	}
 	n.stat.Size = 0
-	for key, value := range n.chld {
-		n.stat.Size += calculateFinalSize(value, path+"/"+key)
+	for _, value := range n.chld {
+		n.stat.Size += calculateFinalSize(value)
 	}
 
 	return n.stat.Size
@@ -493,7 +564,7 @@ func (fs *Fuse) updateNodeSizesAlongPath(path string, diff int64, timestamp fuse
 
 			node = node.chld[c]
 			if node != nil {
-				node.stat.Size -= diff
+				node.stat.Size += diff
 				node.stat.Ctim = timestamp
 			}
 		}
