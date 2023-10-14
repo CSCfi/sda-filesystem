@@ -145,6 +145,8 @@ Usage of ./airlock:
     	Filename of original unecrypted file when uploading pre-encrypted file from Findata vm
   -project string
     	SD Connect project if it differs from that in the VM
+  -public-key value
+    	Public key used to encrypt file. Can be given multiple times.
   -quiet
     	Print only errors
   -segment-size int

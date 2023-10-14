@@ -4,7 +4,6 @@ package mountpoint
 
 import (
 	"os"
-	"runtime"
 	"testing"
 	"time"
 
@@ -120,37 +119,28 @@ type Testfs struct {
 	fuse.FileSystemBase
 }
 
-func (t *Testfs) Getattr(path string, stat *fuse.Stat_t, fh uint64) (errc int) {
+func (t *Testfs) Getattr(_ string, stat *fuse.Stat_t, _ uint64) (errc int) {
 	stat.Mode = fuse.S_IFDIR | 0755
 
 	return 0
 }
 
-func (t *Testfs) Readdir(path string,
-	fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
-	ofst int64, fh uint64) (errc int) {
+func (t *Testfs) Readdir(_ string,
+	_ func(name string, stat *fuse.Stat_t, _ int64) bool,
+	_ int64, _ uint64) (errc int) {
 	return -fuse.EIO
 }
 
 func TestCheckMountPoint_Fail_Read(t *testing.T) {
-	basepath, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Could not retrieve working directory: %s", err.Error())
-	}
-	node, err := os.MkdirTemp(basepath, "filesystem")
+	node, err := os.MkdirTemp("../../test", "filesystem")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
 	defer os.RemoveAll(node)
 
-	options := []string{}
-	if runtime.GOOS == "darwin" {
-		options = append(options, "-o", "defer_permissions")
-	}
-
 	testfs := &Testfs{}
 	host := fuse.NewFileSystemHost(testfs)
-	go host.Mount(node, options)
+	go host.Mount(node, nil)
 	defer host.Unmount()
 
 	time.Sleep(2 * time.Second)

@@ -16,7 +16,7 @@ import (
 )
 
 // Open opens a file.
-func (fs *Fuse) Open(path string, flags int) (errc int, fh uint64) {
+func (fs *Fuse) Open(path string, _ int) (errc int, fh uint64) {
 	defer fs.synchronize()()
 	logs.Debug("Opening file ", filepath.FromSlash(path))
 
@@ -163,8 +163,9 @@ func (fs *Fuse) Read(path string, buff []byte, ofst int64, fh uint64) int {
 }
 
 // Readdir reads the contents of a directory.
-func (fs *Fuse) Readdir(path string, fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
-	ofst int64, fh uint64) (errc int) {
+func (fs *Fuse) Readdir(path string,
+	fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
+	_ int64, fh uint64) (errc int) {
 	defer fs.synchronize()()
 	node := fs.getNode(path, fh).node
 	if node == nil {

@@ -35,7 +35,7 @@ func (c *mockCache) Get(key string) (any, bool) {
 	return nil, false
 }
 
-func (c *mockCache) Set(key string, value any, cost int64, ttl time.Duration) bool {
+func (c *mockCache) Set(key string, value any, _ int64, _ time.Duration) bool {
 	c.key = key
 	c.data = value.([]byte)
 
@@ -52,7 +52,7 @@ type mockRepository struct {
 
 func (r *mockRepository) getEnvs() error { return r.envError }
 
-func (r *mockRepository) downloadData(nodes []string, buf any, start, end int64) error {
+func (r *mockRepository) downloadData(_ []string, buf any, _, _ int64) error {
 	_, _ = io.ReadFull(bytes.NewReader(r.mockDownloadDataBuf), buf.([]byte))
 
 	return r.mockDownloadDataError
@@ -350,7 +350,7 @@ type testTransport struct {
 	err error
 }
 
-func (t testTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+func (t testTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return &http.Response{}, t.err
 }
 

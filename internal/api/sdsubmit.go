@@ -129,7 +129,7 @@ func (s *sdSubmitInfo) getEnvs() error {
 	return nil
 }
 
-func (s *sdSubmitInfo) authenticate(auth ...string) error {
+func (s *sdSubmitInfo) authenticate(_ ...string) error {
 	s.datasets = make(map[string]int)
 	count, count500 := 0, 0
 
@@ -196,7 +196,7 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 }
 
 // Dummy function, not needed
-func (s *sdSubmitInfo) updateAttributes(nodes []string, path string, attr any) error {
+func (s *sdSubmitInfo) updateAttributes(_ []string, _ string, _ any) error {
 	return nil
 }
 

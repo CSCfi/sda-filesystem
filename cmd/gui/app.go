@@ -44,11 +44,11 @@ func (a *App) startup(ctx context.Context) {
 	filesystem.SetSignalBridge(a.Panic)
 }
 
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) shutdown(_ context.Context) {
 	filesystem.UnmountFilesystem()
 }
 
-func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+func (a *App) beforeClose(_ context.Context) (prevent bool) {
 	return a.preventQuit
 }
 
@@ -169,7 +169,9 @@ func (a *App) Login(username, password string) (bool, error) {
 		logs.Info("You are not the project manager")
 	default:
 		logs.Info("You are the project manager")
-		if err = airlock.GetPublicKey(); err != nil {
+		if err = airlock.GetProxy(); err != nil {
+			logs.Error(err)
+		} else if err = airlock.GetPublicKey(nil); err != nil {
 			logs.Error(err)
 		} else {
 			wailsruntime.EventsEmit(a.ctx, "isProjectManager")
