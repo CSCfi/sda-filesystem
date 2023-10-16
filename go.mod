@@ -6,7 +6,7 @@ require (
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
-	github.com/neicnordic/crypt4gh v1.8.2
+	github.com/neicnordic/crypt4gh v1.8.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/wailsapp/wails/v2 v2.6.0
 	golang.org/x/crypto v0.14.0
