@@ -261,13 +261,14 @@ func main() {
 	go func() {
 		for {
 			input := <-wait
-			if strings.EqualFold(input[0], "update") {
+			switch strings.ToLower(input[0]) {
+			case "update":
 				if fs.FilesOpen() {
 					logs.Warningf("You have files in use which prevents updating Data Gateway")
 				} else {
 					fs.RefreshFilesystem(nil, nil)
 				}
-			} else if strings.EqualFold(input[0], "clear") {
+			case "clear":
 				if len(input) > 1 {
 					path := filepath.Clean(input[1])
 					if err := fs.ClearPath(path); err != nil {
