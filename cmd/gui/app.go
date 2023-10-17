@@ -44,11 +44,11 @@ func (a *App) startup(ctx context.Context) {
 	filesystem.SetSignalBridge(a.Panic)
 }
 
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) shutdown(_ context.Context) {
 	filesystem.UnmountFilesystem()
 }
 
-func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+func (a *App) beforeClose(_ context.Context) (prevent bool) {
 	return a.preventQuit
 }
 
@@ -230,7 +230,7 @@ func (a *App) LoadFuse() {
 			wailsruntime.EventsEmit(a.ctx, "fuseReady")
 		}()
 
-		var wait = make(chan bool)
+		var wait = make(chan []string)
 		go mountpoint.WaitForUpdateSignal(wait)
 		go func() {
 			for {
@@ -274,16 +274,13 @@ func (a *App) OpenFuse() {
 }
 
 func (a *App) RefreshFuse() error {
-	if a.fs.FilesOpen(a.mountpoint) {
+	if a.fs.FilesOpen() {
 		return fmt.Errorf("You have files in use which prevents updating Data Gateway")
 	}
-	logs.Info("Updating Data Gateway")
 	time.Sleep(200 * time.Millisecond)
 
 	a.ph.deleteProjects()
-	newFs := filesystem.InitializeFilesystem(a.ph.AddProject)
-	newFs.PopulateFilesystem(a.ph.trackContainers)
-	a.fs.RefreshFilesystem(newFs)
+	a.fs.RefreshFilesystem(a.ph.AddProject, a.ph.trackContainers)
 
 	buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
 	if len(buckets) > 0 {

@@ -80,28 +80,33 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestUserChooseUpdate(t *testing.T) {
+func TestUserInput(t *testing.T) {
 	finished := false
-	reader := strings.NewReader("continue\nhello\nupdate")
+	expectedOutput := [][]string{{"continue"}, {"hello", "sunshine"}, {"update"}}
+	reader := strings.NewReader("continue\nhello sunshine\nupdate")
 
-	var ch = make(chan bool)
+	var ch = make(chan []string)
 	go func() {
-		userChooseUpdate(reader, ch)
-		finished = true
+		userInput(reader, ch)
 	}()
 	go func() {
-		finished = <-ch
+		for i := range expectedOutput {
+			nextLine := <-ch
+			if !reflect.DeepEqual(nextLine, expectedOutput[i]) {
+				return
+			}
+		}
+		finished = true
 	}()
 
 	time.Sleep(10 * time.Millisecond)
 
 	if !finished {
-		t.Fatal("Function did not read input correctly. Input 'update' did not stop function")
+		t.Fatal("Function did not read input correctly.")
 	}
 }
 
-func TestUserChooseUpdate_Error(t *testing.T) {
-	finished := false
+func TestUserInput_Error(t *testing.T) {
 	buf := &testStream{err: errExpected}
 
 	var level string
@@ -111,12 +116,9 @@ func TestUserChooseUpdate_Error(t *testing.T) {
 	})
 	defer logs.SetSignal(func(l string, s []string) {})
 
-	var ch = make(chan bool)
+	var ch = make(chan []string)
 	go func() {
-		userChooseUpdate(buf, ch)
-	}()
-	go func() {
-		finished = <-ch
+		userInput(buf, ch)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -127,9 +129,6 @@ func TestUserChooseUpdate_Error(t *testing.T) {
 	}
 	if !reflect.DeepEqual(strs, err) {
 		t.Fatalf("Logged output incorrect\nExpected: %q\nReceived: %q", err, strs)
-	}
-	if finished {
-		t.Error("Function did not read input correctly. Input should not have stopped function")
 	}
 }
 

@@ -31,7 +31,7 @@ var CheckMountPoint = func(mount string) error {
 	return nil
 }
 
-func WaitForUpdateSignal(ch chan<- bool) {
+func WaitForUpdateSignal(ch chan<- []string) {
 }
 
 func BytesAvailable(dir string) (freeBytes uint64, err error) {

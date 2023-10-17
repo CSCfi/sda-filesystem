@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Enable listing more than 10000 objects in bucket with `marker` query parameter
+- In CLI, the `clear <path>` command clears the cache for all files under `path`
 
 ## [v2.1.6] 2023-08-04
 

@@ -374,7 +374,7 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 	endofst := end - chStart
 
 	// We create the cache key based on path and requested bytes
-	cacheKey := strings.Join(nodes, "_") + "_" + strconv.FormatInt(chStart, 10)
+	cacheKey := toCacheKey(nodes, chStart)
 	response, found := downloadCache.Get(cacheKey)
 
 	if !found {
@@ -403,6 +403,19 @@ var DownloadData = func(nodes []string, path string, start int64, end int64, max
 	return ret[ofst:endofst], nil
 }
 
+func toCacheKey(nodes []string, chunkIdx int64) string {
+	return strings.Join(nodes, "_") + "_" + strconv.FormatInt(chunkIdx, 10)
+}
+
 var ClearCache = func() {
 	downloadCache.Clear()
+}
+
+var DeleteFileFromCache = func(nodes []string, size int64) {
+	i := int64(0)
+	for i < size {
+		key := toCacheKey(nodes, i)
+		downloadCache.Del(key)
+		i += chunkSize
+	}
 }
