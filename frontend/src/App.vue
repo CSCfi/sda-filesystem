@@ -134,6 +134,10 @@ c-tabs {
     flex-grow: 1;
 }
 
+c-button {
+    align-self: center;
+}
+
 #content {
     margin: 40px;
     display: flex;
