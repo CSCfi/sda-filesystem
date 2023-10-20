@@ -9,6 +9,8 @@ export function CheckEncryption(arg1:string,arg2:string):Promise<any>;
 
 export function ExportFile(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
+export function FilesOpen():Promise<boolean>;
+
 export function GetDefaultMountPoint():Promise<string>;
 
 export function InitFuse():Promise<void>;

@@ -18,6 +18,10 @@ export function ExportFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExportFile'](arg1, arg2, arg3);
 }
 
+export function FilesOpen() {
+  return window['go']['main']['App']['FilesOpen']();
+}
+
 export function GetDefaultMountPoint() {
   return window['go']['main']['App']['GetDefaultMountPoint']();
 }

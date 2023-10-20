@@ -1,7 +1,19 @@
 <script lang="ts" setup>
 import { reactive, ref, onMounted, computed } from 'vue'
-import { GetDefaultMountPoint, LoadFuse, OpenFuse, RefreshFuse, ChangeMountPoint } from '../../wailsjs/go/main/App'
-import { CDataTableHeader, CDataTableData, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
+import {
+    GetDefaultMountPoint,
+    LoadFuse,
+    OpenFuse,
+    RefreshFuse,
+    ChangeMountPoint,
+    FilesOpen,
+} from '../../wailsjs/go/main/App'
+import {
+    CDataTableHeader,
+    CDataTableData,
+    CDataTableFooterOptions,
+    CPaginationOptions
+} from 'csc-ui/dist/types';
 import { EventsEmit, EventsOn } from '../../wailsjs/runtime'
 import { filesystem } from "../../wailsjs/go/models";
 
@@ -93,17 +105,27 @@ function changeMountPoint() {
 
 function refresh() {
     updating.value = true;
-    allContainers.value = 0;
-    loadedContainers.value = 0;
 
-    projectData.forEach((project) => {
-        project['progress'].value = 0;
+    FilesOpen().then((open: boolean) => {
+        if (open) {
+            EventsEmit(
+                "showToast",
+                "Resfresh not possible",
+                "You have files in use which prevents updating Data Gateway"
+            )
+            updating.value = false;
+        } else {
+            allContainers.value = 0;
+            loadedContainers.value = 0;
+
+            projectData.forEach((project) => {
+                project['progress'].value = 0;
+            });
+            projectKey.value = 0;
+
+            RefreshFuse();
+        }
     });
-    projectKey.value = 0;
-
-    RefreshFuse().catch(e => {
-        EventsEmit("showToast", "Refresh not possible", e as string);
-    })
 }
 </script>
 
