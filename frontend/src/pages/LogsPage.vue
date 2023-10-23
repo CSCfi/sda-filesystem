@@ -3,7 +3,13 @@ import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { main } from "../../wailsjs/go/models";
 import { Quit } from '../../wailsjs/go/main/App'
-import { CDataTableHeader, CDataTableData, CDataTableDataItem, CDataTableFooterOptions, CPaginationOptions } from 'csc-ui/dist/types';
+import {
+    CDataTableHeader,
+    CDataTableData,
+    CDataTableDataItem,
+    CDataTableFooterOptions,
+    CPaginationOptions,
+} from 'csc-ui/dist/types';
 import { reactive, ref, computed, onUnmounted } from 'vue';
 
 const logHeaders: CDataTableHeader[] = [

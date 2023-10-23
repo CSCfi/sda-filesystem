@@ -273,10 +273,11 @@ func (a *App) OpenFuse() {
 	}
 }
 
-func (a *App) RefreshFuse() error {
-	if a.fs.FilesOpen() {
-		return fmt.Errorf("You have files in use which prevents updating Data Gateway")
-	}
+func (a *App) FilesOpen() bool {
+	return a.fs.FilesOpen()
+}
+
+func (a *App) RefreshFuse() {
 	time.Sleep(200 * time.Millisecond)
 
 	a.ph.deleteProjects()
@@ -287,8 +288,6 @@ func (a *App) RefreshFuse() error {
 		wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 	}
 	wailsruntime.EventsEmit(a.ctx, "fuseReady")
-
-	return nil
 }
 
 func (a *App) SelectFile() (string, error) {
