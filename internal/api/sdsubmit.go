@@ -90,7 +90,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 
 	var metadata []Metadata
 	for i := range files {
-		if files[i].FileStatus == "READY" {
+		if strings.EqualFold(files[i].FileStatus, "ready") {
 			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
 			metadata = append(metadata, md)
 

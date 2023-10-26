@@ -72,7 +72,7 @@ GET /metadata/datasets/repository.org/dataset/files?scheme=https
         "decryptedFileSize": 32,
         "decryptedFileChecksum": "hash",
         "decryptedFileChecksumType": "SHA256",
-        "fileStatus": "READY"
+        "fileStatus": "ready"
     },
 ]
 ```
