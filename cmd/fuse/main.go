@@ -56,6 +56,13 @@ func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
+type credentialsError struct {
+}
+
+func (e *credentialsError) Error() string {
+	return "Incorrect username or password"
+}
+
 func userInput(r io.Reader, ch chan<- []string) {
 	scanner := bufio.NewScanner(r)
 	var answer string
@@ -71,33 +78,27 @@ func userInput(r io.Reader, ch chan<- []string) {
 	}
 }
 
-var askForLogin = func(lr loginReader) (string, string, bool, error) {
-	username, password, exist := checkEnvVars()
-	if exist {
-		logs.Info("Using username and password from environment variables CSC_USERNAME and CSC_PASSWORD")
-
-		return username, password, true, nil
-	}
-
+var askForLogin = func(lr loginReader) (string, string, error) {
 	fmt.Printf("\nLog in with your CSC credentials\n")
 	fmt.Print("Enter username: ")
 	scanner := bufio.NewScanner(lr.getStream())
 
+	var username string
 	if scanner.Scan() {
 		username = scanner.Text()
 	}
 	if err := scanner.Err(); err != nil {
-		return "", "", false, fmt.Errorf("Could not read username: %w", err)
+		return "", "", fmt.Errorf("Could not read username: %w", err)
 	}
 
 	fmt.Print("Enter password: ")
 	password, err := lr.readPassword()
 	fmt.Println()
 	if err != nil {
-		return "", "", false, fmt.Errorf("Could not read password: %w", err)
+		return "", "", fmt.Errorf("Could not read password: %w", err)
 	}
 
-	return username, password, false, nil
+	return username, password, nil
 }
 
 func checkEnvVars() (string, string, bool) {
@@ -111,8 +112,27 @@ func checkEnvVars() (string, string, bool) {
 	return "", "", false
 }
 
+func authenticate(username, password string) error {
+	token := api.BasicToken(username, password)
+	err := api.Authenticate(api.SDConnect, token, project)
+
+	var re *api.RequestError
+	if errors.As(err, &re) && re.StatusCode == 401 {
+		return &credentialsError{}
+	}
+
+	return err
+}
+
 // login asks for CSC username and password
 var login = func(lr loginReader) error {
+	username, password, exists := checkEnvVars()
+	if exists {
+		logs.Info("Using username and password from environment variables CSC_USERNAME and CSC_PASSWORD")
+
+		return authenticate(username, password)
+	}
+
 	// Get the state of the terminal before running the password prompt
 	err := lr.getState()
 	if err != nil {
@@ -133,25 +153,18 @@ var login = func(lr loginReader) error {
 	}()
 
 	for {
-		username, password, exists, err := askForLogin(lr)
+		username, password, err := askForLogin(lr)
 		if err != nil {
 			return err
 		}
 
-		token := api.BasicToken(username, password)
-		err = api.Authenticate(api.SDConnect, token, project)
-		if err == nil {
-			return nil
-		}
+		err = authenticate(username, password)
 
-		var re *api.RequestError
-		if errors.As(err, &re) && re.StatusCode == 401 {
-			err = fmt.Errorf("Incorrect username or password")
-			if !exists {
-				logs.Error(err)
+		var e *credentialsError
+		if errors.As(err, &e) {
+			logs.Error(err)
 
-				continue
-			}
+			continue
 		}
 
 		return err
@@ -261,6 +274,9 @@ func main() {
 	go func() {
 		for {
 			input := <-wait
+			if len(input) == 0 {
+				continue
+			}
 			switch strings.ToLower(input[0]) {
 			case "update":
 				if fs.FilesOpen() {
