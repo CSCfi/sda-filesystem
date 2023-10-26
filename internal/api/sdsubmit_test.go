@@ -166,7 +166,7 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 			FileSize:              20,
 			DecryptedFileSize:     20,
 			DecryptedFileChecksum: "if6ox",
-			FileStatus:            "READY",
+			FileStatus:            "ready",
 		},
 	}
 	testFileJSON, _ := json.Marshal(testFile)
