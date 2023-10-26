@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] 
+## [2.2.0] 
 
 ### Changed
 - Remove the spinner above the toggle for SD Connect when logging in
@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Recover buttons after failed refresh in GUI
+- SD Submit changed code so that `ready` state is now lower case, make use of `strings.EqualFold` 
+for checking case insensitivity
 
 ## [v2.1.6] 2023-08-04
 
