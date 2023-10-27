@@ -151,9 +151,6 @@ func TestAskForLogin(t *testing.T) {
 		},
 	}
 
-	os.Unsetenv("CSC_USERNAME")
-	os.Unsetenv("CSC_PASSWORD")
-
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			// Ignore prints to stdout
@@ -162,7 +159,7 @@ func TestAskForLogin(t *testing.T) {
 			os.Stdout = null
 
 			r := newTestReader([]string{tt.username}, tt.password, tt.streamError, tt.readerError)
-			str1, str2, exists, err := askForLogin(r)
+			str1, str2, err := askForLogin(r)
 
 			os.Stdout = sout
 			null.Close()
@@ -176,68 +173,34 @@ func TestAskForLogin(t *testing.T) {
 				}
 			case err != nil:
 				t.Errorf("Function returned error: %s", err.Error())
-			case exists:
-				t.Errorf("Function says the environment variables exist.")
 			case str1 != tt.username:
 				t.Errorf("Username incorrect. Expected=%s, received=%s", tt.username, str1)
 			case str2 != tt.password:
 				t.Errorf("Password incorrect. Expected=%s, received=%s", tt.password, str2)
 			}
-
 		})
-	}
-}
-
-func TestAskForLogin_Envs(t *testing.T) {
-	// Ignore prints to stdout
-	null, _ := os.Open(os.DevNull)
-	sout := os.Stdout
-	os.Stdout = null
-
-	username := "rumplestiltskin"
-	password := "very-secret-password"
-	os.Setenv("CSC_USERNAME", username)
-	os.Setenv("CSC_PASSWORD", password)
-
-	r := newTestReader([]string{}, "", errors.New("stream error"), errors.New("reader error"))
-	str1, str2, exists, err := askForLogin(r)
-
-	os.Unsetenv("CSC_USERNAME")
-	os.Unsetenv("CSC_PASSWORD")
-
-	os.Stdout = sout
-	null.Close()
-
-	switch {
-	case err != nil:
-		t.Errorf("Function returned error: %s", err.Error())
-	case !exists:
-		t.Errorf("Function says the environment variables do not exist.")
-	case str1 != username:
-		t.Errorf("Username incorrect. Expected=%s, received=%s", username, str1)
-	case str2 != password:
-		t.Errorf("Password incorrect. Expected=%s, received=%s", password, str2)
 	}
 }
 
 func TestLogin(t *testing.T) {
 	var count int
 	var tests = []struct {
-		testname          string
-		readerError       error
-		errorText         string
-		mockAskForLogin   func(loginReader) (string, string, bool, error)
-		mockValidateLogin func(string, ...string) error
+		testname           string
+		readerError        error
+		errorText          string
+		username, password string
+		mockAskForLogin    func(loginReader) (string, string, error)
+		mockAuthenticate   func(string, ...string) error
 	}{
 		{
-			"OK", nil, "",
-			func(lr loginReader) (string, string, bool, error) {
+			"OK", nil, "", "", "",
+			func(lr loginReader) (string, string, error) {
 				if count > 0 {
-					return "", "", false, fmt.Errorf("Function did not approve login during first loop")
+					return "", "", fmt.Errorf("Function did not approve login during first loop")
 				}
 				count++
 
-				return "dumbledore", "345fgj78", false, nil
+				return "dumbledore", "345fgj78", nil
 			},
 			func(rep string, rest ...string) error {
 				if len(rest) != 2 {
@@ -256,14 +219,9 @@ func TestLogin(t *testing.T) {
 			},
 		},
 		{
-			"OK_EXISTS", nil, "",
-			func(lr loginReader) (string, string, bool, error) {
-				if count > 0 {
-					return "", "", true, fmt.Errorf("Function did not approve login during first loop")
-				}
-				count++
-
-				return "sandman", "89bf5cifu6vo", true, nil
+			"OK_EXISTS", nil, "", "sandman", "89bf5cifu6vo",
+			func(lr loginReader) (string, string, error) {
+				return "", "", fmt.Errorf("Should not have called askForLogin()")
 			},
 			func(rep string, rest ...string) error {
 				if len(rest) != 2 {
@@ -282,15 +240,15 @@ func TestLogin(t *testing.T) {
 			},
 		},
 		{
-			"OK_401_ONCE", nil, "",
-			func(lr loginReader) (string, string, bool, error) {
+			"OK_401_ONCE", nil, "", "", "",
+			func(lr loginReader) (string, string, error) {
 				usernames, passwords := []string{"Smith", "Doris"}, []string{"hwd82bkwe", "pwd"}
 				if count > 1 {
-					return "", "", false, fmt.Errorf("Function in infinite loop")
+					return "", "", fmt.Errorf("Function in infinite loop")
 				}
 				count++
 
-				return usernames[count-1], passwords[count-1], false, nil
+				return usernames[count-1], passwords[count-1], nil
 			},
 			func(rep string, rest ...string) error {
 				if len(rest) != 2 {
@@ -309,14 +267,9 @@ func TestLogin(t *testing.T) {
 			},
 		},
 		{
-			"FAIL_401_EXISTS", nil, "Incorrect username or password",
-			func(lr loginReader) (string, string, bool, error) {
-				if count > 0 {
-					return "", "", true, fmt.Errorf("Function in infinite loop")
-				}
-				count++
-
-				return "Jones", "v689cft", true, nil
+			"FAIL_401_EXISTS", nil, "Incorrect username or password", "Jones", "v689cft",
+			func(lr loginReader) (string, string, error) {
+				return "", "", fmt.Errorf("Should not have called askForLogin()")
 			},
 			func(rep string, rest ...string) error {
 				return &api.RequestError{StatusCode: 401}
@@ -324,32 +277,32 @@ func TestLogin(t *testing.T) {
 		},
 		{
 			"FAIL_STATE", errExpected,
-			"Failed to get terminal state: " + errExpected.Error(),
-			func(lr loginReader) (string, string, bool, error) {
-				return "", "", false, fmt.Errorf("Function should not have called askForLogin()")
+			"Failed to get terminal state: " + errExpected.Error(), "", "",
+			func(lr loginReader) (string, string, error) {
+				return "", "", fmt.Errorf("Function should not have called askForLogin()")
 			},
 			func(rep string, rest ...string) error {
 				return fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
 		{
-			"FAIL_ASK", nil, errExpected.Error(),
-			func(lr loginReader) (string, string, bool, error) {
-				return "", "", false, errExpected
+			"FAIL_ASK", nil, errExpected.Error(), "", "",
+			func(lr loginReader) (string, string, error) {
+				return "", "", errExpected
 			},
 			func(rep string, rest ...string) error {
 				return fmt.Errorf("Function should not have called api.ValidateLogin()")
 			},
 		},
 		{
-			"FAIL_VALIDATE", nil, errExpected.Error(),
-			func(lr loginReader) (string, string, bool, error) {
+			"FAIL_VALIDATE", nil, errExpected.Error(), "", "",
+			func(lr loginReader) (string, string, error) {
 				if count > 0 {
-					return "", "", false, fmt.Errorf("Function in infinite loop")
+					return "", "", fmt.Errorf("Function in infinite loop")
 				}
 				count++
 
-				return "", "", false, nil
+				return "", "", nil
 			},
 			func(rep string, rest ...string) error {
 				return errExpected
@@ -358,18 +311,30 @@ func TestLogin(t *testing.T) {
 	}
 
 	origAskForLogin := askForLogin
-	origValidateLogin := api.Authenticate
+	origAuthenticate := api.Authenticate
 
 	defer func() {
 		askForLogin = origAskForLogin
-		api.Authenticate = origValidateLogin
+		api.Authenticate = origAuthenticate
 	}()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			count = 0
 			askForLogin = tt.mockAskForLogin
-			api.Authenticate = tt.mockValidateLogin
+			api.Authenticate = tt.mockAuthenticate
+
+			if tt.username == "" {
+				os.Unsetenv("CSC_USERNAME")
+			} else {
+				os.Setenv("CSC_USERNAME", tt.username)
+			}
+
+			if tt.password == "" {
+				os.Unsetenv("CSC_PASSWORD")
+			} else {
+				os.Setenv("CSC_PASSWORD", tt.password)
+			}
 
 			// Ignore prints to stdout
 			null, _ := os.Open(os.DevNull)
@@ -392,7 +357,6 @@ func TestLogin(t *testing.T) {
 			case err.Error() != tt.errorText:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
 			}
-
 		})
 	}
 }
@@ -514,7 +478,6 @@ func TestProcessFlags(t *testing.T) {
 			case tt.mount != testMount:
 				t.Errorf("CheckMountPoint() received incorrect mount point. Expected=%s, received=%s", tt.mount, testMount)
 			}
-
 		})
 	}
 }

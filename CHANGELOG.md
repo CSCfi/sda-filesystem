@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recover buttons after failed refresh in GUI
 - SD Submit changed code so that `ready` state is now lower case, make use of `strings.EqualFold` 
 for checking case insensitivity
+- Checks envs before terminal state because the state might not be available
 
 ## [v2.1.6] 2023-08-04
 
