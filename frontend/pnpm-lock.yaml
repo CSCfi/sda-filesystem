@@ -15,8 +15,8 @@ dependencies:
     specifier: ^7.3.67
     version: 7.3.67
   csc-ui:
-    specifier: ^0.9.3
-    version: 0.9.3
+    specifier: ^0.9.4
+    version: 0.9.4
   vue:
     specifier: ^3.3.7
     version: 3.3.7(typescript@5.2.2)
@@ -216,12 +216,6 @@ packages:
       estree-walker: 2.0.2
       magic-string: 0.30.5
 
-  /@vue/reactivity@3.3.4:
-    resolution: {integrity: sha512-kLTDLwd0B1jG08NBF3R5rqULtv/f8x3rOFByTDz4J53ttIQEDmALqKqXY0J+XQeN0aV2FBxY8nJDf88yvOPAqQ==}
-    dependencies:
-      '@vue/shared': 3.3.4
-    dev: true
-
   /@vue/reactivity@3.3.7:
     resolution: {integrity: sha512-cZNVjWiw00708WqT0zRpyAgduG79dScKEPYJXq2xj/aMtk3SKvL3FBt2QKUlh6EHBJ1m8RhBY+ikBUzwc7/khg==}
     dependencies:
@@ -270,8 +264,8 @@ packages:
     resolution: {integrity: sha512-7CEBgcMjVmitjYo5q8JTJVra6X5mQ20uTThdK+0kR7UEaDrAWEQcRiBtWJzga4eRpP6afNwwLsX2SET2JhVB1Q==}
     dev: true
 
-  /csc-ui@0.9.3:
-    resolution: {integrity: sha512-Pli29HPf51Us166s5vjJYJpz0jYZxwbkcm6D9pieXC4XgneijNT6q/Q6j4ecg/U70HmtcEARGbXsoeTEg98yJA==}
+  /csc-ui@0.9.4:
+    resolution: {integrity: sha512-Mxp5fuehFgucIKJ3gNiT7nq+xtA4RrlM+iVyX0wTdrCDXZIHG8KFz9sOmmHLkBu9Z/z8eQ3+1FSGhYqV5e13gg==}
     dependencies:
       '@mdi/js': 7.3.67
       '@stencil/core': 4.5.0
