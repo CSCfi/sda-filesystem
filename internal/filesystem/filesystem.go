@@ -172,13 +172,21 @@ func (fs *Fuse) RefreshFilesystem(initFunc func(Project), populateFunc func(stri
 
 // FilesOpen checks if any of the files are being used by the user
 func (fs *Fuse) FilesOpen() bool {
+	mount := fs.mount
 	switch runtime.GOOS {
 	case "linux":
-		mount := fs.mount
 		_, err := exec.Command("fuser", "-m", mount).Output()
-		if err == nil {
+
+		return err == nil
+	case "darwin":
+		output, err := exec.Command("fuser", "-c", mount).Output()
+		if err != nil {
+			logs.Errorf("Update halted, could not determine if files are open: %w", err)
+
 			return true
 		}
+
+		return len(output) > 0
 	default:
 		for _, n := range fs.openmap {
 			if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
