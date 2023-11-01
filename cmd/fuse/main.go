@@ -220,19 +220,6 @@ func init() {
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
-func shutdown() <-chan bool {
-	done := make(chan bool)
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, os.Interrupt)
-	go func() {
-		<-s
-		logs.Info("Shutting down Data Gateway")
-		done <- true
-	}()
-
-	return done
-}
-
 func main() {
 	err := api.GetCommonEnvs()
 	if err != nil {
@@ -264,7 +251,6 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	done := shutdown()
 	fs := filesystem.InitializeFilesystem(nil)
 	fs.PopulateFilesystem(nil)
 
@@ -280,7 +266,7 @@ func main() {
 			switch strings.ToLower(input[0]) {
 			case "update":
 				if fs.FilesOpen() {
-					logs.Warningf("You have files in use which prevents updating Data Gateway")
+					logs.Errorf("You have files in use which prevents updating Data Gateway")
 				} else {
 					fs.RefreshFilesystem(nil, nil)
 				}
@@ -288,15 +274,16 @@ func main() {
 				if len(input) > 1 {
 					path := filepath.Clean(input[1])
 					if err := fs.ClearPath(path); err != nil {
-						logs.Warning(err)
+						logs.Error(err)
 					}
 				} else {
-					logs.Warningf("Cannot clear cache without path")
+					logs.Errorf("Cannot clear cache without path")
 				}
 			}
 		}
 	}()
 
 	filesystem.MountFilesystem(fs, mount)
-	<-done
+
+	logs.Info("Shutting down Data Gateway")
 }
