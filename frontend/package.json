@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@cscfi/csc-ui-vue": "^0.0.1",
+    "@cscfi/csc-ui-vue": "^0.0.2",
     "@mdi/font": "^7.3.67",
     "@mdi/js": "^7.3.67",
     "csc-ui": "^0.9.3",

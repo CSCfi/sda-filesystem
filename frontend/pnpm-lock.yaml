@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@cscfi/csc-ui-vue':
-    specifier: ^0.0.1
-    version: 0.0.1
+    specifier: ^0.0.2
+    version: 0.0.2
   '@mdi/font':
     specifier: ^7.3.67
     version: 7.3.67
@@ -63,8 +63,8 @@ packages:
       '@babel/helper-validator-identifier': 7.22.20
       to-fast-properties: 2.0.0
 
-  /@cscfi/csc-ui-vue@0.0.1:
-    resolution: {integrity: sha512-4hgiVp2MXubDhZ6/BVGYzXRLqNq1J1pJP2taMUI+PoBIWB0Gz+7lTja9/oMqL2r39MnbRteg3rofJMEOZzP6qQ==}
+  /@cscfi/csc-ui-vue@0.0.2:
+    resolution: {integrity: sha512-doYKLLi2AFnKIhaZ4Lu2RLduGYiN1xnNHMcBGu9L4KZF9AgWMPH6Xv8UEV0ISMKWza0FGXL1DZkzZUankknWrQ==}
     dev: false
 
   /@esbuild/android-arm@0.15.18:
