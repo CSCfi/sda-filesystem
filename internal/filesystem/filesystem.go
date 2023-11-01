@@ -187,6 +187,16 @@ func (fs *Fuse) FilesOpen() bool {
 		}
 
 		return len(output) > 0
+	case "windows":
+		volume, _ := os.Readlink(fs.mount)
+		output, err := exec.Command("handle.exe", "-a", "-nobanner", volume).Output()
+		if err != nil {
+			logs.Errorf("Update halted, could not determine if files are open: %w", err)
+
+			return true
+		}
+
+		return strings.Contains(string(output), volume)
 	default:
 		for _, n := range fs.openmap {
 			if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
