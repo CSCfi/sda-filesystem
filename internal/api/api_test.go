@@ -17,6 +17,8 @@ import (
 
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
+
+	"golang.org/x/exp/maps"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -785,5 +787,39 @@ func TestDownloadData_FoundNoCache_Error(t *testing.T) {
 	}
 	if data != nil {
 		t.Errorf("TestDownloadData_FoundNoCache_Error no data, received=%s", string(data))
+	}
+}
+
+type mockStorage struct {
+	cache.Cacheable
+
+	keys map[string]bool
+}
+
+func (ms *mockStorage) Del(key string) {
+	delete(ms.keys, key)
+}
+
+func TestDeleteFileFromCache(t *testing.T) {
+	nodes := []string{"path", "to", "object"}
+	size := int64((1<<25)*3 + 100)
+
+	origCache := downloadCache
+	defer func() { downloadCache = origCache }()
+
+	keys := map[string]bool{
+		"path_to_object_0":         true,
+		"path_to_object_33554432":  true,
+		"path_to_object_67108864":  true,
+		"path_to_object_100663296": true,
+	}
+
+	storage := &mockStorage{keys: keys}
+	downloadCache = &cache.Ristretto{Cacheable: storage}
+
+	DeleteFileFromCache(nodes, size)
+
+	if len(storage.keys) > 0 {
+		t.Fatalf("Function did not delete the entire file from cache, missed %v", maps.Keys(storage.keys))
 	}
 }
