@@ -894,6 +894,7 @@ func TestGetNodeChildren(t *testing.T) {
 	}{
 		{"Rep1/child_1", []string{"dir+", "kansio"}},
 		{"Rep1/child_2", []string{"+folder", "dir"}},
+		{"Rep1/child_4", nil},
 	}
 
 	for i, tt := range tests {
