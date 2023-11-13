@@ -9,10 +9,10 @@ require (
 	github.com/neicnordic/crypt4gh v1.8.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/wailsapp/wails/v2 v2.6.0
-	golang.org/x/crypto v0.14.0
+	golang.org/x/crypto v0.15.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/sys v0.14.0
-	golang.org/x/term v0.13.0
+	golang.org/x/term v0.14.0
 )
 
 require (
@@ -42,5 +42,5 @@ require (
 	github.com/wailsapp/go-webview2 v1.0.1 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 )
