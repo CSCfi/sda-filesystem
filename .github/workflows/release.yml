@@ -53,7 +53,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up Golang ${{ matrix.golang-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.golang-version }}
       - name: Install macOS dependencies
@@ -133,7 +133,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up Golang ${{ matrix.golang-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.golang-version }}
       - name: Install Windows dependencies
@@ -205,7 +205,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up Golang ${{ matrix.golang-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.golang-version }}
       - name: Install macOS dependencies
