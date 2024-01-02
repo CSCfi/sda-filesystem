@@ -11,7 +11,7 @@
   "dependencies": {
     "@cscfi/csc-ui-vue": "^0.0.2",
     "@mdi/font": "^7.4.47",
-    "@mdi/js": "^7.3.67",
+    "@mdi/js": "^7.4.47",
     "csc-ui": "^0.9.5",
     "vue": "^3.3.11"
   },
