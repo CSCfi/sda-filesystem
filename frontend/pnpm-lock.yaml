@@ -12,8 +12,8 @@ dependencies:
     specifier: ^7.4.47
     version: 7.4.47
   '@mdi/js':
-    specifier: ^7.3.67
-    version: 7.3.67
+    specifier: ^7.4.47
+    version: 7.4.47
   csc-ui:
     specifier: ^0.9.5
     version: 0.9.5
@@ -92,8 +92,8 @@ packages:
     resolution: {integrity: sha512-43MtGpd585SNzHZPcYowu/84Vz2a2g31TvPMTm9uTiCSWzaheQySUcSyUH/46fPnuPQWof2yd0pGBtzee/IQWw==}
     dev: false
 
-  /@mdi/js@7.3.67:
-    resolution: {integrity: sha512-MnRjknFqpTC6FifhGHjZ0+QYq2bAkZFQqIj8JA2AdPZbBxUvr8QSgB2yPAJ8/ob/XkR41xlg5majDR3c1JP1hw==}
+  /@mdi/js@7.4.47:
+    resolution: {integrity: sha512-KPnNOtm5i2pMabqZxpUz7iQf+mfrYZyKCZ8QNz85czgEt7cuHcGorWfdzUMWYA0SD+a6Hn4FmJ+YhzzzjkTZrQ==}
     dev: false
 
   /@stencil/core@4.5.0:
@@ -248,7 +248,7 @@ packages:
   /csc-ui@0.9.5:
     resolution: {integrity: sha512-GJsl24TWr3sA4RHqXPB6klk6L3dhx+I1cZo1NcAo6WXcdRU8Z1TaMZocsRS9mlxH5evkndf0W7PrUISRgAjmfg==}
     dependencies:
-      '@mdi/js': 7.3.67
+      '@mdi/js': 7.4.47
       '@stencil/core': 4.5.0
       '@types/node': 20.8.6
       normalize.css: 8.0.1
