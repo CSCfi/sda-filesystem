@@ -79,7 +79,9 @@ func Test_SDConnect_GetProjects(t *testing.T) {
 			}
 
 			url := "https://data.csc.fi"
-			c := connecter{url: &url, token: &tt.token}
+			// for now ignore this as it will be fixed in go 1.22
+			// https://stackoverflow.com/questions/62446118/implicit-memory-aliasing-in-for-loop
+			c := connecter{url: &url, token: &tt.token} // #nosec G601
 			projects, err := c.getProjects()
 
 			if err != nil {

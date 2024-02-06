@@ -16,7 +16,6 @@ func TestCheckMountPoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	defer os.RemoveAll(node)
 
 	if err = CheckMountPoint(node); err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
@@ -24,6 +23,10 @@ func TestCheckMountPoint(t *testing.T) {
 }
 
 func TestCheckMountPoint_Permissions(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping fuse test for ci docker")
+	}
+
 	var tests = []struct {
 		testname, name string
 		mode           int
@@ -47,6 +50,7 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 			os.RemoveAll(node)
 		})
 	}
+
 }
 
 func TestCheckMountPoint_Not_Dir(t *testing.T) {
@@ -74,6 +78,9 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 }
 
 func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping fuse test for ci docker")
+	}
 	node, err := os.MkdirTemp("", "dir")
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
@@ -85,6 +92,7 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	} else if err = CheckMountPoint(node + "/child"); err == nil {
 		t.Error("Function should have returned error")
 	}
+
 }
 
 func TestCheckMountPoint_Not_Exist(t *testing.T) {
