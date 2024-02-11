@@ -47,19 +47,19 @@ Install [pnpm](https://pnpm.io/installation)
 ### Build and Run
 
 Before running/building the repository for the first time, generate the frontend assests by running:
-```
+```bash
 pnpm install --prefix frontend
 pnpm --prefix frontend run build
 ```
 
 To run in development mode:
-```
+```bash
 cd cmd/gui
 wails dev
 ``` 
 
 To build for production:
-```
+```bash
 cd cmd/gui
 
 # For Linux and macOS
@@ -82,11 +82,11 @@ Two command line binaries are released, one for SDA-Filesystem and one for Airlo
 The CLI binary will require a username and password for accessing the SD-Connect Proxy API. Username is given as input. Password is either given as input or in an environmental variable.
 
 #### Build and Run
-```
+```bash
 go build -o ./go-fuse ./cmd/fuse/main.go
 ```
 Test install.
-```
+```bash
 ./go-fuse -help                        
 Usage of ./go-fuse:
   -alsologtostderr
@@ -128,11 +128,11 @@ If the user wants to update particular SD Connect files inside the filesystem, t
 The CLI binary will require a username, a bucket and a filename. Password is either given as input or in an environmental variable.
 
 #### Build and Run
-```
+```bash
 go build -o ./airlock ./cmd/airlock/main.go
 ```
 Test install.
-```
+```bash
 ./airlock -help
 Usage of ./airlock:
   -alsologtostderr

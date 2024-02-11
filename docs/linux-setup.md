@@ -2,12 +2,12 @@
 
 Build:
 (if upx is not install remove the flag)
-```
+```bash
 wails build -upx -trimpath -clean -s
 ```
 
 or download the release:
-```
+```bash
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
 export version=v2.2.1
@@ -15,7 +15,7 @@ wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fu
 ```
 
 Install the software:
-```
+```bash
 sudo unzip -qq go-fuse-gui-golang1.20-linux-amd64.zip
 sudo mv /etc/sda-fuse/data-gateway /etc/sda-fuse/sda-fuse
 sudo chmod 755 /etc/sda-fuse/data-gateway
@@ -35,7 +35,7 @@ EOF
 ```
 
 For the desktop icon to be functional, each user needs to enable it using:
-```
+```bash
 chmod +x "${HOME}/Desktop/filesystem.desktop"
 gio set "${HOME}/Desktop/filesystem.desktop" "metadata::trusted" yes
 ```

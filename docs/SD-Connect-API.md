@@ -137,7 +137,7 @@ The objects endpoint returns list of objects in a given project container.
 /project/{projectName}/container/{containerName}/objects
 ```
 #### Response
-```
+```json
 [
     {
         "name": "file.txt",

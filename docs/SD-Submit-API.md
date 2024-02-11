@@ -28,7 +28,7 @@ The `/metadata/datasets` endpoint is used to display the list of datasets the gi
 GET /metadata/datasets
 ```
 ### Response
-```
+```json
 [
     "dataset_1",
     "dataset_2"
@@ -50,7 +50,7 @@ GET /metadata/datasets/repository.org/dataset/files?scheme=https
 ```
 
 ### Response
-```
+```json
 [
     {
         "fileId": "urn:file:1",
