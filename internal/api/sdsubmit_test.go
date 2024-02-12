@@ -105,7 +105,7 @@ func Test_SDSubmit_GetFiles_Fail(t *testing.T) {
 
 func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 	// Mock
-	testFile := []file{
+	testFile := []fileInfo{
 		{
 			FileID:                "file1",
 			DatasetID:             "dataset1",
@@ -114,7 +114,7 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 			FileSize:              10,
 			DecryptedFileSize:     10,
 			DecryptedFileChecksum: "abc123",
-			FileStatus:            "READY",
+			Status:                "READY",
 		},
 		{
 			FileID:                "file2",
@@ -124,7 +124,7 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 			FileSize:              10,
 			DecryptedFileSize:     10,
 			DecryptedFileChecksum: "abc123",
-			FileStatus:            "PENDING",
+			Status:                "PENDING",
 		},
 	}
 	testFileJSON, _ := json.Marshal(testFile)
@@ -157,7 +157,7 @@ func Test_SDSubmit_GetFiles_Pass(t *testing.T) {
 
 func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 	// Mock
-	testFile := []file{
+	testFile := []fileInfo{
 		{
 			FileID:                "file1",
 			DatasetID:             "dataset1",
@@ -166,7 +166,7 @@ func Test_SDSubmit_GetFiles_Split_Pass(t *testing.T) {
 			FileSize:              20,
 			DecryptedFileSize:     20,
 			DecryptedFileChecksum: "if6ox",
-			FileStatus:            "ready",
+			Status:                "ready",
 		},
 	}
 	testFileJSON, _ := json.Marshal(testFile)
@@ -414,14 +414,6 @@ func Test_SDSubmit_ValidateLogin_Pass_None(t *testing.T) {
 
 	if len(s.datasets) > 0 {
 		t.Errorf("Function failed, expected no datasets, received=%d", len(s.datasets))
-	}
-}
-
-func Test_SDSubmit_LevelCount(t *testing.T) {
-	s := sdSubmitInfo{}
-	lc := s.levelCount()
-	if lc != 2 {
-		t.Errorf("Function failed, expected=%d, received=%d", 2, lc)
 	}
 }
 

@@ -532,7 +532,6 @@ func TestPopulateFilesystem(t *testing.T) {
 	origNthLevel := api.GetNthLevel
 	origRemoveInvalidChars := removeInvalidChars
 	origCreateObjects := createObjects
-	origLevelCount := api.LevelCount
 
 	defer func() {
 		newNode = origNewNode
@@ -540,7 +539,6 @@ func TestPopulateFilesystem(t *testing.T) {
 		api.GetNthLevel = origNthLevel
 		removeInvalidChars = origRemoveInvalidChars
 		createObjects = origCreateObjects
-		api.LevelCount = origLevelCount
 	}()
 
 	newNode = func(ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
@@ -612,16 +610,6 @@ func TestPopulateFilesystem(t *testing.T) {
 				j.fs.root.chld[repository].chld[project].chld[container].chld[key] = value
 			}
 		}
-	}
-	api.LevelCount = func(rep string) int {
-		if rep == rep1 {
-			return 3
-		} else if rep == rep2 {
-			return 2
-		}
-		t.Fatalf("api.LevelCount() received invalid repository %s", rep)
-
-		return 0
 	}
 
 	fs.PopulateFilesystem(nil)
