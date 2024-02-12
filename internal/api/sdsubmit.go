@@ -94,12 +94,15 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	var metadata []Metadata
 	for i := range files {
 		if strings.EqualFold(files[i].Status, "ready") {
-			filePath := strings.SplitN(files[i].FilePath, "/", 2)[1]
-			md := Metadata{Name: filePath, Bytes: files[i].DecryptedFileSize}
+			filePath := strings.SplitN(files[i].FilePath, "/", 2)
+			if len(filePath) != 2 {
+				return nil, fmt.Errorf("Invalid file path: %s", files[i].FilePath)
+			}
+			md := Metadata{Name: filePath[1], Bytes: files[i].DecryptedFileSize}
 			metadata = append(metadata, md)
 
 			s.lock.Lock()
-			s.fileIDs[origDataset+"_"+filePath] = url.PathEscape(files[i].FileID)
+			s.fileIDs[origDataset+"_"+filePath[1]] = url.PathEscape(files[i].FileID)
 			s.lock.Unlock()
 		}
 	}

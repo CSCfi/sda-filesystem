@@ -116,8 +116,8 @@ var testFuse = `{
             ]
         },
         {
-            "name": "Rep2",
-            "nameSafe": "Rep2",
+            "name": "` + api.SDSubmit + `",
+            "nameSafe": "` + api.SDSubmit + `",
             "size": -5,
             "children": [
                 {
@@ -217,7 +217,7 @@ var testObjects = `{
 }`
 
 const rep1 = "Rep1"
-const rep2 = "Rep2"
+const rep2 = api.SDSubmit
 
 type jsonNode struct {
 	Name     string      `json:"name"`
@@ -437,7 +437,7 @@ func TestRefreshFilesystem(t *testing.T) {
 
 func TestClearPath_Fail(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
-	fs.root.chld[api.SDConnect] = fs.root.chld["Rep1"]
+	fs.root.chld[api.SDConnect] = fs.root.chld[rep1]
 	fs.root.chld[api.SDConnect].originalName = api.SDConnect
 
 	origNthLevel := api.GetNthLevel
@@ -453,7 +453,7 @@ func TestClearPath_Fail(t *testing.T) {
 			"INVALID_PATH", "not/a/valid/path", "Path not/a/valid/path is invalid",
 		},
 		{
-			"ONLY_SDCONNECT", "Rep2/example.com/tiedosto", "Clearing cache only enabled for " + api.SDConnect,
+			"ONLY_SDCONNECT", rep2 + "/example.com/tiedosto", "Clearing cache only enabled for " + api.SDConnect,
 		},
 		{
 			"PATH_TOO_SHORT", api.SDConnect + "/child_1", "Path needs to include a bucket",
@@ -476,7 +476,7 @@ func TestClearPath_Fail(t *testing.T) {
 
 func TestClearPath_Connect(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
-	fs.root.chld[api.SDConnect] = fs.root.chld["Rep1"]
+	fs.root.chld[api.SDConnect] = fs.root.chld[rep1]
 	fs.root.chld[api.SDConnect].originalName = api.SDConnect
 	path := api.SDConnect + "/child_1/kansio"
 
@@ -502,7 +502,7 @@ func TestClearPath_Connect(t *testing.T) {
 
 	diff := int64(105)
 	origFs := getTestFuse(t, false, 5)
-	origFs.root.chld[api.SDConnect] = origFs.root.chld["Rep1"]
+	origFs.root.chld[api.SDConnect] = origFs.root.chld[rep1]
 	origFs.root.chld[api.SDConnect].originalName = api.SDConnect
 	origFs.root.chld[api.SDConnect].stat.Size += diff
 	origFs.root.chld[api.SDConnect].chld["child_1"].stat.Size += diff
@@ -581,7 +581,7 @@ func TestPopulateFilesystem(t *testing.T) {
 
 		for j := range jobs {
 			nodes := strings.Split(j.containerPath, "/")
-			if len(nodes) != 3 {
+			if len(nodes) < 2 {
 				t.Errorf("Invalid containerPath %s", j.containerPath)
 
 				continue
@@ -589,7 +589,6 @@ func TestPopulateFilesystem(t *testing.T) {
 
 			repository := nodes[0]
 			project := nodes[1]
-			container := nodes[2]
 
 			if _, ok := origFs.root.chld[repository]; !ok {
 				t.Errorf("Invalid repository %s in containerInfo", repository)
@@ -601,12 +600,24 @@ func TestPopulateFilesystem(t *testing.T) {
 
 				continue
 			}
-			if _, ok := origFs.root.chld[repository].chld[project].chld[container]; !ok {
+
+			origPr := origFs.root.chld[repository].chld[project]
+			if len(nodes) == 2 {
+				for key, value := range origPr.chld {
+					j.fs.root.chld[repository].chld[project].chld[key] = value
+				}
+
+				continue
+			}
+
+			container := nodes[2]
+			if _, ok := origPr.chld[container]; !ok {
 				t.Errorf("Invalid container %s in containerInfo", repository+"/"+project+"/"+container)
 
 				continue
 			}
-			for key, value := range origFs.root.chld[repository].chld[project].chld[container].chld {
+
+			for key, value := range origPr.chld[container].chld {
 				j.fs.root.chld[repository].chld[project].chld[container].chld[key] = value
 			}
 		}
@@ -744,7 +755,7 @@ func TestCreateObjects_Nth_Level_Fail(t *testing.T) {
 	jobs := make(chan containerInfo, 1)
 	wg.Add(1)
 	go createObjects(0, jobs, &wg, nil)
-	jobs <- containerInfo{containerPath: "Rep1/child_2/dir", timestamp: fuse.Timespec{}, fs: fs}
+	jobs <- containerInfo{containerPath: rep1 + "/child_2/dir", timestamp: fuse.Timespec{}, fs: fs}
 	close(jobs)
 	wg.Wait()
 
@@ -830,25 +841,25 @@ func TestLookupNode(t *testing.T) {
 		origPath       []string
 	}{
 		{
-			"OK_1", "Rep1/child_2/_folder/",
-			fs.root.chld["Rep1"].chld["child_2"].chld["_folder"],
-			[]string{"Rep1", "child_2", "+folder"},
+			"OK_1", rep1 + "/child_2/_folder/",
+			fs.root.chld[rep1].chld["child_2"].chld["_folder"],
+			[]string{rep1, "child_2", "+folder"},
 		},
 		{
-			"OK_2", "Rep1/child_1///dir_////folder",
-			fs.root.chld["Rep1"].chld["child_1"].chld["dir_"].chld["folder"],
-			[]string{"Rep1", "child+1", "dir+", "folder"},
+			"OK_2", rep1 + "/child_1///dir_////folder",
+			fs.root.chld[rep1].chld["child_1"].chld["dir_"].chld["folder"],
+			[]string{rep1, "child+1", "dir+", "folder"},
 		},
 		{
-			"OK_3", "Rep2/example.com/tiedosto",
-			fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"],
-			[]string{"Rep2", "https://example.com", "tiedosto"},
+			"OK_3", rep2 + "/example.com/tiedosto",
+			fs.root.chld[rep2].chld["example.com"].chld["tiedosto"],
+			[]string{rep2, "https://example.com", "tiedosto"},
 		},
 		{
 			"NOT_FOUND_1", "Rep4/child_2/folder/file_3", nil, []string{""},
 		},
 		{
-			"NOT_FOUND_2", "Rep1/child_1//dir_/folder///another_folder", nil, []string{""},
+			"NOT_FOUND_2", rep1 + "/child_1//dir_/folder///another_folder", nil, []string{""},
 		},
 	}
 
@@ -880,9 +891,9 @@ func TestGetNodeChildren(t *testing.T) {
 		path     string
 		children []string
 	}{
-		{"Rep1/child_1", []string{"dir+", "kansio"}},
-		{"Rep1/child_2", []string{"+folder", "dir"}},
-		{"Rep1/child_4", nil},
+		{rep1 + "/child_1", []string{"dir+", "kansio"}},
+		{rep1 + "/child_2", []string{"+folder", "dir"}},
+		{rep1 + "/child_4", nil},
 	}
 
 	for i, tt := range tests {
