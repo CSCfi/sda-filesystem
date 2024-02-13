@@ -412,13 +412,6 @@ func Test_SDConnect_GetNthLevel_Projects(t *testing.T) {
 	}
 }
 
-func Test_SDConnect_LevelCount(t *testing.T) {
-	sd := sdConnectInfo{}
-	if lc := sd.levelCount(); lc != 3 {
-		t.Errorf("Function failed, expected=3, received=%d", lc)
-	}
-}
-
 func Test_SDConnect_CalculateDecryptedSize(t *testing.T) {
 	// Fail min size
 	s := calculateDecryptedSize(5, 5)

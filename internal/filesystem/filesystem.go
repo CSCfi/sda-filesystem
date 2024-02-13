@@ -286,47 +286,49 @@ func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
 				defer wg.Done()
 				defer CheckPanic()
 
-				prntNode := fs.root.chld[repository].chld[project]
-
+				var err error
+				var containers []api.Metadata
 				projectPath := repository + "/" + project
-				logs.Debugf("Fetching data for %s", filepath.FromSlash(projectPath))
-				containers, err := api.GetNthLevel(repository, projectPath, prntNode.originalName)
 
-				if err != nil {
-					logs.Error(err)
+				if repository == api.SDSubmit {
+					// Project, container, and object are terms used in SD Connect.
+					// SD Apply, on the other hand, uses datasets and files.
+					// Since fetching files for a dataset requires only one http request,
+					// one can think of datasets as equivalent to containers.
+					// This means that projects do not have a corresponding level in SD Apply, so here we skip
+					// filling in SD Apply while filling in projects.
+					containers = []api.Metadata{{Name: projectPath}}
+				} else {
+					logs.Debugf("Fetching data for %s", filepath.FromSlash(projectPath))
+					prntNode := fs.root.chld[repository].chld[project]
+					containers, err = api.GetNthLevel(repository, projectPath, prntNode.originalName)
 
-					return
-				}
+					if err != nil {
+						logs.Error(err)
 
-				for i, c := range containers {
-					var mode uint32 = fuse.S_IFREG | sRDONLY
-					nodeType := "file"
-
-					if api.LevelCount(repository) > 2 {
-						mode = fuse.S_IFDIR | sRDONLY
-						nodeType = "directory"
+						return
 					}
 
-					containerSafe := removeInvalidChars(c.Name)
-					containerPath := projectPath + "/" + containerSafe
+					for i, c := range containers {
+						var mode uint32 = fuse.S_IFDIR | sRDONLY
 
-					// Create a file or a container (depending on repository)
-					logs.Debugf("Creating %s %s", nodeType, filepath.FromSlash(containerPath))
-					_, containerSafe = fs.makeNode(prntNode, c, containerPath, mode, timestamp)
-					containers[i].Name = projectPath + "/" + containerSafe
+						containerSafe := removeInvalidChars(c.Name)
+						containerPath := projectPath + "/" + containerSafe
+
+						// Create a file or a container (depending on repository)
+						logs.Debugf("Creating directory %s", filepath.FromSlash(containerPath))
+						_, containerSafe = fs.makeNode(prntNode, c, containerPath, mode, timestamp)
+						containers[i].Name = projectPath + "/" + containerSafe
+					}
 				}
 
-				if api.LevelCount(repository) > 2 {
-					mapLock.Lock()
-					forChannel[project] = containers // LOCK
-					numJobs += len(containers)       // LOCK
-					mapLock.Unlock()
+				mapLock.Lock()
+				forChannel[projectPath] = containers // LOCK
+				numJobs += len(containers)           // LOCK
+				mapLock.Unlock()
 
-					if send != nil {
-						send(repository, project, len(containers))
-					}
-				} else if send != nil {
-					send(repository, project, 0)
+				if send != nil {
+					send(repository, project, len(containers))
 				}
 			}(rep, pr)
 		}
@@ -390,7 +392,7 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 		fs := j.fs
 		timestamp := j.timestamp
 
-		logs.Debugf("Fetching data for directory %s", filepath.FromSlash(containerPath))
+		logs.Debugf("Fetching data for %s", filepath.FromSlash(containerPath))
 
 		c := fs.getNode(containerPath, ^uint64(0))
 		if c.node == nil {
@@ -399,7 +401,7 @@ var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, 
 			continue
 		}
 
-		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1], c.path[2])
+		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1:]...)
 		if err != nil {
 			logs.Error(err)
 

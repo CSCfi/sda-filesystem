@@ -36,16 +36,19 @@ type sdSubmitInfo struct {
 	datasets map[string]int
 }
 
-type file struct {
+type fileInfo struct {
 	FileID                    string `json:"fileId"`
 	DatasetID                 string `json:"datasetId"`
 	DisplayFileName           string `json:"displayFileName"`
+	FilePath                  string `json:"filePath"`
 	FileName                  string `json:"fileName"`
 	FileSize                  int64  `json:"fileSize"`
 	DecryptedFileSize         int64  `json:"decryptedFileSize"`
 	DecryptedFileChecksum     string `json:"decryptedFileChecksum"`
 	DecryptedFileChecksumType string `json:"decryptedFileChecksumType"`
-	FileStatus                string `json:"fileStatus"`
+	Status                    string `json:"fileStatus"`
+	CreatedAt                 string `json:"createdAt"`
+	LastModified              string `json:"lastModified"`
 }
 
 func init() {
@@ -81,7 +84,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	}
 
 	// Request files
-	var files []file
+	var files []fileInfo
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
 	err := MakeRequest(path, query, nil, nil, &files)
 	if err != nil {
@@ -90,12 +93,16 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 
 	var metadata []Metadata
 	for i := range files {
-		if strings.EqualFold(files[i].FileStatus, "ready") {
-			md := Metadata{Name: files[i].DisplayFileName, Bytes: files[i].DecryptedFileSize}
+		if strings.EqualFold(files[i].Status, "ready") {
+			filePath := strings.SplitN(files[i].FilePath, "/", 2)
+			if len(filePath) != 2 {
+				return nil, fmt.Errorf("Invalid file path: %s", files[i].FilePath)
+			}
+			md := Metadata{Name: filePath[1], Bytes: files[i].DecryptedFileSize}
 			metadata = append(metadata, md)
 
 			s.lock.Lock()
-			s.fileIDs[origDataset+"_"+files[i].DisplayFileName] = url.PathEscape(files[i].FileID)
+			s.fileIDs[origDataset+"_"+filePath[1]] = url.PathEscape(files[i].FileID)
 			s.lock.Unlock()
 		}
 	}
@@ -168,10 +175,6 @@ func (s *sdSubmitInfo) authenticate(_ ...string) error {
 	return nil
 }
 
-func (s *sdSubmitInfo) levelCount() int {
-	return 2
-}
-
 func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, error) {
 	switch len(nodes) {
 	case 0:
@@ -213,7 +216,7 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer any, start, end int64
 	}
 
 	// Request data
-	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+nodes[1]]
+	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+strings.Join(nodes[1:], "/")]
 
 	return MakeRequest(path, query, nil, nil, buffer)
 }

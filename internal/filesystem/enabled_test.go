@@ -20,10 +20,10 @@ func TestOpen(t *testing.T) {
 		node           *node
 		errc           int
 	}{
-		{"OK_1", "Rep1/child_2/_folder/test", fs.root.chld["Rep1"].chld["child_2"].chld["_folder"].chld["test"], 0},
-		{"OK_2", "/Rep2/example.com/tiedosto", fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"], 0},
-		{"NOT_FOUND", "Rep2/example.com/file", nil, -fuse.ENOENT},
-		{"NOT_FILE", "Rep1/child_1/dir_", nil, -fuse.EISDIR},
+		{"OK_1", rep1 + "/child_2/_folder/test", fs.root.chld[rep1].chld["child_2"].chld["_folder"].chld["test"], 0},
+		{"OK_2", "/" + rep2 + "/example.com/tiedosto", fs.root.chld[rep2].chld["example.com"].chld["tiedosto"], 0},
+		{"NOT_FOUND", rep2 + "/example.com/file", nil, -fuse.ENOENT},
+		{"NOT_FILE", rep1 + "/child_1/dir_", nil, -fuse.EISDIR},
 	}
 
 	origIsValidOpen := isValidOpen
@@ -86,12 +86,12 @@ func TestOpen_Decryption_Check(t *testing.T) {
 	}{
 		{
 			"OK_1", []string{api.SDConnect, "child_2", "_folder", "test"},
-			fs.root.chld["Rep1"].chld["child_2"].chld["_folder"].chld["test"].stat.Ino,
+			fs.root.chld[rep1].chld["child_2"].chld["_folder"].chld["test"].stat.Ino,
 			[]int64{444, 244, 93, 90},
 		},
 		{
 			"OK_2", []string{api.SDConnect, "child_1", "kansio", "file_3"},
-			fs.root.chld["Rep1"].chld["child_1"].chld["kansio"].chld["file_3"].stat.Ino,
+			fs.root.chld[rep1].chld["child_1"].chld["kansio"].chld["file_3"].stat.Ino,
 			[]int64{401, 185, 73, 5},
 		},
 	}
@@ -118,7 +118,7 @@ func TestOpen_Decryption_Check(t *testing.T) {
 			}
 
 			fs := getTestFuse(t, false, 5)
-			fs.root.chld[api.SDConnect] = fs.root.chld["Rep1"]
+			fs.root.chld[api.SDConnect] = fs.root.chld[rep1]
 			fs.root.chld[api.SDConnect].originalName = api.SDConnect
 
 			path := strings.Join(tt.nodes, "/")
@@ -155,11 +155,11 @@ func TestOpen_Decryption_Check_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_500", []string{api.SDConnect, "child_2", "_folder", "file_1"}, false,
-			fs.root.chld["Rep1"].chld["child_2"].chld["_folder"].chld["file_1"].stat.Ino, -fuse.EIO, 500,
+			fs.root.chld[rep1].chld["child_2"].chld["_folder"].chld["file_1"].stat.Ino, -fuse.EIO, 500,
 		},
 		{
 			"FAIL_451", []string{api.SDConnect, "child_1", "kansio", "file_2"}, true,
-			fs.root.chld["Rep1"].chld["child_1"].chld["kansio"].chld["file_2"].stat.Ino, -fuse.EACCES, 451,
+			fs.root.chld[rep1].chld["child_1"].chld["kansio"].chld["file_2"].stat.Ino, -fuse.EACCES, 451,
 		},
 	}
 
@@ -179,7 +179,7 @@ func TestOpen_Decryption_Check_Error(t *testing.T) {
 			}
 
 			fs := getTestFuse(t, false, 5)
-			fs.root.chld[api.SDConnect] = fs.root.chld["Rep1"]
+			fs.root.chld[api.SDConnect] = fs.root.chld[rep1]
 			fs.root.chld[api.SDConnect].originalName = api.SDConnect
 
 			path := strings.Join(tt.nodes, "/")
@@ -213,10 +213,10 @@ func TestOpendir(t *testing.T) {
 		node           *node
 		errc           int
 	}{
-		{"OK_1", "/Rep1/child_1/kansio", fs.root.chld["Rep1"].chld["child_1"].chld["kansio"], 0},
-		{"OK_2", "Rep2/example.com/", fs.root.chld["Rep2"].chld["example.com"], 0},
-		{"NOT_FOUND", "Rep1/child_3", nil, -fuse.ENOENT},
-		{"NOT_DIR", "Rep1/child_2/_folder/file_1", nil, -fuse.ENOTDIR},
+		{"OK_1", "/" + rep1 + "/child_1/kansio", fs.root.chld[rep1].chld["child_1"].chld["kansio"], 0},
+		{"OK_2", rep2 + "/example.com/", fs.root.chld[rep2].chld["example.com"], 0},
+		{"NOT_FOUND", rep1 + "/child_3", nil, -fuse.ENOENT},
+		{"NOT_DIR", rep1 + "/child_2/_folder/file_1", nil, -fuse.ENOTDIR},
 	}
 
 	origUpdateAttributes := api.UpdateAttributes
@@ -250,10 +250,10 @@ func TestOpendir(t *testing.T) {
 func TestRelease(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
 
-	node := fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"]
+	node := fs.root.chld[rep2].chld["example.com"].chld["tiedosto"]
 	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
 	node.opencnt = 2
-	ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino)
+	ret := fs.Release(rep2+"/example.com/tiedosto", node.stat.Ino)
 	switch {
 	case ret != 0:
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
@@ -263,7 +263,7 @@ func TestRelease(t *testing.T) {
 		t.Errorf("Node should not have been removed from openmap")
 	}
 
-	ret = fs.Release("Rep2/example.com/tiedosto", node.stat.Ino)
+	ret = fs.Release(rep2+"/example.com/tiedosto", node.stat.Ino)
 
 	switch {
 	case ret != 0:
@@ -274,7 +274,7 @@ func TestRelease(t *testing.T) {
 		t.Errorf("Node should have been removed from openmap")
 	}
 
-	if ret := fs.Release("Rep2/example.com/tiedosto", node.stat.Ino); ret != -fuse.ENOENT {
+	if ret := fs.Release(rep2+"/example.com/tiedosto", node.stat.Ino); ret != -fuse.ENOENT {
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
 	}
 }
@@ -282,10 +282,10 @@ func TestRelease(t *testing.T) {
 func TestReleaseDir(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
 
-	node := fs.root.chld["Rep1"].chld["child_1"].chld["kansio"]
+	node := fs.root.chld[rep1].chld["child_1"].chld["kansio"]
 	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
 	node.opencnt = 2
-	ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino)
+	ret := fs.Releasedir(rep1+"/child_1/kansio", node.stat.Ino)
 	switch {
 	case ret != 0:
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
@@ -295,7 +295,7 @@ func TestReleaseDir(t *testing.T) {
 		t.Errorf("Node should not have been removed from openmap")
 	}
 
-	ret = fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino)
+	ret = fs.Releasedir(rep1+"/child_1/kansio", node.stat.Ino)
 
 	switch {
 	case ret != 0:
@@ -306,7 +306,7 @@ func TestReleaseDir(t *testing.T) {
 		t.Errorf("Node should have been removed from openmap")
 	}
 
-	if ret := fs.Releasedir("Rep1/child_1/kansio", node.stat.Ino); ret != -fuse.ENOENT {
+	if ret := fs.Releasedir(rep1+"/child_1/kansio", node.stat.Ino); ret != -fuse.ENOENT {
 		t.Errorf("Return value incorrect. Expected=0, received=%d", ret)
 	}
 }
@@ -314,13 +314,13 @@ func TestReleaseDir(t *testing.T) {
 func TestGetattr(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
 
-	node := fs.root.chld["Rep2"].chld["example.com"]
+	node := fs.root.chld[rep2].chld["example.com"]
 	node.stat.Atim = fuse.Now()
 	node.stat.Uid = 4
 	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
 
 	var stat fuse.Stat_t
-	errc := fs.Getattr("Rep2/example.com", &stat, node.stat.Ino)
+	errc := fs.Getattr(rep2+"/example.com", &stat, node.stat.Ino)
 
 	if errc != 0 {
 		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
@@ -328,7 +328,7 @@ func TestGetattr(t *testing.T) {
 		t.Errorf("Stat defined incorrectly\nExpected=%v\nReceived=%v", node.stat, stat)
 	}
 
-	errc = fs.Getattr("Rep2/example.com/does_not_exist", &stat, ^uint64(0))
+	errc = fs.Getattr(rep2+"/example.com/does_not_exist", &stat, ^uint64(0))
 
 	if errc != -fuse.ENOENT {
 		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
@@ -348,22 +348,22 @@ func TestRead(t *testing.T) {
 		ret, len           int
 	}{
 		{
-			"OK_1", "/Rep1/child_1/kansio/file_1",
+			"OK_1", "/" + rep1 + "/child_1/kansio/file_1",
 			"All work and no play makes Jack a dull boy", "All work a",
-			fs.root.chld["Rep1"].chld["child_1"].chld["kansio"].chld["file_1"],
+			fs.root.chld[rep1].chld["child_1"].chld["kansio"].chld["file_1"],
 			0, 10, 10,
 		},
 		{
-			"OK_2", "Rep2/example.com/tiedosto",
+			"OK_2", rep2 + "/example.com/tiedosto",
 			"I am very important data. Nice to meet you.",
 			"very important data. Nice to meet you.",
-			fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"],
+			fs.root.chld[rep2].chld["example.com"].chld["tiedosto"],
 			5, 38, 100,
 		},
 		{
-			"OK_3", "Rep1/child_2/_folder/test",
+			"OK_3", rep1 + "/child_2/_folder/test",
 			"This data is too short", "",
-			fs.root.chld["Rep1"].chld["child_2"].chld["_folder"].chld["test"],
+			fs.root.chld[rep1].chld["child_2"].chld["_folder"].chld["test"],
 			50, 0, 25,
 		},
 	}
@@ -404,15 +404,15 @@ func TestRead_Error(t *testing.T) {
 		denied         bool
 	}{
 		{
-			"NOT_FOUND", "Rep1/child_4/file", nil, -fuse.ENOENT, false,
+			"NOT_FOUND", rep1 + "/child_4/file", nil, -fuse.ENOENT, false,
 		},
 		{
-			"DOWNLOAD_ERROR", "Rep2/example.com/tiedosto",
-			fs.root.chld["Rep2"].chld["example.com"].chld["tiedosto"], -fuse.EIO, false,
+			"DOWNLOAD_ERROR", rep2 + "/example.com/tiedosto",
+			fs.root.chld[rep2].chld["example.com"].chld["tiedosto"], -fuse.EIO, false,
 		},
 		{
-			"NO_ACCESS", "Rep1/child_2/_folder/file_1",
-			fs.root.chld["Rep1"].chld["child_2"].chld["_folder"].chld["file_1"], -fuse.EACCES, true,
+			"NO_ACCESS", rep1 + "/child_2/_folder/file_1",
+			fs.root.chld[rep1].chld["child_2"].chld["_folder"].chld["file_1"], -fuse.EACCES, true,
 		},
 	}
 
@@ -444,7 +444,7 @@ func TestRead_Error(t *testing.T) {
 func TestReaddir(t *testing.T) {
 	fs := getTestFuse(t, false, 5)
 
-	node := fs.root.chld["Rep1"]
+	node := fs.root.chld[rep1]
 	fs.openmap[node.stat.Ino] = nodeAndPath{node: node}
 
 	fill := func(name string, stat *fuse.Stat_t, ofst int64) bool {
@@ -473,7 +473,7 @@ func TestReaddir(t *testing.T) {
 		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)
 	}
 
-	errc = fs.Readdir("Rep2/dummy", fill, 0, ^uint64(0))
+	errc = fs.Readdir(rep2+"/dummy", fill, 0, ^uint64(0))
 
 	if errc != -fuse.ENOENT {
 		t.Errorf("Return value incorrect. Expected=0, received=%d", errc)

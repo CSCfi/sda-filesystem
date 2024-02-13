@@ -44,7 +44,6 @@ type httpInfo struct {
 type fuseInfo interface {
 	getEnvs() error
 	authenticate(...string) error
-	levelCount() int
 	getNthLevel(string, ...string) ([]Metadata, error)
 	updateAttributes([]string, string, any) error
 	downloadData([]string, any, int64, int64) error
@@ -218,11 +217,6 @@ var Authenticate = func(rep string, auth ...string) error {
 
 func SettleRepositories() {
 	hi.preventEnable = true
-}
-
-// LevelCount returns the amount of levels repository 'rep' has
-var LevelCount = func(rep string) int {
-	return hi.repositories[rep].levelCount()
 }
 
 // makeRequest sends HTTP requests and parses the responses

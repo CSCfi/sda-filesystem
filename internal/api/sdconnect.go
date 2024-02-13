@@ -173,10 +173,6 @@ func (c *sdConnectInfo) authenticate(auth ...string) error {
 	return err
 }
 
-func (c *sdConnectInfo) levelCount() int {
-	return 3
-}
-
 func (c *sdConnectInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, error) {
 	if len(nodes) == 0 {
 		return c.projects, nil

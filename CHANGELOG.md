@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [2024.02.2] - 2024-02-13
+
+### Changed
+
+- In SD Apply, `FilePath` key is used to create subdirectories in the filesystem.
+
 ## [2024.02.1] - 2024-02-06
 
-## Added
+### Added
 
 - gitlab releases
 

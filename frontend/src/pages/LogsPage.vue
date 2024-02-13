@@ -10,7 +10,7 @@ import {
     CDataTableFooterOptions,
     CPaginationOptions,
 } from 'csc-ui/dist/types';
-import { reactive, ref, computed, onUnmounted } from 'vue';
+import { reactive, ref, watch, computed, onUnmounted } from 'vue';
 
 const logHeaders: CDataTableHeader[] = [
     { key: 'loglevel', value: 'Level', sortable: false },
@@ -21,7 +21,6 @@ const logHeaders: CDataTableHeader[] = [
 const logData = reactive<main.Log[]>([])
 const logDataTable = reactive<CDataTableData[]>([])
 const logDataTableFiltered = computed(() => logDataTable.filter(row => {
-    logsKey.value++;
     let matchedLevel: boolean = containsFilterString(row['loglevel'].value as string);
     let matchedStamp: boolean = containsFilterString(row['timestamp'].formattedValue as string);
     let matchedMessage: boolean = containsFilterString(row['message'].value as string);
@@ -53,6 +52,10 @@ EventsOn('newLogEntry', function(entry: main.Log) {
 
 EventsOn('saveLogsAndQuit', function(entry: main.Log) {
     SaveLogs(logData).then(() => Quit());
+})
+
+watch(() => logDataTableFiltered.value, () => {
+    logsKey.value++;
 })
 
 function addLogsToTable() {
