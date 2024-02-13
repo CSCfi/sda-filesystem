@@ -10,7 +10,7 @@ or download the release:
 ```bash
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=v2.2.1
+export version=2024.02.2
 wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.20-linux-amd64.zip"
 ```
 
