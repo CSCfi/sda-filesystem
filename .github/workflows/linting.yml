@@ -42,7 +42,7 @@ jobs:
           pnpm run --dir frontend build
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3.7.0
+        uses: golangci/golangci-lint-action@v3.7.1
         with:
           version: v1.51.2
           args: -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --timeout=10m
