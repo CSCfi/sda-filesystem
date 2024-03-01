@@ -2,8 +2,6 @@ module sda-filesystem
 
 go 1.21
 
-toolchain go1.22.0
-
 require (
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/dgraph-io/ristretto v0.1.1
