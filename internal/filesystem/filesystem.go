@@ -383,7 +383,7 @@ func calculateFinalSize(n *node) int64 {
 	return n.stat.Size
 }
 
-var createObjects = func(id int, jobs <-chan containerInfo, wg *sync.WaitGroup, send func(string, string, int)) {
+var createObjects = func(_ int, jobs <-chan containerInfo, wg *sync.WaitGroup, send func(string, string, int)) {
 	defer wg.Done()
 	defer CheckPanic()
 
