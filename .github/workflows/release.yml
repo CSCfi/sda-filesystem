@@ -230,7 +230,7 @@ jobs:
           choco install upx
           choco install pnpm
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v3
         if: matrix.os == 'ubuntu-20.04'
         with:
           version: 8
