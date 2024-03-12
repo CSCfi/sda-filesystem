@@ -124,7 +124,7 @@ release:
   extends: .automated-release
 
   release:
-    description: "Data Gateway fuse layer"
+    description: $(cat release_changes.md)
     assets:
       links:
         - name: go-fuse-cli-amd64-${RELEASE_VERSION} (artifactory)

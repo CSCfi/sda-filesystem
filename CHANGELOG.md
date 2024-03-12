@@ -1,8 +1,11 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
+
+## [Unreleased]
 
 ## [2024.02.2] - 2024-02-13
 
@@ -19,6 +22,12 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 ### Changed
 
 - Updated dependencies
+
+## [2024.02.0] - 2024-02-06
+
+### Changed
+
+- Chaged to calendar versioning
 
 ## [2.2.1]
 
@@ -193,3 +202,8 @@ for checking case insensitivity
 - unit tests
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
+
+[unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.2...HEAD
+[2024.02.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.1...2024.02.2
+[2024.02.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.0...2024.02.1
+[2024.02.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/releases/2024.02.0
