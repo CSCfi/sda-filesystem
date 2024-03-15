@@ -39,7 +39,8 @@ func main() {
 		Width:    800,
 		Height:   575,
 		Linux: &linux.Options{
-			Icon: build.Icon,
+			Icon:             build.Icon,
+			WebviewGpuPolicy: linux.WebviewGpuPolicyNever,
 		},
 	})
 
