@@ -7,6 +7,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- UI showing white screen in GPU flavoured VMs
+
 ## [2024.02.2] - 2024-02-13
 
 ### Changed
