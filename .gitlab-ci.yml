@@ -32,7 +32,7 @@ lint:
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
     - go mod tidy -compat=1.20 && go mod vendor
-    - golangci-lint run -v ./... --timeout 10m -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --out-format code-climate | tee gl-code-quality-report.json
+    - golangci-lint run -v ./... --allow-parallel-runners --timeout 10m -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --out-format code-climate | tee gl-code-quality-report.json
     - go fmt ./...
     - go vet ./...
   artifacts:
