@@ -7,9 +7,15 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2024.03.0] - 2024-03-20
+
 ### Fixed
 
 - UI showing white screen in GPU flavoured VMs
+
+### Changed
+
+- bump package to `2024.03.0`
 
 ## [2024.02.2] - 2024-02-13
 
@@ -207,7 +213,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.2...HEAD
+[unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.03.0...HEAD
+[2024.03.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.2...2024.03.0
 [2024.02.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.1...2024.02.2
 [2024.02.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.0...2024.02.1
 [2024.02.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/releases/2024.02.0
