@@ -7,6 +7,16 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2024.03.1] - 2024-03-20
+
+### Changed
+
+- bump version to `2024.03.1`
+
+### Fixed
+
+- github releases pipelines for GUI build
+
 ## [2024.03.0] - 2024-03-20
 
 ### Fixed
@@ -213,7 +223,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.03.0...HEAD
+[unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.03.1...HEAD
+[2024.03.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.03.0...2024.03.1
 [2024.03.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.2...2024.03.0
 [2024.02.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.1...2024.02.2
 [2024.02.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.02.0...2024.02.1
