@@ -58,7 +58,7 @@ sudo mkdir -p /opt/airlock-deploy
 cd /opt/airlock-deploy
 sudo wget "${airlock_client}" > /dev/null 2>&1
 
-sudo unzip -qq go-airlock-cli-golang1.20-linux-amd64.zip
+sudo unzip -qq go-airlock-cli-linux-amd64.zip
 
 sudo mv "/opt/airlock-deploy/${airlock_client}" /usr/bin/airlock-client
 sudo chmod 755 /usr/bin/airlock-client

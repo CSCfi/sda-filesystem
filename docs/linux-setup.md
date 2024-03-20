@@ -10,13 +10,13 @@ or download the release:
 ```bash
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=2024.03.0
-wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-golang1.20-linux-amd64.zip"
+export version=2024.03.1
+wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-linux-amd64.zip"
 ```
 
 Install the software:
 ```bash
-sudo unzip -qq go-fuse-gui-golang1.20-linux-amd64.zip
+sudo unzip -qq go-fuse-gui-linux-amd64.zip
 sudo mv /etc/sda-fuse/data-gateway /etc/sda-fuse/data-gateway 
 sudo chmod 755 /etc/sda-fuse/data-gateway 
 sudo ln -s /etc/sda-fuse/data-gateway  /usr/bin/data-gateway 

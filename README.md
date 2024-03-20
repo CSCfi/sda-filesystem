@@ -19,7 +19,7 @@ Binaries are built on each release for all supported Operating Systems.
 
 ### Requirements
 
-Go version 1.20
+Go version 1.21
 
 Set these environment variables before running the application:
 - `FS_SD_CONNECT_API` - API for SD-Connect
