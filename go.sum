@@ -57,6 +57,8 @@ github.com/mattn/go-isatty v0.0.19 h1:JITubQf0MOLdlGRuRq+jtsDlekdYPia9ZFsB8h/APP
 github.com/mattn/go-isatty v0.0.19/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/neicnordic/crypt4gh v1.9.1 h1:NKeOmsZ1/0xDpLvBDjN8Ltoh3ODbLB+NeKulDaNo4Oc=
 github.com/neicnordic/crypt4gh v1.9.1/go.mod h1:C8jHyUkt3bnQg0EwdRRswzvLXfu4dyLQOPARDIQTU24=
+github.com/neicnordic/crypt4gh v1.10.0 h1:7G++KTSnKM0lGJQREHA0qR0pUAc4sdhnb2+5n9hqFw8=
+github.com/neicnordic/crypt4gh v1.10.0/go.mod h1:YTpSmA/avBJojbwGSlWVs5Gtc4D0kzdFomCV9kIIXPw=
 github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 h1:KoWmjvw+nsYOo29YJK9vDA65RGE3NrOnUtO7a+RF9HU=
 github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8/go.mod h1:HKlIX3XHQyzLZPlr7++PzdhaXEj94dEiJgZDTsxEqUI=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
