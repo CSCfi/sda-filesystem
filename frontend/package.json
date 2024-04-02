@@ -19,7 +19,7 @@
     "@babel/types": "^7.24.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.4.2",
-    "vite": "^5.1.6",
+    "vite": "^5.2.7",
     "vue-tsc": "^2.0.0"
   }
 }
