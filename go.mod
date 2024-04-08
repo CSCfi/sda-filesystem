@@ -11,8 +11,8 @@ require (
 	github.com/wailsapp/wails/v2 v2.8.0
 	golang.org/x/crypto v0.21.0
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
-	golang.org/x/sys v0.18.0
-	golang.org/x/term v0.18.0
+	golang.org/x/sys v0.19.0
+	golang.org/x/term v0.19.0
 )
 
 require (
