@@ -9,10 +9,10 @@ require (
 	github.com/neicnordic/crypt4gh v1.10.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/wailsapp/wails/v2 v2.8.0
-	golang.org/x/crypto v0.21.0
+	golang.org/x/crypto v0.22.0
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
-	golang.org/x/sys v0.18.0
-	golang.org/x/term v0.18.0
+	golang.org/x/sys v0.19.0
+	golang.org/x/term v0.19.0
 )
 
 require (
