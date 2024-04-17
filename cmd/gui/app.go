@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"time"
 
 	"sda-filesystem/internal/airlock"
@@ -17,7 +18,6 @@ import (
 	"sda-filesystem/internal/mountpoint"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/exp/slices"
 )
 
 // App struct
