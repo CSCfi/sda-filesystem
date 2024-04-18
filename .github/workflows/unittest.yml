@@ -8,8 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.21"]
-        nodejs-version: ["18"]
+        go-version: ["1.22"]
+        nodejs-version: ["20"]
     steps:
       - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5

@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ["1.21"]
-        nodejs-version: ["18"]
+        go: ["1.22"]
+        nodejs-version: ["20"]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
