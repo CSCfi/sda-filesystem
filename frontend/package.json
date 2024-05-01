@@ -13,7 +13,7 @@
     "@mdi/font": "^7.4.47",
     "@mdi/js": "^7.4.47",
     "csc-ui": "^0.9.5",
-    "vue": "^3.4.21"
+    "vue": "^3.4.26"
   },
   "devDependencies": {
     "@babel/types": "^7.24.0",
