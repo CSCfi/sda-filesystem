@@ -17,8 +17,6 @@ import (
 
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
-
-	"golang.org/x/exp/maps"
 )
 
 var errExpected = errors.New("Expected error for test")
@@ -820,6 +818,10 @@ func TestDeleteFileFromCache(t *testing.T) {
 	DeleteFileFromCache(nodes, size)
 
 	if len(storage.keys) > 0 {
-		t.Fatalf("Function did not delete the entire file from cache, missed %v", maps.Keys(storage.keys))
+		missedKeys := make([]string, 0, len(storage.keys))
+		for key := range storage.keys {
+			missedKeys = append(missedKeys, key)
+		}
+		t.Fatalf("Function did not delete the entire file from cache, missed %v", missedKeys)
 	}
 }
