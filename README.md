@@ -121,6 +121,17 @@ Example run: `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in
 
 User can update the filesystem by inputting the command `update`. This requires that no files inside the filesystem are being used. Update also clears cache. As a result of this operation, new files may be added and some old ones removed.
 
+The filesystem can be also updated programatically with the `SIGUSR2` signal.
+
+To update filesystem on bash in SD Desktop:
+```bash
+# Update CLI version
+kill -s SIGUSR2 $(pgrep go-fuse)
+
+# Update GUI version
+kill -s SIGUSR2 $(pgrep sda-fuse)
+```
+
 If the user wants to update particular SD Connect files inside the filesystem, the user can input command `clear <path>`. `<path>` is the path to the file/folder that the user wishes to update. `<path>` must at least contain a bucket, i.e. `SD-Connect/project/bucket` or `SD-Connect/project/bucket/file` would be acceptable paths, but not, e.g., `SD-Connect/project`. If the user gives a path to a folder, all files inside this folder are updated but no files are added or removed. This operation clears the cache for all the neccessary files so that the new content is read from the database and sizes of these files are updated in the filesystem.
 
 ### Airlock
