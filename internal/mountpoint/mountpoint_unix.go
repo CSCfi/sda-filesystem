@@ -59,7 +59,7 @@ var CheckMountPoint = func(mount string) error {
 
 func WaitForUpdateSignal(ch chan<- []string) {
 	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGUSR1)
+	signal.Notify(s, syscall.SIGUSR2)
 	for {
 		<-s
 		ch <- []string{"update"}
