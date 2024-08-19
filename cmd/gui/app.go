@@ -73,7 +73,7 @@ func (a *App) Panic() {
 	}
 	result, err := wailsruntime.MessageDialog(a.ctx, options)
 	if err != nil {
-		logs.Error(fmt.Errorf("Dialog gave an error, could not respond to user decision: %w", err))
+		logs.Error(fmt.Errorf("dialog gave an error, could not respond to user decision: %w", err))
 	} else if result == quitButton {
 		wailsruntime.EventsEmit(a.ctx, "saveLogsAndQuit")
 	}
@@ -101,21 +101,21 @@ func (a *App) InitializeAPI() error {
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Errorf("Required environmental variables missing")
+		return errors.New("required environmental variables missing")
 	}
 
 	err = api.InitializeCache()
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Errorf("Initializing cache failed")
+		return errors.New("initializing cache failed")
 	}
 
 	err = api.InitializeClient()
 	if err != nil {
 		logs.Error(err)
 
-		return fmt.Errorf("Initializing HTTP client failed")
+		return errors.New("initializing HTTP client failed")
 	}
 
 	noneAvailable := true
@@ -129,7 +129,7 @@ func (a *App) InitializeAPI() error {
 	}
 
 	if noneAvailable {
-		return fmt.Errorf("No services available")
+		return errors.New("no services available")
 	}
 
 	return nil
@@ -140,7 +140,7 @@ func (a *App) Authenticate(repository string) error {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)
 
-		return fmt.Errorf(message)
+		return errors.New(message)
 	}
 
 	return nil
@@ -156,7 +156,7 @@ func (a *App) Login(username, password string) (bool, error) {
 		}
 		message, _ := logs.Wrapper(err)
 
-		return false, fmt.Errorf(message)
+		return false, errors.New(message)
 	}
 
 	logs.Info("Login successful")
@@ -328,7 +328,7 @@ func (a *App) ExportFile(file, folder string, encrypted bool) error {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)
 
-		return fmt.Errorf(message)
+		return errors.New(message)
 	}
 
 	return nil
