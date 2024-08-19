@@ -11,6 +11,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 - run `wails generate module` in renovate `postUpgradeTasks`
 
+### Changed
+
+- replacing field `skip-pkg-cache` with `skip-cache` for `golangci-lint-action` in GitHub workflow
+
 ## [2024.6.0] - 2024-06-07
 
 ### Fixed
