@@ -93,7 +93,7 @@ var Warningf = func(format string, args ...any) {
 	if signal != nil {
 		signal(logrus.WarnLevel.String(), StructureError(err))
 	} else {
-		log.Warningf(err.Error())
+		log.Warning(err.Error())
 	}
 }
 
