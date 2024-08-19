@@ -7,6 +7,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- run `wails generate module` in renovate `postUpgradeTasks`
+
 ## [2024.6.0] - 2024-06-07
 
 ### Fixed
