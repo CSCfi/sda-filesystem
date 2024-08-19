@@ -46,4 +46,4 @@ jobs:
         with:
           version: latest
           args: -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --exclude G401,G501,G107 --timeout=10m
-          skip-pkg-cache: true
+          skip-cache: true
