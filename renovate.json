@@ -1,8 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "postUpgradeTasks": {
-    "commands": ["/go/bin/wails generate module"],
-    "fileFilters": ["frontend/wailsjs/**"],
-    "executionMode": "branch"
-  }
 }
+
