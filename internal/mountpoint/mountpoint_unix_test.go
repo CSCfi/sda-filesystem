@@ -29,7 +29,7 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 
 	var tests = []struct {
 		testname, name string
-		mode           int
+		mode           uint32
 	}{
 		{"NO_READ_PERM", "folder", 0333},
 		{"NO_WRITE_PERM", "node", 0555},
