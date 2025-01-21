@@ -20,9 +20,9 @@ EventsOn('setRepositories', function(reps: {[key: string]: [boolean, boolean]}) 
 <template>
     <c-container style="width: 700px;">
         <c-login-card-title>Log in to Data Gateway</c-login-card-title>
-        <p style="width: 500px;">
-            Data Gateway gives you secure access to your data folders.
-            Select from which service you want to access data securely.
+        <p style="width: 550px;">
+            Access and import files from other SD services into SD Desktop.
+            Please select the service to access data from.
         </p>
 
         <c-loader :hide="initialized || disabled"></c-loader>
