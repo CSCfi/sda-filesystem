@@ -30,6 +30,16 @@ watch(() => selected.value, (sel: boolean) => {
     }
 })
 
+function getRepoDescription(repo: string) {
+    if (repo.toLowerCase() === "sd-apply") {
+        return ": Access requires a permit from the data controller";
+    }
+    else if (repo.toLowerCase() === "sd-connect") {
+        return ": Access data stored in SD Connect";
+    }
+    return "";
+}
+
 function success() {
     loading.value = false;
     emit("selected");
@@ -46,7 +56,10 @@ function success() {
                 @changeValue="selected = $event.target.value">
             </c-switch>
             <c-loader :hide="!loading || useForm"></c-loader>
-            <div class="repository-name">{{ props.repository.replace("-", " ") }}</div>
+            <div class="repository-name">
+                <span><b>{{ props.repository.replace("-", " ") }}</b></span>
+                <span>{{ getRepoDescription(props.repository) }}</span>
+            </div>
         </c-row>
         <div>
             <c-switch :style="{ visibility: 'hidden' }"></c-switch>
