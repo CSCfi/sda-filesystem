@@ -13,6 +13,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) Updated service description text on login card (#22)
 - replacing field `skip-pkg-cache` with `skip-cache` for `golangci-lint-action` in GitHub workflow
 
 ## [2024.6.0] - 2024-06-07
