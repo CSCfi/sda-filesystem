@@ -32,7 +32,7 @@ Optional envronment variables:
 - `CSC_USERNAME` - username for SDA-Filesystem
 - `CSC_PASSWORD` - password for SDA-Filesystem and Airlock CLI
 
-For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/local-proxy
+For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/sd-desktop/local-proxy
 
 ## Graphical User Interface
 
