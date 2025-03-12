@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,7 +14,6 @@ import (
 // We name it SD Apply as that is where the datasets access is registered
 // However the datasets are mostly in SD Submit backend
 
-const SDSubmit string = "SD-Apply"
 const SDSubmitPrnt string = "SD Apply"
 
 // This exists for unit test mocking
@@ -51,12 +49,12 @@ type fileInfo struct {
 	LastModified              string `json:"lastModified"`
 }
 
-func init() {
+/*func init() {
 	su := &submitter{fileIDs: make(map[string]string)}
 	sd := &sdSubmitInfo{submittable: su}
 	sd.fileIDs = su.fileIDs
 	allRepositories[SDSubmit] = sd
-}
+}*/
 
 //
 // Functions for submitter
@@ -64,7 +62,7 @@ func init() {
 
 func (s *submitter) getDatasets(urlStr string) ([]string, error) {
 	var datasets []string
-	err := MakeRequest(urlStr+"/metadata/datasets", nil, nil, nil, &datasets)
+	err := MakeRequest(urlStr+"/metadata/datasets", nil, nil, &datasets)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve %s datasets from API %s: %w", SDSubmitPrnt, urlStr, err)
 	}
@@ -86,7 +84,7 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 	// Request files
 	var files []fileInfo
 	path := urlStr + "/metadata/datasets/" + url.PathEscape(dataset) + "/files"
-	err := MakeRequest(path, query, nil, nil, &files)
+	err := MakeRequest(path, query, nil, &files)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve files for dataset %s: %w", fsPath, err)
 	}
@@ -116,65 +114,6 @@ func (s *submitter) getFiles(fsPath, urlStr, dataset string) ([]Metadata, error)
 // Functions for sdSubmitInfo
 //
 
-func (s *sdSubmitInfo) getEnvs() error {
-	var err error
-	urls, err := GetEnv("FS_SD_SUBMIT_API", false)
-	if err != nil {
-		return err
-	}
-	s.urls = []string{}
-	for i, u := range strings.Split(urls, ",") {
-		if err = validURL(u); err != nil {
-			return fmt.Errorf("%s API not a valid URL: %w", SDSubmitPrnt, err)
-		}
-		s.urls = append(s.urls, strings.TrimRight(u, "/"))
-		if err := testURL(s.urls[i]); err != nil {
-			return fmt.Errorf("Cannot connect to %s registered API: %w", SDSubmitPrnt, err)
-		}
-	}
-
-	return nil
-}
-
-func (s *sdSubmitInfo) authenticate(_ ...string) error {
-	s.datasets = make(map[string]int)
-	count, count500 := 0, 0
-
-	for i := range s.urls {
-		datasets, err := s.getDatasets(s.urls[i])
-		if err != nil {
-			var re *RequestError
-			if errors.As(err, &re) && re.StatusCode == 401 {
-				return fmt.Errorf("%s authorization failed", SDSubmitPrnt)
-			}
-
-			logs.Warning(err)
-			if errors.As(err, &re) && re.StatusCode == 500 {
-				count500++
-			} else {
-				count++
-			}
-		} else {
-			for j := range datasets {
-				s.datasets[datasets[j]] = i
-			}
-		}
-	}
-
-	if len(s.datasets) == 0 {
-		switch {
-		case count500 > 0:
-			return fmt.Errorf("%s is not available, please contact CSC servicedesk", SDSubmitPrnt)
-		case count > 0:
-			return fmt.Errorf("%s APIs failed to retrieve any data", SDSubmitPrnt)
-		default:
-			return fmt.Errorf("No datasets found for %s", SDSubmitPrnt)
-		}
-	}
-
-	return nil
-}
-
 func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, error) {
 	switch len(nodes) {
 	case 0:
@@ -198,11 +137,6 @@ func (s *sdSubmitInfo) getNthLevel(fsPath string, nodes ...string) ([]Metadata, 
 	}
 }
 
-// Dummy function, not needed
-func (s *sdSubmitInfo) updateAttributes(_ []string, _ string, _ any) error {
-	return nil
-}
-
 func (s *sdSubmitInfo) downloadData(nodes []string, buffer any, start, end int64) error {
 	idx, ok := s.datasets[nodes[0]]
 	if !ok {
@@ -218,5 +152,5 @@ func (s *sdSubmitInfo) downloadData(nodes []string, buffer any, start, end int64
 	// Request data
 	path := s.urls[idx] + "/files/" + s.fileIDs[nodes[0]+"_"+strings.Join(nodes[1:], "/")]
 
-	return MakeRequest(path, query, nil, nil, buffer)
+	return MakeRequest(path, query, nil, buffer)
 }

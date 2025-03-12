@@ -11,7 +11,7 @@ brew install upx
 
 Decompress the binary
 ```
-upx -d data-gateway.app/Contents/MacOS/data-gateway 
+upx -d data-gateway.app/Contents/MacOS/data-gateway
 ```
 
 ## Directory is not unmounted after program crash

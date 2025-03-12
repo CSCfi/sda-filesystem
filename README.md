@@ -6,12 +6,7 @@
 
 **This project has been rebranded as Data Gateway**
 
-Data Gateway makes use of the:
-
-- [SD Connect Proxy API](docs/SD-Connect-API.md) 
-- [SD Apply/SD Submit Download API](docs/SD-Submit-API.md) 
-
-It builds a FUSE (Filesystem in Userspace) layer and uses Airlock to export files to SD Connect. Software currently supports Linux, macOS and Windows for:
+Data Gateway builds a FUSE (Filesystem in Userspace) layer and uses Airlock to export files to SD Connect. Software currently supports Linux and macOS for:
 - [Graphical User Interface](#graphical-user-interface)
 - [Command Line Interface](#command-line-interface)
 
@@ -19,26 +14,17 @@ Binaries are built on each release for all supported Operating Systems.
 
 ### Requirements
 
-Go version 1.21
+Go version 1.23
 
 Set these environment variables before running the application:
-- `FS_SD_CONNECT_API` - API for SD-Connect
-- `FS_SD_SUBMIT_API` – a comma-separated list of APIs for SD Apply/SD Submit
-- `SDS_ACCESS_TOKEN` - a JWT for authenticating to the SD APIs
-- `FS_CERTS` - path to a file that contains certificates required by SD Connect, SD Apply/SD Submit, and SDS AAI 
+- `SDS_ACCESS_TOKEN` - a opaque token for authenticating to api gateway
 
 Optional envronment variables:
-
-- `CSC_USERNAME` - username for SDA-Filesystem
 - `CSC_PASSWORD` - password for SDA-Filesystem and Airlock CLI
-
-For test environment follow instructions at https://gitlab.ci.csc.fi/sds-dev/sd-desktop/local-proxy
 
 ## Graphical User Interface
 
 ###  Dependencies
-
-`cgofuse` and its [dependencies on different operating systems](https://github.com/billziss-gh/cgofuse#how-to-build).
 
 Install [Wails](https://wails.io/docs/gettingstarted/installation) and its dependencies.
 
@@ -56,7 +42,7 @@ To run in development mode:
 ```bash
 cd cmd/gui
 wails dev
-``` 
+```
 
 To build for production:
 ```bash
@@ -75,7 +61,7 @@ See [Linux setup](docs/linux-setup.md).
 
 ## Command Line Interface
 
-Two command line binaries are released, one for SDA-Filesystem and one for Airlock. 
+Two command line binaries are released, one for SDA-Filesystem and one for Airlock.
 
 ### SDA-Fileystem
 
@@ -87,7 +73,7 @@ go build -o ./go-fuse ./cmd/fuse/main.go
 ```
 Test install.
 ```bash
-./go-fuse -help                        
+./go-fuse -help
 Usage of ./go-fuse:
   -alsologtostderr
     	log to standard error as well as files
@@ -103,8 +89,6 @@ Usage of ./go-fuse:
     	log to standard error instead of files
   -mount string
     	Path to Data Gateway mount point
-  -project string
-    	SD Connect project if it differs from that in the VM
   -sdapply
       Connect only to SD Apply
   -stderrthreshold value
@@ -150,18 +134,12 @@ Usage of ./airlock:
     	log to standard error as well as files
   -debug
     	Enable debug prints
-  -journal-number string
-    	Journal Number/Name specific for Findata uploads
   -log_backtrace_at value
     	when logging hits line file:N, emit a stack trace
   -log_dir string
     	If non-empty, write log files in this directory
   -logtostderr
     	log to standard error instead of files
-  -original-file string
-    	Filename of original unecrypted file when uploading pre-encrypted file from Findata vm
-  -project string
-    	SD Connect project if it differs from that in the VM
   -quiet
     	Print only errors
   -segment-size int
@@ -172,7 +150,7 @@ Usage of ./airlock:
     	log level for V logs
   -vmodule value
     	comma-separated list of pattern=N settings for file-filtered logging
-``` 
+```
 
 Example run: `./airlock username ExampleBucket ExampleFile` will export file `ExampleFile` to bucket `ExampleBucket`.
 
@@ -184,5 +162,3 @@ See [troubleshooting](docs/troubleshooting.md) for fixes to known issues.
 Data Gateway is released under `MIT`, see [LICENSE](LICENSE).
 
 [Wails](https://wails.io) is released under [MIT](https://github.com/wailsapp/wails/blob/master/LICENSE)
-
-[CgoFuse](https://github.com/billziss-gh/cgofuse) is released under [MIT](https://github.com/billziss-gh/cgofuse/blob/master/LICENSE.txt)

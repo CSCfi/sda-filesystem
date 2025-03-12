@@ -14,6 +14,7 @@ var signal func(string, []string)
 var log *logrus.Logger
 
 var levelMap = map[string]logrus.Level{
+	logrus.TraceLevel.String(): logrus.TraceLevel,
 	logrus.DebugLevel.String(): logrus.DebugLevel,
 	logrus.InfoLevel.String():  logrus.InfoLevel,
 	logrus.WarnLevel.String():  logrus.WarnLevel,
@@ -37,7 +38,11 @@ var SetLevel = func(level string) {
 	log.SetLevel(logrus.InfoLevel)
 }
 
-// Wrapper returns the outermost error in err as a string along with the wrapped error
+func GetLevel() logrus.Level {
+	return log.GetLevel()
+}
+
+// Wrapper returns the outermost error in 'err' as a string along with the unwrapped error
 func Wrapper(err error) (string, error) {
 	unwrapped := errors.Unwrap(err)
 	if unwrapped != nil {
@@ -47,7 +52,7 @@ func Wrapper(err error) (string, error) {
 	return err.Error(), nil
 }
 
-// StructureError divides err into a list of strings where each string represents one wrapped error
+// StructureError divides 'err' into a list of strings where each string represents one wrapped error
 var StructureError = func(err error) []string {
 	fullError := []string{}
 	for i := 0; err != nil; i++ {
@@ -79,11 +84,11 @@ func Errorf(format string, args ...any) {
 }
 
 // Warning logs a message at level "Warning" either on the standard logger or in the GUI
-func Warning(err error) {
+func Warning(args ...any) {
 	if signal != nil {
-		signal(logrus.WarnLevel.String(), StructureError(err))
+		signal(logrus.WarnLevel.String(), []string{fmt.Sprint(args...)})
 	} else {
-		log.Warning(err.Error())
+		log.Warning(args...)
 	}
 }
 

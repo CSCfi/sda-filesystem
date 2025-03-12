@@ -4,10 +4,11 @@
 *.pem
 *.out
 .go-version
-sda-filesystem
-vendor/
 build/bin
 node_modules
 frontend/dist
 frontend/package-lock.json
 frontend/package.json.md5
+__pycache__
+dev-tools/scripts/*.json
+dev-tools/compose/.env
