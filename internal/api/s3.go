@@ -199,6 +199,21 @@ func GetObjects(rep, bucket, path string, prefix ...string) ([]Metadata, error) 
 	return meta, nil
 }
 
+func GetSegmentedObjects(rep, bucket string) ([]Metadata, error) {
+	params := &s3.ListObjectsV2Input{
+		Bucket: aws.String(url.PathEscape(bucket)),
+	}
+
+	meta, err := getObjects(params, bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, rep, err)
+	}
+
+	logs.Debugf("Retrieved objects for container %s in %s", bucket, rep)
+
+	return meta, nil
+}
+
 func getObjects(params *s3.ListObjectsV2Input, bucket string) ([]Metadata, error) {
 	paginator := s3.NewListObjectsV2Paginator(ai.hi.s3Client, params, func(o *s3.ListObjectsV2PaginatorOptions) {
 		o.Limit = 10000

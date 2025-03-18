@@ -10,6 +10,7 @@ import "C"
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/neicnordic/crypt4gh/model/headers"
 )
 
@@ -188,6 +190,13 @@ func ClearPath(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get headers for bucket %s: %w", bucket, err)
 	}
+	// Need to check if objects are segmented
+	segmentsBucket := bucket + segmentsSuffix
+	segmentSizes, err := getObjectSizesFromSegments(rep, segmentsBucket)
+	var noBucket *types.NoSuchBucket
+	if err != nil && !errors.As(err, &noBucket) {
+		logs.Warningf("Object sizes may not be correct: %s", err.Error())
+	}
 
 	bucketPath := strings.Join(pathNames[:4], "/")
 	objMap := make(map[string]metadata, len(objects))
@@ -197,7 +206,7 @@ func ClearPath(path string) error {
 		if ok {
 			header = versions.Headers[strconv.Itoa(versions.LatestVersion)].Header
 		}
-		objMap[bucketPath+"/"+objects[i].Name] = metadata{objects[i], header}
+		objMap[bucketPath+"/"+objects[i].Name] = metadata{objects[i], header, segmentSizes[objects[i].Name]}
 	}
 
 	oldSize := node.stat.st_size
@@ -220,7 +229,11 @@ func clearNode(node *C.node_t, pathNodes []string, meta map[string]metadata) (C.
 			if obj.header != "" {
 				fi.headers[node.stat.st_ino] = obj.header
 			}
-			node.stat.st_size = C.off_t(obj.Size)
+			if obj.Size == 0 {
+				node.stat.st_size = C.off_t(obj.segmentSize)
+			} else {
+				node.stat.st_size = C.off_t(obj.Size)
+			}
 			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
 		}
 	} else {

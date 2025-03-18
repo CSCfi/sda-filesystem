@@ -30,6 +30,7 @@ import (
 )
 
 const numRoutines = 4
+const segmentsSuffix = "_segments"
 
 var signalBridge func()
 
@@ -49,6 +50,7 @@ type bucketInfo struct {
 	path       string
 	headers    map[string]api.VaultHeaderVersions
 	bucketNode *goNode
+	segmented  bool
 }
 
 // goNode is a representation of a file/directory in Go before it is moved to C
@@ -60,7 +62,8 @@ type goNode struct {
 
 type metadata struct {
 	api.Metadata
-	header string
+	header      string
+	segmentSize int64
 }
 
 // SetSignalBridge initializes the signal which informs Wails that program has paniced
@@ -152,7 +155,7 @@ func InitialiseFilesystem() *C.nodes_t {
 		// Fetching headers
 		headers, err := api.GetHeaders(rep, buckets)
 		if err != nil {
-			logs.Errorf("Failed to retrieve file headers for %s", api.ToPrint(rep))
+			logs.Errorf("Failed to retrieve file headers for %s: %s", api.ToPrint(rep), err.Error())
 
 			continue
 		}
@@ -160,9 +163,16 @@ func InitialiseFilesystem() *C.nodes_t {
 		batchHeaders[parentPath] = headers
 
 		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
+		segmentBuckets := []string{}
 
 		// Create bucket directories
 		for i := range buckets {
+			if strings.HasSuffix(buckets[i].Name, segmentsSuffix) {
+				segmentBuckets = append(segmentBuckets, buckets[i].Name)
+
+				continue
+			}
+
 			bucketPath := parentPath + "/" + buckets[i].Name
 			logs.Debugf("Creating directory /%s", filepath.FromSlash(bucketPath))
 			bucketSafe := makeNode(parentChildren, buckets[i], true, parentPath)
@@ -171,6 +181,13 @@ func InitialiseFilesystem() *C.nodes_t {
 
 			if rep != api.SDConnect && fi.guiFun != nil {
 				fi.guiFun(rep, bucketSafe, 1)
+			}
+		}
+
+		for i := range segmentBuckets {
+			bucketName := strings.TrimSuffix(segmentBuckets[i], segmentsSuffix)
+			if node, ok := parentChildren[bucketName]; ok {
+				node.meta.Name = segmentBuckets[i]
 			}
 		}
 	}
@@ -189,7 +206,9 @@ func InitialiseFilesystem() *C.nodes_t {
 
 	for path := range bucketNodes {
 		for nameSafe, node := range bucketNodes[path] {
-			jobs <- bucketInfo{path + "/" + nameSafe, batchHeaders[path][node.meta.Name], node}
+			segmented := strings.HasSuffix(node.meta.Name, segmentsSuffix)
+			node.meta.Name = strings.TrimSuffix(node.meta.Name, segmentsSuffix)
+			jobs <- bucketInfo{"/" + path + "/" + nameSafe, batchHeaders[path][node.meta.Name], node, segmented}
 		}
 	}
 	close(jobs)
@@ -307,15 +326,24 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 		node := j.bucketNode
 		path := j.path
 		headers := j.headers
+		segmented := j.segmented
 
 		nodesSafe := strings.Split(path, "/")
+		repository := nodesSafe[1]
 
 		logs.Debugf("Fetching data for %s", filepath.FromSlash(path))
-		objects, err := api.GetObjects(nodesSafe[0], node.meta.Name, "/"+path)
+		objects, err := api.GetObjects(repository, node.meta.Name, path)
 		if err != nil {
 			logs.Error(err)
 
 			continue
+		}
+		segmentSizes := map[string]int64{}
+		if segmented {
+			segmentSizes, err = getObjectSizesFromSegments(repository, node.meta.Name)
+			if err != nil {
+				logs.Warningf("Object sizes may not be correct: %s", err.Error())
+			}
 		}
 
 		meta := make([]metadata, 0, len(objects))
@@ -331,15 +359,34 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 			if ok {
 				header = versions.Headers[strconv.Itoa(versions.LatestVersion)].Header
 			}
-			meta = append(meta, metadata{objects[i], header})
+			meta = append(meta, metadata{objects[i], header, segmentSizes[objects[i].Name]})
 		}
 
 		createLevel(node, meta, path)
 
 		if fi.guiFun != nil {
-			fi.guiFun(nodesSafe[0], nodesSafe[1], 1)
+			fi.guiFun(repository, nodesSafe[2], 1)
 		}
 	}
+}
+
+// getObjectSizesFromSegments is used for getting the object sizes for buckets that
+// have a matching segments bucket.
+func getObjectSizesFromSegments(rep, bucket string) (map[string]int64, error) {
+	logs.Debugf("Fetching object sizes for container %s from matching segments container %s", bucket, rep)
+	objects, err := api.GetSegmentedObjects(rep, bucket+segmentsSuffix)
+	if err != nil {
+		return map[string]int64{}, fmt.Errorf("cannot fetch object sizes for container %s in %s: %w", bucket, rep, err)
+	}
+
+	objectSizes := make(map[string]int64)
+	for i := range objects {
+		pathNames := strings.Split(objects[i].Name, "/")
+		actualObjectName := strings.Join(pathNames[:max(len(pathNames)-2, 0)], "/")
+		objectSizes[actualObjectName] += objects[i].Size
+	}
+
+	return objectSizes, nil
 }
 
 func createLevel(prnt *goNode, meta []metadata, prntPath string) {
@@ -350,10 +397,13 @@ func createLevel(prnt *goNode, meta []metadata, prntPath string) {
 
 		// If true, create the final object file
 		if len(parts) == 1 {
-			logs.Debugf("Creating file /%s", filepath.FromSlash(prntPath+"/"+meta[i].Name))
+			logs.Debugf("Creating file %s", filepath.FromSlash(prntPath+"/"+meta[i].Name))
 			objectSafe := makeNode(prnt.children, meta[i].Metadata, false, prntPath)
 
 			prnt.children[objectSafe].header = meta[i].header
+			if prnt.children[objectSafe].meta.Size == 0 {
+				prnt.children[objectSafe].meta.Size = meta[i].segmentSize
+			}
 
 			continue
 		}
@@ -365,7 +415,7 @@ func createLevel(prnt *goNode, meta []metadata, prntPath string) {
 	// Create all unique subdirectories at this level
 	for key, value := range childrenMeta {
 		md := api.Metadata{Name: key, Size: 0, LastModified: nil}
-		logs.Debugf("Creating directory /%s", filepath.FromSlash(prntPath+"/"+key))
+		logs.Debugf("Creating directory %s", filepath.FromSlash(prntPath+"/"+key))
 		dirSafe := makeNode(prnt.children, md, true, prntPath)
 		createLevel(prnt.children[dirSafe], value, prntPath+"/"+dirSafe)
 	}
@@ -373,7 +423,7 @@ func createLevel(prnt *goNode, meta []metadata, prntPath string) {
 
 // makeNode adds a node into the Go tree structure. Returns node's name in filesystem.
 func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSafe string) string {
-	name := removeInvalidChars(meta.Name)
+	name := removeInvalidChars(meta.Name) // Redundant for buckets and project
 	if !isDir {
 		name = strings.TrimSuffix(name, ".c4gh")
 	}
