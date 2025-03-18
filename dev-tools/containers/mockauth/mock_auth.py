@@ -32,7 +32,7 @@ def generate_token() -> Tuple:
 
 def get_desktop_token() -> str:
     iat = int(time())
-    ttl = 3600
+    ttl = 36000
     exp = iat + ttl
     access_token = {
         "sub": "desktop",

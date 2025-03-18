@@ -2,11 +2,11 @@
 import { reactive, ref, onMounted, computed } from 'vue'
 import {
     GetDefaultMountPoint,
-    LoadFuse,
     OpenFuse,
     RefreshFuse,
     ChangeMountPoint,
     FilesOpen,
+    InitFuse,
 } from '../../wailsjs/go/main/App'
 import {
     CDataTableHeader,
@@ -15,14 +15,13 @@ import {
     CPaginationOptions
 } from 'csc-ui/dist/types';
 import { EventsEmit, EventsOn } from '../../wailsjs/runtime'
-import { filesystem } from "../../wailsjs/go/models";
 
 const projectHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name' },
     { key: 'repository', value: 'Location' },
-    { 
-        key: 'progress', 
-        value: 'Progress', 
+    {
+        key: 'progress',
+        value: 'Progress',
         width: "200px",
         sortable: false,
         component: {
@@ -42,6 +41,7 @@ const pageIdx = ref(1)
 const projectKey = ref(0)
 const updating = ref(false)
 const mountpoint = ref("")
+const loading = ref(false)
 
 const allContainers = ref(0)
 const loadedContainers = ref(0)
@@ -64,31 +64,28 @@ onMounted(() => {
     })
 })
 
-EventsOn('sendProjects', function(projects: filesystem.Project[]) {
-    let tableData: CDataTableData[] = projects.map(project => {
-        let item: CDataTableData = Object.fromEntries(Object.entries(project).map(([k, v]) => [k, {"value": v}]));
-        item['repository'].formattedValue = project.repository.replace("-", " ");
-        item['progress'] = {"value": 0};
-        return item;
-    });
-    projectData.length = 0;
-    projectData.push(...tableData);
-    projectKey.value++;
+EventsOn('showProgress', () => {
+    pageIdx.value = 2;
+    loading.value = false;
+    allContainers.value *= -1;
 })
 
-EventsOn('showProgress', () => (allContainers.value *= -1))
-
-EventsOn('updateGlobalProgress', function(nom: number, denom: number) {
+EventsOn('updateGlobalProgress', (nom: number, denom: number) => {
     loadedContainers.value += nom;
     allContainers.value += denom;
 })
 
-EventsOn('updateProjectProgress', function(project: filesystem.Project, progress: number) {
-    let idx: number = projectData.findIndex(row => row['name'].value === project.name && row['repository'].value === project.repository);
-    if (progress > (projectData[idx]['progress'].value as number)) {
+EventsOn('updateProjectProgress', (name: string, repository: string, progress: number) => {
+    let idx: number = projectData.findIndex(row => row['name'].value === name && row['repository'].value === repository);
+    if (idx == -1) {
+        let item: CDataTableData = {name: {value: name}, repository: {value: repository}};
+        item['repository'].formattedValue = repository.replace("-", " ");
+        item['progress'] = {"value": 0};
+        projectData.push(item);
+    } else if (progress > (projectData[idx]['progress'].value as number)) {
         projectData[idx]['progress'].value = progress;
-        projectKey.value++;
     }
+    projectKey.value++;
 })
 
 EventsOn('fuseReady', () => {pageIdx.value = 4; updating.value = false})
@@ -144,10 +141,11 @@ function refresh() {
                 <c-text-field id="choose-dir-input" :value="mountpoint" readonly></c-text-field>
                 <c-button @click="changeMountPoint" outlined>Change</c-button>
             </c-row>
-            <c-button 
-                class="continue-button" 
-                size="large" 
-                @click="pageIdx++; LoadFuse()"
+            <c-button
+                class="continue-button"
+                size="large"
+                @click="loading = true; InitFuse()"
+                :loading="loading"
                 :disabled="!mountpoint">
                 Continue
             </c-button>
@@ -163,11 +161,11 @@ function refresh() {
             </c-flex>
             <p class="smaller-text">{{ pageIdx == 2 ? "Please wait, this might take a few minutes." : "Data Gateway is ready to be used."}}</p>
             <c-progress-bar label="complete" :value=globalProgress></c-progress-bar>
-            <c-data-table 
+            <c-data-table
                 class="gateway-table"
-                :data.prop="projectData" 
+                :data.prop="projectData"
                 :headers.prop="projectHeaders"
-                :key="projectKey" 
+                :key="projectKey"
                 :footerOptions="footerOptions"
                 :pagination="paginationOptions"
                 :hide-footer="projectData.length <= 5">

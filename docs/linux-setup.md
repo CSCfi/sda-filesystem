@@ -10,7 +10,7 @@ or download the release:
 ```bash
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=2025.3.0
+export version=2025.4.0
 wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-linux-amd64.zip"
 ```
 

@@ -2,10 +2,8 @@
 import { ref, watch } from 'vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist/types';
-import { SelectFile, CheckEncryption, ExportFile } from '../../wailsjs/go/main/App'
+import { SelectFile, CheckExistence, ExportFile } from '../../wailsjs/go/main/App'
 import { mdiTrashCanOutline } from '@mdi/js'
-
-import LoginForm from '../components/LoginForm.vue';
 
 const exportHeaders: CDataTableHeader[] = [
     { key: 'name', value: 'Name', sortable: false },
@@ -15,7 +13,7 @@ const exportHeaders: CDataTableHeader[] = [
 const exportHeadersModifiable: CDataTableHeader[] = [
     { key: 'name', value: 'Name', sortable: false },
     { key: 'folder', value: 'Target Folder', sortable: false },
-    { key: 'actions', value: null, sortable: false, justify: "end", 
+    { key: 'actions', value: null, sortable: false, justify: "end",
       children: [
         {
             value: 'Remove',
@@ -31,7 +29,7 @@ const exportHeadersModifiable: CDataTableHeader[] = [
                 },
             },
         },
-        ], 
+        ],
     },
 ]
 
@@ -39,21 +37,15 @@ const exportData = ref<CDataTableData[]>([])
 const bucketItems = ref<CAutocompleteItem[]>([])
 const filteredBucketItems = ref<CAutocompleteItem[]>([])
 
-const skipLogin = ref(false)
 const pageIdx = ref(0)
 const selectedBucket = ref("")
 const bucketQuery = ref("")
 
 const selectedFile = ref("")
-const encrypted = ref(false)
 const showModal = ref(false)
 const chooseToContinue = ref(false)
 
-EventsOn('sdconnectAvailable', () => {
-    skipLogin.value = true;
-})
-
-EventsOn('isProjectManager', () => {
+EventsOn('exportPossible', () => {
     pageIdx.value = 1;
 })
 
@@ -65,7 +57,7 @@ EventsOn('setBuckets', (buckets: string[]) => {
     filteredBucketItems.value = bucketItems.value;
 })
 
-watch(() => bucketQuery.value, (query: string) => { 
+watch(() => bucketQuery.value, (query: string) => {
     selectedBucket.value = query;
     filteredBucketItems.value = bucketItems.value.filter((item: CAutocompleteItem) => {
         if (selectedBucket.value) {
@@ -78,24 +70,21 @@ watch(() => bucketQuery.value, (query: string) => {
 
 function selectFile() {
     SelectFile().then((filename: string) => {
-        CheckEncryption(filename, selectedBucket.value).then((checks: Array<boolean>) => {
+        CheckExistence(filename, selectedBucket.value).then((found: boolean) => {
             selectedFile.value = filename
-            encrypted.value = checks[0]
 
             let exportRow: CDataTableData = {
-                'name': {'value': filename.split('/').reverse()[0] + (!checks[0] ? ".c4gh" : "")}, 
+                'name': {'value': filename.split('/').reverse()[0] + ".c4gh"},
                 'folder': {'value': selectedBucket.value}
             };
             exportData.value = [];
             exportData.value.push(exportRow);
 
-            if (checks[1]) { // If exists
+            if (found) { // If exists
                 showModal.value = true;
             } else {
                 chooseToContinue.value = true;
             }
-        }).catch(e => {
-            EventsEmit("showToast", "Failed to check if file is encrypted", e as string);
         })
     }).catch(e => {
         EventsEmit("showToast", "Could not choose file", e as string);
@@ -103,7 +92,7 @@ function selectFile() {
 }
 
 function exportFile() {
-    ExportFile(selectedFile.value, selectedBucket.value, encrypted.value).then(() => {
+    ExportFile(selectedFile.value, selectedBucket.value).then(() => {
         pageIdx.value = 4;
     }).catch(e => {
         pageIdx.value = 2;
@@ -129,7 +118,7 @@ function containsFilterString(str: string): boolean {
                 <c-card-title>File already exists</c-card-title>
 
                 <c-card-content>
-                    Airlock wants to upload file {{ exportData.length ? exportData[0]['name']['value'] : "" }} 
+                    Airlock wants to upload file {{ exportData.length ? exportData[0]['name']['value'] : "" }}
                     but a similar file already exists in SD Connect. Overwrite file?
                 </c-card-content>
 
@@ -142,17 +131,12 @@ function containsFilterString(str: string): boolean {
 
         <c-flex v-show="pageIdx == 0" id="no-export-page">
             <h2>Export is not possible</h2>
-            <p v-if="skipLogin">You need to have project manager rights to export files.</p>
-            <p v-else>
-                Please log in to SD Connect with your CSC credentials. 
-                Note that only CSC project managers have export rights.
-            </p>
-            <LoginForm v-if="!skipLogin"></LoginForm>
+            <p>You need to have project manager rights to export files.</p>
         </c-flex>
         <c-flex v-show="pageIdx == 1">
             <h2>Select a destination folder for your export</h2>
             <p>
-                Your export will be sent to SD Connect. 
+                Your export will be sent to SD Connect.
                 If the folder does not already exist in SD Connect, it will be created.
                 Please note that the folder name cannot be modified afterwards.
             </p>
@@ -167,9 +151,9 @@ function containsFilterString(str: string): boolean {
                     @changeQuery="bucketQuery = $event.detail">
                 </c-autocomplete>
             </c-row>
-            <c-button 
-                class="continue-button" 
-                size="large" 
+            <c-button
+                class="continue-button"
+                size="large"
                 :disabled="!selectedBucket"
                 @click="pageIdx++">
                 Continue
@@ -186,15 +170,15 @@ function containsFilterString(str: string): boolean {
                 </c-row>
                 <p>If you wish to export multiple files, please create a tar/zip file.</p>
                 <p>
-                    Unencrypted file will be encrypted by default with service encryption key 
-                    and will be accessible only via SD Desktop.<br>If you want to access the file 
+                    Unencrypted file will be encrypted by default with service encryption key
+                    and will be accessible only via SD Desktop.<br>If you want to access the file
                     otherwise, please encrypt it before exporting.
                 </p>
             </div>
             <c-data-table v-else
                 id="export-table"
                 class="gateway-table"
-                :data.prop="exportData" 
+                :data.prop="exportData"
                 :headers.prop="exportHeadersModifiable"
                 hide-footer=true>
             </c-data-table>
@@ -209,7 +193,7 @@ function containsFilterString(str: string): boolean {
             <c-progress-bar indeterminate></c-progress-bar>
             <c-data-table
                 class="gateway-table"
-                :data.prop="exportData" 
+                :data.prop="exportData"
                 :headers.prop="exportHeaders"
                 hide-footer=true>
             </c-data-table>
@@ -217,12 +201,12 @@ function containsFilterString(str: string): boolean {
         <c-flex v-show="pageIdx == 4">
             <h2>Export complete</h2>
             <p>
-                All files have been uploaded to SD Connect. You can now 
+                All files have been uploaded to SD Connect. You can now
                 close or minimise the window to continue working.
             </p>
             <c-button
-                class="continue-button" 
-                size="large" 
+                class="continue-button"
+                size="large"
                 @click="exportData.pop(); chooseToContinue = false; pageIdx = 1">
                 New Export
             </c-button>
