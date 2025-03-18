@@ -11,7 +11,6 @@ import (
 	"slices"
 	"time"
 
-	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
@@ -25,7 +24,6 @@ type App struct {
 	ctx         context.Context
 	ph          *ProjectHandler
 	lh          *LogHandler
-	fs          *filesystem.Fuse
 	mountpoint  string
 	loginRepo   string
 	paniced     bool
@@ -52,6 +50,7 @@ func (a *App) beforeClose(_ context.Context) (prevent bool) {
 	return a.preventQuit
 }
 
+// Quit can be used in frontend to quit application
 func (a *App) Quit() {
 	a.preventQuit = false
 	wailsruntime.Quit(a.ctx)
@@ -89,103 +88,41 @@ func (a *App) GetDefaultMountPoint() string {
 	return a.mountpoint
 }
 
-func (a *App) InitializeAPI() error {
-	reps := make(map[string][2]bool)
-	defer wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
+func (a *App) GetUsername() string {
+	return api.GetUsername()
+}
 
+func (a *App) InitializeAPI() (bool, error) {
+	if err := api.Setup(); err != nil {
+		logs.Error(err)
+		outer, _ := logs.Wrapper(err)
+
+		return false, errors.New(outer)
+	}
+	access, err := api.GetProfile()
+	if err != nil {
+		logs.Error(err)
+		outer, _ := logs.Wrapper(err)
+
+		return false, errors.New(outer)
+	}
+	if !access {
+		logs.Errorf("Your session has expired")
+	}
+
+	reps := make(map[string]bool)
+	enabled := api.GetRepositories()
 	for _, r := range api.GetAllRepositories() {
-		reps[r] = [2]bool{true, r == a.loginRepo}
+		reps[r] = !slices.Contains(enabled, r)
 	}
+	wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 
-	err := api.GetCommonEnvs()
-	if err != nil {
-		logs.Error(err)
-
-		return errors.New("required environmental variables missing")
-	}
-
-	err = api.InitializeCache()
-	if err != nil {
-		logs.Error(err)
-
-		return errors.New("initializing cache failed")
-	}
-
-	err = api.InitializeClient()
-	if err != nil {
-		logs.Error(err)
-
-		return errors.New("initializing HTTP client failed")
-	}
-
-	noneAvailable := true
-	for _, r := range api.GetAllRepositories() {
-		if err = api.GetEnvs(r); err != nil {
-			logs.Error(err)
-		} else {
-			noneAvailable = false
+	/*
+		if airlock.ExportPossible() {
+			wailsruntime.EventsEmit(a.ctx, "exportPossible")
 		}
-		reps[r] = [2]bool{err != nil, r == a.loginRepo}
-	}
-
-	if noneAvailable {
-		return errors.New("no services available")
-	}
-
-	return nil
-}
-
-func (a *App) Authenticate(repository string) error {
-	if err := api.Authenticate(repository); err != nil {
-		logs.Error(err)
-		message, _ := logs.Wrapper(err)
-
-		return errors.New(message)
-	}
-
-	return nil
-}
-
-func (a *App) Login(username, password string) (bool, error) {
-	token := api.BasicToken(username, password)
-	if err := api.Authenticate(a.loginRepo, token, ""); err != nil {
-		logs.Error(err)
-		var re *api.RequestError
-		if errors.As(err, &re) && re.StatusCode == 401 {
-			return false, nil
-		}
-		message, _ := logs.Wrapper(err)
-
-		return false, errors.New(message)
-	}
-
-	logs.Info("Login successful")
-
-	isManager, err := airlock.IsProjectManager("")
-	switch {
-	case err != nil:
-		logs.Errorf("Resolving project manager status failed: %w", err)
-	case !isManager:
-		logs.Info("You are not the project manager")
-	default:
-		logs.Info("You are the project manager")
-		if err = airlock.GetPublicKey(); err != nil {
-			logs.Error(err)
-		} else {
-			wailsruntime.EventsEmit(a.ctx, "isProjectManager")
-		}
-	}
-
-	wailsruntime.EventsEmit(a.ctx, "sdconnectAvailable")
-
-	return true, nil
-}
-
-func (a *App) InitFuse() {
-	a.preventQuit = true
-	api.SettleRepositories()
-	a.fs = filesystem.InitializeFilesystem(a.ph.AddProject)
-	a.ph.sendProjects()
+	*/
+	return access, nil
 }
 
 func (a *App) ChangeMountPoint() (string, error) {
@@ -216,31 +153,32 @@ func (a *App) ChangeMountPoint() (string, error) {
 	return mount, nil
 }
 
-func (a *App) LoadFuse() {
+func (a *App) InitFuse() {
+	a.preventQuit = true
 	go func() {
-		defer filesystem.CheckPanic()
-		a.fs.PopulateFilesystem(a.ph.trackContainers)
-
+		var wait = make(chan any)
 		go func() {
-			time.Sleep(time.Second)
-			buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
-			if len(buckets) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
-			}
-			wailsruntime.EventsEmit(a.ctx, "fuseReady")
-		}()
+			<-wait // Wait for fuse to be ready
 
-		var wait = make(chan []string)
-		go mountpoint.WaitForUpdateSignal(wait)
-		go func() {
-			for {
-				<-wait
-				wailsruntime.EventsEmit(a.ctx, "refresh")
-			}
+			var cmd = make(chan []string)
+			go mountpoint.WaitForUpdateSignal(cmd)
+			go func() {
+				for {
+					<-cmd
+					wailsruntime.EventsEmit(a.ctx, "refresh")
+				}
+			}()
+			go func() {
+				buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
+				if len(buckets) > 0 {
+					wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
+				}
+				wailsruntime.EventsEmit(a.ctx, "fuseReady")
+			}()
 		}()
+		ret := filesystem.MountFilesystem(a.mountpoint, a.ph.trackProjectProgress, wait)
 
-		filesystem.MountFilesystem(a.fs, a.mountpoint)
-		os.Exit(0)
+		os.Exit(ret)
 	}()
 }
 
@@ -274,16 +212,16 @@ func (a *App) OpenFuse() {
 }
 
 func (a *App) FilesOpen() bool {
-	return a.fs.FilesOpen()
+	return filesystem.FilesOpen()
 }
 
 func (a *App) RefreshFuse() {
 	time.Sleep(200 * time.Millisecond)
 
 	a.ph.deleteProjects()
-	a.fs.RefreshFilesystem(a.ph.AddProject, a.ph.trackContainers)
+	filesystem.RefreshFilesystem()
 
-	buckets := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName())
+	buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
 	if len(buckets) > 0 {
 		wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 	}
@@ -303,33 +241,21 @@ func (a *App) SelectFile() (string, error) {
 	return file, nil
 }
 
-func (a *App) CheckEncryption(file, bucket string) (checks [2]bool, err error) {
-	if checks[0], err = airlock.CheckEncryption(file); err != nil {
-		logs.Error(err)
+func (a *App) CheckExistence(file, bucket string) (found bool) {
+	chld := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName() + "/" + bucket)
 
-		return
-	}
-
-	extension := ""
-	if !checks[0] {
-		extension = ".c4gh"
-	}
-
-	chld := a.fs.GetNodeChildren(api.SDConnect + "/" + airlock.GetProjectName() + "/" + bucket)
-	checks[1] = slices.Contains(chld, filepath.Base(file+extension))
-
-	return
+	return slices.Contains(chld, filepath.Base(file+".c4gh"))
 }
 
-func (a *App) ExportFile(file, folder string, encrypted bool) error {
+func (a *App) ExportFile(file, folder string) error {
 	time.Sleep(1000 * time.Millisecond)
-	err := airlock.Upload(file, folder, 4000, "", "", encrypted)
+	/*err := airlock.Upload(file, folder, 4000)
 	if err != nil {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)
 
 		return errors.New(message)
-	}
+	}*/
 
 	return nil
 }

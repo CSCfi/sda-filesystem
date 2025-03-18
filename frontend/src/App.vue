@@ -14,21 +14,21 @@ interface ComponentType {
 
 const disabled = ref(false)
 const initialized = ref(false)
-const loggedIn = ref(false)
+const selected = ref(false)
 const accessed = ref(false)
 
-const currentPage = ref("Login")
+const currentPage = ref("Select")
 const componentData = computed<ComponentType[]>(() => ([
     {
-        name: "Login",
-        visible: !loggedIn.value,
+        name: "Select",
+        visible: !selected.value,
         props: {
-            initialized: initialized.value, 
+            initialized: initialized.value,
             disabled: disabled.value,
         },
     },
-    { name: "Access", visible: loggedIn.value, active: loggedIn.value },
-    { name: "Export", visible: loggedIn.value, disabled: !accessed.value },
+    { name: "Access", visible: selected.value, active: selected.value },
+    { name: "Export", visible: selected.value, disabled: !accessed.value },
     { name: "Logs", visible: true }
 ]))
 
@@ -37,16 +37,20 @@ const visibleTabs = computed(() => componentData.value.filter(data => data.visib
 const toasts = ref<HTMLCToastsElement | null>(null);
 
 onMounted(() => {
-    InitializeAPI().then(() => {
+    InitializeAPI().then((access: boolean) => {
         console.log("Initializing Data Gateway finished");
         initialized.value = true;
+        if (!access) {
+            disabled.value = true;
+            EventsEmit("showToast", "Relogin to SD Desktop", "Your session has expired");
+        }
     }).catch(e => {
         disabled.value = true;
         EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
     });
 })
 
-EventsOn('showToast', function(title: string, err: string) {
+EventsOn('showToast', (title: string, err: string) => {
     const message: CToastMessage = {
         title: title,
         message: err,
@@ -57,10 +61,9 @@ EventsOn('showToast', function(title: string, err: string) {
     toasts.value?.addToast(message);
 })
 
-EventsOn('loggedIn', () => {
-    loggedIn.value = true; 
+EventsOn('selectFinished', () => {
+    selected.value = true;
     currentPage.value = 'Access';
-    InitFuse();
 })
 
 EventsOn('fuseReady', () => (accessed.value = true))
@@ -81,23 +84,22 @@ EventsOn('fuseReady', () => (accessed.value = true))
                 >{{ tab.name }}</c-tab>
             </c-tabs>
             <c-spacer></c-spacer>
-            <c-button 
-                size="small" 
-                text 
-                no-radius 
-                icon-end 
-                @click="Quit"
-                :style="{visibility: loggedIn ? 'visible' : 'hidden'}">
+            <c-button
+                size="small"
+                text
+                no-radius
+                icon-end
+                @click="Quit">
                 <i class="mdi mdi-logout-variant" slot="icon"></i>
                 Disconnect and sign out
             </c-button>
         </c-toolbar>
 
         <div id="content">
-            <component 
+            <component
                 v-for="data in componentData"
                 v-show="data.name === currentPage"
-                :is="data.name" 
+                :is="data.name"
                 v-bind="data.props">
             </component>
         </div>
