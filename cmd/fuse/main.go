@@ -20,7 +20,7 @@ import (
 	"golang.org/x/term"
 )
 
-var mount, project, logLevel string
+var mount, logLevel string
 var requestTimeout int
 
 //var sdsubmitOnly bool
