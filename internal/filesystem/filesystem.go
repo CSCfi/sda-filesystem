@@ -75,8 +75,8 @@ func SetSignalBridge(fn func()) {
 var checkPanic = func() {
 	if signalBridge != nil {
 		if err := recover(); err != nil {
-			logs.Error(fmt.Errorf("something went wrong when creating Data Gateway: %w",
-				fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+			logs.Errorf("Something went wrong when creating Data Gateway: %w",
+				fmt.Errorf("%v\n\n%s", err, string(debug.Stack())))
 			// Send alert
 			signalBridge()
 		}
