@@ -76,7 +76,7 @@ func GetHeaders(rep string, buckets []Metadata) (BatchHeaders, error) {
 	if len(warnings) > 0 {
 		logs.Warningf("The request for file headers was not entirely successful.")
 		for i := range warnings {
-			logs.Warning(warnings[i])
+			logs.Warningf(warnings[i])
 		}
 	}
 
