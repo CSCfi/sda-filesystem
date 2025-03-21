@@ -16,6 +16,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - (users) Updated service description text on login card (#22)
 - replacing field `skip-pkg-cache` with `skip-cache` for `golangci-lint-action` in GitHub workflow
 
+### Fixed
+
+- wails install in renovate
+
 ## [2024.6.0] - 2024-06-07
 
 ### Fixed
