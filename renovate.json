@@ -6,7 +6,7 @@
       "postUpgradeTasks": {
         "commands": [
           "pnpm --prefix frontend run build",
-          "cd /tmp/renovate/cache/others/go/pkg/mod/{{{packageName}}}@{{{prettyNewVersion}}}/cmd/wails && go install",
+          "go install github.com/wailsapp/wails/v2/cmd/wails@{{{prettyNewVersion}}}",
           "cd cmd/gui && wails generate module"
         ],
         "fileFilters": ["frontend/wailsjs/**"]
@@ -14,4 +14,3 @@
     }
   ]
 }
-
