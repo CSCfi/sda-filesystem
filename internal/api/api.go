@@ -27,7 +27,7 @@ const SDConnect string = "SD-Connect"
 
 var ai = apiInfo{
 	hi: httpInfo{
-		requestTimeout: 20,
+		requestTimeout: 60,
 		httpRetry:      3,
 		client:         &http.Client{},
 	},

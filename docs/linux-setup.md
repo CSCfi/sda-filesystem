@@ -3,7 +3,7 @@
 Build:
 (if upx is not install remove the flag)
 ```bash
-wails build -upx -trimpath -clean -s
+wails build -upx -trimpath -clean -s -tags webkit2_41
 ```
 
 or download the release:
