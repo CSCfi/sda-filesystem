@@ -132,6 +132,8 @@ func InitialiseFilesystem() *C.nodes_t {
 
 			continue
 		}
+		buckets, segmentBuckets := separateSegmentBuckets(buckets)
+
 		numJobs += len(buckets)
 
 		parentChildren := root.children[rep].children
@@ -163,16 +165,9 @@ func InitialiseFilesystem() *C.nodes_t {
 		batchHeaders[parentPath] = headers
 
 		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
-		segmentBuckets := []string{}
 
 		// Create bucket directories
 		for i := range buckets {
-			if strings.HasSuffix(buckets[i].Name, segmentsSuffix) {
-				segmentBuckets = append(segmentBuckets, buckets[i].Name)
-
-				continue
-			}
-
 			bucketPath := parentPath + "/" + buckets[i].Name
 			logs.Debugf("Creating directory /%s", filepath.FromSlash(bucketPath))
 			bucketSafe := makeNode(parentChildren, buckets[i], true, parentPath)
@@ -185,9 +180,9 @@ func InitialiseFilesystem() *C.nodes_t {
 		}
 
 		for i := range segmentBuckets {
-			bucketName := strings.TrimSuffix(segmentBuckets[i], segmentsSuffix)
+			bucketName := strings.TrimSuffix(segmentBuckets[i].Name, segmentsSuffix)
 			if node, ok := parentChildren[bucketName]; ok {
-				node.meta.Name = segmentBuckets[i]
+				node.meta.Name = segmentBuckets[i].Name
 			}
 		}
 	}
@@ -233,6 +228,25 @@ func InitialiseFilesystem() *C.nodes_t {
 	}
 
 	return fi.nodes
+}
+
+func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metadata) {
+	lastIdx := len(buckets) - 1
+	for i := 0; i < lastIdx; i++ {
+		if strings.HasSuffix(buckets[i].Name, segmentsSuffix) {
+			for ; lastIdx > i; lastIdx-- {
+				if !strings.HasSuffix(buckets[lastIdx].Name, segmentsSuffix) {
+					break
+				}
+			}
+			tmp := buckets[i]
+			buckets[i] = buckets[lastIdx]
+			buckets[lastIdx] = tmp
+			lastIdx--
+		}
+	}
+
+	return buckets[:lastIdx], buckets[lastIdx:]
 }
 
 func numberOfNodes(node *goNode) (numNodes int, numObjects int) {
