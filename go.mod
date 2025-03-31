@@ -1,8 +1,7 @@
 module sda-filesystem
 
 go 1.22.2
-
-toolchain go1.23.0
+toolchain go1.24.1
 
 require (
 	github.com/billziss-gh/cgofuse v1.5.0
@@ -12,8 +11,8 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/wailsapp/wails/v2 v2.9.1
 	golang.org/x/crypto v0.26.0
-	golang.org/x/sys v0.24.0
-	golang.org/x/term v0.23.0
+	golang.org/x/sys v0.31.0
+	golang.org/x/term v0.30.0
 )
 
 require (
