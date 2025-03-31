@@ -5,7 +5,7 @@ stages:
   - release
 
 variables:
-  BUILD_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-golang-ci
+  BUILD_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
   BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci
 
 include:
@@ -87,7 +87,7 @@ test:
     - go mod tidy && go mod vendor
     - CI=true go test -v -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v frontend)
 
-build-artifacts: 
+build-artifacts:
   stage: build
   image: $BUILDER_IMAGE
   rules :
@@ -135,5 +135,3 @@ release:
           url: https://$ARTIFACTORY_SERVER/artifactory/$ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/go-airlock-cli-amd64-${RELEASE_VERSION}
         - name: data-gateway-amd64-${RELEASE_VERSION} (artifactory)
           url: https://$ARTIFACTORY_SERVER/artifactory/$ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-amd64-${RELEASE_VERSION}
-
-
