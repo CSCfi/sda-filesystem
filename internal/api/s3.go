@@ -350,7 +350,7 @@ func getDataChunk(
 	}
 
 	if _, err = io.ReadFull(crypt4GHReader, buffer); err != nil {
-		return nil, fmt.Errorf("failed to read file chunk: %w", err)
+		return nil, fmt.Errorf("failed to read file chunk [%d, %d): %w", chByteStart, chByteEnd, err)
 	}
 	downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
 	logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)

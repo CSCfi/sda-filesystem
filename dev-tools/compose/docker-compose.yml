@@ -38,10 +38,9 @@ services:
     image: docker.io/hashicorp/vault:1.18.1
     container_name: vault
     env_file:
-      - .env.krakend
+      - .env.keystone
     environment:
-      ARTIFACTORY_USER: "${ARTIFACTORY_USER}"
-      ARTIFACTORY_USER_PASSWORD: "${ARTIFACTORY_USER_PASSWORD}"
+      ARTIFACTORY_TOKEN: "${ARTIFACTORY_TOKEN}"
     entrypoint: /vault/helpers/vault.sh
     volumes:
       - ../vault/helpers:/vault/helpers
@@ -64,17 +63,17 @@ services:
     ports:
       - 8200:8200
     profiles:
-      - krakend
+      - keystone
   vault-setup:
     image: docker.io/hashicorp/vault:1.18.1
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
-      - .env.krakend
+      - .env.keystone
     volumes:
       - ../vault/helpers:/vault/helpers
     profiles:
-      - krakend
+      - keystone
     depends_on:
       vault:
         condition: service_healthy

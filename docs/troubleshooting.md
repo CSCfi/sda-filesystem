@@ -20,6 +20,11 @@ upx -d data-gateway.app/Contents/MacOS/data-gateway
 fusermount -u <path>
 ```
 
+### MacOS
+```
+umount <path>
+```
+
 ## File was updated in archive, but program displays old file
 ### GUI
 Click on the `Update` button to clear cached files.

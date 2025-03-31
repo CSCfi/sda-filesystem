@@ -19,7 +19,8 @@ VAULT_SECRET=${VAULT_SECRET:-sdsi-secret-token}
 mkdir -p "${C4GH_TRANSIT_DIR}"
 wget \
     -O "${C4GH_TRANSIT_DIR}/c4ghtransit" \
-    "https://${ARTIFACTORY_USER}:${ARTIFACTORY_USER_PASSWORD}@artifactory.ci.csc.fi:443/artifactory/sds-generic-local/c4gh-transit/c4ghtransit"
+    --header "X-JFrog-Art-Api: ${ARTIFACTORY_TOKEN}" \
+    "https://artifactory.ci.csc.fi:443/artifactory/sds-generic-local/c4gh-transit/c4ghtransit"
 chmod +x "${C4GH_TRANSIT_DIR}/c4ghtransit"
 
 # start vault server in development mode
