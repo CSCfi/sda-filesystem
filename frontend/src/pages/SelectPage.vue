@@ -24,7 +24,7 @@ EventsOn('setRepositories', function(reps: {[key: string]: boolean}) {
 </script>
 
 <template>
-    <c-container style="width: 700px;">
+    <div style="width: 700px;">
         <c-login-card-title>Log in to Data Gateway</c-login-card-title>
         <p style="width: 550px;">
             Access and import files from other SD services into SD Desktop.
@@ -45,5 +45,5 @@ EventsOn('setRepositories', function(reps: {[key: string]: boolean}) {
             @click="EventsEmit('selectFinished')">
             Continue
         </c-button>
-    </c-container>
+    </div>
 </template>

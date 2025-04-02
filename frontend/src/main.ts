@@ -1,7 +1,8 @@
 import { createApp } from 'vue';
-import { applyPolyfills, defineCustomElements } from 'csc-ui/loader';
+import { defineCustomElements } from '@cscfi/csc-ui/loader';
 import { vControl } from '@cscfi/csc-ui-vue';
 import '@mdi/font/css/materialdesignicons.css';
+import '@cscfi/csc-ui/css/theme.css';
 
 import App from './App.vue';
 import Access from './pages/AccessPage.vue'
@@ -16,9 +17,6 @@ app.component('Select', Select);
 app.component('Logs', Logs);
 
 app.directive('control', vControl);
-
-applyPolyfills().then(() => {
-  defineCustomElements();
-});
+defineCustomElements();
 
 app.mount('#app');

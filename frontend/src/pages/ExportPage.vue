@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { CAutocompleteItem, CDataTableHeader, CDataTableData } from 'csc-ui/dist/types';
+import { CAutocompleteItem, CDataTableHeader, CDataTableData } from '@cscfi/csc-ui/dist/types'
 import { SelectFile, CheckExistence, ExportFile } from '../../wailsjs/go/main/App'
 import { mdiTrashCanOutline } from '@mdi/js'
 
@@ -106,7 +106,7 @@ function containsFilterString(str: string): boolean {
 </script>
 
 <template>
-    <c-container class="fill-width">
+    <div class="container">
         <c-steps :value="pageIdx" :style="{display: pageIdx ? 'block' : 'none'}">
             <c-step>Choose directory</c-step>
             <c-step>Export files</c-step>
@@ -129,11 +129,11 @@ function containsFilterString(str: string): boolean {
             </c-card>
         </c-modal>
 
-        <c-flex v-show="pageIdx == 0" id="no-export-page">
+        <div v-show="pageIdx == 0" id="no-export-page">
             <h2>Export is not possible</h2>
             <p>You need to have project manager rights to export files.</p>
-        </c-flex>
-        <c-flex v-show="pageIdx == 1">
+        </div>
+        <div v-show="pageIdx == 1">
             <h2>Select a destination folder for your export</h2>
             <p>
                 Your export will be sent to SD Connect.
@@ -158,13 +158,12 @@ function containsFilterString(str: string): boolean {
                 @click="pageIdx++">
                 Continue
             </c-button>
-        </c-flex>
-        <c-flex v-show="pageIdx == 2">
+        </div>
+        <div v-show="pageIdx == 2">
             <div
                 v-if="!chooseToContinue"
-                id="drop-area"
-                class="fill-width">
-                <c-row align="center" gap="20px">
+                id="drop-area">
+                <c-row align="center" gap="20">
                     <!-- <h4>Drag or drop file here or</h4> -->
                     <c-button outlined @click="selectFile()">Select file</c-button>
                 </c-row>
@@ -186,8 +185,8 @@ function containsFilterString(str: string): boolean {
                 <c-button @click="pageIdx--; exportData.pop()" outlined>Cancel</c-button>
                 <c-button @click="pageIdx++; exportFile()" :disabled="!chooseToContinue">Export</c-button>
             </c-row>
-        </c-flex>
-        <c-flex v-show="pageIdx == 3">
+        </div>
+        <div v-show="pageIdx == 3">
             <h2>Exporting File</h2>
             <p>Please wait, this might take few minutes.</p>
             <c-progress-bar indeterminate></c-progress-bar>
@@ -197,8 +196,8 @@ function containsFilterString(str: string): boolean {
                 :headers.prop="exportHeaders"
                 hide-footer=true>
             </c-data-table>
-        </c-flex>
-        <c-flex v-show="pageIdx == 4">
+        </div>
+        <div v-show="pageIdx == 4">
             <h2>Export complete</h2>
             <p>
                 All files have been uploaded to SD Connect. You can now
@@ -210,8 +209,8 @@ function containsFilterString(str: string): boolean {
                 @click="exportData.pop(); chooseToContinue = false; pageIdx = 1">
                 New Export
             </c-button>
-        </c-flex>
-    </c-container>
+        </div>
+    </div>
 </template>
 
 <style scoped>
@@ -224,7 +223,7 @@ c-autocomplete {
 }
 
 #drop-area {
-    border: 3px solid var(--csc-primary);
+    border: 3px solid var(--c-primary-600);
     margin-top: 20px;
     margin-bottom: 20px;
     padding: 40px;
