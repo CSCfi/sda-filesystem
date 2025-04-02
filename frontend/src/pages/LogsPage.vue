@@ -7,10 +7,10 @@ import {
     CDataTableHeader,
     CDataTableData,
     CDataTableDataItem,
-    CDataTableFooterOptions,
     CPaginationOptions,
-} from 'csc-ui/dist/types';
+} from '@cscfi/csc-ui/dist/types';
 import { reactive, ref, watch, computed, onUnmounted } from 'vue';
+import { mdiFilterVariant, mdiTrayArrowDown } from '@mdi/js';
 
 const logHeaders: CDataTableHeader[] = [
     { key: 'loglevel', value: 'Level', sortable: false },
@@ -31,9 +31,6 @@ const logsKey = ref(0)
 const filterStr = ref("")
 const interval = ref(setInterval(() => addLogsToTable(), 1000))
 
-const footerOptions: CDataTableFooterOptions = {
-    itemsPerPageOptions: [5, 10, 15, 20],
-}
 const paginationOptions: CPaginationOptions = {
     itemCount: logDataTable.length,
     itemsPerPage: 5,
@@ -88,16 +85,16 @@ function containsFilterString(str: string): boolean {
 </script>
 
 <template>
-    <c-container class="fill-width">
+    <div class="container">
         <c-row id="log-title-row" justify="space-between" align="center">
             <h2>Logs</h2>
             <c-button id="export-button" text no-radius @click="SaveLogs(logData)">
-                <i class="mdi mdi-tray-arrow-down" slot="icon"></i>
                 Export detailed logs
+                <c-icon :path="mdiTrayArrowDown"></c-icon>
             </c-button>
         </c-row>
         <c-text-field label="Filter items" v-model="filterStr">
-            <i class="mdi mdi-filter-variant" slot="pre"></i>
+            <c-icon :path="mdiFilterVariant" size="16" slot="pre"></c-icon>
         </c-text-field>
         <c-data-table
             id="log-table"
@@ -108,11 +105,10 @@ function containsFilterString(str: string): boolean {
             :key="logsKey"
             :data.prop="logDataTableFiltered"
             :headers.prop="logHeaders"
-            :footerOptions.prop="footerOptions"
             :pagination.prop="paginationOptions"
             :hide-footer="logDataTable.length <= 5">
         </c-data-table>
-    </c-container>
+    </div>
 </template>
 
 <style scoped>
