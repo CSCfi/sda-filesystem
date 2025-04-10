@@ -15,10 +15,11 @@ require (
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/neicnordic/crypt4gh v1.12.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/wailsapp/wails/v2 v2.9.2
-	golang.org/x/crypto v0.27.0
-	golang.org/x/sys v0.29.0
-	golang.org/x/term v0.24.0
+	github.com/wailsapp/wails/v2 v2.10.1
+	github.com/winfsp/cgofuse v1.6.0
+	golang.org/x/crypto v0.36.0
+	golang.org/x/sys v0.31.0
+	golang.org/x/term v0.30.0
 )
 
 require (
