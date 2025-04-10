@@ -181,7 +181,7 @@ func GetBuckets(rep string) ([]Metadata, error) {
 // GetObjects returns metadata for all the objects in a particular bucket.
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
-func GetObjects(rep, bucket, path string, prefix ...string) ([]Metadata, error) {
+func GetObjects(_, bucket, path string, prefix ...string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(url.PathEscape(bucket)),
 	}

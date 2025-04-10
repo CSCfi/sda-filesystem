@@ -92,7 +92,7 @@ func MountFilesystem(mount string, fun func(string, string, int), ready chan<- a
 	fi.nodes = (*C.nodes_t)(C.malloc(C.sizeof_struct_Nodes))
 
 	m := C.CString(mount)
-	defer C.free(unsafe.Pointer(m))
+	defer C.free(unsafe.Pointer(m)) //nolint:nlreturn
 	defer C.fflush(nil)
 
 	fuseDebug := 0
@@ -239,9 +239,7 @@ func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metad
 					break
 				}
 			}
-			tmp := buckets[i]
-			buckets[i] = buckets[lastIdx]
-			buckets[lastIdx] = tmp
+			buckets[i], buckets[lastIdx] = buckets[lastIdx], buckets[i]
 			lastIdx--
 		}
 	}

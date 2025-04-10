@@ -50,6 +50,6 @@ func (ph *ProjectHandler) trackProjectProgress(rep, name string, count int) {
 	wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project.Name, project.Repository, progress)
 }
 
-func (fh *ProjectHandler) deleteProjects() {
-	fh.progress = make(map[Project][]int)
+func (ph *ProjectHandler) deleteProjects() {
+	ph.progress = make(map[Project][]int)
 }

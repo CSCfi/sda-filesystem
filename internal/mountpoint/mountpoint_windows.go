@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"unsafe"
 
 	"sda-filesystem/internal/logs"
-
-	"golang.org/x/sys/windows"
 )
 
 var CheckMountPoint = func(mount string) error {
@@ -34,6 +31,7 @@ var CheckMountPoint = func(mount string) error {
 func WaitForUpdateSignal(ch chan<- []string) {
 }
 
+/*
 func BytesAvailable(dir string) (freeBytes uint64, err error) {
 	lazy := windows.NewLazySystemDLL("kernel32.dll")
 	if err = lazy.Load(); err != nil {
@@ -60,3 +58,4 @@ func BytesAvailable(dir string) (freeBytes uint64, err error) {
 
 	return
 }
+*/

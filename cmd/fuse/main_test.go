@@ -197,7 +197,8 @@ func TestLogin(t *testing.T) {
 				return "", fmt.Errorf("should not have called askForPassword()")
 			},
 			func(password string) error {
-				if password != "89bf5cifu6vo" {
+				expected := "89bf5cifu6vo" // #nosec G101
+				if password != expected {
 					return fmt.Errorf("incorrect password. Expected=89bf5cifu6vo, received=%s", password)
 				}
 
@@ -216,7 +217,8 @@ func TestLogin(t *testing.T) {
 				return passwords[count-1], nil
 			},
 			func(password string) error {
-				if password == "hwd82bkwe" {
+				expected := "hwd82bkwe" // #nosec G101
+				if password == expected {
 					return nil
 				}
 
