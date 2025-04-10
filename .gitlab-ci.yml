@@ -85,7 +85,7 @@ test:
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
     - go mod tidy && go mod vendor
-    - CI=true go test -v -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v frontend)
+    - CI=true go test -tags=fuse3 -v -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v frontend)
 
 build-artifacts:
   stage: build
