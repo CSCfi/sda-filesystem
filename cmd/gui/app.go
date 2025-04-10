@@ -247,7 +247,7 @@ func (a *App) CheckExistence(file, bucket string) (found bool) {
 	return slices.Contains(chld, filepath.Base(file+".c4gh"))
 }
 
-func (a *App) ExportFile(file, folder string) error {
+func (a *App) ExportFile(_, _ string) error {
 	time.Sleep(1000 * time.Millisecond)
 	/*err := airlock.Upload(file, folder, 4000)
 	if err != nil {

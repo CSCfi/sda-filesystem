@@ -31,9 +31,9 @@ import (
 
 func searchNode(path string) *C.node_t {
 	cpath := C.CString(path)
-	defer C.free(unsafe.Pointer(cpath))
+	defer C.free(unsafe.Pointer(cpath)) //nolint:nlreturn
 
-	return C.search_node(fi.nodes, cpath)
+	return C.search_node(fi.nodes, cpath) //nolint:nlreturn
 }
 
 // getPathNodeNames returns a slice of strings containing the original names of nodes along the path to `node`
@@ -74,7 +74,7 @@ func updateParentSizes(node *C.node_t, oldSize C.off_t) {
 // UnmountFilesystem unmounts fuse, which automatically frees memory in C
 func UnmountFilesystem() {
 	cMount := C.CString(fi.mount)
-	defer C.free(unsafe.Pointer(cMount))
+	defer C.free(unsafe.Pointer(cMount)) //nolint:nlreturn
 
 	errno := C.unmount_filesystem(cMount)
 	if errno > 0 {
