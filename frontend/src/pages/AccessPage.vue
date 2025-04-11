@@ -144,7 +144,7 @@ function refresh() {
             <c-button
                 class="continue-button"
                 size="large"
-                @click="loading = true; InitFuse()"
+                @click="if (!loading) InitFuse(); loading = true;"
                 :loading="loading"
                 :disabled="!mountpoint">
                 Continue

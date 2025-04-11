@@ -177,8 +177,9 @@ func (a *App) InitFuse() {
 			}()
 		}()
 		ret := filesystem.MountFilesystem(a.mountpoint, a.ph.trackProjectProgress, wait)
-
-		os.Exit(ret)
+		if ret > 0 {
+			logs.Errorf("Exit status %d", ret)
+		}
 	}()
 }
 

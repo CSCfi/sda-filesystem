@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libfuse3-3 \
     libc6 \
     psmisc \
+    fuse3 \
     bash \
     curl \
     nano \

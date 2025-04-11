@@ -22,6 +22,8 @@
 const int MAX_READ = 1 << 20;
 
 static void s3_destroy(void *private_data) {
+    WaitForLock();
+
     nodes_t *n = (nodes_t *)private_data;
     free_nodes(n);
     free(n);
@@ -143,7 +145,7 @@ static int s3_getattr(const char *path, struct stat *stbuf) {
 }
 
 static void *s3_init(struct fuse_conn_info *conn) {
-    nodes_t *n = InitialiseFilesystem();
+    nodes_t *n = GetFilesystem();
     n->uid = getuid();
     n->gid = getgid();
 
@@ -225,17 +227,4 @@ int mount_filesystem(const char *mount, int debug) {
     fuse_opt_free_args(&args);
 
     return res;
-}
-
-int unmount_filesystem(const char *mount) {
-#if defined(__linux__)
-    int res = umount2(mount, MNT_DETACH);
-#elif defined(__APPLE__)
-    int res = unmount(mount, MNT_FORCE);
-#endif
-
-    if (res)
-        return errno;
-
-    return 0;
 }
