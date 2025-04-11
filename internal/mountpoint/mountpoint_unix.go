@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"sda-filesystem/internal/logs"
@@ -16,6 +18,8 @@ import (
 
 // CheckMountPoint verifies that the filesystem can be created in directory 'mount'
 var CheckMountPoint = func(mount string) error {
+	_ = Unmount(mount) // In case previous run did not unmount the directory
+
 	// Verify mount point exists
 	info, err := os.Stat(mount)
 	if os.IsNotExist(err) {
@@ -64,6 +68,25 @@ func WaitForUpdateSignal(ch chan<- []string) {
 		<-s
 		ch <- []string{"update"}
 	}
+}
+
+func Unmount(mount string) error {
+	logs.Debugf("Starting to unmount %s", mount)
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("fusermount3", "-u", mount)
+	case "darwin":
+		cmd = exec.Command("diskutil", "unmount", mount)
+	}
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("unmounting filesystem failed: %w", err)
+	}
+	logs.Debug("Filesystem unmounted")
+
+	return nil
 }
 
 /*

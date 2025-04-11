@@ -19,10 +19,10 @@ import (
 	"runtime"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -73,18 +73,26 @@ func updateParentSizes(node *C.node_t, oldSize C.off_t) {
 
 // UnmountFilesystem unmounts fuse, which automatically frees memory in C
 func UnmountFilesystem() {
-	cMount := C.CString(fi.mount)
-	defer C.free(unsafe.Pointer(cMount)) //nolint:nlreturn
+	fi.mu.RLock()
+	defer fi.mu.RUnlock()
 
-	errno := C.unmount_filesystem(cMount)
-	if errno > 0 {
-		logs.Warningf("Unmounting filesystem failed: %s", syscall.Errno(errno).Error())
+	err := mountpoint.Unmount(fi.mount)
+	if err != nil {
+		logs.Warning(err)
 	}
+}
+
+//export WaitForLock
+func WaitForLock() {
+	fi.mu.RLock()
 }
 
 // RefreshFilesystem clears cache and creates a new fileystem that will reflect any changes
 // that have occurred in the repositories. Does not unmount fuse at any point.
 func RefreshFilesystem() {
+	fi.mu.Lock()
+	defer fi.mu.Unlock()
+
 	logs.Info("Updating Data Gateway")
 	C.free_nodes(fi.nodes)
 	api.ClearCache()

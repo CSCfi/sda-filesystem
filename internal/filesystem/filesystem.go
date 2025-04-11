@@ -43,6 +43,7 @@ type fuseInfo struct {
 	nodes   *C.nodes_t
 	ready   chan<- any
 	guiFun  func(string, string, int)
+	mu      sync.RWMutex
 }
 
 // bucketInfo is a packet of information sent through a channel to createObjects()
@@ -89,7 +90,10 @@ func MountFilesystem(mount string, fun func(string, string, int), ready chan<- a
 	fi.mount = mount
 	fi.ready = ready
 	fi.guiFun = fun
+
+	fi.mu.Lock()
 	fi.nodes = (*C.nodes_t)(C.malloc(C.sizeof_struct_Nodes))
+	InitialiseFilesystem()
 
 	m := C.CString(mount)
 	defer C.free(unsafe.Pointer(m)) //nolint:nlreturn
@@ -103,10 +107,15 @@ func MountFilesystem(mount string, fun func(string, string, int), ready chan<- a
 	return int(C.mount_filesystem(m, C.int(fuseDebug)))
 }
 
+//export GetFilesystem
+func GetFilesystem() *C.nodes_t {
+	fi.mu.Unlock()
+
+	return fi.nodes
+}
+
 // InitialiseFilesystem initializes the in-memory filesystem database
-//
-//export InitialiseFilesystem
-func InitialiseFilesystem() *C.nodes_t {
+func InitialiseFilesystem() {
 	logs.Info("Initializing in-memory Data Gateway database")
 	defer checkPanic()
 
@@ -226,8 +235,6 @@ func InitialiseFilesystem() *C.nodes_t {
 	case fi.ready <- nil:
 	default:
 	}
-
-	return fi.nodes
 }
 
 func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metadata) {
