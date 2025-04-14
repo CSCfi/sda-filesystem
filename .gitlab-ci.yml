@@ -56,6 +56,8 @@ jfrog-go-audit:
   tags:
     - sds
   script:
+    # Update upstream package checksums in case they have changed
+    - go mod vendor
     # Configure JFrog Artifactory repositories
     - jf config import "${JF_CONFIG}"
     - jf go-config --repo-resolve $ARTIFACTORY_SERVER
