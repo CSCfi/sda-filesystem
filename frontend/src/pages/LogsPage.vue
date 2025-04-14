@@ -28,7 +28,7 @@ const logDataTableFiltered = computed(() => logDataTable.filter(row => {
 }))
 
 const logsKey = ref(0)
-const filterStr = ref("") 
+const filterStr = ref("")
 const interval = ref(setInterval(() => addLogsToTable(), 1000))
 
 const footerOptions: CDataTableFooterOptions = {
@@ -65,12 +65,12 @@ function addLogsToTable() {
 
     let tableData: CDataTableData[] = logData.slice(logDataTable.length).map((logRow: main.Log) => {
         let timestamp: CDataTableDataItem = {
-            "value": logRow.timestamp, 
+            "value": logRow.timestamp,
             "formattedValue": logRow.timestamp.split(".")[0],
         };
         let level: CDataTableDataItem = {
             "component": {
-                tag: 'c-status', 
+                tag: 'c-status',
                 params: { type: logRow.loglevel },
             },
             "value": logRow.loglevel.charAt(0).toUpperCase() + logRow.loglevel.slice(1)
@@ -99,14 +99,14 @@ function containsFilterString(str: string): boolean {
         <c-text-field label="Filter items" v-model="filterStr">
             <i class="mdi mdi-filter-variant" slot="pre"></i>
         </c-text-field>
-        <c-data-table 
+        <c-data-table
             id="log-table"
             class="gateway-table"
-            no-data-text="No logs available" 
+            no-data-text="No logs available"
             sortBy="timestamp"
             sort-direction="desc"
-            :key="logsKey" 
-            :data.prop="logDataTableFiltered" 
+            :key="logsKey"
+            :data.prop="logDataTableFiltered"
             :headers.prop="logHeaders"
             :footerOptions.prop="footerOptions"
             :pagination.prop="paginationOptions"

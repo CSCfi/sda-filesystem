@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { DeleteProjects } from '../../wailsjs/go/main/ProjectHandler'
 import { reactive, ref, onMounted, computed } from 'vue'
 import {
     GetDefaultMountPoint,
@@ -62,6 +63,7 @@ onMounted(() => {
     GetDefaultMountPoint().then((dir: string) => {
         mountpoint.value = dir;
     })
+    DeleteProjects(); // so that reloading in development mode does not duplicate data
 })
 
 EventsOn('showProgress', () => {

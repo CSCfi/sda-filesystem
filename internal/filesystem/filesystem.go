@@ -90,6 +90,7 @@ func MountFilesystem(mount string, fun func(string, string, int), ready chan<- a
 	fi.mount = mount
 	fi.ready = ready
 	fi.guiFun = fun
+	fi.mu = sync.RWMutex{}
 
 	fi.mu.Lock()
 	fi.nodes = (*C.nodes_t)(C.malloc(C.sizeof_struct_Nodes))
