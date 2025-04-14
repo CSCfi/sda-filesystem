@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- `go mod vendor` to `jf audit` pipeline to pre-emptively handle changing checksums in upstream package repos
 - run `wails generate module` in renovate `postUpgradeTasks`
 
 ### Changed
