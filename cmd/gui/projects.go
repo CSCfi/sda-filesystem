@@ -17,7 +17,7 @@ type ProjectHandler struct {
 }
 
 func NewProjectHandler() *ProjectHandler {
-	return &ProjectHandler{progress: make(map[Project][]int)}
+	return &ProjectHandler{}
 }
 
 func (ph *ProjectHandler) SetContext(ctx context.Context) {
@@ -50,6 +50,6 @@ func (ph *ProjectHandler) trackProjectProgress(rep, name string, count int) {
 	wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project.Name, project.Repository, progress)
 }
 
-func (ph *ProjectHandler) deleteProjects() {
+func (ph *ProjectHandler) DeleteProjects() {
 	ph.progress = make(map[Project][]int)
 }

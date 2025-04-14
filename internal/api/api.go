@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -151,7 +152,7 @@ func GetProfile() (bool, error) {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
 	}
 	ai.token = ai.userProfile.DesktopToken
-	if ai.userProfile.SDConnect {
+	if ai.userProfile.SDConnect && !slices.Contains(ai.repositories, SDConnect) {
 		ai.repositories = append(ai.repositories, SDConnect)
 	}
 

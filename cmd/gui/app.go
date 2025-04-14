@@ -219,7 +219,7 @@ func (a *App) FilesOpen() bool {
 func (a *App) RefreshFuse() {
 	time.Sleep(200 * time.Millisecond)
 
-	a.ph.deleteProjects()
+	a.ph.DeleteProjects()
 	filesystem.RefreshFilesystem()
 
 	buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
