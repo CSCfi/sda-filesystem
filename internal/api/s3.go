@@ -135,6 +135,7 @@ func initialiseS3Client() error {
 		o.BaseEndpoint = aws.String(ai.proxy)
 		o.UsePathStyle = true
 		o.EndpointResolverV2 = &resolverV2{}
+		o.DisableLogOutputChecksumValidationSkipped = true
 	})
 
 	logs.Debug("Initialised S3 client")
