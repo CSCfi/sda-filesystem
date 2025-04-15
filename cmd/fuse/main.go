@@ -232,9 +232,10 @@ func main() {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, os.Interrupt)
 	go func() {
-		<-s
-		logs.Info("Shutting down Data Gateway")
-		filesystem.UnmountFilesystem()
+		for range s {
+			logs.Info("Shutting down Data Gateway")
+			filesystem.UnmountFilesystem()
+		}
 	}()
 
 	ret := filesystem.MountFilesystem(mount, nil, wait)
