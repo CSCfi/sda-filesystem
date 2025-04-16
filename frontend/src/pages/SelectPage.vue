@@ -34,6 +34,7 @@ EventsOn('setRepositories', function(reps: {[key: string]: boolean}) {
         <c-loader :hide="initialized || disabled"></c-loader>
         <RepositorySelect
             v-for="(repositoryDisabled, rep) in repositories"
+            :key="rep"
             @selected="(status: boolean) => selectedRepos[rep] = status"
             :disabled="props.disabled || repositoryDisabled"
             :repository="(rep as string)">
