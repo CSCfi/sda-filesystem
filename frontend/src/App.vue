@@ -2,11 +2,12 @@
 import { CToastMessage, CToastType } from '@cscfi/csc-ui/dist/types'
 import { ref, computed, onMounted } from 'vue'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime'
-import { InitializeAPI, InitFuse, Quit } from '../wailsjs/go/main/App'
+import { InitializeAPI, Quit } from '../wailsjs/go/main/App'
 import { mdiLogoutVariant } from '@mdi/js'
 
 interface ComponentType {
     name: string
+    tab: string
     visible: boolean
     props?: {[key:string]:boolean}
     active?: boolean
@@ -18,23 +19,24 @@ const initialized = ref(false)
 const selected = ref(false)
 const accessed = ref(false)
 
-const currentPage = ref("Select")
+const currentTab = ref("Select")
 const componentData = computed<ComponentType[]>(() => ([
     {
-        name: "Select",
+        name: "SelectPage",
+        tab: "Select",
         visible: !selected.value,
         props: {
             initialized: initialized.value,
             disabled: disabled.value,
         },
     },
-    { name: "Access", visible: selected.value, active: selected.value },
-    { name: "Export", visible: selected.value, disabled: !accessed.value },
-    { name: "Logs", visible: true }
+    { name: "AccessPage", tab: "Access", visible: selected.value, active: selected.value },
+    { name: "ExportPage", tab: "Export", visible: selected.value, disabled: !accessed.value },
+    { name: "LogsPage", tab: "Logs", visible: true }
 ]))
 
 const visibleTabs = computed(() => componentData.value.filter(data => data.visible))
-
+// eslint-disable-next-line no-undef
 const toasts = ref<HTMLCToastsElement | null>(null);
 
 onMounted(() => {
@@ -64,7 +66,7 @@ EventsOn('showToast', (title: string, err: string) => {
 
 EventsOn('selectFinished', () => {
     selected.value = true;
-    currentPage.value = 'Access';
+    currentTab.value = 'Access';
 })
 
 EventsOn('fuseReady', () => (accessed.value = true))
@@ -77,17 +79,19 @@ EventsOn('fuseReady', () => (accessed.value = true))
             <h4>Data Gateway</h4>
             <c-spacer></c-spacer>
             <div id="tab-wrapper">
-                <c-tabs v-model="currentPage" borderless v-control>
+                <c-tabs v-model="currentTab" borderless v-control>
                     <c-tab
                         v-for="tab in visibleTabs"
-                        :value="tab.name"
+                        :key="tab.tab"
+                        :value="tab.tab"
                         :active="tab.active"
                         :disabled="tab.disabled"
-                    >{{ tab.name }}</c-tab>
+                    >{{ tab.tab }}</c-tab>
                     <c-tab-items>
                     <c-tab-item
                         v-for="tab in visibleTabs"
-                        :value="tab.name"
+                        :key="tab.tab"
+                        :value="tab.tab"
                     ></c-tab-item>
                     </c-tab-items>
                 </c-tabs>
@@ -107,7 +111,8 @@ EventsOn('fuseReady', () => (accessed.value = true))
         <div id="content">
             <component
                 v-for="data in componentData"
-                v-show="data.name === currentPage"
+                v-show="data.tab === currentTab"
+                :key="data.name"
                 :is="data.name"
                 v-bind="data.props">
             </component>

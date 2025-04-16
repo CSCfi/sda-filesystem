@@ -47,7 +47,7 @@ EventsOn('newLogEntry', function(entry: main.Log) {
     logData.push(entry);
 })
 
-EventsOn('saveLogsAndQuit', function(entry: main.Log) {
+EventsOn('saveLogsAndQuit', function() {
     SaveLogs(logData).then(() => Quit());
 })
 
