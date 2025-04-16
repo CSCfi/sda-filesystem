@@ -9,17 +9,31 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- (users) test if chosen mount point can be unmounted in case previous runtime failed to unmount directory
+- (users) log level `trace` that shows logs from libfuse
 - `go mod vendor` to `jf audit` pipeline to pre-emptively handle changing checksums in upstream package repos
 - run `wails generate module` in renovate `postUpgradeTasks`
 
 ### Changed
 
+- (users) password is no longer required
+- imported files are decrypted locally
+- data import uses AWS S3
+- binaries now work with the current KrakenD setup
+- refactored the code to use libfuse instead of cgofuse
 - (users) Updated service description text on login card (#22)
 - replacing field `skip-pkg-cache` with `skip-cache` for `golangci-lint-action` in GitHub workflow
 
 ### Fixed
 
+- (users) data import should be faster than before
+- (users) `_segments` containers are hidden
+- wails does not exit due to unmounting
 - wails install in renovate
+
+### Removed
+
+- (admins) support for Windows. Will be hopefully added back later
 
 ## [2024.6.0] - 2024-06-07
 
