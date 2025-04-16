@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bullseye
+FROM python:3.13-slim-bullseye
 
 COPY --chmod=755 ./dev-tools/containers/mockauth/mock_auth.py /usr/local/bin
 
