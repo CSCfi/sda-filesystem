@@ -35,7 +35,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: docker.io/hashicorp/vault:1.18.1
+    image: docker.io/hashicorp/vault:1.19.1
     container_name: vault
     env_file:
       - .env.keystone
@@ -65,7 +65,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: docker.io/hashicorp/vault:1.18.1
+    image: docker.io/hashicorp/vault:1.19.1
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
