@@ -2,252 +2,230 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"path/filepath"
-	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/google/uuid"
+	"github.com/neicnordic/crypt4gh/keys"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
-const chunkSize = 1 << 25
+const SDSubmit string = "SD-Apply"
+const SDConnect string = "SD-Connect"
 
-var hi = httpInfo{requestTimeout: 20, httpRetry: 3, repositories: make(map[string]fuseInfo)}
-var allRepositories = make(map[string]fuseInfo)
+var ai = apiInfo{
+	hi: httpInfo{
+		requestTimeout: 60,
+		httpRetry:      3,
+		client:         &http.Client{},
+	},
+	vi: vaultInfo{
+		keyName: uuid.NewString(),
+	},
+	repositories: []string{}, // SD Apply will be added here once it works with S3
+}
 var downloadCache *cache.Ristretto
 
-// httpInfo contains all necessary variables used during HTTP requests
+// apiInfo contains variables required for Data Gateway to work with KrakendD
+type apiInfo struct {
+	proxy        string
+	token        string
+	password     string // base64 encoded
+	repositories []string
+	userProfile  profile
+	hi           httpInfo
+	vi           vaultInfo
+}
+
+// httpInfo contains variables used during HTTP requests
 type httpInfo struct {
 	requestTimeout int
 	httpRetry      int
-	certPath       string
-	basicToken     string
-	sdsToken       string
 	client         *http.Client
-	preventEnable  bool
-	repositories   map[string]fuseInfo
+	s3Client       *s3.Client
 }
 
-// If you wish to add a new repository, it must implement the following functions
-type fuseInfo interface {
-	getEnvs() error
-	authenticate(...string) error
-	getNthLevel(string, ...string) ([]Metadata, error)
-	updateAttributes([]string, string, any) error
-	downloadData([]string, any, int64, int64) error
+type profile struct {
+	Username     string `json:"username"`
+	ProjectName  string `json:"project"`
+	ProjectType  string `json:"projectType"`
+	DesktopToken string `json:"access_token"`
+	PI           bool   `json:"PI"`
+	SDConnect    bool   `json:"sdConnect"`
+	S3Access     bool   `json:"s3Access"`
 }
 
-// Metadata contains node metadata fetched from an api
-type Metadata struct {
-	Bytes int64  `json:"bytes"`
-	Name  string `json:"name"`
-}
-
-// RequestError is used to obtain the status code from the HTTP request
+// RequestError is used to obtain the status code from a HTTP request
 type RequestError struct {
 	StatusCode int
+	errStr     string
 }
 
-func (re *RequestError) Error() string {
-	return fmt.Sprintf("API responded with status %d %s", re.StatusCode, http.StatusText(re.StatusCode))
-}
-
-// GetAllRepositories returns the names of every possible repository.
-// Every repository needs to add itself to the allRepositories map in an init function
-var GetAllRepositories = func() []string {
-	var names []string
-	for key := range allRepositories {
-		names = append(names, key)
+func (re *RequestError) Error() (err string) {
+	if re.errStr != "" {
+		krakendErr := struct { // Sometimes KrakenD sends an error in this format
+			Message string `json:"message"`
+			Status  int    `json:"status"`
+		}{}
+		unmarshalErr := json.Unmarshal([]byte(re.errStr), &krakendErr)
+		if unmarshalErr != nil {
+			err = fmt.Sprintf("%d %s", re.StatusCode, re.errStr)
+		} else {
+			err = fmt.Sprintf("%d %s", krakendErr.Status, krakendErr.Message)
+		}
+	} else {
+		err = fmt.Sprintf("%d %s", re.StatusCode, http.StatusText(re.StatusCode))
 	}
 
-	return names
+	return
 }
 
-// GetEnabledRepositories returns the name of every repository the user has enabled
-var GetEnabledRepositories = func() []string {
-	var names []string
-	for key := range hi.repositories {
-		names = append(names, key)
-	}
-
-	return names
-}
-
-// SetRequestTimeout redefines hi.requestTimeout
+// SetRequestTimeout redefines the timeout for an http request
 var SetRequestTimeout = func(timeout int) {
-	hi.requestTimeout = timeout
+	ai.hi.requestTimeout = timeout
 }
 
-// GetEnvs gets the environment variables for repository 'r'
-var GetEnvs = func(r string) error {
-	return allRepositories[r].getEnvs()
-}
-
-// GetEnv looks up environment variable given in 'name'
+// GetEnv looks up environment variable given in `name`
 var GetEnv = func(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
 	if !ok {
-		return "", fmt.Errorf("Environment variable %s not set", name)
+		return "", fmt.Errorf("environment variable %s not set", name)
 	}
 	if verifyURL {
-		if err := validURL(env); err != nil {
-			return "", fmt.Errorf("Environment variable %s not a valid URL: %w", name, err)
+		if _, err := url.ParseRequestURI(env); err != nil {
+			return "", fmt.Errorf("environment variable %s not a valid URL: %w", name, err)
 		}
 	}
 
 	return env, nil
 }
 
-var validURL = func(value string) error {
-	u, err := url.ParseRequestURI(value)
-	if err != nil {
-		return fmt.Errorf("%s is an invalid URL: %w", value, err)
-	}
-	if u.Scheme != "https" {
-		return fmt.Errorf("%s does not have scheme 'https'", value)
-	}
-
-	return nil
-}
-
-// GetCommonEnvs gets the environmental varibles that are needed for all repositories
-// This may need to be changed if new repositories are added
-func GetCommonEnvs() (err error) {
-	if hi.certPath, err = GetEnv("FS_CERTS", false); err != nil {
-		return err
-	}
-	if hi.sdsToken, err = GetEnv("SDS_ACCESS_TOKEN", false); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-var GetSDSToken = func() string {
-	return hi.sdsToken
-}
-
-// InitializeCache creates a cache for downloaded data
-func InitializeCache() error {
+// Setup reads the necessary environment varibles needed for requests,
+// generates key pair for vault, and initialises s3 client
+func Setup() error {
 	var err error
+	ai.proxy, err = GetEnv("PROXY_URL", true)
+	if err != nil {
+		return fmt.Errorf("required environment variables missing: %w", err)
+	}
+
+	ai.token, err = GetEnv("SDS_ACCESS_TOKEN", false)
+	if err != nil {
+		return fmt.Errorf("required environment variables missing: %w", err)
+	}
+
 	downloadCache, err = cache.NewRistrettoCache()
 	if err != nil {
-		return fmt.Errorf("Could not create cache: %w", err)
+		return fmt.Errorf("failed to create cache: %w", err)
 	}
 
-	return nil
-}
-
-// InitializeClient initializes a global http client
-func InitializeClient() error {
-	// Handle certificates if ones are set
-	caCertPool := x509.NewCertPool()
-	if len(hi.certPath) > 0 {
-		caCert, err := os.ReadFile(hi.certPath)
-		if err != nil {
-			return fmt.Errorf("Reading certificate file failed: %w", err)
-		}
-		caCertPool.AppendCertsFromPEM(caCert)
-	} else {
-		caCertPool = nil
+	if err = initialiseS3Client(); err != nil {
+		return fmt.Errorf("failed to initialise S3 client: %w", err)
 	}
 
-	// Set up HTTP client
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.MaxConnsPerHost = 100
-	tr.MaxIdleConnsPerHost = 100
-	tr.TLSClientConfig = &tls.Config{
-		RootCAs:    caCertPool,
-		MinVersion: tls.VersionTLS12,
-	}
-	tr.ForceAttemptHTTP2 = true
-	tr.DisableKeepAlives = false
-
-	jar, err := cookiejar.New(&cookiejar.Options{})
+	var publicKey [chacha20poly1305.KeySize]byte
+	publicKey, ai.vi.privateKey, err = keys.GenerateKeyPair()
 	if err != nil {
-		return fmt.Errorf("Failed to create a cookie jar: %w", err)
+		return fmt.Errorf("failed to generate key pair: %w", err)
 	}
-
-	hi.client = &http.Client{
-		Transport: tr,
-		Jar:       jar,
-	}
-
-	logs.Debug("Initializing HTTP client successful")
+	ai.vi.publicKey = base64.StdEncoding.EncodeToString(publicKey[:])
 
 	return nil
 }
 
-var testURL = func(url string) error {
-	response, err := hi.client.Head(url)
+func GetProfile() (bool, error) {
+	err := MakeRequest("GET", "/profile", nil, nil, nil, &ai.userProfile)
 	if err != nil {
-		return err
+		return false, fmt.Errorf("failed to get user profile: %w", err)
 	}
-	response.Body.Close()
+	ai.token = ai.userProfile.DesktopToken
+	if ai.userProfile.SDConnect && !slices.Contains(ai.repositories, SDConnect) {
+		ai.repositories = append(ai.repositories, SDConnect)
+	}
+
+	return ai.userProfile.S3Access, nil
+}
+
+// Authenticate checks that user passes the authentication checks in KrakenD with the given password.
+var Authenticate = func(password string) error {
+	ai.password = base64.StdEncoding.EncodeToString([]byte(password))
+	err := MakeRequest("GET", "/credentials/check", nil, nil, nil, nil)
+	if err != nil {
+		ai.password = ""
+
+		return fmt.Errorf("failed to authenicate user: %w", err)
+	}
 
 	return nil
 }
 
-var BasicToken = func(username, password string) string {
-	hi.basicToken = base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-
-	return hi.basicToken
+// ToPrint returns repository name in printable format
+func ToPrint(rep string) string {
+	return strings.ReplaceAll(rep, "-", " ")
 }
 
-var Authenticate = func(rep string, auth ...string) error {
-	err := allRepositories[rep].authenticate(auth...)
-	if err == nil && !hi.preventEnable {
-		hi.repositories[rep] = allRepositories[rep]
-	}
-
-	return err
+// GetAllRepositories returns the list of all possible repositories
+func GetAllRepositories() []string {
+	return []string{SDConnect, SDSubmit}
 }
 
-func SettleRepositories() {
-	hi.preventEnable = true
+// GetRepositories returns the list of repositories the filesystem can access
+func GetRepositories() []string {
+	return ai.repositories
 }
 
-// makeRequest sends HTTP requests and parses the responses
-var MakeRequest = func(url string, query, headers map[string]string, body io.Reader, ret any) error {
+func GetS3Client() *s3.Client {
+	return ai.hi.s3Client
+}
+
+func GetUsername() string {
+	return ai.userProfile.Username
+}
+
+func GetProjectName() string {
+	return ai.userProfile.ProjectName
+}
+
+func GetProjectType() string {
+	return ai.userProfile.ProjectType
+}
+
+func SDConnectEnabled() bool {
+	return ai.userProfile.SDConnect
+}
+
+func IsProjectManager() bool {
+	return ai.userProfile.PI
+}
+
+// MakeRequest sends HTTP request to KrakenD and parses the response
+var MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 	var response *http.Response
 
 	// Build HTTP request
-	var err error
-	var timeout time.Duration
-	var request *http.Request
-
-	if body != nil {
-		if reflect.ValueOf(body) == reflect.Zero(reflect.TypeOf(body)) { // manifest file in airlock
-			request, err = http.NewRequest("PUT", url, nil)
-		} else {
-			request, err = http.NewRequest("PUT", url, body)
-		}
-		timeout = time.Duration(108000) * time.Second
-	} else {
-		request, err = http.NewRequest("GET", url, nil)
-		timeout = time.Duration(hi.requestTimeout) * time.Second
-	}
-
+	request, err := http.NewRequest(method, ai.proxy+path, reqBody)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating request failed: %w", err)
 	}
 
+	// Adjust request timeout
+	timeout := time.Duration(ai.hi.requestTimeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
 	request = request.WithContext(ctx)
+	defer cancel()
 
 	// Place query params if they are set
 	q := request.URL.Query()
@@ -256,10 +234,9 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	}
 	request.URL.RawQuery = q.Encode()
 
-	if body == nil {
-		request.Header.Set("Authorization", "Bearer "+hi.sdsToken)
-	} else {
-		request.Header.Set("Authorization", "Basic "+hi.basicToken)
+	request.Header.Set("Authorization", "Bearer "+ai.token)
+	if ai.password != "" {
+		request.Header.Set("CSC-Password", ai.password)
 	}
 
 	// Place additional headers if any are available
@@ -271,14 +248,14 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	escapedURL = strings.ReplaceAll(escapedURL, "\r", "")
 
 	// Execute HTTP request
-	// retry the request as specified by hi.httpRetry variable
+	// Retry the request as specified by ai.hi.httpRetry variable
 	count := 0
 	for {
-		response, err = hi.client.Do(request)
-		logs.Debugf("Trying Request %s, attempt %d/%d", escapedURL, count+1, hi.httpRetry)
+		response, err = ai.hi.client.Do(request)
+		logs.Debugf("Trying Request %s, attempt %d/%d", escapedURL, count+1, ai.hi.httpRetry)
 		count++
 
-		if err != nil && count >= hi.httpRetry {
+		if err != nil && count >= ai.hi.httpRetry {
 			return err
 		}
 		if err == nil {
@@ -287,51 +264,19 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	}
 	defer response.Body.Close()
 
-	if body == nil && response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
-		return &RequestError{response.StatusCode}
+	// Read response body (size unknown)
+	respBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
 	}
-	if body != nil && response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusAccepted {
-		return &RequestError{response.StatusCode}
+	if response.StatusCode >= 400 {
+		return &RequestError{response.StatusCode, string(respBody)}
 	}
 
-	// Parse request
-	switch v := ret.(type) {
-	case *SpecialHeaders:
-		v.Decrypted = (response.Header.Get("X-Decrypted") == "True")
-
-		if v.Decrypted {
-			if headerSize := response.Header.Get("X-Header-Size"); headerSize != "" {
-				if v.HeaderSize, err = strconv.ParseInt(headerSize, 10, 0); err != nil {
-					logs.Warningf("Could not convert header X-Header-Size to integer: %w", err)
-					v.Decrypted = false
-				}
-			} else {
-				logs.Warningf("Could not find header X-Header-Size in response")
-				v.Decrypted = false
-			}
-		}
-
-		if segSize := response.Header.Get("X-Segmented-Object-Size"); segSize != "" {
-			if v.SegmentedObjectSize, err = strconv.ParseInt(segSize, 10, 0); err != nil {
-				logs.Warningf("Could not convert header X-Segmented-Object-Size to integer: %w", err)
-				v.SegmentedObjectSize = -1
-			}
-		} else {
-			v.SegmentedObjectSize = -1
-		}
-
-		_, _ = io.Copy(io.Discard, response.Body)
-	case []byte:
-		if _, err = io.ReadFull(response.Body, v); err != nil {
-			return fmt.Errorf("Copying response failed: %w", err)
-		}
-	case *[]byte:
-		if *v, err = io.ReadAll(response.Body); err != nil {
-			return fmt.Errorf("Copying response failed: %w", err)
-		}
-	default:
-		if err = json.NewDecoder(response.Body).Decode(v); err != nil {
-			return fmt.Errorf("Unable to decode response: %w", err)
+	// Parse response
+	if ret != nil {
+		if err := json.Unmarshal(respBody, ret); err != nil {
+			return fmt.Errorf("unable to decode response: %w", err)
 		}
 	}
 
@@ -340,71 +285,16 @@ var MakeRequest = func(url string, query, headers map[string]string, body io.Rea
 	return nil
 }
 
-var GetNthLevel = func(rep string, fsPath string, nodes ...string) ([]Metadata, error) {
-	return hi.repositories[rep].getNthLevel(filepath.FromSlash(fsPath), nodes...)
-}
-
-// UpdateAttributes modifies attributes of node in 'fsPath'.
-// 'nodes' contains the original names of each node in 'fsPath'
-var UpdateAttributes = func(nodes []string, fsPath string, attr any) error {
-	return hi.repositories[nodes[0]].updateAttributes(nodes[1:], filepath.FromSlash(fsPath), attr)
-}
-
-// DownloadData requests data between range [start, end) from an API.
-var DownloadData = func(nodes []string, path string, start int64, end int64, maxEnd int64) ([]byte, error) {
-	// chunk index of cache
-	chunk := start / chunkSize
-	// start coordinate of chunk
-	chStart := chunk * chunkSize
-	// end coordinate of chunk
-	chEnd := (chunk + 1) * chunkSize
-
-	// Final chunk may be shorter than others if file size restricts it
-	if chEnd > maxEnd {
-		chEnd = maxEnd
-	}
-
-	ofst := start - chStart
-	endofst := end - chStart
-
-	// We create the cache key based on path and requested bytes
-	cacheKey := toCacheKey(nodes, chStart)
-	response, found := downloadCache.Get(cacheKey)
-
-	if !found {
-		buf := make([]byte, chEnd-chStart)
-		err := hi.repositories[nodes[0]].downloadData(nodes[1:], buf, chStart, chEnd)
-		if err != nil {
-			return nil, fmt.Errorf("Retrieving data failed for %s: %w", path, err)
-		}
-
-		downloadCache.Set(cacheKey, buf, int64(len(buf)), time.Minute*60)
-		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chStart, chEnd)
-
-		if endofst > int64(len(buf)) {
-			endofst = int64(len(buf))
-		}
-
-		return buf[ofst:endofst], nil
-	}
-
-	ret := response.([]byte)
-	if endofst > int64(len(ret)) {
-		endofst = int64(len(ret))
-	}
-	logs.Debugf("Retrieved file %s from cache, with coordinates [%d, %d)", path, start, end)
-
-	return ret[ofst:endofst], nil
-}
-
 func toCacheKey(nodes []string, chunkIdx int64) string {
-	return strings.Join(nodes, "_") + "_" + strconv.FormatInt(chunkIdx, 10)
+	return strings.Join(nodes, "/") + "_" + strconv.FormatInt(chunkIdx, 10)
 }
 
+// ClearCache empties the entire ristretto cache
 var ClearCache = func() {
 	downloadCache.Clear()
 }
 
+// DeleteFileFromCache clears all entries from a given file/object from cache
 var DeleteFileFromCache = func(nodes []string, size int64) {
 	i := int64(0)
 	for i < size {

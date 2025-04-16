@@ -20,18 +20,18 @@ import (
 	"golang.org/x/term"
 )
 
-var mount, project, logLevel string
+var mount, logLevel string
 var requestTimeout int
-var sdsubmit bool
+
+// var sdsubmitOnly bool
 
 type loginReader interface {
 	readPassword() (string, error)
-	getStream() io.Reader
 	getState() error
 	restoreState() error
 }
 
-// stdinReader reads username and password from stdin (implements loginReader)
+// stdinReader reads password from stdin (implements loginReader)
 type stdinReader struct {
 	originalState *term.State
 }
@@ -40,10 +40,6 @@ func (r *stdinReader) readPassword() (string, error) {
 	pwd, err := term.ReadPassword(int(syscall.Stdin))
 
 	return string(pwd), err
-}
-
-func (r *stdinReader) getStream() io.Reader {
-	return os.Stdin
 }
 
 func (r *stdinReader) getState() (err error) {
@@ -60,9 +56,10 @@ type credentialsError struct {
 }
 
 func (e *credentialsError) Error() string {
-	return "Incorrect username or password"
+	return "Incorrect password"
 }
 
+// userInput reads user's input from io.Reader and sends it into a channel
 func userInput(r io.Reader, ch chan<- []string) {
 	scanner := bufio.NewScanner(r)
 	var answer string
@@ -78,43 +75,34 @@ func userInput(r io.Reader, ch chan<- []string) {
 	}
 }
 
-var askForLogin = func(lr loginReader) (string, string, error) {
-	fmt.Printf("\nLog in with your CSC credentials\n")
-	fmt.Print("Enter username: ")
-	scanner := bufio.NewScanner(lr.getStream())
-
-	var username string
-	if scanner.Scan() {
-		username = scanner.Text()
+func applyCommand(ch <-chan []string) {
+	for {
+		input := <-ch
+		if len(input) == 0 {
+			continue
+		}
+		switch strings.ToLower(input[0]) {
+		case "update":
+			if filesystem.FilesOpen() {
+				logs.Errorf("You have files in use which prevents updating Data Gateway")
+			} else {
+				filesystem.RefreshFilesystem()
+			}
+		case "clear":
+			if len(input) > 1 {
+				path := filepath.Clean(input[1])
+				if err := filesystem.ClearPath(path); err != nil {
+					logs.Error(err)
+				}
+			} else {
+				logs.Errorf("Cannot clear cache without path")
+			}
+		}
 	}
-	if err := scanner.Err(); err != nil {
-		return "", "", fmt.Errorf("Could not read username: %w", err)
-	}
-
-	fmt.Print("Enter password: ")
-	password, err := lr.readPassword()
-	fmt.Println()
-	if err != nil {
-		return "", "", fmt.Errorf("Could not read password: %w", err)
-	}
-
-	return username, password, nil
 }
 
-func checkEnvVars() (string, string, bool) {
-	username, usernameEnv := os.LookupEnv("CSC_USERNAME")
-	password, passwordEnv := os.LookupEnv("CSC_PASSWORD")
-
-	if usernameEnv && passwordEnv {
-		return username, password, true
-	}
-
-	return "", "", false
-}
-
-func authenticate(username, password string) error {
-	token := api.BasicToken(username, password)
-	err := api.Authenticate(api.SDConnect, token, project)
+func authenticate(password string) error {
+	err := api.Authenticate(password)
 
 	var re *api.RequestError
 	if errors.As(err, &re) && re.StatusCode == 401 {
@@ -124,19 +112,29 @@ func authenticate(username, password string) error {
 	return err
 }
 
-// login asks for CSC username and password
-var login = func(lr loginReader) error {
-	username, password, exists := checkEnvVars()
-	if exists {
-		logs.Info("Using username and password from environment variables CSC_USERNAME and CSC_PASSWORD")
+var askForPassword = func(lr loginReader) (string, error) {
+	fmt.Print("Enter password: ")
+	password, err := lr.readPassword()
+	fmt.Println()
+	if err != nil {
+		return "", fmt.Errorf("could not read password: %w", err)
+	}
 
-		return authenticate(username, password)
+	return password, nil
+}
+
+var login = func(lr loginReader) error {
+	password, ok := os.LookupEnv("CSC_PASSWORD")
+	if ok {
+		logs.Info("Using password from environment variable CSC_PASSWORD")
+
+		return authenticate(password)
 	}
 
 	// Get the state of the terminal before running the password prompt
 	err := lr.getState()
 	if err != nil {
-		return fmt.Errorf("Failed to get terminal state: %w", err)
+		return fmt.Errorf("failed to get terminal state: %w", err)
 	}
 
 	// check for ctrl+c signal
@@ -153,12 +151,12 @@ var login = func(lr loginReader) error {
 	}()
 
 	for {
-		username, password, err := askForLogin(lr)
+		password, err := askForPassword(lr)
 		if err != nil {
 			return err
 		}
 
-		err = authenticate(username, password)
+		err = authenticate(password)
 
 		var e *credentialsError
 		if errors.As(err, &e) {
@@ -169,29 +167,6 @@ var login = func(lr loginReader) error {
 
 		return err
 	}
-}
-
-func determineAccess() error {
-	submitSuccess := true
-	if err := api.Authenticate(api.SDSubmit); err != nil {
-		if sdsubmit {
-			return err
-		}
-		submitSuccess = false
-		logs.Error(err)
-	}
-
-	if !sdsubmit {
-		if err := login(&stdinReader{}); err != nil {
-			if !submitSuccess {
-				return err
-			}
-			logs.Error(err)
-			logs.Infof("Dropping %s", api.SDConnect)
-		}
-	}
-
-	return nil
 }
 
 func processFlags() error {
@@ -214,76 +189,56 @@ func processFlags() error {
 
 func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
-	flag.StringVar(&project, "project", "", "SD Connect project if it differs from that in the VM")
-	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {debug,info,warning,error}")
-	flag.BoolVar(&sdsubmit, "sdapply", false, "Connect only to SD Apply")
+	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {trace,debug,info,warning,error}")
+	// flag.BoolVar(&sdsubmitOnly, "sdapply", false, "Connect only to SD Apply")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
 func main() {
-	err := api.GetCommonEnvs()
-	if err != nil {
-		logs.Fatal(err)
-	}
-	err = api.InitializeCache()
-	if err != nil {
-		logs.Fatal(err)
-	}
-	err = api.InitializeClient()
-	if err != nil {
-		logs.Fatal(err)
-	}
-
 	flag.Parse()
-	err = processFlags()
+	if err := processFlags(); err != nil {
+		logs.Fatal(err)
+	}
+	if err := api.Setup(); err != nil {
+		logs.Fatal(err)
+	}
+
+	access, err := api.GetProfile()
 	if err != nil {
 		logs.Fatal(err)
 	}
 
-	for _, rep := range api.GetAllRepositories() {
-		if err := api.GetEnvs(rep); err != nil {
+	// if !sdsubmitOnly {
+	if !api.SDConnectEnabled() {
+		// logs.Warningf("You do not have SD Connect enabled")
+		logs.Fatal("You do not have SD Connect enabled")
+	} else if !access {
+		logs.Info("Passwordless session not possible")
+		if err := login(&stdinReader{}); err != nil {
 			logs.Fatal(err)
 		}
 	}
+	// }
 
-	err = determineAccess()
-	if err != nil {
-		logs.Fatal(err)
-	}
-
-	fs := filesystem.InitializeFilesystem(nil)
-	fs.PopulateFilesystem(nil)
-
-	var wait = make(chan []string)
-	go mountpoint.WaitForUpdateSignal(wait)
-	go userInput(os.Stdin, wait)
+	var wait = make(chan any)
+	var cmd = make(chan []string)
 	go func() {
-		for {
-			input := <-wait
-			if len(input) == 0 {
-				continue
-			}
-			switch strings.ToLower(input[0]) {
-			case "update":
-				if fs.FilesOpen() {
-					logs.Errorf("You have files in use which prevents updating Data Gateway")
-				} else {
-					fs.RefreshFilesystem(nil, nil)
-				}
-			case "clear":
-				if len(input) > 1 {
-					path := filepath.Clean(input[1])
-					if err := fs.ClearPath(path); err != nil {
-						logs.Error(err)
-					}
-				} else {
-					logs.Errorf("Cannot clear cache without path")
-				}
-			}
+		<-wait // Wait for fuse to be ready
+		go mountpoint.WaitForUpdateSignal(cmd)
+		go userInput(os.Stdin, cmd)
+		go applyCommand(cmd)
+	}()
+
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, os.Interrupt)
+	go func() {
+		for range s {
+			logs.Info("Shutting down Data Gateway")
+			filesystem.UnmountFilesystem()
 		}
 	}()
 
-	filesystem.MountFilesystem(fs, mount)
+	ret := filesystem.MountFilesystem(mount, nil, wait)
 
-	logs.Info("Shutting down Data Gateway")
+	os.Exit(ret)
 }

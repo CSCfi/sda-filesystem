@@ -39,7 +39,7 @@ func TestSetAndGet(t *testing.T) {
 	key := "bob"
 	content := "¿why is a raven like a writing desk?"
 
-	ok := c.Set(key, content, int64(len(content)), -1)
+	ok := c.Set(key, []byte(content), int64(len(content)), -1)
 	if !ok {
 		t.Fatal("Saving value failed")
 	}
@@ -49,10 +49,8 @@ func TestSetAndGet(t *testing.T) {
 	if !ok {
 		t.Fatal("Could not find value from cache")
 	}
-	if str, ok := val.(string); !ok {
-		t.Fatalf("Stored value is not a string")
-	} else if str != content {
-		t.Fatalf("Cache returned incorrect value\nExpected=%s\nReceived=%s", content, str)
+	if string(val) != content {
+		t.Fatalf("Cache returned incorrect value\nExpected=%s\nReceived=%s", content, string(val))
 	}
 }
 
@@ -68,7 +66,7 @@ func TestSetAndGet_Expired(t *testing.T) {
 	key := "muumi"
 	content := "To infinity and beyond"
 
-	ok := c.Set(key, content, int64(len(content)), 2*time.Second)
+	ok := c.Set(key, []byte(content), int64(len(content)), 2*time.Second)
 	if !ok {
 		t.Fatal("Saving value failed")
 	}
@@ -89,7 +87,7 @@ func TestDel(t *testing.T) {
 		t.Fatal("Cache is nil")
 	}
 
-	c.Set("key", "I am information", int64(len("I am information")), -1)
+	c.Set("key", []byte("I am information"), int64(len("I am information")), -1)
 	c.Del("key")
 
 	time.Sleep(wait)
@@ -109,9 +107,9 @@ func TestClear(t *testing.T) {
 		t.Fatal("Cache is nil")
 	}
 
-	c.Set("key", "I am information", int64(len("I am information")), -1)
-	c.Set("key2", "More information", int64(len("More information")), -1)
-	c.Set("key3", "very secret info", int64(len("very secret info")), -1)
+	c.Set("key", []byte("I am information"), int64(len("I am information")), -1)
+	c.Set("key2", []byte("More information"), int64(len("More information")), -1)
+	c.Set("key3", []byte("very secret info"), int64(len("very secret info")), -1)
 
 	time.Sleep(wait)
 	c.Clear()

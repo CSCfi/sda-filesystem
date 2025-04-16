@@ -3,14 +3,14 @@
 Build:
 (if upx is not install remove the flag)
 ```bash
-wails build -upx -trimpath -clean -s
+wails build -upx -trimpath -clean -s -tags webkit2_41
 ```
 
 or download the release:
 ```bash
 sudo mkdir -p /etc/sda-fuse
 cd /etc/sda-fuse/
-export version=2024.06.0
+export version=2025.4.0
 wget "https://github.com/CSCfi/sda-filesystem/releases/download/${version}/go-fuse-gui-linux-amd64.zip"
 ```
 

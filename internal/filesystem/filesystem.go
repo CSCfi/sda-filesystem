@@ -1,515 +1,464 @@
 package filesystem
 
+/*
+#cgo CFLAGS: -D GO_CGO_BUILD -D_FILE_OFFSET_BITS=64 -g -Wall -Wextra -Wno-unused-parameter
+#cgo linux pkg-config: fuse3
+#cgo darwin pkg-config: fuse
+#include <stdio.h>
+#include <time.h>
+#include <sys/stat.h>
+#include "helpers.h"
+#include "enabled.h"
+*/
+import "C"
+
 import (
 	"crypto/sha256"
 	"fmt"
-	"net/url"
-	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
-	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
+	"unsafe"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 
-	"github.com/billziss-gh/cgofuse/fuse"
+	"github.com/sirupsen/logrus"
 )
 
-const sRDONLY = 00444
 const numRoutines = 4
+const segmentsSuffix = "_segments"
 
 var signalBridge func()
-var host *fuse.FileSystemHost
 
-// Fuse stores the filesystem structure
-type Fuse struct {
-	fuse.FileSystemBase
-	lock    sync.Mutex
-	inoLock sync.RWMutex
-	ino     uint64
-	root    *node
-	openmap map[uint64]nodeAndPath
+var fi = fuseInfo{}
+
+// fuseInfo stores variables relevant to the filesystem
+type fuseInfo struct {
 	mount   string
+	headers map[C.ino_t]string
+	nodes   *C.nodes_t
+	ready   chan<- any
+	guiFun  func(string, string, int)
+	mu      sync.RWMutex
 }
 
-// node represents one file or directory
-type node struct {
-	stat              fuse.Stat_t
-	chld              map[string]*node
-	opencnt           int
-	originalName      string // so that api calls work
-	decryptionChecked bool
-	denied            bool
+// bucketInfo is a packet of information sent through a channel to createObjects()
+type bucketInfo struct {
+	path       string
+	headers    map[string]api.VaultHeaderVersions
+	bucketNode *goNode
+	segmented  bool
 }
 
-// nodeAndPath contains the node itself and a list of names which are the original path to the node. Yes, a very original name
-type nodeAndPath struct {
-	node *node
-	path []string
+// goNode is a representation of a file/directory in Go before it is moved to C
+type goNode struct {
+	meta     api.Metadata
+	header   string
+	children map[string]*goNode
 }
 
-// containerInfo is a packet of information sent through a channel to createObjects()
-type containerInfo struct {
-	containerPath string
-	timestamp     fuse.Timespec
-	fs            *Fuse
+type metadata struct {
+	api.Metadata
+	header      string
+	segmentSize int64
 }
 
-type Project struct {
-	Name       string `json:"name"`
-	Repository string `json:"repository"`
-}
-
-// SetSignalBridge initializes the signal which informs QML that program has paniced
+// SetSignalBridge initializes the signal which informs Wails that program has paniced
 func SetSignalBridge(fn func()) {
 	signalBridge = fn
 }
 
-// CheckPanic recovers from panic if one occured. Used for GUI
-var CheckPanic = func() {
+// checkPanic recovers from panic if one occured. Used for GUI
+var checkPanic = func() {
 	if signalBridge != nil {
 		if err := recover(); err != nil {
-			logs.Error(fmt.Errorf("Something went wrong when creating Data Gateway: %w",
-				fmt.Errorf("%v\n\n%s", err, string(debug.Stack()))))
+			logs.Errorf("Something went wrong when creating Data Gateway: %w",
+				fmt.Errorf("%v\n\n%s", err, string(debug.Stack())))
 			// Send alert
 			signalBridge()
 		}
 	}
 }
 
-// InitializeFileSystem initializes the in-memory filesystem database
-var InitializeFilesystem = func(send func(Project)) *Fuse {
-	logs.Info("Initializing in-memory Data Gateway database")
-	timestamp := fuse.Now()
-	fs := Fuse{}
-	fs.ino++
-	fs.openmap = map[uint64]nodeAndPath{}
-	fs.root = newNode(fs.ino, fuse.S_IFDIR|sRDONLY, 0, 0, timestamp)
-	fs.root.stat.Size = -1
-
-	for _, enabled := range api.GetEnabledRepositories() {
-		logs.Info("Beginning filling in ", strings.ReplaceAll(enabled, "-", " "))
-
-		// Create folders for each repository
-		md := api.Metadata{Name: enabled, Bytes: -1}
-		fs.makeNode(fs.root, md, enabled, fuse.S_IFDIR|sRDONLY, timestamp)
-
-		// These are the folders displayed in GUI
-		projects, _ := api.GetNthLevel(enabled, enabled)
-		for _, project := range projects {
-			projectSafe := project.Name
-
-			// This is mainly here because of SD Submit
-			if u, err := url.ParseRequestURI(projectSafe); err == nil {
-				projectSafe = strings.TrimLeft(strings.TrimPrefix(projectSafe, u.Scheme), ":/")
-			}
-
-			projectSafe = removeInvalidChars(projectSafe)
-			projectPath := enabled + "/" + projectSafe
-
-			// Create a project/dataset directory
-			logs.Debugf("Creating directory %s", filepath.FromSlash(projectPath))
-			_, projectSafe = fs.makeNode(fs.root.chld[enabled], project, projectPath, fuse.S_IFDIR|sRDONLY, timestamp)
-
-			if send != nil {
-				send(Project{Repository: enabled, Name: projectSafe})
-			}
-		}
-	}
-
-	return &fs
-}
-
-// MountFilesystem mounts filesystem 'fs' to directory 'mount'
-func MountFilesystem(fs *Fuse, mount string) {
-	host = fuse.NewFileSystemHost(fs)
-	fs.mount = mount
-
-	options := []string{}
-	switch runtime.GOOS {
-	case "darwin":
-		options = append(options, "-o", "defer_permissions")
-		options = append(options, "-o", "volname="+path.Base(mount))
-		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
-		options = append(options, "-o", "iosize=262144")  // Value not optimized
-	case "linux":
-		options = append(options, "-o", "attr_timeout=0") // This causes the fuse to call getattr between open and read
-		options = append(options, "-o", "auto_unmount")
-	case "windows":
-		options = append(options, "-o", "umask=0222")
-		options = append(options, "-o", "uid=-1")
-		options = append(options, "-o", "gid=-1")
-	}
-
+// MountFilesystem mounts filesystem to directory 'mount'
+func MountFilesystem(mount string, fun func(string, string, int), ready chan<- any) int {
 	logs.Infof("Mounting Data Gateway at %s", mount)
-	host.Mount(mount, options)
-}
+	fi.mount = mount
+	fi.ready = ready
+	fi.guiFun = fun
+	fi.mu = sync.RWMutex{}
 
-// UnmountFilesystem unmounts filesystem if host is defined
-func UnmountFilesystem() {
-	if host != nil {
-		host.Unmount()
+	fi.mu.Lock()
+	fi.nodes = (*C.nodes_t)(C.malloc(C.sizeof_struct_Nodes))
+	InitialiseFilesystem()
+
+	m := C.CString(mount)
+	defer C.free(unsafe.Pointer(m)) //nolint:nlreturn
+	defer C.fflush(nil)
+
+	fuseDebug := 0
+	if logs.GetLevel() == logrus.TraceLevel {
+		fuseDebug = 1
 	}
+
+	return int(C.mount_filesystem(m, C.int(fuseDebug)))
 }
 
-// RefreshFilesystem clears cache and creates a new fileystem that will reflect any changes
-// that have occurred in the repositories. Does not unmount fuse at any point.
-func (fs *Fuse) RefreshFilesystem(initFunc func(Project), populateFunc func(string, string, int)) {
-	logs.Info("Updating Data Gateway")
-	api.ClearCache()
+//export GetFilesystem
+func GetFilesystem() *C.nodes_t {
+	fi.mu.Unlock()
 
-	newFs := InitializeFilesystem(initFunc)
-	newFs.PopulateFilesystem(populateFunc)
-	fs.ino = newFs.ino
-	fs.root = newFs.root
-	fs.openmap = newFs.openmap
+	return fi.nodes
 }
 
-// FilesOpen checks if any of the files are being used by the user
-func (fs *Fuse) FilesOpen() bool {
-	mount := fs.mount
-	switch runtime.GOOS {
-	case "linux":
-		_, err := exec.Command("fuser", "-m", mount).Output()
+// InitialiseFilesystem initializes the in-memory filesystem database
+func InitialiseFilesystem() {
+	logs.Info("Initializing in-memory Data Gateway database")
+	defer checkPanic()
 
-		return err == nil
-	case "darwin":
-		output, err := exec.Command("fuser", "-c", mount).Output()
+	// First get the metadata from S3 and build a tree in Go to represent the filesystem structure
+	root := newGoNode(api.Metadata{Name: "", Size: 0, LastModified: nil}, true)
+
+	numJobs := 0
+	bucketNodes := make(map[string]map[string]*goNode)
+	batchHeaders := make(map[string]api.BatchHeaders)
+	repositories := api.GetRepositories()
+
+	for _, rep := range repositories {
+		logs.Info("Beginning filling in ", api.ToPrint(rep))
+
+		// Create folder for repository
+		meta := api.Metadata{Name: rep, Size: 0, LastModified: nil}
+		makeNode(root.children, meta, true, "")
+
+		// Get buckets for repository
+		buckets, err := api.GetBuckets(rep)
 		if err != nil {
-			logs.Errorf("Update halted, could not determine if files are open: %w", err)
+			logs.Error(err)
 
-			return true
+			continue
+		}
+		buckets, segmentBuckets := separateSegmentBuckets(buckets)
+
+		numJobs += len(buckets)
+
+		parentChildren := root.children[rep].children
+		parentPath := rep
+
+		if rep == api.SDConnect {
+			project := api.GetProjectName()
+			projectPath := rep + "/" + project
+			logs.Debugf("Creating directory /%s", filepath.FromSlash(projectPath))
+			meta := api.Metadata{Name: project, Size: 0, LastModified: nil}
+			makeNode(parentChildren, meta, true, api.SDConnect)
+
+			parentPath = projectPath
+			parentChildren = parentChildren[project].children
+
+			if fi.guiFun != nil {
+				fi.guiFun(rep, project, len(buckets))
+			}
 		}
 
-		return len(output) > 0
-	case "windows":
-		volume, _ := os.Readlink(fs.mount)
-		output, err := exec.Command("handle.exe", "-a", "-nobanner", volume).Output()
+		// Fetching headers
+		headers, err := api.GetHeaders(rep, buckets)
 		if err != nil {
-			logs.Errorf("Update halted, could not determine if files are open: %w", err)
+			logs.Errorf("Failed to retrieve file headers for %s: %s", api.ToPrint(rep), err.Error())
 
-			return true
+			continue
+		}
+		logs.Infof("Retrieved file headers for %s", api.ToPrint(rep))
+		batchHeaders[parentPath] = headers
+
+		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
+
+		// Create bucket directories
+		for i := range buckets {
+			bucketPath := parentPath + "/" + buckets[i].Name
+			logs.Debugf("Creating directory /%s", filepath.FromSlash(bucketPath))
+			bucketSafe := makeNode(parentChildren, buckets[i], true, parentPath)
+
+			bucketNodes[parentPath][bucketSafe] = parentChildren[bucketSafe]
+
+			if rep != api.SDConnect && fi.guiFun != nil {
+				fi.guiFun(rep, bucketSafe, 1)
+			}
 		}
 
-		return strings.Contains(string(output), volume)
-	default:
-		for _, n := range fs.openmap {
-			if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
-				return true
+		for i := range segmentBuckets {
+			bucketName := strings.TrimSuffix(segmentBuckets[i].Name, segmentsSuffix)
+			if node, ok := parentChildren[bucketName]; ok {
+				node.meta.Name = segmentBuckets[i].Name
 			}
 		}
 	}
 
-	return false
-}
-
-// ClearPath is desined for situations where a file is edited in the repository and the user wants to read this new data.
-// Function clears cache for `path` and updates all its file sizes.
-func (fs *Fuse) ClearPath(path string) error {
-	logs.Infof("Clearing path %s", path)
-	n := fs.getNode(path, ^uint64(0))
-	if n.node == nil {
-		return fmt.Errorf("Path %s is invalid", path)
+	if fi.guiFun != nil {
+		fi.guiFun("", "", 0) // So that progressbar knows when to start to show progress
 	}
-
-	if n.path[0] != api.SDConnect {
-		return fmt.Errorf("Clearing cache only enabled for %s", api.SDConnect)
-	}
-
-	if len(n.path) < 3 {
-		return fmt.Errorf("Path needs to include a bucket")
-	}
-
-	containerPath := strings.Join(strings.Split(path, string(os.PathSeparator))[:3], "/")
-	objects, err := api.GetNthLevel(n.path[0], containerPath, n.path[1], n.path[2])
-	if err != nil {
-		return fmt.Errorf("Cache not cleared since new file sizes could not be obtained: %w", err)
-	}
-
-	objMap := map[string]int64{}
-	for _, obj := range objects {
-		objMap[obj.Name] = obj.Bytes
-	}
-
-	oldSize := n.node.stat.Size
-	timestamp := fuse.Now()
-	clearNode(n, objMap, timestamp)
-	calculateFinalSize(n.node)
-	fs.updateNodeSizesAlongPath(filepath.Dir(path), n.node.stat.Size-oldSize, timestamp)
-
-	logs.Info("Path cleared")
-
-	return nil
-}
-
-func clearNode(n nodeAndPath, meta map[string]int64, timestamp fuse.Timespec) {
-	if n.node.stat.Mode&fuse.S_IFMT == fuse.S_IFREG {
-		api.DeleteFileFromCache(n.path, n.node.stat.Size)
-		size, ok := meta[strings.Join(n.path[3:], "/")]
-		if ok {
-			n.node.stat.Size = size
-			n.node.decryptionChecked = false
-			n.node.stat.Ctim = timestamp
-		}
-
-		return
-	}
-
-	if meta != nil {
-		n.node.stat.Size = -1
-	}
-
-	for _, chld := range n.node.chld {
-		clearNode(nodeAndPath{chld, append(n.path, chld.originalName)}, meta, timestamp)
-	}
-}
-
-// PopulateFilesystem creates the rest of the nodes (files and directories) of the filesystem
-func (fs *Fuse) PopulateFilesystem(send func(string, string, int)) {
-	timestamp := fuse.Now()
 
 	var wg sync.WaitGroup
-	forChannel := make(map[string][]api.Metadata)
-	numJobs := 0
-	mapLock := sync.RWMutex{}
-
-	for rep := range fs.root.chld {
-		for pr := range fs.root.chld[rep].chld {
-			wg.Add(1)
-
-			go func(repository, project string) {
-				defer wg.Done()
-				defer CheckPanic()
-
-				var err error
-				var containers []api.Metadata
-				projectPath := repository + "/" + project
-
-				if repository == api.SDSubmit {
-					// Project, container, and object are terms used in SD Connect.
-					// SD Apply, on the other hand, uses datasets and files.
-					// Since fetching files for a dataset requires only one http request,
-					// one can think of datasets as equivalent to containers.
-					// This means that projects do not have a corresponding level in SD Apply, so here we skip
-					// filling in SD Apply while filling in projects.
-					containers = []api.Metadata{{Name: projectPath}}
-				} else {
-					logs.Debugf("Fetching data for %s", filepath.FromSlash(projectPath))
-					prntNode := fs.root.chld[repository].chld[project]
-					containers, err = api.GetNthLevel(repository, projectPath, prntNode.originalName)
-
-					if err != nil {
-						logs.Error(err)
-
-						return
-					}
-
-					for i, c := range containers {
-						var mode uint32 = fuse.S_IFDIR | sRDONLY
-
-						containerSafe := removeInvalidChars(c.Name)
-						containerPath := projectPath + "/" + containerSafe
-
-						// Create a file or a container (depending on repository)
-						logs.Debugf("Creating directory %s", filepath.FromSlash(containerPath))
-						_, containerSafe = fs.makeNode(prntNode, c, containerPath, mode, timestamp)
-						containers[i].Name = projectPath + "/" + containerSafe
-					}
-				}
-
-				mapLock.Lock()
-				forChannel[projectPath] = containers // LOCK
-				numJobs += len(containers)           // LOCK
-				mapLock.Unlock()
-
-				if send != nil {
-					send(repository, project, len(containers))
-				}
-			}(rep, pr)
-		}
-	}
-
-	wg.Wait()
-	if send != nil {
-		send("", "", 0) // So that progressbar knows when to start to show progress
-	}
-
-	jobs := make(chan containerInfo, numJobs)
+	jobs := make(chan bucketInfo, numJobs)
 
 	for w := 1; w <= numRoutines; w++ {
 		wg.Add(1)
-		go createObjects(w, jobs, &wg, send)
+		go createObjects(w, jobs, &wg)
 	}
 
-	for _, value := range forChannel {
-		for i := range value {
-			jobs <- containerInfo{containerPath: value[i].Name, timestamp: timestamp, fs: fs}
+	for path := range bucketNodes {
+		for nameSafe, node := range bucketNodes[path] {
+			segmented := strings.HasSuffix(node.meta.Name, segmentsSuffix)
+			node.meta.Name = strings.TrimSuffix(node.meta.Name, segmentsSuffix)
+			jobs <- bucketInfo{"/" + path + "/" + nameSafe, batchHeaders[path][node.meta.Name], node, segmented}
 		}
 	}
 	close(jobs)
 
 	wg.Wait()
 
-	// Calculate the size of higher level directories whose size currently is just -1.
-	calculateFinalSize(fs.root)
+	// Construct the array of nodes for C
+	num, objs := numberOfNodes(root)
+	fi.headers = make(map[C.ino_t]string, objs)
+	fi.nodes.nodes = (*C.node_t)(C.malloc(C.sizeof_struct_Node * C.size_t(num)))
+	fi.nodes.count = 1
+	nodeSlice := unsafe.Slice(fi.nodes.nodes, num)
+	nodeSlice[0] = goNodeToC(root, "")
+	nodeSlice[0].parent = nil
+	addNodeChildrenToC(nodeSlice, root, 0)
+
 	logs.Info("Data Gateway database completed")
-}
 
-var removeInvalidChars = func(str string) string {
-	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
-		"_", "|", "_", "@", "_", ":", "_", "&", "_", "!", "_", "?", "_",
-		"<", "_", ">", "_", "'", "_", "\"", "_"}
-
-	// Remove characters which may interfere with filesystem structure
-	r := strings.NewReplacer(forReplacer...)
-
-	return r.Replace(str)
-}
-
-func calculateFinalSize(n *node) int64 {
-	if n.stat.Size != -1 {
-		return n.stat.Size
+	select {
+	case fi.ready <- nil:
+	default:
 	}
-	n.stat.Size = 0
-	for _, value := range n.chld {
-		n.stat.Size += calculateFinalSize(value)
-	}
-
-	return n.stat.Size
 }
 
-var createObjects = func(_ int, jobs <-chan containerInfo, wg *sync.WaitGroup, send func(string, string, int)) {
-	defer wg.Done()
-	defer CheckPanic()
+func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metadata) {
+	lastIdx := len(buckets) - 1
+	for i := 0; i < lastIdx; i++ {
+		if strings.HasSuffix(buckets[i].Name, segmentsSuffix) {
+			for ; lastIdx > i; lastIdx-- {
+				if !strings.HasSuffix(buckets[lastIdx].Name, segmentsSuffix) {
+					break
+				}
+			}
+			buckets[i], buckets[lastIdx] = buckets[lastIdx], buckets[i]
+			lastIdx--
+		}
+	}
 
-	for j := range jobs {
-		containerPath := j.containerPath
-		fs := j.fs
-		timestamp := j.timestamp
+	return buckets[:lastIdx], buckets[lastIdx:]
+}
 
-		logs.Debugf("Fetching data for %s", filepath.FromSlash(containerPath))
+func numberOfNodes(node *goNode) (numNodes int, numObjects int) {
+	if node.children == nil {
+		return 1, 1
+	}
 
-		c := fs.getNode(containerPath, ^uint64(0))
-		if c.node == nil {
-			logs.Errorf("Bug in code? Cannot find node %s", containerPath)
+	numNodes++
+	for i := range node.children {
+		num, obj := numberOfNodes(node.children[i])
+		numNodes += num
+		numNodes += obj
+	}
 
-			continue
+	return
+}
+
+func goNodeToC(node *goNode, name string) C.node_t {
+	cNode := C.node_t{}
+	cNode.orig_name = C.CString(node.meta.Name)
+	cNode.name = C.CString(name)
+	cNode.stat.st_size = C.off_t(node.meta.Size)
+	cNode.chld_count = 0
+	cNode.children = nil
+	cNode.last_modified.tv_sec = 0
+	cNode.last_modified.tv_nsec = 0
+	cNode.offset = -1
+
+	if node.children == nil {
+		cNode.stat.st_mode = syscall.S_IFREG | 0444
+		cNode.stat.st_nlink = 1
+		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
+	} else {
+		cNode.stat.st_mode = syscall.S_IFDIR | 0444
+		cNode.stat.st_nlink = C.nlink_t(2 + len(node.children))
+	}
+
+	return cNode
+}
+
+// addNodeChildrenToC adds the children of `prnt` to slice `nodeSlice`, which represents the array of nodes in C.
+func addNodeChildrenToC(nodeSlice []C.node_t, prnt *goNode, prntIdx C.int64_t) (C.off_t, C.time_t) {
+	startIdx := fi.nodes.count
+	chldCount := C.int64_t(len(prnt.children))
+
+	nodeSlice[prntIdx].chld_count = chldCount
+	nodeSlice[prntIdx].children = &nodeSlice[startIdx] // Pointer to first child in array
+
+	// Make sure all the children are placed sequentially in the array
+	fi.nodes.count += chldCount
+
+	i := startIdx
+	for name, chld := range prnt.children {
+		nodeSlice[i] = goNodeToC(chld, name)
+		nodeSlice[i].parent = &nodeSlice[prntIdx]
+		i++
+	}
+
+	// Making sure sorting and searching use the same comparison function (the one in C)
+	C.sort_node_children(&nodeSlice[prntIdx])
+
+	i = startIdx
+	for ; i < startIdx+chldCount; i++ {
+		ino := C.ino_t(i)
+		nodeSlice[i].stat.st_ino = ino // ino is equivalent to the node's index in the array
+		chld := prnt.children[C.GoString(nodeSlice[i].name)]
+
+		size := nodeSlice[i].stat.st_size
+		modified := nodeSlice[i].last_modified.tv_sec
+
+		if len(chld.children) > 0 {
+			size, modified = addNodeChildrenToC(nodeSlice, chld, i)
+		} else if chld.header != "" {
+			fi.headers[ino] = chld.header
 		}
 
-		objects, err := api.GetNthLevel(c.path[0], containerPath, c.path[1:]...)
+		nodeSlice[prntIdx].stat.st_size += size
+		if modified > nodeSlice[prntIdx].last_modified.tv_sec {
+			nodeSlice[prntIdx].last_modified.tv_sec = modified
+		}
+	}
+
+	return nodeSlice[prntIdx].stat.st_size, nodeSlice[prntIdx].last_modified.tv_sec
+}
+
+var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer checkPanic()
+
+	for j := range jobs {
+		node := j.bucketNode
+		path := j.path
+		headers := j.headers
+		segmented := j.segmented
+
+		nodesSafe := strings.Split(path, "/")
+		repository := nodesSafe[1]
+
+		logs.Debugf("Fetching data for %s", filepath.FromSlash(path))
+		objects, err := api.GetObjects(repository, node.meta.Name, path)
 		if err != nil {
 			logs.Error(err)
 
 			continue
 		}
+		segmentSizes := map[string]int64{}
+		if segmented {
+			segmentSizes, err = getObjectSizesFromSegments(repository, node.meta.Name)
+			if err != nil {
+				logs.Warningf("Object sizes may not be correct: %s", err.Error())
+			}
+		}
 
-		nodesSafe := split(containerPath)
-		fs.createLevel(c.node, objects, containerPath, timestamp)
+		meta := make([]metadata, 0, len(objects))
+		for i := range objects {
+			// Prevent the creation of objects that are actually empty directories
+			// Not sure if this is still a problem
+			if strings.HasSuffix(objects[i].Name, "/") {
+				continue
+			}
 
-		if send != nil {
-			send(nodesSafe[0], nodesSafe[1], 1)
+			header := ""
+			versions, ok := headers[objects[i].Name]
+			if ok {
+				header = versions.Headers[strconv.Itoa(versions.LatestVersion)].Header
+			}
+			meta = append(meta, metadata{objects[i], header, segmentSizes[objects[i].Name]})
+		}
+
+		createLevel(node, meta, path)
+
+		if fi.guiFun != nil {
+			fi.guiFun(repository, nodesSafe[2], 1)
 		}
 	}
 }
 
-func (fs *Fuse) createLevel(prnt *node, objects []api.Metadata, prntPath string, tmsp fuse.Timespec) {
-	dirSize := make(map[string]int64)
-	dirChildren := make(map[string][]api.Metadata)
+// getObjectSizesFromSegments is used for getting the object sizes for buckets that
+// have a matching segments bucket.
+func getObjectSizesFromSegments(rep, bucket string) (map[string]int64, error) {
+	logs.Debugf("Fetching object sizes for container %s from matching segments container %s", bucket, rep)
+	objects, err := api.GetSegmentedObjects(rep, bucket+segmentsSuffix)
+	if err != nil {
+		return map[string]int64{}, fmt.Errorf("cannot fetch object sizes for container %s in %s: %w", bucket, rep, err)
+	}
 
-	for _, obj := range objects {
-		// Prevent the creation of objects that are actually empty directories
-		if strings.HasSuffix(obj.Name, "/") {
+	objectSizes := make(map[string]int64)
+	for i := range objects {
+		pathNames := strings.Split(objects[i].Name, "/")
+		actualObjectName := strings.Join(pathNames[:max(len(pathNames)-2, 0)], "/")
+		objectSizes[actualObjectName] += objects[i].Size
+	}
 
-			continue
-		}
+	return objectSizes, nil
+}
 
-		parts := strings.SplitN(obj.Name, "/", 2)
+func createLevel(prnt *goNode, meta []metadata, prntPath string) {
+	childrenMeta := make(map[string][]metadata)
+
+	for i := range meta {
+		parts := strings.SplitN(meta[i].Name, "/", 2)
 
 		// If true, create the final object file
 		if len(parts) == 1 {
-			objectSafe := removeInvalidChars(parts[0])
-			objectPath := prntPath + "/" + objectSafe
-			logs.Debugf("Creating file %s", filepath.FromSlash(objectPath))
-			fs.makeNode(prnt, obj, objectPath, fuse.S_IFREG|sRDONLY, tmsp)
+			logs.Debugf("Creating file %s", filepath.FromSlash(prntPath+"/"+meta[i].Name))
+			objectSafe := makeNode(prnt.children, meta[i].Metadata, false, prntPath)
+
+			prnt.children[objectSafe].header = meta[i].header
+			if prnt.children[objectSafe].meta.Size == 0 {
+				prnt.children[objectSafe].meta.Size = meta[i].segmentSize
+			}
 
 			continue
 		}
 
-		dirSize[parts[0]] += obj.Bytes
-		dirChildren[parts[0]] = append(dirChildren[parts[0]], api.Metadata{Name: parts[1], Bytes: obj.Bytes})
+		meta[i].Name = parts[1]
+		childrenMeta[parts[0]] = append(childrenMeta[parts[0]], meta[i])
 	}
 
 	// Create all unique subdirectories at this level
-	for key, value := range dirSize {
-		md := api.Metadata{Bytes: value, Name: key}
-		dirSafe := removeInvalidChars(key)
-		p := prntPath + "/" + dirSafe
-		logs.Debugf("Creating directory %s", filepath.FromSlash(p))
-		n, dirSafe := fs.makeNode(prnt, md, p, fuse.S_IFDIR|sRDONLY, tmsp)
-		fs.createLevel(n, dirChildren[key], prntPath+"/"+dirSafe, tmsp)
+	for key, value := range childrenMeta {
+		md := api.Metadata{Name: key, Size: 0, LastModified: nil}
+		logs.Debugf("Creating directory %s", filepath.FromSlash(prntPath+"/"+key))
+		dirSafe := makeNode(prnt.children, md, true, prntPath)
+		createLevel(prnt.children[dirSafe], value, prntPath+"/"+dirSafe)
 	}
 }
 
-// split deconstructs a filepath string into an array of strings
-func split(path string) []string {
-	return strings.Split(path, "/")
-}
-
-// newNode initializes a node struct
-var newNode = func(ino uint64, mode uint32, uid uint32, gid uint32, tmsp fuse.Timespec) *node {
-	self := node{
-		fuse.Stat_t{
-			Dev:      0,
-			Ino:      ino,
-			Mode:     mode,
-			Nlink:    1,
-			Uid:      uid,
-			Gid:      gid,
-			Atim:     tmsp,
-			Mtim:     tmsp,
-			Ctim:     tmsp,
-			Birthtim: tmsp,
-			Flags:    0,
-		},
-		nil,
-		0,
-		"",
-		false,
-		false}
-	// Initialize map of children if node is a directory
-	if fuse.S_IFDIR == self.stat.Mode&fuse.S_IFMT {
-		self.chld = map[string]*node{}
-	}
-
-	return &self
-}
-
-// makeNode adds a node into the fuse. Returns created node and its name in filesystem
-func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode uint32, timestamp fuse.Timespec) (*node, string) {
-	name := path.Base(nodePath)
-	dir := (fuse.S_IFDIR == mode&fuse.S_IFMT)
-	prntPath := path.Dir(nodePath)
-
-	if !dir {
+// makeNode adds a node into the Go tree structure. Returns node's name in filesystem.
+func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSafe string) string {
+	name := removeInvalidChars(meta.Name) // Redundant for buckets and project
+	if !isDir {
 		name = strings.TrimSuffix(name, ".c4gh")
 	}
 
-	possibleTwin := prnt.chld[name]
+	possibleTwin, ok := siblings[name]
 
 	// A folder or a file with the same name already exists
 	newName, origName := "", meta.Name
-	if possibleTwin != nil {
+	if ok {
 		// Create a unique suffix for file/folder and change name of node (whichever is possibly a file)
-		changeOtherNode := dir && (fuse.S_IFREG == possibleTwin.stat.Mode&fuse.S_IFMT)
-		changeDir := dir && (fuse.S_IFREG != possibleTwin.stat.Mode&fuse.S_IFMT)
+		changeOtherNode := isDir && possibleTwin.children == nil
+		changeDir := isDir && possibleTwin.children != nil
 
 		if changeOtherNode {
-			origName = possibleTwin.originalName
+			origName = possibleTwin.meta.Name
 		}
 		sum := fmt.Sprintf("%x", sha256.Sum256([]byte(origName)))[0:6]
 
@@ -522,7 +471,7 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 		}
 
 		if changeOtherNode {
-			prnt.chld[newName] = possibleTwin
+			siblings[newName] = possibleTwin
 		} else {
 			name = newName
 		}
@@ -533,128 +482,36 @@ func (fs *Fuse) makeNode(prnt *node, meta api.Metadata, nodePath string, mode ui
 		origName = strings.ReplaceAll(origName, "%", "%%")
 	}
 
-	if dir && name != meta.Name {
-		logs.Warningf("Directory %s under directory %s has had its name changed to %s", origName, prntPath, name)
-	} else if (!dir && name != strings.TrimSuffix(meta.Name, ".c4gh")) || newName != "" {
+	if isDir && name != meta.Name {
+		logs.Warningf("Directory %s under directory %s has had its name changed to %s", meta.Name, pathSafe, name)
+	} else if (!isDir && name != strings.TrimSuffix(meta.Name, ".c4gh")) || newName != "" {
 		if newName == "" {
 			newName = name
 		}
-		logs.Warningf("File %s under directory %s has had its name changed to %s", origName, prntPath, newName)
+		logs.Warningf("File %s under directory %s has had its name changed to %s", origName, pathSafe, newName)
 	}
 
-	fs.inoLock.Lock()
-	fs.ino++                                    // LOCK
-	n := newNode(fs.ino, mode, 0, 0, timestamp) // LOCK
-	fs.inoLock.Unlock()
+	siblings[name] = newGoNode(meta, isDir)
 
-	n.stat.Size = meta.Bytes
-	n.originalName = meta.Name
-	prnt.chld[name] = n
-	prnt.stat.Ctim = n.stat.Ctim
-	prnt.stat.Mtim = n.stat.Ctim
-
-	return n, name
+	return name
 }
 
-// lookupNode finds the node at the end of path
-var lookupNode = func(root *node, path string) (node *node, origPath []string) {
-	node = root
-	for _, c := range split(path) {
-		if c != "" {
-			if node == nil {
-				return
-			}
-
-			node = node.chld[c]
-			if node != nil {
-				origPath = append(origPath, node.originalName)
-			}
-		}
+func newGoNode(meta api.Metadata, isDir bool) *goNode {
+	node := goNode{meta, "", nil}
+	if isDir {
+		node.children = make(map[string]*goNode)
 	}
 
-	return
+	return &node
 }
 
-func (fs *Fuse) updateNodeSizesAlongPath(path string, diff int64, timestamp fuse.Timespec) {
-	node := fs.root
-	for _, c := range split(path) {
-		if c != "" {
-			if node == nil {
-				return
-			}
+var removeInvalidChars = func(str string) string {
+	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
+		"_", "|", "_", "@", "_", ":", "_", "&", "_", "!", "_", "?", "_",
+		"<", "_", ">", "_", "'", "_", "\"", "_"}
 
-			node = node.chld[c]
-			if node != nil {
-				node.stat.Size += diff
-				node.stat.Ctim = timestamp
-			}
-		}
-	}
-}
+	// Remove characters which may interfere with filesystem structure
+	r := strings.NewReplacer(forReplacer...)
 
-func (fs *Fuse) openNode(path string, dir bool) (int, uint64) {
-	n, origPath := lookupNode(fs.root, path)
-	if n == nil {
-		return -fuse.ENOENT, ^uint64(0)
-	}
-	if !dir && fuse.S_IFDIR == n.stat.Mode&fuse.S_IFMT {
-		return -fuse.EISDIR, ^uint64(0)
-	}
-	if dir && fuse.S_IFDIR != n.stat.Mode&fuse.S_IFMT {
-		return -fuse.ENOTDIR, ^uint64(0)
-	}
-	n.opencnt++
-	if n.opencnt == 1 {
-		fs.openmap[n.stat.Ino] = nodeAndPath{node: n, path: origPath}
-	}
-
-	return 0, n.stat.Ino
-}
-
-func (fs *Fuse) closeNode(fh uint64) int {
-	node := fs.openmap[fh].node
-	if node == nil {
-		return -fuse.ENOENT
-	}
-	node.opencnt--
-	if node.opencnt == 0 {
-		delete(fs.openmap, node.stat.Ino)
-	}
-
-	return 0
-}
-
-func (fs *Fuse) getNode(path string, fh uint64) nodeAndPath {
-	if fh == ^uint64(0) {
-		node, origPath := lookupNode(fs.root, path)
-
-		return nodeAndPath{node: node, path: origPath}
-	}
-
-	return fs.openmap[fh]
-}
-
-func (fs *Fuse) GetNodeChildren(path string) []string {
-	n := fs.getNode(path, ^uint64(0))
-	if n.node == nil {
-		return nil
-	}
-	chld := make([]string, len(n.node.chld))
-	i := 0
-	for _, value := range n.node.chld {
-		chld[i] = value.originalName
-		i++
-	}
-
-	sort.Strings(chld)
-
-	return chld
-}
-
-func (fs *Fuse) synchronize() func() {
-	fs.lock.Lock()
-
-	return func() {
-		fs.lock.Unlock()
-	}
+	return r.Replace(str)
 }

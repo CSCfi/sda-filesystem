@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/billziss-gh/cgofuse/fuse"
+	"github.com/winfsp/cgofuse/fuse"
 )
 
 func TestCheckMountPoint(t *testing.T) {

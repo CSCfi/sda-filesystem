@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 )
 
 var cache *Ristretto
@@ -20,23 +20,23 @@ type Ristretto struct {
 
 // Cacheable includes all the functions a struct must implement in order for it to be embedded in Ristretto
 type Cacheable interface {
-	Get(string) (any, bool)
-	Set(string, any, int64, time.Duration) bool
+	Get(string) ([]byte, bool)
+	Set(string, []byte, int64, time.Duration) bool
 	Del(string)
 	Clear()
 }
 
 // Because otherwise we cannot mock cache for tests
 type storage struct {
-	cache *ristretto.Cache
+	cache *ristretto.Cache[string, []byte]
 }
 
 // NewRistrettoCache initializes a cache
 var NewRistrettoCache = func() (*Ristretto, error) {
 	var err error
 	onceCache.Do(func() {
-		var ristrettoCache *ristretto.Cache
-		ristrettoCache, err = ristretto.NewCache(&ristretto.Config{
+		var ristrettoCache *ristretto.Cache[string, []byte]
+		ristrettoCache, err = ristretto.NewCache(&ristretto.Config[string, []byte]{
 			// Maximum number of items in cache
 			// A recommended number is expected maximum times 10
 			// so 30 * 10 = 300
@@ -61,17 +61,22 @@ var NewRistrettoCache = func() (*Ristretto, error) {
 }
 
 // Get returns item behind key "key" and a boolean representing whether the item was found or not
-func (s *storage) Get(key string) (any, bool) {
+func (s *storage) Get(key string) ([]byte, bool) {
 	return s.cache.Get(key)
 }
 
 // Set stores data to cache with specific key and ttl. If ttl == -1, RistrettoCacheTTL will be used.
-func (s *storage) Set(key string, value any, cost int64, ttl time.Duration) bool {
+func (s *storage) Set(key string, value []byte, cost int64, ttl time.Duration) bool {
 	if ttl == -1 {
 		ttl = RistrettoCacheTTL
 	}
 
-	return s.cache.SetWithTTL(key, value, cost, ttl)
+	ok := s.cache.SetWithTTL(key, value, cost, ttl)
+	if ok {
+		s.cache.Wait()
+	}
+
+	return ok
 }
 
 // Del deletes item with key "key" from cache

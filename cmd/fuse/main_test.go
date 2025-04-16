@@ -17,21 +17,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var errExpected = errors.New("Expected error for test")
+var errExpected = errors.New("expected error for test")
 
 // testReader implements loginReader and contains password
 type testReader struct {
-	pwd    string
-	err    error
-	stream io.Reader
+	pwd string
+	err error
 }
 
 func (r testReader) readPassword() (string, error) {
 	return r.pwd, r.err
-}
-
-func (r testReader) getStream() io.Reader {
-	return r.stream
 }
 
 func (r testReader) getState() error {
@@ -42,7 +37,7 @@ func (r testReader) restoreState() error {
 	return nil
 }
 
-// testStream is an io.Reader given to testReader
+// testStream is an io.Reader
 type testStream struct {
 	data []string
 	done bool
@@ -65,14 +60,6 @@ func (s *testStream) Read(p []byte) (int, error) {
 	s.idx++
 
 	return len(content), nil
-}
-
-func newTestReader(input []string, password string, sErr error, rErr error) *testReader {
-	return &testReader{
-		stream: &testStream{data: input, err: sErr},
-		pwd:    password,
-		err:    rErr,
-	}
 }
 
 func TestMain(m *testing.M) {
@@ -132,22 +119,18 @@ func TestUserInput_Error(t *testing.T) {
 	}
 }
 
-func TestAskForLogin(t *testing.T) {
+func TestAskForPassword(t *testing.T) {
 	var tests = []struct {
-		testname, username, password string
-		streamError, readerError     error
-		errorText                    string
+		testname, password string
+		readerError        error
+		errorText          string
 	}{
 		{
-			"OK", "Jones", "567ghk789", nil, nil, "",
+			"OK", "567ghk789", nil, "",
 		},
 		{
-			"FAIL_SCANNER", "Jim", "xtykr6ofcyul", errExpected, nil,
-			"Could not read username: " + errExpected.Error(),
-		},
-		{
-			"FAIL_READER", "Groot", "567ghk789", nil, errExpected,
-			"Could not read password: " + errExpected.Error(),
+			"FAIL_READER", "567ghk789", errExpected,
+			"could not read password: " + errExpected.Error(),
 		},
 	}
 
@@ -158,8 +141,8 @@ func TestAskForLogin(t *testing.T) {
 			sout := os.Stdout
 			os.Stdout = null
 
-			r := newTestReader([]string{tt.username}, tt.password, tt.streamError, tt.readerError)
-			str1, str2, err := askForLogin(r)
+			r := testReader{tt.password, tt.readerError}
+			password, err := askForPassword(r)
 
 			os.Stdout = sout
 			null.Close()
@@ -173,10 +156,8 @@ func TestAskForLogin(t *testing.T) {
 				}
 			case err != nil:
 				t.Errorf("Function returned error: %s", err.Error())
-			case str1 != tt.username:
-				t.Errorf("Username incorrect. Expected=%s, received=%s", tt.username, str1)
-			case str2 != tt.password:
-				t.Errorf("Password incorrect. Expected=%s, received=%s", tt.password, str2)
+			case password != tt.password:
+				t.Errorf("Password incorrect. Expected=%s, received=%s", tt.password, password)
 			}
 		})
 	}
@@ -188,78 +169,56 @@ func TestLogin(t *testing.T) {
 		testname           string
 		readerError        error
 		errorText          string
-		username, password string
-		mockAskForLogin    func(loginReader) (string, string, error)
-		mockAuthenticate   func(string, ...string) error
+		password           string // For CSC_PASSWORD env
+		mockAskForPassword func(loginReader) (string, error)
+		mockAuthenticate   func(string) error
 	}{
 		{
-			"OK", nil, "", "", "",
-			func(lr loginReader) (string, string, error) {
+			"OK", nil, "", "",
+			func(_ loginReader) (string, error) {
 				if count > 0 {
-					return "", "", fmt.Errorf("Function did not approve login during first loop")
+					return "", fmt.Errorf("function did not approve login during first loop")
 				}
 				count++
 
-				return "dumbledore", "345fgj78", nil
+				return "345fgj78", nil
 			},
-			func(rep string, rest ...string) error {
-				if len(rest) != 2 {
-					return fmt.Errorf("Too few parameters")
-				}
-				if rep != api.SDConnect {
-					return fmt.Errorf("Repository should have been %s", api.SDConnect)
-				}
-
-				token := "ZHVtYmxlZG9yZTozNDVmZ2o3OA==" // #nosec G101
-				if rest[0] != token {
-					return fmt.Errorf("Incorrect token. Expected=%s, received=%s", token, rest[0])
+			func(password string) error {
+				if password != "345fgj78" {
+					return fmt.Errorf("incorrect password. Expected=345fgj78, received=%s", password)
 				}
 
 				return nil
 			},
 		},
 		{
-			"OK_EXISTS", nil, "", "sandman", "89bf5cifu6vo",
-			func(lr loginReader) (string, string, error) {
-				return "", "", fmt.Errorf("Should not have called askForLogin()")
+			"OK_EXISTS", nil, "", "89bf5cifu6vo",
+			func(_ loginReader) (string, error) {
+				return "", fmt.Errorf("should not have called askForPassword()")
 			},
-			func(rep string, rest ...string) error {
-				if len(rest) != 2 {
-					return fmt.Errorf("Too few parameters")
-				}
-				if rep != api.SDConnect {
-					return fmt.Errorf("Repository should have been %s", api.SDConnect)
-				}
-
-				token := "c2FuZG1hbjo4OWJmNWNpZnU2dm8=" // #nosec G101
-				if rest[0] != token {
-					return fmt.Errorf("Incorrect token. Expected=%s, received=%s", token, rest[0])
+			func(password string) error {
+				expected := "89bf5cifu6vo" // #nosec G101
+				if password != expected {
+					return fmt.Errorf("incorrect password. Expected=89bf5cifu6vo, received=%s", password)
 				}
 
 				return nil
 			},
 		},
 		{
-			"OK_401_ONCE", nil, "", "", "",
-			func(lr loginReader) (string, string, error) {
-				usernames, passwords := []string{"Smith", "Doris"}, []string{"hwd82bkwe", "pwd"}
+			"OK_401_ONCE", nil, "", "",
+			func(_ loginReader) (string, error) {
+				passwords := []string{"pwd", "hwd82bkwe"}
 				if count > 1 {
-					return "", "", fmt.Errorf("Function in infinite loop")
+					return "", fmt.Errorf("function in infinite loop")
 				}
 				count++
 
-				return usernames[count-1], passwords[count-1], nil
+				return passwords[count-1], nil
 			},
-			func(rep string, rest ...string) error {
-				if len(rest) != 2 {
-					return fmt.Errorf("Too few parameters")
-				}
-				if rep != api.SDConnect {
-					return fmt.Errorf("Repository should have been %s", api.SDConnect)
-				}
-
-				token := "RG9yaXM6cHdk" // #nosec G101
-				if rest[0] == token {
+			func(password string) error {
+				expected := "hwd82bkwe" // #nosec G101
+				if password == expected {
 					return nil
 				}
 
@@ -267,68 +226,62 @@ func TestLogin(t *testing.T) {
 			},
 		},
 		{
-			"FAIL_401_EXISTS", nil, "Incorrect username or password", "Jones", "v689cft",
-			func(lr loginReader) (string, string, error) {
-				return "", "", fmt.Errorf("Should not have called askForLogin()")
+			"FAIL_401_EXISTS", nil, "Incorrect password", "v689cft",
+			func(_ loginReader) (string, error) {
+				return "", fmt.Errorf("should not have called askForPassword()")
 			},
-			func(rep string, rest ...string) error {
+			func(_ string) error {
 				return &api.RequestError{StatusCode: 401}
 			},
 		},
 		{
 			"FAIL_STATE", errExpected,
-			"Failed to get terminal state: " + errExpected.Error(), "", "",
-			func(lr loginReader) (string, string, error) {
-				return "", "", fmt.Errorf("Function should not have called askForLogin()")
+			"failed to get terminal state: " + errExpected.Error(), "",
+			func(_ loginReader) (string, error) {
+				return "", fmt.Errorf("function should not have called askForPassword()")
 			},
-			func(rep string, rest ...string) error {
-				return fmt.Errorf("Function should not have called api.ValidateLogin()")
-			},
-		},
-		{
-			"FAIL_ASK", nil, errExpected.Error(), "", "",
-			func(lr loginReader) (string, string, error) {
-				return "", "", errExpected
-			},
-			func(rep string, rest ...string) error {
-				return fmt.Errorf("Function should not have called api.ValidateLogin()")
+			func(_ string) error {
+				return fmt.Errorf("function should not have called api.Authenticate()")
 			},
 		},
 		{
-			"FAIL_VALIDATE", nil, errExpected.Error(), "", "",
-			func(lr loginReader) (string, string, error) {
+			"FAIL_ASK", nil, errExpected.Error(), "",
+			func(_ loginReader) (string, error) {
+				return "", errExpected
+			},
+			func(_ string) error {
+				return fmt.Errorf("function should not have called api.Authenticate()")
+			},
+		},
+		{
+			"FAIL_AUTHENTICATE", nil, errExpected.Error(), "",
+			func(_ loginReader) (string, error) {
 				if count > 0 {
-					return "", "", fmt.Errorf("Function in infinite loop")
+					return "", fmt.Errorf("function in infinite loop")
 				}
 				count++
 
-				return "", "", nil
+				return "", nil
 			},
-			func(rep string, rest ...string) error {
+			func(_ string) error {
 				return errExpected
 			},
 		},
 	}
 
-	origAskForLogin := askForLogin
+	origAskForPassword := askForPassword
 	origAuthenticate := api.Authenticate
 
 	defer func() {
-		askForLogin = origAskForLogin
+		askForPassword = origAskForPassword
 		api.Authenticate = origAuthenticate
 	}()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			count = 0
-			askForLogin = tt.mockAskForLogin
+			askForPassword = tt.mockAskForPassword
 			api.Authenticate = tt.mockAuthenticate
-
-			if tt.username == "" {
-				os.Unsetenv("CSC_USERNAME")
-			} else {
-				os.Setenv("CSC_USERNAME", tt.username)
-			}
 
 			if tt.password == "" {
 				os.Unsetenv("CSC_PASSWORD")
@@ -341,8 +294,7 @@ func TestLogin(t *testing.T) {
 			sout := os.Stdout
 			os.Stdout = null
 
-			r := newTestReader([]string{""}, "", nil, tt.readerError)
-			err := login(r)
+			err := login(testReader{"", tt.readerError})
 
 			os.Stdout = sout
 			null.Close()
@@ -356,57 +308,6 @@ func TestLogin(t *testing.T) {
 				t.Error("Function should have returned error")
 			case err.Error() != tt.errorText:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
-			}
-		})
-	}
-}
-
-func TestDetermineAccess(t *testing.T) {
-	var tests = []struct {
-		testname              string
-		submitErr, connectErr error
-		sdsubmit              bool
-	}{
-		{"OK_1", nil, nil, false},
-		{"OK_2", nil, nil, true},
-		{"OK_3", nil, errExpected, true},
-		{"OK_4", nil, errExpected, false},
-		{"OK_5", errExpected, nil, false},
-		{"FAIL_SUBMIT", errExpected, nil, true},
-		{"FAIL_ALL_1", errExpected, errExpected, false},
-		{"FAIL_ALL_2", errExpected, errExpected, true},
-	}
-
-	origSDSubmit := sdsubmit
-	origLogin := login
-	origValidateLogin := api.Authenticate
-
-	defer func() {
-		sdsubmit = origSDSubmit
-		login = origLogin
-		api.Authenticate = origValidateLogin
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			sdsubmit = tt.sdsubmit
-			login = func(lr loginReader) error {
-				return tt.connectErr
-			}
-			api.Authenticate = func(rep string, auth ...string) error {
-				return tt.submitErr
-			}
-
-			err := determineAccess()
-			switch {
-			case strings.HasPrefix(tt.testname, "OK"):
-				if err != nil {
-					t.Errorf("Returned unexpected error: %s", err.Error())
-				}
-			case err == nil:
-				t.Error("Function should have returned error")
-			case !errors.Is(err, errExpected):
-				t.Errorf("Function returned incorrect error: %s", err.Error())
 			}
 		})
 	}

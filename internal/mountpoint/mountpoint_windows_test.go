@@ -2,6 +2,7 @@ package mountpoint
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hectane/go-acl"

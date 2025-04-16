@@ -1,33 +1,19 @@
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
-import { Authenticate } from '../../wailsjs/go/main/App'
-import { EventsEmit } from '../../wailsjs/runtime/runtime'
-
-import LoginForm from './LoginForm.vue';
 
 const props = defineProps<{
     disabled: boolean,
-    useForm: boolean,
     repository: string,
 }>()
 
-const emit = defineEmits(['selected'])
+const emit = defineEmits<{
+  selected: [status: boolean]
+}>()
 
 const selected = ref(false)
-const loading = ref(false)
 
-watch(() => selected.value, (sel: boolean) => { 
-    loading.value = sel;
-    if (sel && !props.useForm) {
-        Authenticate(props.repository).then(() => {
-            success();
-        }).catch(e => {
-            selected.value = false;
-            EventsEmit("showToast", "Access refused", e as string);
-        }).finally(() => {
-            loading.value = false;
-        });
-    }
+watch(() => selected.value, (sel: boolean) => {
+    emit("selected", sel);
 })
 
 function getRepoDescription(repo: string) {
@@ -39,37 +25,22 @@ function getRepoDescription(repo: string) {
     }
     return "";
 }
-
-function success() {
-    loading.value = false;
-    emit("selected");
-}
 </script>
 
 <template>
     <c-row align="start">
         <c-row align="center" class="switch-row">
-            <c-switch 
+            <c-switch
                 :value="selected"
-                :style="{'pointer-events': (selected && !useForm) ? 'none' : 'auto'}"
                 :disabled="props.disabled"
                 @changeValue="selected = $event.target.value">
             </c-switch>
-            <c-loader :hide="!loading || useForm"></c-loader>
             <div class="repository-name">
                 <span><b>{{ props.repository.replace("-", " ") }}</b></span>
                 <span>{{ getRepoDescription(props.repository) }}</span>
             </div>
         </c-row>
-        <div>
-            <c-switch :style="{ visibility: 'hidden' }"></c-switch>
-            <LoginForm 
-                class="login-form"
-                v-if="useForm && selected && loading" 
-                @loggedIn="success()"
-                small>
-            </LoginForm>
-        </div>
+       <c-switch :style="{ visibility: 'hidden' }"></c-switch>
     </c-row>
 </template>
 

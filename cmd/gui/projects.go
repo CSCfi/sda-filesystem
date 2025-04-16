@@ -2,54 +2,41 @@ package main
 
 import (
 	"context"
-	"sda-filesystem/internal/filesystem"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type ProjectHandler struct {
-	ctx      context.Context
-	projects []filesystem.Project
-	progress map[filesystem.Project][]int
+type Project struct {
+	Name       string `json:"name"`
+	Repository string `json:"repository"`
 }
 
-// NewApp creates a new App application struct
+type ProjectHandler struct {
+	ctx      context.Context
+	progress map[Project][]int
+}
+
 func NewProjectHandler() *ProjectHandler {
-	return &ProjectHandler{projects: make([]filesystem.Project, 0), progress: make(map[filesystem.Project][]int)}
+	return &ProjectHandler{}
 }
 
 func (ph *ProjectHandler) SetContext(ctx context.Context) {
 	ph.ctx = ctx
 }
 
-func (ph *ProjectHandler) AddProject(pr filesystem.Project) {
-	ph.projects = append(ph.projects, pr)
-	ph.progress[pr] = []int{0, -1}
-}
-
-func (ph *ProjectHandler) sendProjects() {
-	wailsruntime.EventsEmit(ph.ctx, "sendProjects", ph.projects)
-}
-
-func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
+func (ph *ProjectHandler) trackProjectProgress(rep, name string, count int) {
 	if rep == "" {
 		wailsruntime.EventsEmit(ph.ctx, "showProgress")
 
 		return
 	}
 
-	project := filesystem.Project{Name: pr, Repository: rep}
-	if ph.progress[project][1] == -1 {
-		ph.progress[project][1] = count
-
-		if count == 0 {
-			wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", 1, -1)
-			wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project, 100)
-
-			return
-		}
-
+	project := Project{Name: name, Repository: rep}
+	_, ok := ph.progress[project]
+	if !ok {
+		ph.progress[project] = []int{0, count}
 		wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", 0, -count)
+		wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project.Name, project.Repository, 0)
 
 		return
 	}
@@ -60,10 +47,9 @@ func (ph *ProjectHandler) trackContainers(rep, pr string, count int) {
 		progress = int(float64(ph.progress[project][0]) / float64(ph.progress[project][1]) * 100)
 	}
 	wailsruntime.EventsEmit(ph.ctx, "updateGlobalProgress", count, 0)
-	wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project, progress)
+	wailsruntime.EventsEmit(ph.ctx, "updateProjectProgress", project.Name, project.Repository, progress)
 }
 
-func (ph *ProjectHandler) deleteProjects() {
-	ph.projects = []filesystem.Project{}
-	ph.progress = make(map[filesystem.Project][]int)
+func (ph *ProjectHandler) DeleteProjects() {
+	ph.progress = make(map[Project][]int)
 }

@@ -23,7 +23,6 @@ type LogHandler struct {
 	ctx context.Context
 }
 
-// NewApp creates a new App application struct
 func NewLogHandler() *LogHandler {
 	return &LogHandler{}
 }
@@ -46,6 +45,9 @@ func (lh *LogHandler) SaveLogs(logsToSave []Log) {
 	if err != nil {
 		logs.Errorf("Could not select file name: %w", err)
 
+		return
+	}
+	if file == "" { // Cancelled
 		return
 	}
 

@@ -1,0 +1,185 @@
+services:
+  keystone-swift:
+    image: ghcr.io/cscfi/docker-keystone-swift:latest
+    container_name: keystone-swift
+    env_file:
+      - .env.keystone
+    environment:
+      S6_LOGGING: 0
+    healthcheck:
+      test: curl --fail http://127.0.0.1:5001/ || exit 1
+      interval: 20s
+      timeout: 20s
+      retries: 5
+      start_period: 20s
+    profiles:
+      - keystone
+    ports:
+      - 8080:8080
+      - 5001:5001
+
+  mockauth:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/mockauth/Dockerfile
+    image: mockauth
+    container_name: mockauth
+    env_file:
+      - .env.keystone
+    environment:
+      SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
+    profiles:
+      - keystone
+    depends_on:
+      keystone-swift:
+        condition: service_healthy
+
+  vault:
+    image: docker.io/hashicorp/vault:1.18.1
+    container_name: vault
+    env_file:
+      - .env.keystone
+    environment:
+      ARTIFACTORY_TOKEN: "${ARTIFACTORY_TOKEN}"
+    entrypoint: /vault/helpers/vault.sh
+    volumes:
+      - ../vault/helpers:/vault/helpers
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "--proxy",
+          "off",
+          "http://127.0.0.1:8200/v1/sys/health?standbyok=true"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    ports:
+      - 8200:8200
+    profiles:
+      - keystone
+  vault-setup:
+    image: docker.io/hashicorp/vault:1.18.1
+    entrypoint: /vault/helpers/setup.sh
+    container_name: vault-setup
+    env_file:
+      - .env.keystone
+    volumes:
+      - ../vault/helpers:/vault/helpers
+    profiles:
+      - keystone
+    depends_on:
+      vault:
+        condition: service_healthy
+
+  krakend:
+    image: sds-docker.artifactory.ci.csc.fi/sds/krakend-api-gateway:2025.3.3
+    container_name: krakend
+    env_file:
+      - .env
+      - .env.krakend
+    environment:
+      API_KEY: "${KRAKEND_API_KEY}"
+      KRAKEND_ADDR: "${VALIDATOR_ADDR}"
+      AAI_BASE_URL: "${AAI_BASE_URL}"
+      KEYSTONE_BASE_URL: "${KEYSTONE_BASE_URL}"
+      S3_HOST: "${S3_HOST}"
+      DISABLE_JWK_SECURITY: "${DISABLE_JWK_SECURITY}"
+      C4GH_KEY: "${C4GH_KEY}"
+      C4GH_KEY_PASSPHRASE: "${C4GH_KEY_PASSPHRASE}"
+    volumes:
+      - ../static:/static
+    profiles:
+      - krakend
+    depends_on:
+      krakend-db:
+        condition: service_healthy
+    ports:
+      - 8082:8082
+  krakend-db:
+    image: docker.io/postgres:16-alpine
+    container_name: krakend-db
+    env_file:
+      - .env.krakend
+    environment:
+      DB_PROJECTS: "${CSC_PROJECT}:${EPOUTA_IP_ADDRESS}:normal"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_USER} -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-init:/docker-entrypoint-initdb.d
+    profiles:
+      - krakend
+    depends_on:
+      krakend-db-setup:
+        condition: service_started
+  krakend-db-setup:
+    image: sds-docker.artifactory.ci.csc.fi/sds/guacamole-test-initdb:2025.2.0
+    container_name: krakend-db-setup
+    volumes:
+      - postgres-init:/docker-entrypoint-initdb.d
+    profiles:
+      - krakend
+
+  data-upload:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/data-upload/Dockerfile
+    image: data-upload
+    container_name: data-upload
+    env_file:
+      - .env
+      - .env.keystone
+    profiles:
+      - keystone
+    depends_on:
+      vault-setup:
+        condition: service_completed_successfully
+      mockauth:
+        condition: service_started
+      krakend:
+        condition: service_started
+      terminal-proxy:
+        condition: service_started
+
+  terminal-proxy:
+    image: docker.io/nginx:1.27
+    container_name: terminal-proxy
+    environment:
+      KRAKEND_ADDR: "${KRAKEND_ADDR}"
+      KRAKEND_API_KEY: "${KRAKEND_API_KEY}"
+      EPOUTA_IP_ADDRESS: "${EPOUTA_IP_ADDRESS}"
+      BACKEND_HOST: "${BACKEND_HOST}"
+      NGINX_ENVSUBST_TEMPLATE_SUFFIX: ".conf"
+    volumes:
+      - ../proxy:/etc/nginx/templates
+    ports:
+      - 80:80
+
+  data-gateway:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/data-gateway/Dockerfile
+    image: data-gateway
+    container_name: data-gateway
+    environment:
+      SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
+      PROXY_URL: "${PROXY_URL}"
+    tty: true
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    profiles:
+      - fuse
+
+volumes:
+  postgres-init:

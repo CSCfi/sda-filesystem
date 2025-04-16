@@ -4,18 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"unsafe"
 
 	"sda-filesystem/internal/logs"
-
-	"golang.org/x/sys/windows"
 )
 
 var CheckMountPoint = func(mount string) error {
 	if _, err := os.Stat(mount); !os.IsNotExist(err) {
 		logs.Infof("Windows requires that mount point does not exist beforehand so directory %s will be removed", mount)
 		if err = os.Remove(mount); err != nil {
-			return fmt.Errorf("Removal failed: %w", err)
+			return fmt.Errorf("removal failed: %w", err)
 		}
 		return nil
 	}
@@ -24,7 +21,7 @@ var CheckMountPoint = func(mount string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		logs.Debugf("Path to %s does not exist so it will be created", mount)
 		if err = os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("Could not create a path to directory %s: %w", mount, err)
+			return fmt.Errorf("could not create a path to directory %s: %w", mount, err)
 		}
 	}
 
@@ -34,6 +31,7 @@ var CheckMountPoint = func(mount string) error {
 func WaitForUpdateSignal(ch chan<- []string) {
 }
 
+/*
 func BytesAvailable(dir string) (freeBytes uint64, err error) {
 	lazy := windows.NewLazySystemDLL("kernel32.dll")
 	if err = lazy.Load(); err != nil {
@@ -60,3 +58,4 @@ func BytesAvailable(dir string) (freeBytes uint64, err error) {
 
 	return
 }
+*/
