@@ -12,9 +12,8 @@ import {
 import {
     CDataTableHeader,
     CDataTableData,
-    CDataTableFooterOptions,
     CPaginationOptions
-} from 'csc-ui/dist/types';
+} from '@cscfi/csc-ui/dist/types';
 import { EventsEmit, EventsOn } from '../../wailsjs/runtime'
 
 const projectHeaders: CDataTableHeader[] = [
@@ -48,9 +47,6 @@ const allContainers = ref(0)
 const loadedContainers = ref(0)
 const globalProgress = computed(() => (allContainers.value <= 0 ? 0 : Math.floor(loadedContainers.value / allContainers.value * 100)))
 
-const footerOptions: CDataTableFooterOptions = {
-    itemsPerPageOptions: [5, 10, 15, 20],
-}
 const paginationOptions: CPaginationOptions = {
     itemCount: projectData.length,
     itemsPerPage: 5,
@@ -109,7 +105,7 @@ function refresh() {
         if (open) {
             EventsEmit(
                 "showToast",
-                "Resfresh not possible",
+                "Refresh not possible",
                 "You have files in use which prevents updating Data Gateway"
             )
             updating.value = false;
@@ -129,18 +125,18 @@ function refresh() {
 </script>
 
 <template>
-    <c-container class="fill-width">
+    <div class="container">
         <c-steps :value="pageIdx">
             <c-step>Choose directory</c-step>
             <c-step>Prepare access</c-step>
             <c-step>Access ready</c-step>
         </c-steps>
 
-        <c-flex v-if="pageIdx == 1">
+        <div v-if="pageIdx == 1">
             <h2>Start by creating access to your files</h2>
             <p>Choose in which local directory your files will be available.</p>
-            <c-row gap="20px">
-                <c-text-field id="choose-dir-input" :value="mountpoint" readonly></c-text-field>
+            <c-row gap="40">
+                <c-text-field :value="mountpoint" hide-details readonly></c-text-field>
                 <c-button @click="changeMountPoint" outlined>Change</c-button>
             </c-row>
             <c-button
@@ -151,16 +147,16 @@ function refresh() {
                 :disabled="!mountpoint">
                 Continue
             </c-button>
-        </c-flex>
-        <c-flex v-else>
+        </div>
+        <div v-else>
             <h2>{{ pageIdx == 2 ? "Preparing access" : "Access ready"}}</h2>
-            <c-flex v-if="pageIdx > 2">
+            <div v-if="pageIdx > 2">
                 <p>If you update the contents of projects, please refresh access.</p>
-                <c-row gap="20px" justify="end">
+                <c-row gap="20" justify="end">
                     <c-button @click="refresh" outlined :disabled="updating">Refresh access</c-button>
                     <c-button @click="OpenFuse" :disabled="updating">Open folder</c-button>
                 </c-row>
-            </c-flex>
+            </div>
             <p class="smaller-text">{{ pageIdx == 2 ? "Please wait, this might take a few minutes." : "Data Gateway is ready to be used."}}</p>
             <c-progress-bar label="complete" :value=globalProgress></c-progress-bar>
             <c-data-table
@@ -168,16 +164,10 @@ function refresh() {
                 :data.prop="projectData"
                 :headers.prop="projectHeaders"
                 :key="projectKey"
-                :footerOptions="footerOptions"
                 :pagination="paginationOptions"
                 :hide-footer="projectData.length <= 5">
             </c-data-table>
-        </c-flex>
-    </c-container>
+        </div>
+    </div>
 </template>
 
-<style scoped>
-#choose-dir-input {
-    width: 400px;
-}
-</style>

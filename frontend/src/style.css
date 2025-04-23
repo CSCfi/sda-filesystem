@@ -11,6 +11,10 @@ h2 {
     margin-top: 0px;
 }
 
+c-text-field {
+    max-width: 400px;
+}
+
 c-steps {
     font-size: 0.9em;
     margin-bottom: 20px;
@@ -20,11 +24,15 @@ c-loader {
     pointer-events: none;
 }
 
-.fill-width {
+.container {
+    display: flex;
+    flex-direction: column;
     width: 100%;
+    max-width: 1200px;
 }
 
 .continue-button {
+    margin-top: 1rem;
     float: right; 
 }
 

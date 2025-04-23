@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-import { CToastMessage, CToastType } from 'csc-ui/dist/types'
+import { CToastMessage, CToastType } from '@cscfi/csc-ui/dist/types'
 import { ref, computed, onMounted } from 'vue'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime'
 import { InitializeAPI, InitFuse, Quit } from '../wailsjs/go/main/App'
+import { mdiLogoutVariant } from '@mdi/js'
 
 interface ComponentType {
     name: string
@@ -70,28 +71,36 @@ EventsOn('fuseReady', () => (accessed.value = true))
 </script>
 
 <template>
-    <c-main>
-        <c-toolbar class="relative">
+    <div id="main">
+        <c-toolbar>
             <c-csc-logo></c-csc-logo>
             <h4>Data Gateway</h4>
             <c-spacer></c-spacer>
-            <c-tabs id="tabs" v-model="currentPage" borderless v-control>
-                <c-tab
-                    v-for="tab in visibleTabs"
-                    :value="tab.name"
-                    :active="tab.active"
-                    :disabled="tab.disabled"
-                >{{ tab.name }}</c-tab>
-            </c-tabs>
+            <div id="tab-wrapper">
+                <c-tabs v-model="currentPage" borderless v-control>
+                    <c-tab
+                        v-for="tab in visibleTabs"
+                        :value="tab.name"
+                        :active="tab.active"
+                        :disabled="tab.disabled"
+                    >{{ tab.name }}</c-tab>
+                    <c-tab-items>
+                    <c-tab-item
+                        v-for="tab in visibleTabs"
+                        :value="tab.name"
+                    ></c-tab-item>
+                    </c-tab-items>
+                </c-tabs>
+            </div>
             <c-spacer></c-spacer>
             <c-button
+                id="sign-out-button"
                 size="small"
                 text
                 no-radius
-                icon-end
                 @click="Quit">
-                <i class="mdi mdi-logout-variant" slot="icon"></i>
                 Disconnect and sign out
+                <c-icon :path="mdiLogoutVariant"></c-icon>
             </c-button>
         </c-toolbar>
 
@@ -105,15 +114,18 @@ EventsOn('fuseReady', () => (accessed.value = true))
         </div>
 
         <c-toasts ref="toasts"></c-toasts>
-    </c-main>
+    </div>
 </template>
 
 <style scoped>
-c-main {
-    background-color: white;
+#main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
 c-toolbar {
+    position: relative;
     font-size: 0.9em;
 }
 
@@ -125,12 +137,16 @@ c-csc-logo {
     flex-shrink: 0;
 }
 
+c-tab-item, c-tab-items {
+    display: none;
+}
+
 c-tab {
     width: 80px;
 }
 
-c-tabs {
-    height: 100%;
+#tab-wrapper {
+    height: 60px;
     display: flex;
     align-items: flex-end;
     flex-grow: 1;
@@ -143,5 +159,13 @@ c-button {
 #content {
     margin: 40px;
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Keep itemsPerPage dropdown in place */
+    overflow-y: auto;
+}
+
+#sign-out-button {
+    margin-right: 2rem;
 }
 </style>

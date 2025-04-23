@@ -28,41 +28,25 @@ function getRepoDescription(repo: string) {
 </script>
 
 <template>
-    <c-row align="start">
-        <c-row align="center" class="switch-row">
-            <c-switch
-                :value="selected"
-                :disabled="props.disabled"
-                @changeValue="selected = $event.target.value">
-            </c-switch>
-            <div class="repository-name">
-                <span><b>{{ props.repository.replace("-", " ") }}</b></span>
-                <span>{{ getRepoDescription(props.repository) }}</span>
-            </div>
-        </c-row>
-       <c-switch :style="{ visibility: 'hidden' }"></c-switch>
+    <c-row align="center" gap="10" class="switch-row">
+        <c-switch
+            v-model="selected"
+            :disabled="props.disabled"
+            v-control
+        ></c-switch>
+        <div class="repository-name">
+            <span><b>{{ props.repository.replace("-", " ") }}</b></span>
+            <span>{{ getRepoDescription(props.repository) }}</span>
+        </div>
     </c-row>
 </template>
 
 <style scoped>
-c-switch {
-    padding-bottom: 8px;
-    padding-top: 8px;
-}
-
-.switch-row {
-    position: relative;
-}
 
 .repository-name {
     white-space: nowrap;
-    position: absolute;
-    padding-left: 10px;
-    left: 100%;
 }
-
-.login-form {
-    width: 400px;
-    padding-left: 10px;
+.switch-row {
+    margin-top: 1rem;
 }
 </style>
