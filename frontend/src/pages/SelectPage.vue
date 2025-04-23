@@ -1,26 +1,26 @@
 <script lang="ts" setup>
-import { ref, computed } from 'vue'
-import { EventsEmit, EventsOn } from '../../wailsjs/runtime/runtime'
+import { ref, computed } from "vue";
+import { EventsEmit, EventsOn } from "../../wailsjs/runtime/runtime";
 
-import RepositorySelect from '../components/RepositorySelect.vue'
+import RepositorySelect from "../components/RepositorySelect.vue";
 
 const props = defineProps<{
   initialized: boolean,
   disabled: boolean,
-}>()
+}>();
 
-const repositories = ref<{[key: string]: boolean}>({})
-const selectedRepos = ref<{[key: string]: boolean}>({})
-const validSelection = computed(() => Object.values(selectedRepos.value).some(Boolean))
+const repositories = ref<{[key: string]: boolean}>({});
+const selectedRepos = ref<{[key: string]: boolean}>({});
+const validSelection = computed(() => Object.values(selectedRepos.value).some(Boolean));
 
-EventsOn('setRepositories', function(reps: {[key: string]: boolean}) {
+EventsOn("setRepositories", function(reps: {[key: string]: boolean}) {
   repositories.value = reps;
   selectedRepos.value = Object.fromEntries(
     Object.entries(reps)
       .filter(([_, disabled]) => !disabled)
       .map(([key]) => [key, false])
   );
-})
+});
 </script>
 
 <template>

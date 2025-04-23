@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import { CToastMessage, CToastType } from '@cscfi/csc-ui/dist/types'
-import { ref, computed, onMounted } from 'vue'
-import { EventsOn, EventsEmit } from '../wailsjs/runtime'
-import { InitializeAPI, Quit } from '../wailsjs/go/main/App'
-import { mdiLogoutVariant } from '@mdi/js'
+import { CToastMessage, CToastType } from "@cscfi/csc-ui/dist/types";
+import { ref, computed, onMounted } from "vue";
+import { EventsOn, EventsEmit } from "../wailsjs/runtime";
+import { InitializeAPI, Quit } from "../wailsjs/go/main/App";
+import { mdiLogoutVariant } from "@mdi/js";
 
 interface ComponentType {
   name: string
@@ -14,12 +14,12 @@ interface ComponentType {
   disabled?: boolean
 }
 
-const disabled = ref(false)
-const initialized = ref(false)
-const selected = ref(false)
-const accessed = ref(false)
+const disabled = ref(false);
+const initialized = ref(false);
+const selected = ref(false);
+const accessed = ref(false);
 
-const currentTab = ref("Select")
+const currentTab = ref("Select");
 const componentData = computed<ComponentType[]>(() => ([
   {
     name: "SelectPage",
@@ -33,9 +33,9 @@ const componentData = computed<ComponentType[]>(() => ([
   { name: "AccessPage", tab: "Access", visible: selected.value, active: selected.value },
   { name: "ExportPage", tab: "Export", visible: selected.value, disabled: !accessed.value },
   { name: "LogsPage", tab: "Logs", visible: true }
-]))
+]));
 
-const visibleTabs = computed(() => componentData.value.filter(data => data.visible))
+const visibleTabs = computed(() => componentData.value.filter((data) => data.visible));
 // eslint-disable-next-line no-undef
 const toasts = ref<HTMLCToastsElement | null>(null);
 
@@ -47,13 +47,13 @@ onMounted(() => {
       disabled.value = true;
       EventsEmit("showToast", "Relogin to SD Desktop", "Your session has expired");
     }
-  }).catch(e => {
+  }).catch((e) => {
     disabled.value = true;
     EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
   });
-})
+});
 
-EventsOn('showToast', (title: string, err: string) => {
+EventsOn("showToast", (title: string, err: string) => {
   const message: CToastMessage = {
     title: title,
     message: err,
@@ -62,14 +62,14 @@ EventsOn('showToast', (title: string, err: string) => {
   };
 
   toasts.value?.addToast(message);
-})
+});
 
-EventsOn('selectFinished', () => {
+EventsOn("selectFinished", () => {
   selected.value = true;
-  currentTab.value = 'Access';
-})
+  currentTab.value = "Access";
+});
 
-EventsOn('fuseReady', () => (accessed.value = true))
+EventsOn("fuseReady", () => (accessed.value = true));
 </script>
 
 <template>

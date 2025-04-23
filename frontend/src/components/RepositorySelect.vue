@@ -1,20 +1,20 @@
 <script lang="ts" setup>
-import { ref, watch } from 'vue'
+import { ref, watch } from "vue";
 
 const props = defineProps<{
   disabled: boolean,
   repository: string,
-}>()
+}>();
 
 const emit = defineEmits<{
   selected: [status: boolean]
-}>()
+}>();
 
-const selected = ref(false)
+const selected = ref(false);
 
 watch(() => selected.value, (sel: boolean) => {
   emit("selected", sel);
-})
+});
 
 function getRepoDescription(repo: string) {
   if (repo.toLowerCase() === "sd-apply") {
