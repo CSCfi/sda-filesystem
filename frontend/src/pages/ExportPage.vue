@@ -1,61 +1,61 @@
 <script lang="ts" setup>
-import { ref, watch } from 'vue'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { CAutocompleteItem, CDataTableHeader, CDataTableData } from '@cscfi/csc-ui/dist/types'
-import { SelectFile, CheckExistence, ExportFile } from '../../wailsjs/go/main/App'
-import { mdiTrashCanOutline } from '@mdi/js'
+import { ref, watch } from "vue";
+import { EventsOn, EventsEmit } from "../../wailsjs/runtime/runtime";
+import { CAutocompleteItem, CDataTableHeader, CDataTableData } from "@cscfi/csc-ui/dist/types";
+import { SelectFile, CheckExistence, ExportFile } from "../../wailsjs/go/main/App";
+import { mdiTrashCanOutline } from "@mdi/js";
 
 const exportHeaders: CDataTableHeader[] = [
-  { key: 'name', value: 'Name', sortable: false },
-  { key: 'folder', value: 'Target Folder', sortable: false },
-]
+  { key: "name", value: "Name", sortable: false },
+  { key: "folder", value: "Target Folder", sortable: false },
+];
 
 const exportHeadersModifiable: CDataTableHeader[] = [
-  { key: 'name', value: 'Name', sortable: false },
-  { key: 'folder', value: 'Target Folder', sortable: false },
-  { key: 'actions', value: null, sortable: false, justify: "end",
+  { key: "name", value: "Name", sortable: false },
+  { key: "folder", value: "Target Folder", sortable: false },
+  { key: "actions", value: null, sortable: false, justify: "end",
     children: [
     {
-      value: 'Remove',
+      value: "Remove",
       component: {
-      tag: 'c-button',
+      tag: "c-button",
       params: {
         text: true,
-        size: 'small',
-        title: 'Remove',
+        size: "small",
+        title: "Remove",
         path: mdiTrashCanOutline,
         onClick: () =>
-          { exportData.value.pop(); chooseToContinue.value = false }
+          { exportData.value.pop(); chooseToContinue.value = false; }
         },
       },
     },
     ],
   },
-]
+];
 
-const exportData = ref<CDataTableData[]>([])
-const bucketItems = ref<CAutocompleteItem[]>([])
-const filteredBucketItems = ref<CAutocompleteItem[]>([])
+const exportData = ref<CDataTableData[]>([]);
+const bucketItems = ref<CAutocompleteItem[]>([]);
+const filteredBucketItems = ref<CAutocompleteItem[]>([]);
 
-const pageIdx = ref(0)
-const selectedBucket = ref("")
-const bucketQuery = ref("")
+const pageIdx = ref(0);
+const selectedBucket = ref("");
+const bucketQuery = ref("");
 
-const selectedFile = ref("")
-const showModal = ref(false)
-const chooseToContinue = ref(false)
+const selectedFile = ref("");
+const showModal = ref(false);
+const chooseToContinue = ref(false);
 
-EventsOn('exportPossible', () => {
+EventsOn("exportPossible", () => {
   pageIdx.value = 1;
-})
+});
 
-EventsOn('setBuckets', (buckets: string[]) => {
+EventsOn("setBuckets", (buckets: string[]) => {
   bucketItems.value = buckets.map((bucket: string) => ({
     value: bucket,
     name: bucket,
-  }))
+  }));
   filteredBucketItems.value = bucketItems.value;
-})
+});
 
 watch(() => bucketQuery.value, (query: string) => {
   selectedBucket.value = query;
@@ -65,17 +65,17 @@ watch(() => bucketQuery.value, (query: string) => {
     }
 
     return true;
-  })
-})
+  });
+});
 
 function selectFile() {
   SelectFile().then((filename: string) => {
     CheckExistence(filename, selectedBucket.value).then((found: boolean) => {
-      selectedFile.value = filename
+      selectedFile.value = filename;
 
       let exportRow: CDataTableData = {
-        'name': {'value': filename.split('/').reverse()[0] + ".c4gh"},
-        'folder': {'value': selectedBucket.value}
+        "name": {"value": filename.split("/").reverse()[0] + ".c4gh"},
+        "folder": {"value": selectedBucket.value}
       };
       exportData.value = [];
       exportData.value.push(exportRow);
@@ -85,8 +85,8 @@ function selectFile() {
       } else {
         chooseToContinue.value = true;
       }
-    })
-  }).catch(e => {
+    });
+  }).catch((e) => {
     EventsEmit("showToast", "Could not choose file", e as string);
   });
 }
@@ -94,10 +94,10 @@ function selectFile() {
 function exportFile() {
   ExportFile(selectedFile.value, selectedBucket.value).then(() => {
     pageIdx.value = 4;
-  }).catch(e => {
+  }).catch((e) => {
     pageIdx.value = 2;
     EventsEmit("showToast", "Exporting file failed", e as string);
-  })
+  });
 }
 
 function containsFilterString(str: string): boolean {

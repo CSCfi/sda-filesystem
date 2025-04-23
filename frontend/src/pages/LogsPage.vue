@@ -1,35 +1,35 @@
 <script lang="ts" setup>
-import { SaveLogs } from '../../wailsjs/go/main/LogHandler'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { SaveLogs } from "../../wailsjs/go/main/LogHandler";
+import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { main } from "../../wailsjs/go/models";
-import { Quit } from '../../wailsjs/go/main/App'
+import { Quit } from "../../wailsjs/go/main/App";
 import {
   CDataTableHeader,
   CDataTableData,
   CDataTableDataItem,
   CPaginationOptions,
-} from '@cscfi/csc-ui/dist/types';
-import { reactive, ref, watch, computed, onUnmounted } from 'vue';
-import { mdiFilterVariant, mdiTrayArrowDown } from '@mdi/js';
+} from "@cscfi/csc-ui/dist/types";
+import { reactive, ref, watch, computed, onUnmounted } from "vue";
+import { mdiFilterVariant, mdiTrayArrowDown } from "@mdi/js";
 
 const logHeaders: CDataTableHeader[] = [
-  { key: 'loglevel', value: 'Level', sortable: false },
-  { key: 'timestamp', value: 'Date and Time', sortable: false },
-  { key: 'message', value: 'Message', sortable: false },
-]
+  { key: "loglevel", value: "Level", sortable: false },
+  { key: "timestamp", value: "Date and Time", sortable: false },
+  { key: "message", value: "Message", sortable: false },
+];
 
-const logData = reactive<main.Log[]>([])
-const logDataTable = reactive<CDataTableData[]>([])
-const logDataTableFiltered = computed(() => logDataTable.filter(row => {
-  let matchedLevel: boolean = containsFilterString(row['loglevel'].value as string);
-  let matchedStamp: boolean = containsFilterString(row['timestamp'].formattedValue as string);
-  let matchedMessage: boolean = containsFilterString(row['message'].value as string);
+const logData = reactive<main.Log[]>([]);
+const logDataTable = reactive<CDataTableData[]>([]);
+const logDataTableFiltered = computed(() => logDataTable.filter((row) => {
+  let matchedLevel: boolean = containsFilterString(row["loglevel"].value as string);
+  let matchedStamp: boolean = containsFilterString(row["timestamp"].formattedValue as string);
+  let matchedMessage: boolean = containsFilterString(row["message"].value as string);
   return matchedLevel || matchedStamp || matchedMessage;
-}))
+}));
 
-const logsKey = ref(0)
-const filterStr = ref("")
-const interval = ref(setInterval(() => addLogsToTable(), 1000))
+const logsKey = ref(0);
+const filterStr = ref("");
+const interval = ref(setInterval(() => addLogsToTable(), 1000));
 
 const paginationOptions: CPaginationOptions = {
   itemCount: logDataTable.length,
@@ -37,23 +37,23 @@ const paginationOptions: CPaginationOptions = {
   currentPage: 1,
   startFrom: 0,
   endTo: 4,
-}
+};
 
 onUnmounted(() => {
   clearInterval(interval.value);
-})
+});
 
-EventsOn('newLogEntry', function(entry: main.Log) {
+EventsOn("newLogEntry", function(entry: main.Log) {
   logData.push(entry);
-})
+});
 
-EventsOn('saveLogsAndQuit', function() {
+EventsOn("saveLogsAndQuit", function() {
   SaveLogs(logData).then(() => Quit());
-})
+});
 
 watch(() => logDataTableFiltered.value, () => {
   logsKey.value++;
-})
+});
 
 function addLogsToTable() {
   if (logData.length <= logDataTable.length) {
@@ -67,13 +67,13 @@ function addLogsToTable() {
     };
     let level: CDataTableDataItem = {
       "component": {
-        tag: 'c-status',
+        tag: "c-status",
         params: { type: logRow.loglevel },
       },
       "value": logRow.loglevel.charAt(0).toUpperCase() + logRow.loglevel.slice(1)
     };
     let message: CDataTableDataItem = {"value": logRow.message[0]};
-    return {'loglevel': level, 'timestamp': timestamp, 'message': message};
+    return {"loglevel": level, "timestamp": timestamp, "message": message};
   });
 
   logDataTable.push(...tableData);
