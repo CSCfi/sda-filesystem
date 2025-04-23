@@ -16,6 +16,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- Updated csc-ui to 2.3.4 (#25)
 - (users) password is no longer required
 - imported files are decrypted locally
 - data import uses AWS S3
