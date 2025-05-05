@@ -209,10 +209,23 @@ Since this requires root access, it may not be possible to implement this in pro
 
 <details><summary>Click to expand</summary>
 
+### Unit tests
+
 The provided unit tests can be run with:
 
 ```sh
 go test ./...
+```
+### Frontend linting and formatting
+
+Eslint is used for both linting and formatting checks. You can find the defined rules in `eslint.config.js`.
+
+```sh
+cd frontend
+
+pnpm run lint
+# OR check and fix errors
+pnpm run lint --fix
 ```
 </details>
 
