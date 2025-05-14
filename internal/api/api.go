@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -93,6 +94,13 @@ func (re *RequestError) Error() (err string) {
 	return
 }
 
+type CredentialsError struct {
+}
+
+func (e *CredentialsError) Error() string {
+	return "Incorrect password"
+}
+
 // SetRequestTimeout redefines the timeout for an http request
 var SetRequestTimeout = func(timeout int) {
 	ai.hi.requestTimeout = timeout
@@ -114,7 +122,7 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 }
 
 // Setup reads the necessary environment varibles needed for requests,
-// generates key pair for vault, and initialises s3 client
+// generates key pair for vault, and initialises s3 client.
 func Setup() error {
 	var err error
 	ai.proxy, err = GetEnv("PROXY_URL", true)
@@ -166,6 +174,11 @@ var Authenticate = func(password string) error {
 	if err != nil {
 		ai.password = ""
 
+		var re *RequestError
+		if errors.As(err, &re) && re.StatusCode == 401 {
+			return &CredentialsError{}
+		}
+
 		return fmt.Errorf("failed to authenicate user: %w", err)
 	}
 
@@ -185,10 +198,6 @@ func GetAllRepositories() []string {
 // GetRepositories returns the list of repositories the filesystem can access
 func GetRepositories() []string {
 	return ai.repositories
-}
-
-func GetS3Client() *s3.Client {
-	return ai.hi.s3Client
 }
 
 func GetUsername() string {
