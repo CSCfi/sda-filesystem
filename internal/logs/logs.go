@@ -148,12 +148,14 @@ func Debugf(format string, args ...any) {
 
 // Fatal logs a message at level "Fatal" on the standard logger
 func Fatal(args ...any) {
-	log.Fatal(args...)
+	err := fmt.Sprint(args...)
+	log.Fatal(strings.ToUpper(err[:1]) + err[1:])
 }
 
 // Fatalf logs a message at level "Fatal" on the standard logger
 func Fatalf(format string, args ...any) {
-	log.Fatalf(format, args...)
+	err := fmt.Sprintf(format, args...)
+	log.Fatal(strings.ToUpper(err[:1]) + err[1:])
 }
 
 func init() {

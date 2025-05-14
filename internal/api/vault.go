@@ -121,3 +121,14 @@ func GetReencryptedHeader(bucket, object string) (string, int64, error) {
 
 	return resp.Header, resp.Offset, err
 }
+
+func PostHeader(header []byte, bucket, object string) error {
+	body := `{
+		"header": "%s"
+	}`
+	body = fmt.Sprintf(body, base64.StdEncoding.EncodeToString(header))
+	query := map[string]string{"object": object}
+	path := fmt.Sprintf("/desktop/file-headers/%s", bucket)
+
+	return MakeRequest("POST", path, query, nil, strings.NewReader(body), nil)
+}

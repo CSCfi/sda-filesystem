@@ -1,4 +1,4 @@
-.PHONY: help all remote local gui cli gui_build requirements clean down get_env run_profiles build_profiles exec _wait_for_upload _follow_logs
+.PHONY: help all remote local gui cli gui_build requirements clean down get_env run_profiles build_profiles exec envs _wait_for_upload _follow_logs
 
 MAKEFLAGS += --no-print-directory
 
@@ -115,6 +115,9 @@ build_profiles: down ## Build and run components with possible profile arguments
 
 exec: ## Access data-gateway container
 	@trap 'exit 0' INT; docker exec -it data-gateway /bin/bash
+
+envs:
+	@echo "$$(grep -E '^PROXY_URL|^SDS_ACCESS_TOKEN' dev-tools/compose/.env | xargs)"
 
 
 ### Following targets are for internal use, but you can still run them ###

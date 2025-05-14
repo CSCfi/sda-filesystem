@@ -13,4 +13,4 @@ __pycache__
 dev-tools/scripts/*.json
 dev-tools/compose/.env
 go-fuse
-/airlock
+/certs
