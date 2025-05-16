@@ -11,6 +11,8 @@ import (
 	"slices"
 	"time"
 
+	"sda-filesystem/certs"
+	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
@@ -93,7 +95,7 @@ func (a *App) GetUsername() string {
 }
 
 func (a *App) InitializeAPI() (bool, error) {
-	if err := api.Setup(); err != nil {
+	if err := api.Setup(certs.Files); err != nil {
 		logs.Error(err)
 		outer, _ := logs.Wrapper(err)
 
@@ -117,11 +119,10 @@ func (a *App) InitializeAPI() (bool, error) {
 	}
 	wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 
-	/*
-		if airlock.ExportPossible() {
-			wailsruntime.EventsEmit(a.ctx, "exportPossible")
-		}
-	*/
+	if airlock.ExportPossible() {
+		wailsruntime.EventsEmit(a.ctx, "exportPossible")
+	}
+
 	return access, nil
 }
 
@@ -248,15 +249,15 @@ func (a *App) CheckExistence(file, bucket string) (found bool) {
 	return slices.Contains(chld, filepath.Base(file+".c4gh"))
 }
 
-func (a *App) ExportFile(_, _ string) error {
+func (a *App) ExportFile(file, bucket string) error {
 	time.Sleep(1000 * time.Millisecond)
-	/*err := airlock.Upload(file, folder, 4000)
+	err := airlock.Upload(file, bucket, true)
 	if err != nil {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)
 
 		return errors.New(message)
-	}*/
+	}
 
 	return nil
 }
