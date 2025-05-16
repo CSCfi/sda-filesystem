@@ -222,7 +222,7 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 
-				return &api.RequestError{StatusCode: 401}
+				return &api.CredentialsError{}
 			},
 		},
 		{
@@ -231,7 +231,7 @@ func TestLogin(t *testing.T) {
 				return "", fmt.Errorf("should not have called askForPassword()")
 			},
 			func(_ string) error {
-				return &api.RequestError{StatusCode: 401}
+				return &api.CredentialsError{}
 			},
 		},
 		{
