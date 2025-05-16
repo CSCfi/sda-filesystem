@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- Add eslint (#26)
 - (users) test if chosen mount point can be unmounted in case previous runtime failed to unmount directory
 - (users) log level `trace` that shows logs from libfuse
 - `go mod vendor` to `jf audit` pipeline to pre-emptively handle changing checksums in upstream package repos
