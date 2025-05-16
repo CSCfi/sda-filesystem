@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -135,10 +136,14 @@ var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 	return next.HandleFinalize(ctx, in)
 })
 
-func initialiseS3Client() error {
+func initialiseS3Client(certs []tls.Certificate) error {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.MaxConnsPerHost = 100
 	tr.MaxIdleConnsPerHost = 100
+
+	if certs != nil {
+		tr.TLSClientConfig.Certificates = certs
+	}
 
 	httpClient := &http.Client{
 		Transport: tr,

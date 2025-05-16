@@ -6,6 +6,7 @@ import (
 	"os"
 	"syscall"
 
+	"sda-filesystem/certs"
 	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
@@ -59,7 +60,7 @@ func main() {
 		logs.SetLevel("error")
 	}
 
-	if err := api.Setup(); err != nil {
+	if err := api.Setup(certs.Files); err != nil {
 		logs.Fatal(err)
 	}
 

@@ -31,7 +31,7 @@ const componentData = computed<ComponentType[]>(() => ([
     },
   },
   { name: "AccessPage", tab: "Access", visible: selected.value, active: selected.value },
-  { name: "ExportPage", tab: "Export", visible: selected.value, disabled: !accessed.value },
+  { name: "ExportPage", tab: "Export", visible: accessed.value },
   { name: "LogsPage", tab: "Logs", visible: true }
 ]));
 

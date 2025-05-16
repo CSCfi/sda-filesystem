@@ -69,7 +69,7 @@ func Error(err error) {
 	if signal != nil {
 		stErr := StructureError(err)
 		stErr[0] = strings.ToUpper(stErr[0][:1]) + stErr[0][1:]
-		signal(logrus.ErrorLevel.String(), StructureError(err))
+		signal(logrus.ErrorLevel.String(), stErr)
 	} else {
 		log.Error(strings.ToUpper(err.Error()[:1]) + err.Error()[1:])
 	}
@@ -90,7 +90,7 @@ func Warning(err error) {
 	if signal != nil {
 		stErr := StructureError(err)
 		stErr[0] = strings.ToUpper(stErr[0][:1]) + stErr[0][1:]
-		signal(logrus.WarnLevel.String(), StructureError(err))
+		signal(logrus.WarnLevel.String(), stErr)
 	} else {
 		log.Warning(strings.ToUpper(err.Error()[:1]) + err.Error()[1:])
 	}
