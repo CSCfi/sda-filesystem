@@ -57,22 +57,66 @@ func ExportPossible() bool {
 	return enabled && isManager
 }
 
-// Upload uploads a file to SD Connect
-func Upload(filename, container string, override bool) error {
-	if err := getPublicKeys(); err != nil {
-		return err
-	}
-	exists, err := api.BucketExists(container)
+// CheckObjectExistence checks if the file that is to be uploaded already has an
+// equivalent object in S3 storage. If object exists, user if given a choice to either
+// quit or override the object with the new file.
+func CheckObjectExistence(filename, bucket string) error {
+	object, bucket := reorderNames(filename, bucket)
+	exists, err := api.BucketExists(bucket)
 	if err != nil {
 		return err
 	}
-	created := false
+	if !exists { // No such bucket, object cannot exist
+		return nil
+	}
+
+	objects, err := api.GetObjects(api.SDConnect, bucket, api.SDConnect+"/"+api.GetProjectName()+"/"+bucket)
+	if err != nil {
+		return fmt.Errorf("could not determine if export will override data: %w", err)
+	}
+	exists = slices.ContainsFunc(objects, func(meta api.Metadata) bool {
+		return meta.Name == object
+	})
+	if exists {
+		r := bufio.NewReader(os.Stdin)
+
+		for {
+			fmt.Fprintf(os.Stderr, "Export will override existing object in Allas. Continue? [y/n] ")
+			ans, err := r.ReadString('\n')
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			ans = strings.ToLower(strings.TrimSpace(ans))
+
+			if ans == "y" || ans == "yes" {
+				return nil
+			}
+			if ans == "n" || ans == "no" {
+				return fmt.Errorf("not permitted to override data")
+			}
+		}
+	}
+
+	logs.Info("New object will not override current objects")
+
+	return nil
+}
+
+// Upload uploads a file to SD Connect
+func Upload(filename, bucket string) error {
+	if err := getPublicKeys(); err != nil {
+		return err
+	}
+	exists, err := api.BucketExists(bucket)
+	if err != nil {
+		return err
+	}
 	if !exists {
-		logs.Info("Creating bucket ", container)
-		if err := api.CreateBucket(container); err != nil {
+		logs.Info("Creating bucket ", bucket)
+		if err := api.CreateBucket(bucket); err != nil {
 			return err
 		}
-		created = true
 	}
 
 	encryptedRC, encryptedFileSize, err := getFileDetails(filename)
@@ -92,37 +136,30 @@ func Upload(filename, container string, override bool) error {
 		return fmt.Errorf("file %s is too large (%d bytes)", filename, objectSize)
 	}
 
-	filename += ".c4gh"
-	object, container := reorderNames(filename, container)
-
-	if !override && !created {
-		if err := checkObjectExistence(container, object); err != nil {
-			return err
-		}
-	}
-
 	segmentSize := minSegmentSize
 	for maxParts*segmentSize < encryptedFileSize {
 		segmentSize <<= 1
 	}
 
+	object, bucket := reorderNames(filename, bucket)
+
 	logs.Info("Encrypting file ", filename)
 	logs.Info("Uploading header to vault")
-	if err := api.PostHeader(header, container, object); err != nil {
+	if err := api.PostHeader(header, bucket, object); err != nil {
 		return fmt.Errorf("failed to upload header to vault: %w", err)
 	}
 
-	logs.Infof("Beginning to upload object %s to bucket %s", object, container)
+	logs.Infof("Beginning to upload object %s to bucket %s", object, bucket)
 	logs.Debugf("File size %v", encryptedFileSize)
 	logs.Debugf("Segment size %v", segmentSize)
 
-	err = api.UploadObject(encryptedRC, container, object, segmentSize)
+	err = api.UploadObject(encryptedRC, bucket, object, segmentSize)
 	if err != nil {
-		return fmt.Errorf("failed to upload object %s to bucket %s: %w", object, container, err)
+		return fmt.Errorf("failed to upload object %s to bucket %s: %w", object, bucket, err)
 	}
 	if err = <-encryptedRC.errc; err != nil {
-		logs.Debugf("Deleting object %s from bucket %s", object, container)
-		if err2 := api.DeleteObject(container, object); err2 != nil {
+		logs.Debugf("Deleting object %s from bucket %s", object, bucket)
+		if err2 := api.DeleteObject(bucket, object); err2 != nil {
 			logs.Warningf("Data left in Allas after failed upload: %w", err2)
 		}
 
@@ -177,7 +214,7 @@ func getPublicKeys() error {
 
 func reorderNames(filename, directory string) (string, string) {
 	before, after, _ := strings.Cut(strings.TrimRight(directory, "/"), "/")
-	object := strings.TrimLeft(after+"/"+filepath.Base(filename), "/")
+	object := strings.TrimLeft(after+"/"+filepath.Base(filename+".c4gh"), "/")
 
 	return object, before
 }
@@ -226,38 +263,4 @@ var getFileDetails = func(filename string) (*readCloser, int64, error) {
 	fileSize = encryptedSize(fileSize)
 
 	return &readCloser{pr, file, errc}, fileSize, nil
-}
-
-func checkObjectExistence(container, object string) error {
-	objects, err := api.GetObjects(api.SDConnect, container, api.SDConnect+"/"+api.GetProjectName()+"/"+container)
-	if err != nil {
-		return fmt.Errorf("could not determine if export will override data: %w", err)
-	}
-	exists := slices.ContainsFunc(objects, func(meta api.Metadata) bool {
-		return meta.Name == object
-	})
-	if exists {
-		r := bufio.NewReader(os.Stdin)
-
-		for {
-			fmt.Fprintf(os.Stderr, "Export will override existing object in Allas. Continue? [y/n] ")
-			ans, err := r.ReadString('\n')
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			ans = strings.ToLower(strings.TrimSpace(ans))
-
-			if ans == "y" || ans == "yes" {
-				return nil
-			}
-			if ans == "n" || ans == "no" {
-				return fmt.Errorf("not permitted to override data")
-			}
-		}
-	}
-
-	logs.Info("New object will not override current objects")
-
-	return nil
 }
