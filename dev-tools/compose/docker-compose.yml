@@ -35,7 +35,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: docker.io/hashicorp/vault:1.19.1
+    image: docker.io/hashicorp/vault:1.19.4
     container_name: vault
     env_file:
       - .env.keystone
@@ -65,7 +65,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: docker.io/hashicorp/vault:1.19.1
+    image: docker.io/hashicorp/vault:1.19.4
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
@@ -151,7 +151,7 @@ services:
         condition: service_started
 
   terminal-proxy:
-    image: docker.io/nginx:1.27
+    image: docker.io/nginx:1.28
     container_name: terminal-proxy
     environment:
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
