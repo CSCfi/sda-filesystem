@@ -7,13 +7,14 @@ stages:
 variables:
   BUILD_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
   BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci
+  COMMON_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-ci
 
 include:
   - project: 'sds-dev/releases'
     ref: main
     file: 'releases.yml'
 
-lint:
+backend-lint:
   stage: lint
   image: $BUILD_IMAGE
   rules:
@@ -24,7 +25,7 @@ lint:
       when: never
     - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
       when: never
-    - if: '$CI_COMMIT_TAG !~ "/^$/"'
+    - if: "$CI_COMMIT_TAG"
       when: never
   tags:
     - docker-exec
@@ -41,6 +42,27 @@ lint:
     paths:
       - gl-code-quality-report.json
 
+frontend-lint:
+  stage: lint
+  image: $COMMON_IMAGE
+  rules:
+    # We don't run on tags and default branch
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+      when: never
+    - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
+      when: never
+    - if: "$CI_COMMIT_TAG"
+      when: never
+  tags:
+    - docker-exec
+  before_script:
+    - cd frontend
+    - pnpm install
+  script:
+    - pnpm run lint
+
 jfrog-go-audit:
   stage: test
   rules:
@@ -51,7 +73,7 @@ jfrog-go-audit:
       when: never
     - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
       when: never
-    - if: '$CI_COMMIT_TAG !~ "/^$/"'
+    - if: "$CI_COMMIT_TAG"
       when: never
   tags:
     - sds
@@ -75,7 +97,7 @@ test:
       when: never
     - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
       when: never
-    - if: '$CI_COMMIT_TAG !~ "/^$/"'
+    - if: "$CI_COMMIT_TAG"
       when: never
   tags:
     - docker-exec
