@@ -184,3 +184,8 @@ function refresh() {
   </div>
 </template>
 
+<style scoped>
+c-text-field {
+  width: 500px;
+}
+</style>

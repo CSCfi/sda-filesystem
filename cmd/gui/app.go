@@ -251,7 +251,7 @@ func (a *App) CheckExistence(file, bucket string) (found bool) {
 
 func (a *App) ExportFile(file, bucket string) error {
 	time.Sleep(1000 * time.Millisecond)
-	err := airlock.Upload(file, bucket, true)
+	err := airlock.Upload(file, bucket)
 	if err != nil {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)

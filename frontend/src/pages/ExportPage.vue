@@ -151,6 +151,7 @@ function containsFilterString(str: string): boolean {
           label="Folder name"
           :items="filteredBucketItems"
           items-per-page="5"
+          no-matching-items-message="You are creating a new folder"
           return-value
           @changeQuery="bucketQuery = $event.detail"
         />

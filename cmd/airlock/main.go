@@ -82,7 +82,13 @@ func main() {
 		}
 	}
 
-	if err := airlock.Upload(filename, bucket, *override); err != nil {
+	if !*override {
+		if err = airlock.CheckObjectExistence(filename, bucket); err != nil {
+			logs.Fatal(err)
+		}
+	}
+
+	if err := airlock.Upload(filename, bucket); err != nil {
 		logs.Fatal(err)
 	}
 }

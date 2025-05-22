@@ -126,7 +126,7 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 // Setup reads the necessary environment varibles needed for requests,
 // generates key pair for vault, and initialises s3 client.
 // The parameter `files` is empty if the program does not need mTLS enabled.
-// Otherwise `files` contains all the files from the `./certs` directory.
+// Otherwise `files` contains all the files from the `certs` directory.
 func Setup(files ...embed.FS) error {
 	var err error
 	ai.proxy, err = GetEnv("PROXY_URL", true)
