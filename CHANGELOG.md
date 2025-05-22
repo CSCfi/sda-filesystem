@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- Add lint and format check job to CI (#28)
 - Add eslint (#26)
 - (users) test if chosen mount point can be unmounted in case previous runtime failed to unmount directory
 - (users) log level `trace` that shows logs from libfuse
