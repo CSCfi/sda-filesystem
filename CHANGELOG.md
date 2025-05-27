@@ -9,6 +9,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- the certificates for mTLS are embedded into the binary in the build stage of the CI pipeline
+- mTLS for all PUT/POST/DELETE calls related to uploading objects, thus forcing the user to use GUI/Airlock CLI, which contain the necessary certificates
 - Add lint and format check job to CI (#28)
 - Add eslint (#26)
 - (users) test if chosen mount point can be unmounted in case previous runtime failed to unmount directory
@@ -18,6 +20,12 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) files can only be uploaded via Data Gateway GUI or the Airlock CLI
+- (users) uploaded files have a size limit of 5 TiB
+- (users) objects uploaded to SD Connect are encrypted with the project-specific key
+- large objects are uploaded in separate chunks of at least 128MiB
+- airlock gets all user info from KrakenD and is no longer dependent on files in VM
+- data export uses AWS S3
 - Updated csc-ui to 2.3.4 (#25)
 - (users) password is no longer required
 - imported files are decrypted locally
@@ -36,6 +44,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Removed
 
+- (users) Findata-related arguments from the airlock CLI
 - (admins) support for Windows. Will be hopefully added back later
 
 ## [2024.6.0] - 2024-06-07
