@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
+	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -93,6 +96,13 @@ func (re *RequestError) Error() (err string) {
 	return
 }
 
+type CredentialsError struct {
+}
+
+func (e *CredentialsError) Error() string {
+	return "Incorrect password"
+}
+
 // SetRequestTimeout redefines the timeout for an http request
 var SetRequestTimeout = func(timeout int) {
 	ai.hi.requestTimeout = timeout
@@ -114,8 +124,10 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 }
 
 // Setup reads the necessary environment varibles needed for requests,
-// generates key pair for vault, and initialises s3 client
-func Setup() error {
+// generates key pair for vault, and initialises s3 client.
+// The parameter `files` is empty if the program does not need mTLS enabled.
+// Otherwise `files` contains all the files from the `certs` directory.
+func Setup(files ...embed.FS) error {
 	var err error
 	ai.proxy, err = GetEnv("PROXY_URL", true)
 	if err != nil {
@@ -132,7 +144,12 @@ func Setup() error {
 		return fmt.Errorf("failed to create cache: %w", err)
 	}
 
-	if err = initialiseS3Client(); err != nil {
+	certs, err := loadCertificates(files)
+	if err != nil {
+		return fmt.Errorf("failed to load certficates: %w", err)
+	}
+
+	if err = initialiseS3Client(certs); err != nil {
 		return fmt.Errorf("failed to initialise S3 client: %w", err)
 	}
 
@@ -166,10 +183,52 @@ var Authenticate = func(password string) error {
 	if err != nil {
 		ai.password = ""
 
+		var re *RequestError
+		if errors.As(err, &re) && re.StatusCode == 401 {
+			return &CredentialsError{}
+		}
+
 		return fmt.Errorf("failed to authenicate user: %w", err)
 	}
 
 	return nil
+}
+
+// loadCertificates loads the certificate files from the `./certs` directory and expects
+// them to be in the format <hostname>.crt and <hostname>.key. If no such files are found,
+// a warning is logged but no error is returned. If the files are successfully parsed,
+// the certificates are added to the http client.
+func loadCertificates(certFiles []embed.FS) ([]tls.Certificate, error) {
+	if len(certFiles) == 0 {
+		return nil, nil
+	}
+
+	u, err := url.Parse(ai.proxy)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse proxy url: %w", err)
+	}
+	proxyHost := u.Hostname()
+
+	certBytes, err1 := certFiles[0].ReadFile(proxyHost + ".crt")
+	keyBytes, err2 := certFiles[0].ReadFile(proxyHost + ".key")
+	if err1 != nil || err2 != nil {
+		err = errors.Join(errors.New("disabled mTLS for S3 upload"), err1, err2)
+		logs.Warning(err)
+
+		return nil, nil
+	}
+
+	cert, err := tls.X509KeyPair(certBytes, keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client x509 key pair for host %s", proxyHost)
+	}
+
+	certificates := []tls.Certificate{cert}
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig.Certificates = certificates
+	ai.hi.client = &http.Client{Transport: tr}
+
+	return certificates, nil
 }
 
 // ToPrint returns repository name in printable format
@@ -185,10 +244,6 @@ func GetAllRepositories() []string {
 // GetRepositories returns the list of repositories the filesystem can access
 func GetRepositories() []string {
 	return ai.repositories
-}
-
-func GetS3Client() *s3.Client {
-	return ai.hi.s3Client
 }
 
 func GetUsername() string {

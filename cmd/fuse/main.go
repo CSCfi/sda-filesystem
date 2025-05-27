@@ -52,13 +52,6 @@ func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
 }
 
-type credentialsError struct {
-}
-
-func (e *credentialsError) Error() string {
-	return "Incorrect password"
-}
-
 // userInput reads user's input from io.Reader and sends it into a channel
 func userInput(r io.Reader, ch chan<- []string) {
 	scanner := bufio.NewScanner(r)
@@ -101,17 +94,6 @@ func applyCommand(ch <-chan []string) {
 	}
 }
 
-func authenticate(password string) error {
-	err := api.Authenticate(password)
-
-	var re *api.RequestError
-	if errors.As(err, &re) && re.StatusCode == 401 {
-		return &credentialsError{}
-	}
-
-	return err
-}
-
 var askForPassword = func(lr loginReader) (string, error) {
 	fmt.Print("Enter password: ")
 	password, err := lr.readPassword()
@@ -128,7 +110,7 @@ var login = func(lr loginReader) error {
 	if ok {
 		logs.Info("Using password from environment variable CSC_PASSWORD")
 
-		return authenticate(password)
+		return api.Authenticate(password)
 	}
 
 	// Get the state of the terminal before running the password prompt
@@ -156,9 +138,9 @@ var login = func(lr loginReader) error {
 			return err
 		}
 
-		err = authenticate(password)
+		err = api.Authenticate(password)
 
-		var e *credentialsError
+		var e *api.CredentialsError
 		if errors.As(err, &e) {
 			logs.Error(err)
 

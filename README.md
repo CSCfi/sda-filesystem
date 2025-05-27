@@ -103,7 +103,7 @@ On the other hand, an equivalent version of `make remote` in this instance is ju
 
 In case the binaries are run without the help of a `Makefile`, it should be reminded that both GUI and CLI versions require environment variables `PROXY_URL` and `SDS_ACCESS_TOKEN` to function. After the development environment is set up, you can run
 ```
-export $(grep -E '^PROXY_URL|^SDS_ACCESS_TOKEN' $(git rev-parse --show-toplevel)/dev-tools/compose/.env | xargs)
+eval export $(make envs)
 ```
 to get the correct values exported.
 
@@ -161,12 +161,16 @@ Accepted command line arguments:
 Usage of ./airlock:
   -debug
     	Enable debug prints
+  -override
+      Forcibly override data in SD Connect
   -quiet
     	Print only errors
-  -segment-size int
-    	Maximum size of segments in Mb used to upload data. Valid range is 10-4000. (default 4000)
 ```
-Example run `./airlock username ExampleBucket ExampleFile` will export file `ExampleFile` to bucket `ExampleBucket`.
+Example run `./airlock username example-bucket exampleFile.txt` will export file `exampleFile.txt` to bucket `example-bucket`.
+
+In an SD Desktop VM, the user will only be able to upload files with either the GUI binary or the Airlock CLI due to mutual TLS being enabled at certain endpoints in terminal-proxy. The necessary certificate files will be embedded into the binaries during a CI job.
+
+The file that is being uploaded is assumed to be unencrypted; the program encrypts it with public keys that it fetches via KrakenD.
 
 </details>
 

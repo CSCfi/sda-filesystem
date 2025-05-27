@@ -70,7 +70,7 @@ func WaitForUpdateSignal(ch chan<- []string) {
 	}
 }
 
-func Unmount(mount string) error {
+var Unmount = func(mount string) error {
 	logs.Debugf("Starting to unmount %s", mount)
 
 	var cmd *exec.Cmd

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -67,19 +69,50 @@ var objectToQuery = middleware.SerializeMiddlewareFunc("objectToQuery", func(
 ) (
 	out middleware.SerializeOutput, metadata middleware.Metadata, err error,
 ) {
+	var key string
 	switch v := in.Parameters.(type) {
 	case *s3.GetObjectInput:
+		key = *v.Key
+	case *s3.PutObjectInput:
+		key = *v.Key
+	case *s3.CreateMultipartUploadInput:
+		key = *v.Key
+	case *s3.UploadPartInput:
+		key = *v.Key
+	case *s3.AbortMultipartUploadInput:
+		key = *v.Key
+	case *s3.CompleteMultipartUploadInput:
+		key = *v.Key
+	case *s3.DeleteObjectInput:
+		key = *v.Key
+	}
+
+	if key != "" {
 		req := in.Request.(*smithyhttp.Request)
 		q := req.URL.Query()
-		q.Add("object", *v.Key)
+		q.Add("object", key)
 		req.URL.RawQuery = q.Encode()
 	}
 
 	return next.HandleSerialize(ctx, in)
 })
 
+// methodHeadToGet forces the request method to be GET if it was originally HEAD
+var methodHeadToGet = middleware.BuildMiddlewareFunc("methodHeadToGet", func(
+	ctx context.Context, in middleware.BuildInput, next middleware.BuildHandler,
+) (
+	out middleware.BuildOutput, metadata middleware.Metadata, err error,
+) {
+	req := in.Request.(*smithyhttp.Request)
+	if req.Method == "HEAD" {
+		req.Method = "GET"
+	}
+
+	return next.HandleBuild(ctx, in)
+})
+
 // customFinalize adds necessary headers to request so that the user can be authenticated
-// in KrakenD and removes object from URL path if it is there.
+// in KrakenD, and removes object from URL path if it is there.
 var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 	ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler,
 ) (
@@ -103,13 +136,18 @@ var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 	return next.HandleFinalize(ctx, in)
 })
 
-func initialiseS3Client() error {
+func initialiseS3Client(certs []tls.Certificate) error {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.MaxConnsPerHost = 100
 	tr.MaxIdleConnsPerHost = 100
 
+	if certs != nil {
+		tr.TLSClientConfig.Certificates = certs
+	}
+
 	httpClient := &http.Client{
 		Transport: tr,
+		Timeout:   time.Second * time.Duration(ai.hi.requestTimeout),
 	}
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -128,6 +166,9 @@ func initialiseS3Client() error {
 		return stack.Serialize.Add(objectToQuery, middleware.After)
 	})
 	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
+		return stack.Build.Add(methodHeadToGet, middleware.After)
+	})
+	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
 		return stack.Finalize.Add(customFinalize, middleware.After)
 	})
 
@@ -143,6 +184,52 @@ func initialiseS3Client() error {
 	return nil
 }
 
+// BucketExists checks whether or not bucket already exists in S3 storage
+func BucketExists(bucket string) (bool, error) {
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3-head")
+
+	_, err := ai.hi.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		var re *smithyhttp.ResponseError
+		if errors.As(err, &re) {
+			if re.HTTPStatusCode() == 404 {
+				return false, nil
+			} else if re.HTTPStatusCode() == 403 {
+				return true, fmt.Errorf("bucket %s is already in use by another project", bucket)
+			}
+		}
+
+		return true, fmt.Errorf("could not use bucket %s: %w", bucket, err)
+	}
+
+	logs.Infof("Bucket %s exists", bucket)
+
+	return true, nil
+}
+
+// CreateBucket creates bucket and waits for it to be ready for subsequent requests
+func CreateBucket(bucket string) error {
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+
+	_, err := ai.hi.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		return fmt.Errorf("could not create bucket %s: %w", bucket, err)
+	}
+
+	ctx = context.WithValue(context.Background(), EndpointKey{}, "/s3-head")
+	err = s3.NewBucketExistsWaiter(ai.hi.s3Client).Wait(
+		ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, time.Minute)
+	if err != nil {
+		return fmt.Errorf("failed to wait for bucket %s to exist: %w", bucket, err)
+	}
+
+	return nil
+}
+
 // GetBuckets returns metadata for all the buckets in a certain repository
 func GetBuckets(rep string) ([]Metadata, error) {
 	params := &s3.ListBucketsInput{}
@@ -150,9 +237,7 @@ func GetBuckets(rep string) ([]Metadata, error) {
 		o.Limit = 1000
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(ai.hi.requestTimeout))
-	ctx = context.WithValue(ctx, EndpointKey{}, "/s3")
-	defer cancel()
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
 
 	var buckets []types.Bucket
 	for paginator.HasMorePages() {
@@ -220,9 +305,7 @@ func getObjects(params *s3.ListObjectsV2Input, bucket string) ([]Metadata, error
 		o.Limit = 10000
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(ai.hi.requestTimeout))
-	ctx = context.WithValue(ctx, EndpointKey{}, "/s3")
-	defer cancel()
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
 
 	var objects []types.Object
 	for paginator.HasMorePages() {
@@ -306,9 +389,7 @@ func getDataChunk(
 	startEncrypted := chByteStart/BlockSize*CipherBlockSize + oldOffset
 	endEncrypted := (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(ai.hi.requestTimeout))
-	ctx = context.WithValue(ctx, EndpointKey{}, "/s3")
-	defer cancel()
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
 
 	bucket := nodes[3]
 	object := strings.Join(nodes[4:], "/")
@@ -328,7 +409,7 @@ func getDataChunk(
 	}
 	buffer := make([]byte, bufferSize)
 
-	if header == nil { // Unencrypted file. We end up here in filesystem.CheckHeaderExistence()
+	if header == nil { // We end up here in filesystem.CheckHeaderExistence()
 		if _, err = io.ReadFull(resp.Body, buffer); err != nil {
 			return nil, fmt.Errorf("failed to read file chunk: %w", err)
 		}
@@ -357,4 +438,52 @@ func getDataChunk(
 	logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
 
 	return buffer[ofst:endofst], nil
+}
+
+// UploadObject uploads object to bucket. Object is uploaded in segments of
+// size `segmentSize`. Upload Manager decides if the object is small enough
+// to use PutObject, or if multipart upload is necessary.
+func UploadObject(encryptedBody io.Reader, bucket, object string, segmentSize int64) error {
+	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
+		u.PartSize = segmentSize
+		u.LeavePartsOnError = false
+		u.Concurrency = 1
+	})
+
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		ContentType: aws.String("application/octet-stream"),
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(object),
+		Body:        encryptedBody,
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "EntityTooLarge" {
+			return fmt.Errorf("object %s is too large", object)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+// DeleteObject delets object from bucket. Function is necessary for situations where upload
+// had to be aborted because something went wrong.
+func DeleteObject(bucket, object string) error {
+	params := &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	}
+
+	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+
+	_, err := ai.hi.s3Client.DeleteObject(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to delete object %s in bucket %s: %w", object, bucket, err)
+	}
+
+	return nil
 }

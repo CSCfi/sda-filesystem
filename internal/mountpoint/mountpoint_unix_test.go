@@ -156,6 +156,12 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 		options = append(options, "-o", "defer_permissions")
 	}
 
+	origUnmount := Unmount
+	Unmount = func(mount string) error {
+		return nil
+	}
+	defer func() { Unmount = origUnmount }()
+
 	testfs := &Testfs{}
 	host := fuse.NewFileSystemHost(testfs)
 	go host.Mount(node, options)

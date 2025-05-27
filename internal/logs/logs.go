@@ -69,7 +69,7 @@ func Error(err error) {
 	if signal != nil {
 		stErr := StructureError(err)
 		stErr[0] = strings.ToUpper(stErr[0][:1]) + stErr[0][1:]
-		signal(logrus.ErrorLevel.String(), StructureError(err))
+		signal(logrus.ErrorLevel.String(), stErr)
 	} else {
 		log.Error(strings.ToUpper(err.Error()[:1]) + err.Error()[1:])
 	}
@@ -90,7 +90,7 @@ func Warning(err error) {
 	if signal != nil {
 		stErr := StructureError(err)
 		stErr[0] = strings.ToUpper(stErr[0][:1]) + stErr[0][1:]
-		signal(logrus.WarnLevel.String(), StructureError(err))
+		signal(logrus.WarnLevel.String(), stErr)
 	} else {
 		log.Warning(strings.ToUpper(err.Error()[:1]) + err.Error()[1:])
 	}
@@ -148,12 +148,14 @@ func Debugf(format string, args ...any) {
 
 // Fatal logs a message at level "Fatal" on the standard logger
 func Fatal(args ...any) {
-	log.Fatal(args...)
+	err := fmt.Sprint(args...)
+	log.Fatal(strings.ToUpper(err[:1]) + err[1:])
 }
 
 // Fatalf logs a message at level "Fatal" on the standard logger
 func Fatalf(format string, args ...any) {
-	log.Fatalf(format, args...)
+	err := fmt.Sprintf(format, args...)
+	log.Fatal(strings.ToUpper(err[:1]) + err[1:])
 }
 
 func init() {

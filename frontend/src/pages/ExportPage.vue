@@ -151,6 +151,7 @@ function containsFilterString(str: string): boolean {
           label="Folder name"
           :items="filteredBucketItems"
           items-per-page="5"
+          no-matching-items-message="You are creating a new folder"
           return-value
           @changeQuery="bucketQuery = $event.detail"
         />
@@ -177,9 +178,8 @@ function containsFilterString(str: string): boolean {
         </c-row>
         <p>If you wish to export multiple files, please create a tar/zip file.</p>
         <p>
-          Unencrypted file will be encrypted by default with service encryption key
-          and will be accessible only via SD Desktop.<br>If you want to access the file
-          otherwise, please encrypt it before exporting.
+          File will be encrypted with project-specific encryption key
+          and will be accessible via SD Desktop and SD Connect.
         </p>
       </div>
       <c-data-table
@@ -191,7 +191,7 @@ function containsFilterString(str: string): boolean {
         hide-footer="true"
       />
       <c-row justify="space-between">
-        <c-button outlined @click="pageIdx--; exportData.pop()">
+        <c-button outlined @click="pageIdx--; exportData.pop(); chooseToContinue = false">
           Cancel
         </c-button>
         <c-button :disabled="!chooseToContinue" @click="pageIdx++; exportFile()">
