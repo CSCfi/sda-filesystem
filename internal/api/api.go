@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/tls"
-	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -41,6 +40,11 @@ var ai = apiInfo{
 	repositories: []string{}, // SD Apply will be added here once it works with S3
 }
 var downloadCache *cache.Ristretto
+
+// FileReader is used as a variable type instead of embed.FS so that mocking during tests is easier
+type FileReader interface {
+	ReadFile(name string) ([]byte, error)
+}
 
 // apiInfo contains variables required for Data Gateway to work with KrakendD
 type apiInfo struct {
@@ -127,7 +131,7 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 // generates key pair for vault, and initialises s3 client.
 // The parameter `files` is empty if the program does not need mTLS enabled.
 // Otherwise `files` contains all the files from the `certs` directory.
-func Setup(files ...embed.FS) error {
+func Setup(files ...FileReader) error {
 	var err error
 	ai.proxy, err = GetEnv("PROXY_URL", true)
 	if err != nil {
@@ -194,16 +198,16 @@ var Authenticate = func(password string) error {
 	return nil
 }
 
-// loadCertificates loads the certificate files from the `./certs` directory and expects
+// loadCertificates loads the certificate files from the `certs` directory and expects
 // them to be in the format <hostname>.crt and <hostname>.key. If no such files are found,
 // a warning is logged but no error is returned. If the files are successfully parsed,
 // the certificates are added to the http client.
-func loadCertificates(certFiles []embed.FS) ([]tls.Certificate, error) {
+var loadCertificates = func(certFiles []FileReader) ([]tls.Certificate, error) {
 	if len(certFiles) == 0 {
 		return nil, nil
 	}
 
-	u, err := url.Parse(ai.proxy)
+	u, err := url.ParseRequestURI(ai.proxy)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse proxy url: %w", err)
 	}
@@ -220,13 +224,15 @@ func loadCertificates(certFiles []embed.FS) ([]tls.Certificate, error) {
 
 	cert, err := tls.X509KeyPair(certBytes, keyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load client x509 key pair for host %s", proxyHost)
+		return nil, fmt.Errorf("failed to load client x509 key pair for host %s: %w", proxyHost, err)
 	}
 
 	certificates := []tls.Certificate{cert}
-	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr := ai.hi.client.Transport.(*http.Transport).Clone()
 	tr.TLSClientConfig.Certificates = certificates
 	ai.hi.client = &http.Client{Transport: tr}
+
+	logs.Debug("Certificate successfully added to client")
 
 	return certificates, nil
 }
@@ -258,11 +264,11 @@ func GetProjectType() string {
 	return ai.userProfile.ProjectType
 }
 
-func SDConnectEnabled() bool {
+var SDConnectEnabled = func() bool {
 	return ai.userProfile.SDConnect
 }
 
-func IsProjectManager() bool {
+var IsProjectManager = func() bool {
 	return ai.userProfile.PI
 }
 
