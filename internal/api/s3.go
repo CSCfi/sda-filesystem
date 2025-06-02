@@ -136,7 +136,7 @@ var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 	return next.HandleFinalize(ctx, in)
 })
 
-func initialiseS3Client(certs []tls.Certificate) error {
+var initialiseS3Client = func(certs []tls.Certificate) error {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.MaxConnsPerHost = 100
 	tr.MaxIdleConnsPerHost = 100
