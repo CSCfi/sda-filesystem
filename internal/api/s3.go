@@ -184,9 +184,17 @@ var initialiseS3Client = func(certs []tls.Certificate) error {
 	return nil
 }
 
+func getContext(rep string, head bool) context.Context {
+	endpoint := "/s3/"
+	if head {
+		endpoint = "/s3-head/"
+	}
+	return context.WithValue(context.Background(), EndpointKey{}, endpoint+strings.ToLower(rep))
+}
+
 // BucketExists checks whether or not bucket already exists in S3 storage
-func BucketExists(bucket string) (bool, error) {
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3-head")
+func BucketExists(rep, bucket string) (bool, error) {
+	ctx := getContext(rep, true)
 
 	_, err := ai.hi.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucket),
@@ -210,8 +218,8 @@ func BucketExists(bucket string) (bool, error) {
 }
 
 // CreateBucket creates bucket and waits for it to be ready for subsequent requests
-func CreateBucket(bucket string) error {
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+func CreateBucket(rep, bucket string) error {
+	ctx := getContext(rep, false)
 
 	_, err := ai.hi.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucket),
@@ -220,7 +228,7 @@ func CreateBucket(bucket string) error {
 		return fmt.Errorf("could not create bucket %s: %w", bucket, err)
 	}
 
-	ctx = context.WithValue(context.Background(), EndpointKey{}, "/s3-head")
+	ctx = getContext(rep, true)
 	err = s3.NewBucketExistsWaiter(ai.hi.s3Client).Wait(
 		ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, time.Minute)
 	if err != nil {
@@ -234,10 +242,10 @@ func CreateBucket(bucket string) error {
 func GetBuckets(rep string) ([]Metadata, error) {
 	params := &s3.ListBucketsInput{}
 	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params, func(o *s3.ListBucketsPaginatorOptions) {
-		o.Limit = 1000
+		o.Limit = 1000 // Allas does not currently support this and returns all buckets in one request
 	})
 
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+	ctx := getContext(rep, false)
 
 	var buckets []types.Bucket
 	for paginator.HasMorePages() {
@@ -267,7 +275,7 @@ func GetBuckets(rep string) ([]Metadata, error) {
 // GetObjects returns metadata for all the objects in a particular bucket.
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
-func GetObjects(_, bucket, path string, prefix ...string) ([]Metadata, error) {
+func GetObjects(rep, bucket, path string, prefix ...string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(url.PathEscape(bucket)),
 	}
@@ -275,7 +283,7 @@ func GetObjects(_, bucket, path string, prefix ...string) ([]Metadata, error) {
 		params.Prefix = aws.String(prefix[0])
 	}
 
-	meta, err := getObjects(params, bucket)
+	meta, err := getObjects(params, rep, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list objects for %s: %w", path, err)
 	}
@@ -290,7 +298,7 @@ func GetSegmentedObjects(rep, bucket string) ([]Metadata, error) {
 		Bucket: aws.String(url.PathEscape(bucket)),
 	}
 
-	meta, err := getObjects(params, bucket)
+	meta, err := getObjects(params, rep, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, rep, err)
 	}
@@ -300,12 +308,12 @@ func GetSegmentedObjects(rep, bucket string) ([]Metadata, error) {
 	return meta, nil
 }
 
-func getObjects(params *s3.ListObjectsV2Input, bucket string) ([]Metadata, error) {
+func getObjects(params *s3.ListObjectsV2Input, rep, bucket string) ([]Metadata, error) {
 	paginator := s3.NewListObjectsV2Paginator(ai.hi.s3Client, params, func(o *s3.ListObjectsV2PaginatorOptions) {
 		o.Limit = 10000
 	})
 
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+	ctx := getContext(rep, false)
 
 	var objects []types.Object
 	for paginator.HasMorePages() {
@@ -389,10 +397,12 @@ func getDataChunk(
 	startEncrypted := chByteStart/BlockSize*CipherBlockSize + oldOffset
 	endEncrypted := (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
 
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
-
+	rep := nodes[1]
 	bucket := nodes[3]
 	object := strings.Join(nodes[4:], "/")
+
+	ctx := getContext(rep, false)
+
 	resp, err := ai.hi.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(object),
@@ -443,14 +453,14 @@ func getDataChunk(
 // UploadObject uploads object to bucket. Object is uploaded in segments of
 // size `segmentSize`. Upload Manager decides if the object is small enough
 // to use PutObject, or if multipart upload is necessary.
-func UploadObject(encryptedBody io.Reader, bucket, object string, segmentSize int64) error {
+func UploadObject(encryptedBody io.Reader, rep, bucket, object string, segmentSize int64) error {
 	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
 		u.PartSize = segmentSize
 		u.LeavePartsOnError = false
 		u.Concurrency = 1
 	})
 
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+	ctx := getContext(rep, false)
 
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		ContentType: aws.String("application/octet-stream"),
@@ -472,13 +482,13 @@ func UploadObject(encryptedBody io.Reader, bucket, object string, segmentSize in
 
 // DeleteObject delets object from bucket. Function is necessary for situations where upload
 // had to be aborted because something went wrong.
-func DeleteObject(bucket, object string) error {
+func DeleteObject(rep, bucket, object string) error {
 	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(object),
 	}
 
-	ctx := context.WithValue(context.Background(), EndpointKey{}, "/s3")
+	ctx := getContext(rep, false)
 
 	_, err := ai.hi.s3Client.DeleteObject(ctx, params)
 	if err != nil {

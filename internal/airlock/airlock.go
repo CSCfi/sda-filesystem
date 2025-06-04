@@ -62,7 +62,7 @@ func ExportPossible() bool {
 // quit or override the object with the new file.
 func CheckObjectExistence(filename, bucket string) error {
 	object, bucket := reorderNames(filename, bucket)
-	exists, err := api.BucketExists(bucket)
+	exists, err := api.BucketExists(api.SDConnect, bucket)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func CheckObjectExistence(filename, bucket string) error {
 		}
 	}
 
-	logs.Info("New object will not override current objects")
+	logs.Info("New object will not override current object")
 
 	return nil
 }
@@ -108,13 +108,13 @@ func Upload(filename, bucket string) error {
 	if err := getPublicKeys(); err != nil {
 		return err
 	}
-	exists, err := api.BucketExists(bucket)
+	exists, err := api.BucketExists(api.SDConnect, bucket)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		logs.Info("Creating bucket ", bucket)
-		if err := api.CreateBucket(bucket); err != nil {
+		if err := api.CreateBucket(api.SDConnect, bucket); err != nil {
 			return err
 		}
 	}
@@ -153,13 +153,13 @@ func Upload(filename, bucket string) error {
 	logs.Debugf("File size %v", encryptedFileSize)
 	logs.Debugf("Segment size %v", segmentSize)
 
-	err = api.UploadObject(encryptedRC, bucket, object, segmentSize)
+	err = api.UploadObject(encryptedRC, api.SDConnect, bucket, object, segmentSize)
 	if err != nil {
 		return fmt.Errorf("failed to upload object %s to bucket %s: %w", object, bucket, err)
 	}
 	if err = <-encryptedRC.errc; err != nil {
 		logs.Debugf("Deleting object %s from bucket %s", object, bucket)
-		if err2 := api.DeleteObject(bucket, object); err2 != nil {
+		if err2 := api.DeleteObject(api.SDConnect, bucket, object); err2 != nil {
 			logs.Warningf("Data left in Allas after failed upload: %w", err2)
 		}
 
