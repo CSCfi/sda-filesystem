@@ -32,7 +32,7 @@ var ai = apiInfo{
 	hi: httpInfo{
 		requestTimeout: 60,
 		httpRetry:      3,
-		client:         &http.Client{},
+		client:         &http.Client{Transport: http.DefaultTransport},
 	},
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
@@ -148,12 +148,11 @@ func Setup(files ...FileReader) error {
 		return fmt.Errorf("failed to create cache: %w", err)
 	}
 
-	certs, err := loadCertificates(files)
-	if err != nil {
+	if err := loadCertificates(files); err != nil {
 		return fmt.Errorf("failed to load certficates: %w", err)
 	}
 
-	if err = initialiseS3Client(certs); err != nil {
+	if err = initialiseS3Client(); err != nil {
 		return fmt.Errorf("failed to initialise S3 client: %w", err)
 	}
 
@@ -202,14 +201,14 @@ var Authenticate = func(password string) error {
 // them to be in the format <hostname>.crt and <hostname>.key. If no such files are found,
 // a warning is logged but no error is returned. If the files are successfully parsed,
 // the certificates are added to the http client.
-var loadCertificates = func(certFiles []FileReader) ([]tls.Certificate, error) {
+var loadCertificates = func(certFiles []FileReader) error {
 	if len(certFiles) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	u, err := url.ParseRequestURI(ai.proxy)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse proxy url: %w", err)
+		return fmt.Errorf("could not parse proxy url: %w", err)
 	}
 	proxyHost := u.Hostname()
 
@@ -219,22 +218,21 @@ var loadCertificates = func(certFiles []FileReader) ([]tls.Certificate, error) {
 		err = errors.Join(errors.New("disabled mTLS for S3 upload"), err1, err2)
 		logs.Warning(err)
 
-		return nil, nil
+		return nil
 	}
 
 	cert, err := tls.X509KeyPair(certBytes, keyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load client x509 key pair for host %s: %w", proxyHost, err)
+		return fmt.Errorf("failed to load client x509 key pair for host %s: %w", proxyHost, err)
 	}
 
-	certificates := []tls.Certificate{cert}
 	tr := ai.hi.client.Transport.(*http.Transport).Clone()
-	tr.TLSClientConfig.Certificates = certificates
+	tr.TLSClientConfig.Certificates = []tls.Certificate{cert}
 	ai.hi.client = &http.Client{Transport: tr}
 
 	logs.Debug("Certificate successfully added to client")
 
-	return certificates, nil
+	return nil
 }
 
 // ToPrint returns repository name in printable format
