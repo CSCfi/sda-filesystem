@@ -264,7 +264,7 @@ func numberOfNodes(node *goNode) (numNodes int, numObjects int) {
 	for i := range node.children {
 		num, obj := numberOfNodes(node.children[i])
 		numNodes += num
-		numNodes += obj
+		numObjects += obj
 	}
 
 	return
