@@ -1,13 +1,11 @@
 package api
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -237,20 +235,15 @@ func TestSetup(t *testing.T) {
 	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 		return newCache, nil
 	}
-	mockFiles := embed.FS{}
-	mockCerts := []tls.Certificate{{Certificate: [][]byte{[]byte("fake-cert")}}}
-	loadCertificates = func(certFiles []FileReader) ([]tls.Certificate, error) {
+	mockFiles := MockReader{Files: map[string][]byte{"filename": []byte{4, 78, 95, 90}}}
+	loadCertificates = func(certFiles []FileReader) error {
 		if !reflect.DeepEqual(certFiles[0], mockFiles) {
-			return nil, fmt.Errorf("loadCertificates() received invalid argument")
+			return fmt.Errorf("loadCertificates() received invalid argument")
 		}
 
-		return mockCerts, nil
+		return nil
 	}
-	initialiseS3Client = func(certs []tls.Certificate) error {
-		if !reflect.DeepEqual(certs, mockCerts) {
-			return fmt.Errorf("initialiseS3Client() received incorrect certificates")
-		}
-
+	initialiseS3Client = func() error {
 		return nil
 	}
 
@@ -315,10 +308,10 @@ func TestSetup_Error(t *testing.T) {
 			cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 				return nil, tt.cacheErr
 			}
-			loadCertificates = func(certFiles []FileReader) ([]tls.Certificate, error) {
-				return nil, tt.certErr
+			loadCertificates = func(certFiles []FileReader) error {
+				return tt.certErr
 			}
-			initialiseS3Client = func(certs []tls.Certificate) error {
+			initialiseS3Client = func() error {
 				return tt.s3Err
 			}
 
@@ -479,39 +472,19 @@ func TestLoadCertificates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
-	expectedCert, _ := pem.Decode(mockReader.Files["localhost.crt"])
-
-	certs, err := loadCertificates([]FileReader{mockReader})
-	if err != nil {
+	if err := loadCertificates([]FileReader{mockReader}); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
-	if len(certs) != 1 {
-		t.Fatalf("Function returned a list of certificates with %d entries, expected 1", len(certs))
-	}
-	if !bytes.Equal(certs[0].Leaf.Raw, expectedCert.Bytes) {
-		t.Errorf("Function returned incorrect certificate\nExpected=%d\nReceived=%d", expectedCert.Bytes, certs[0].Leaf.Raw)
-	}
-
-	// Create handler that manually checks client certificate
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-			http.Error(w, "no client certificate", http.StatusBadRequest)
-			return
-		}
-		clientCert := r.TLS.PeerCertificates[0]
-		if !bytes.Equal(clientCert.Raw, expectedCert.Bytes) {
-			http.Error(w, "invalid client certificate", http.StatusUnauthorized)
-			return
-		}
-	})
 
 	certpool := x509.NewCertPool()
 	certpool.AppendCertsFromPEM(caPEM)
 
-	srv := httptest.NewUnstartedServer(handler)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
 	srv.TLS = &tls.Config{
-		ClientAuth: tls.RequireAnyClientCert,
-		RootCAs:    certpool,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+		ClientCAs:  certpool,
 	}
 	srv.StartTLS()
 	defer srv.Close()
@@ -531,12 +504,8 @@ func TestLoadCertificates(t *testing.T) {
 }
 
 func TestLoadCertificates_NoFileReader(t *testing.T) {
-	certs, err := loadCertificates(nil)
-	if err != nil {
+	if err := loadCertificates(nil); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
-	}
-	if certs != nil {
-		t.Errorf("Function should have returned a nil slice of certificates")
 	}
 }
 
@@ -553,7 +522,7 @@ func TestLoadCertificates_InvalidProxy(t *testing.T) {
 
 	errStr := "could not parse proxy url: parse \"not-a-proper-url\": invalid URI for request"
 
-	_, err = loadCertificates([]FileReader{mockReader})
+	err = loadCertificates([]FileReader{mockReader})
 	if err == nil {
 		t.Fatal("Function did not return error")
 	}
@@ -574,12 +543,8 @@ func TestLoadCertificates_MissingFiles(t *testing.T) {
 	}
 	delete(mockReader.Files, "github.crt")
 
-	certs, err := loadCertificates([]FileReader{mockReader})
-	if err != nil {
+	if err = loadCertificates([]FileReader{mockReader}); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
-	}
-	if certs != nil {
-		t.Errorf("Function should have returned a nil slice of certificates")
 	}
 }
 
@@ -597,7 +562,7 @@ func TestLoadCertificates_InvalidCertificates(t *testing.T) {
 
 	errStr := "failed to load client x509 key pair for host localhost: tls: private key does not match public key"
 
-	_, err = loadCertificates([]FileReader{mockReader})
+	err = loadCertificates([]FileReader{mockReader})
 	if err == nil {
 		t.Fatal("Function did not return error")
 	}
