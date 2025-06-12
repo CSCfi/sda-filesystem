@@ -37,6 +37,7 @@ func (m MockReader) ReadFile(name string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("file does not exist")
 	}
+
 	return data, nil
 }
 
@@ -106,21 +107,22 @@ func setupCerts(filename string) ([]byte, MockReader, error) {
 
 type mockCache struct {
 	cache.Cacheable
-	data []byte
-	key  string
+
+	keys map[string][]byte
 }
 
-func (c *mockCache) Get(key string) ([]byte, bool) {
-	if c.key == key && c.data != nil {
-		return c.data, true
-	}
-
-	return nil, false
+func (ms *mockCache) Del(key string) {
+	delete(ms.keys, key)
 }
 
-func (c *mockCache) Set(key string, value []byte, _ int64, _ time.Duration) bool {
-	c.key = key
-	c.data = value
+func (ms *mockCache) Get(key string) ([]byte, bool) {
+	cached, ok := ms.keys[key]
+
+	return cached, ok
+}
+
+func (ms *mockCache) Set(key string, data []byte, _ int64, _ time.Duration) bool {
+	ms.keys[key] = data
 
 	return true
 }
@@ -223,15 +225,16 @@ func TestSetup(t *testing.T) {
 	}()
 
 	GetEnv = func(name string, verifyURL bool) (string, error) {
-		if name == "PROXY_URL" {
+		switch name {
+		case "PROXY_URL":
 			return "test_url", nil
-		} else if name == "SDS_ACCESS_TOKEN" {
+		case "SDS_ACCESS_TOKEN":
 			return "test_token", nil
-		} else {
+		default:
 			return "", fmt.Errorf("unknown env %s", name)
 		}
 	}
-	newCache := &cache.Ristretto{Cacheable: &mockCache{}}
+	newCache := &cache.Ristretto{Cacheable: &mockCache{keys: make(map[string][]byte)}}
 	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 		return newCache, nil
 	}
@@ -297,11 +300,12 @@ func TestSetup_Error(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			GetEnv = func(name string, verifyURL bool) (string, error) {
-				if name == "PROXY_URL" {
+				switch name {
+				case "PROXY_URL":
 					return "", tt.proxyErr
-				} else if name == "SDS_ACCESS_TOKEN" {
+				case "SDS_ACCESS_TOKEN":
 					return "", tt.tokenErr
-				} else {
+				default:
 					return "", fmt.Errorf("unknown env %s", name)
 				}
 			}
@@ -353,23 +357,27 @@ func TestGetProfile(t *testing.T) {
 	ai.repositories = []string{"mock-repo"}
 	finalRepositories := []string{"mock-repo", SDConnect}
 
-	if access, err := GetProfile(); err != nil {
+	access, err := GetProfile()
+	switch {
+	case err != nil:
 		t.Errorf("First call returned error: %s", err.Error())
-	} else if !access {
+	case !access:
 		t.Errorf("User should have access")
-	} else if ai.token != "test_token" {
+	case ai.token != "test_token":
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
-	} else if !reflect.DeepEqual(ai.repositories, finalRepositories) {
+	case !reflect.DeepEqual(ai.repositories, finalRepositories):
 		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", finalRepositories, ai.repositories)
 	}
 
-	if access, err := GetProfile(); err != nil {
+	access, err = GetProfile()
+	switch {
+	case err != nil:
 		t.Errorf("Second call returned error: %s", err.Error())
-	} else if access {
+	case !access:
 		t.Errorf("User should not have access")
-	} else if ai.token != "test_token" {
+	case ai.token != "test_token":
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
-	} else if !reflect.DeepEqual(ai.repositories, finalRepositories) {
+	case !reflect.DeepEqual(ai.repositories, finalRepositories):
 		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", finalRepositories, ai.repositories)
 	}
 }
@@ -463,7 +471,7 @@ func TestLoadCertificates(t *testing.T) {
 	ai.hi.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: true, // #nosec G402
 			},
 		},
 	}
@@ -485,9 +493,10 @@ func TestLoadCertificates(t *testing.T) {
 	srv.TLS = &tls.Config{
 		ClientAuth: tls.RequireAndVerifyClientCert,
 		ClientCAs:  certpool,
+		MinVersion: tls.VersionTLS13,
 	}
 	srv.StartTLS()
-	defer srv.Close()
+	t.Cleanup(func() { srv.Close() })
 
 	// Send request to server
 	resp, err := ai.hi.client.Get(srv.URL)
@@ -615,7 +624,7 @@ func TestMakeRequest(t *testing.T) {
 					t.Errorf("Query parameter 'some' has incorrect value\nExpected=thing\nReceived=%v", value)
 				}
 				body, _ := io.ReadAll(req.Body)
-				defer req.Body.Close()
+				req.Body.Close()
 				if string(body) != "secret message" {
 					t.Errorf("Request body has incorrect value\nExpected=secret message\nReceived=%s", value)
 				}
@@ -709,8 +718,9 @@ func TestMakeRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(tt.mockHandlerFunc))
-			ai.hi.client = server.Client()
+			srv := httptest.NewServer(http.HandlerFunc(tt.mockHandlerFunc))
+			ai.hi.client = srv.Client()
+			t.Cleanup(func() { srv.Close() })
 
 			// Causes client.Do() to fail when redirecting
 			ai.hi.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -722,14 +732,14 @@ func TestMakeRequest(t *testing.T) {
 			switch tt.expectedBody.(type) {
 			case VaultHeader:
 				var objects VaultHeader
-				err = MakeRequest(tt.method, server.URL, tt.query, tt.headers, tt.givenBody, &objects)
+				err = MakeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
 				ret = objects
 			case profile:
 				var objects profile
-				err = MakeRequest(tt.method, server.URL, tt.query, tt.headers, tt.givenBody, &objects)
+				err = MakeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
 				ret = objects
 			default:
-				err = MakeRequest(tt.method, server.URL, tt.query, tt.headers, tt.givenBody, ret)
+				err = MakeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, ret)
 			}
 
 			switch {
@@ -744,8 +754,6 @@ func TestMakeRequest(t *testing.T) {
 			case !reflect.DeepEqual(tt.expectedBody, ret):
 				t.Errorf("Incorrect response body\nExpected=%v\nReceived=%v", tt.expectedBody, ret)
 			}
-
-			server.Close()
 		})
 	}
 }
@@ -758,12 +766,12 @@ func TestMakeRequest_PutRequestNil_And_ReadAll_Error(t *testing.T) {
 		ai.proxy = origProxy
 	}()
 
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Add("Content-Length", "10")
 		rw.WriteHeader(http.StatusCreated)
 	}))
-	ai.hi.client = server.Client()
-	ai.proxy = server.URL
+	ai.hi.client = srv.Client()
+	ai.proxy = srv.URL
 
 	errStr := "failed to read response: unexpected EOF"
 	err := MakeRequest("GET", "/", nil, nil, nil, nil)
@@ -786,16 +794,6 @@ func TestMakeRequest_NewRequest_Error(t *testing.T) {
 	}
 }
 
-type mockStorage struct {
-	cache.Cacheable
-
-	keys map[string]bool
-}
-
-func (ms *mockStorage) Del(key string) {
-	delete(ms.keys, key)
-}
-
 func TestDeleteFileFromCache(t *testing.T) {
 	nodes := []string{"path", "to", "object"}
 	size := int64((1<<25)*3 + 100)
@@ -803,14 +801,14 @@ func TestDeleteFileFromCache(t *testing.T) {
 	origCache := downloadCache
 	defer func() { downloadCache = origCache }()
 
-	keys := map[string]bool{
-		"path/to/object_0":         true,
-		"path/to/object_33554432":  true,
-		"path/to/object_67108864":  true,
-		"path/to/object_100663296": true,
+	keys := map[string][]byte{
+		"path/to/object_0":         {4, 8, 9},
+		"path/to/object_33554432":  {74, 80, 0},
+		"path/to/object_67108864":  {3, 88, 6},
+		"path/to/object_100663296": {42, 23, 56},
 	}
 
-	storage := &mockStorage{keys: keys}
+	storage := &mockCache{keys: keys}
 	downloadCache = &cache.Ristretto{Cacheable: storage}
 
 	DeleteFileFromCache(nodes, size)

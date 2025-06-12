@@ -23,7 +23,7 @@ import (
 var mount, logLevel string
 var requestTimeout int
 
-// var sdsubmitOnly bool
+// var sdapplyOnly bool
 
 type loginReader interface {
 	readPassword() (string, error)
@@ -172,7 +172,7 @@ func processFlags() error {
 func init() {
 	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {trace,debug,info,warning,error}")
-	// flag.BoolVar(&sdsubmitOnly, "sdapply", false, "Connect only to SD Apply")
+	// flag.BoolVar(&sdapplyOnly, "sdapply", false, "Connect only to SD Apply")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
@@ -190,7 +190,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	// if !sdsubmitOnly {
+	// if !sdapplyOnly {
 	if !api.SDConnectEnabled() {
 		// logs.Warningf("You do not have SD Connect enabled")
 		logs.Fatal("You do not have SD Connect enabled")
