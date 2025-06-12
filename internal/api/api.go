@@ -25,7 +25,7 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-const SDSubmit string = "SD-Apply"
+const SDApply string = "SD-Apply"
 const SDConnect string = "SD-Connect"
 
 var ai = apiInfo{
@@ -242,11 +242,11 @@ func ToPrint(rep string) string {
 
 // GetAllRepositories returns the list of all possible repositories
 func GetAllRepositories() []string {
-	return []string{SDConnect, SDSubmit}
+	return []string{SDConnect, SDApply}
 }
 
 // GetRepositories returns the list of repositories the filesystem can access
-func GetRepositories() []string {
+var GetRepositories = func() []string {
 	return ai.repositories
 }
 
@@ -254,11 +254,11 @@ func GetUsername() string {
 	return ai.userProfile.Username
 }
 
-func GetProjectName() string {
+var GetProjectName = func() string {
 	return ai.userProfile.ProjectName
 }
 
-func GetProjectType() string {
+var GetProjectType = func() string {
 	return ai.userProfile.ProjectType
 }
 

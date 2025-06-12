@@ -16,6 +16,7 @@ func TestCheckMountPoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
+	t.Cleanup(func() { os.RemoveAll(node) })
 
 	if err = CheckMountPoint(node); err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
@@ -38,6 +39,7 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			node, err := os.MkdirTemp("", tt.name)
+			t.Cleanup(func() { os.RemoveAll(node) })
 
 			if err != nil {
 				t.Errorf("Failed to create folder: %s", err.Error())
@@ -46,8 +48,6 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 			} else if err = CheckMountPoint(node); err == nil {
 				t.Error("Function should have returned error")
 			}
-
-			os.RemoveAll(node)
 		})
 	}
 
@@ -58,7 +58,7 @@ func TestCheckMountPoint_Not_Dir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
 	}
-	defer os.RemoveAll(file.Name())
+	t.Cleanup(func() { os.RemoveAll(file.Name()) })
 
 	if err = CheckMountPoint(file.Name()); err == nil {
 		t.Error("Function should have returned error")
@@ -70,7 +70,7 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
 	}
-	defer os.RemoveAll(file.Name())
+	t.Cleanup(func() { os.RemoveAll(file.Name()) })
 
 	if err = CheckMountPoint(file.Name() + "/folder"); err == nil {
 		t.Error("Function should have returned error")
@@ -85,7 +85,7 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	defer os.RemoveAll(node)
+	t.Cleanup(func() { os.RemoveAll(node) })
 
 	if err = os.Chmod(node, os.FileMode(0555)); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
@@ -100,8 +100,8 @@ func TestCheckMountPoint_Not_Exist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	os.RemoveAll(node)       // make sure folder does not exist
-	defer os.RemoveAll(node) // if folder was created in function
+	os.RemoveAll(node)                       // make sure folder does not exist
+	t.Cleanup(func() { os.RemoveAll(node) }) // if folder was created in function
 
 	if err = CheckMountPoint(node); err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
@@ -115,7 +115,7 @@ func TestCheckMountPoint_Not_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	defer os.RemoveAll(node)
+	t.Cleanup(func() { os.RemoveAll(node) })
 
 	if file, err := os.CreateTemp(node, "file"); err != nil {
 		t.Errorf("Failed to create file %s: %s", file.Name(), err.Error())
@@ -149,7 +149,7 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	defer os.RemoveAll(node)
+	t.Cleanup(func() { os.RemoveAll(node) })
 
 	options := []string{}
 	if runtime.GOOS == "darwin" {
@@ -165,7 +165,7 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	testfs := &Testfs{}
 	host := fuse.NewFileSystemHost(testfs)
 	go host.Mount(node, options)
-	defer host.Unmount()
+	t.Cleanup(func() { host.Unmount() })
 
 	time.Sleep(2 * time.Second)
 

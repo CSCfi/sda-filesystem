@@ -33,7 +33,7 @@ type BatchHeaders map[string]map[string]VaultHeaderVersions
 type Headers map[string]map[string]string
 
 // GetHeaders gets all the file headers from header storage for bucket
-func GetHeaders(rep string, buckets []Metadata) (BatchHeaders, error) {
+var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 	if err := whitelistKey(rep); err != nil {
 		return nil, fmt.Errorf("failed to whitelist public key: %w", err)
 	}
@@ -122,6 +122,7 @@ func GetReencryptedHeader(bucket, object string) (string, int64, error) {
 	return resp.Header, resp.Offset, err
 }
 
+// PostHeader sends header of an encrypted object to be stored in Vault.
 func PostHeader(header []byte, bucket, object string) error {
 	body := `{
 		"header": "%s"

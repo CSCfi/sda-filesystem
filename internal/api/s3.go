@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,7 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/smithy-go"
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -184,6 +184,7 @@ func getContext(rep string, head bool) context.Context {
 	if head {
 		endpoint = "/s3-head/"
 	}
+
 	return context.WithValue(context.Background(), EndpointKey{}, endpoint+strings.ToLower(rep))
 }
 
@@ -202,6 +203,8 @@ func BucketExists(rep, bucket string) (bool, error) {
 			} else if re.HTTPStatusCode() == 403 {
 				return true, fmt.Errorf("bucket %s is already in use by another project", bucket)
 			}
+
+			err = re.Err
 		}
 
 		return true, fmt.Errorf("could not use bucket %s: %w", bucket, err)
@@ -220,6 +223,11 @@ func CreateBucket(rep, bucket string) error {
 		Bucket: aws.String(bucket),
 	})
 	if err != nil {
+		var re *smithyhttp.ResponseError
+		if errors.As(err, &re) {
+			err = re.Err
+		}
+
 		return fmt.Errorf("could not create bucket %s: %w", bucket, err)
 	}
 
@@ -227,6 +235,11 @@ func CreateBucket(rep, bucket string) error {
 	err = s3.NewBucketExistsWaiter(ai.hi.s3Client).Wait(
 		ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, time.Minute)
 	if err != nil {
+		var re *smithyhttp.ResponseError
+		if errors.As(err, &re) {
+			err = re.Err
+		}
+
 		return fmt.Errorf("failed to wait for bucket %s to exist: %w", bucket, err)
 	}
 
@@ -234,7 +247,7 @@ func CreateBucket(rep, bucket string) error {
 }
 
 // GetBuckets returns metadata for all the buckets in a certain repository
-func GetBuckets(rep string) ([]Metadata, error) {
+var GetBuckets = func(rep string) ([]Metadata, error) {
 	params := &s3.ListBucketsInput{}
 	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params, func(o *s3.ListBucketsPaginatorOptions) {
 		o.Limit = 1000 // Allas does not currently support this and returns all buckets in one request
@@ -246,6 +259,11 @@ func GetBuckets(rep string) ([]Metadata, error) {
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
 		if err != nil {
+			var re *smithyhttp.ResponseError
+			if errors.As(err, &re) {
+				err = re.Err
+			}
+
 			return nil, fmt.Errorf("failed to list buckets for %s: %w", ToPrint(rep), err)
 		}
 
@@ -270,7 +288,7 @@ func GetBuckets(rep string) ([]Metadata, error) {
 // GetObjects returns metadata for all the objects in a particular bucket.
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
-func GetObjects(rep, bucket, path string, prefix ...string) ([]Metadata, error) {
+var GetObjects = func(rep, bucket, path string, prefix ...string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(url.PathEscape(bucket)),
 	}
@@ -288,17 +306,17 @@ func GetObjects(rep, bucket, path string, prefix ...string) ([]Metadata, error) 
 	return meta, nil
 }
 
-func GetSegmentedObjects(rep, bucket string) ([]Metadata, error) {
+var GetSegmentedObjects = func(rep, bucket string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(url.PathEscape(bucket)),
 	}
 
 	meta, err := getObjects(params, rep, bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, rep, err)
+		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, ToPrint(rep), err)
 	}
 
-	logs.Debugf("Retrieved objects for container %s in %s", bucket, rep)
+	logs.Debugf("Retrieved objects for container %s in %s", bucket, ToPrint(rep))
 
 	return meta, nil
 }
@@ -315,9 +333,13 @@ func getObjects(params *s3.ListObjectsV2Input, rep, bucket string) ([]Metadata, 
 		output, err := paginator.NextPage(ctx)
 
 		if err != nil {
-			var apiErr smithy.APIError
-			if errors.As(err, &apiErr) && apiErr.ErrorCode() == "BadRequest" {
-				err = fmt.Errorf("bad request: bucket name %q may not be S3 compatible", bucket)
+			var re *smithyhttp.ResponseError
+			if errors.As(err, &re) {
+				if re.HTTPStatusCode() == 400 {
+					err = fmt.Errorf("bad request: bucket name %q may not be S3 compatible", bucket)
+				} else {
+					err = re.Err
+				}
 			}
 
 			return nil, err
@@ -372,7 +394,7 @@ func getDataChunk(
 	// start coordinate of chunk
 	chByteStart := chunk * chunkSize
 	// end coordinate of chunk
-	chByteEnd := min((chunk+1)*chunkSize, fileSize)
+	chByteEnd := (chunk + 1) * chunkSize
 
 	// Index offset in chunk
 	ofst := startDecrypted - chByteStart
@@ -387,10 +409,25 @@ func getDataChunk(
 		return chunkData[ofst:endofst], nil
 	}
 
-	// Convert chunk coordinates to work with encrypted file in storage
-	// Chunks are a multiple of BlockSize, so no need to worry about floats
-	startEncrypted := chByteStart/BlockSize*CipherBlockSize + oldOffset
-	endEncrypted := (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
+	var startEncrypted, endEncrypted, encryptedBodySize int64
+	if header == nil || *header == "" {
+		// We end up here when we cannot decrypt the object. Either when trying to fetch the header
+		// in filesystem.CheckHeaderExistence() or when object has been encrypted with an unknown key.
+		// In these situations there is no point to map the range of bytes to an encrypted range
+		// because we read the response body as is.
+		startEncrypted = chByteStart
+		endEncrypted = chByteEnd
+		encryptedBodySize = fileSize
+	} else {
+		// Convert chunk coordinates to work with encrypted object in storage
+		// Chunks are a multiple of BlockSize, so no need to worry about floats
+		startEncrypted = chByteStart/BlockSize*CipherBlockSize + oldOffset
+		endEncrypted = (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
+
+		nBlocks := math.Ceil(float64(fileSize) / float64(BlockSize))
+		encryptedBodySize = fileSize + int64(nBlocks)*MacSize
+	}
+	endEncrypted = min(endEncrypted, encryptedBodySize)
 
 	rep := nodes[1]
 	bucket := nodes[3]
@@ -404,26 +441,20 @@ func getDataChunk(
 		Range:  aws.String(fmt.Sprintf("bytes=%d-%d", startEncrypted, endEncrypted-1)),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve object from allas for %s: %w", path, err)
+		var re *smithyhttp.ResponseError
+		if errors.As(err, &re) {
+			err = re.Err
+		}
+
+		return nil, fmt.Errorf("failed to retrieve object from Allas for %s: %w", path, err)
 	}
 	defer resp.Body.Close()
 
-	bufferSize := chByteEnd - chByteStart
-	if header != nil && *header == "" { // File encrypted with unknown key
-		bufferSize += MacSize
-	}
-	buffer := make([]byte, bufferSize)
-
-	if header == nil { // We end up here in filesystem.CheckHeaderExistence()
-		if _, err = io.ReadFull(resp.Body, buffer); err != nil {
-			return nil, fmt.Errorf("failed to read file chunk: %w", err)
-		}
-
-		return buffer[ofst:endofst], nil
-	}
-
+	chByteEnd = min(chByteEnd, fileSize)
+	buffer := make([]byte, chByteEnd-chByteStart)
 	crypt4GHReader := resp.Body.(io.Reader)
-	if *header != "" { // Encrypted file we can decrypt
+
+	if header != nil && *header != "" { // Encrypted file we can decrypt
 		var headerBytes []byte
 		headerBytes, err = base64.StdEncoding.DecodeString(*header)
 		if err != nil {
@@ -439,8 +470,12 @@ func getDataChunk(
 	if _, err = io.ReadFull(crypt4GHReader, buffer); err != nil {
 		return nil, fmt.Errorf("failed to read file chunk [%d, %d): %w", chByteStart, chByteEnd, err)
 	}
-	downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
-	logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
+
+	// Do not cache data when retrieving object header
+	if header != nil {
+		downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
+		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
+	}
 
 	return buffer[ofst:endofst], nil
 }
@@ -464,12 +499,16 @@ func UploadObject(encryptedBody io.Reader, rep, bucket, object string, segmentSi
 		Body:        encryptedBody,
 	})
 	if err != nil {
-		var apiErr smithy.APIError
-		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "EntityTooLarge" {
-			return fmt.Errorf("object %s is too large", object)
+		var re *smithyhttp.ResponseError
+		if errors.As(err, &re) {
+			if re.HTTPStatusCode() == 413 {
+				err = errors.New("object is too large")
+			} else {
+				err = re.Err
+			}
 		}
 
-		return err
+		return fmt.Errorf("failed to upload object %s to bucket %s: %w", object, bucket, err)
 	}
 
 	return nil
@@ -487,6 +526,11 @@ func DeleteObject(rep, bucket, object string) error {
 
 	_, err := ai.hi.s3Client.DeleteObject(ctx, params)
 	if err != nil {
+		var re *smithyhttp.ResponseError
+		if errors.As(err, &re) {
+			err = re.Err
+		}
+
 		return fmt.Errorf("failed to delete object %s in bucket %s: %w", object, bucket, err)
 	}
 
