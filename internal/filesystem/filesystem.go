@@ -4,11 +4,20 @@ package filesystem
 #cgo CFLAGS: -D GO_CGO_BUILD -D_FILE_OFFSET_BITS=64 -g -Wall -Wextra -Wno-unused-parameter
 #cgo linux pkg-config: fuse3
 #cgo darwin pkg-config: fuse
+#cgo nocallback search_node
+#cgo nocallback sort_node_children
+#cgo nocallback free_nodes
 #include <stdio.h>
 #include <time.h>
 #include <sys/stat.h>
 #include "helpers.h"
 #include "enabled.h"
+
+static nodes_t fuse_nodes = {0};
+
+static inline nodes_t *get_nodes() {
+    return &fuse_nodes;
+}
 */
 import "C"
 
@@ -93,7 +102,7 @@ func MountFilesystem(mount string, fun func(string, string, int), ready chan<- a
 	fi.mu = sync.RWMutex{}
 
 	fi.mu.Lock()
-	fi.nodes = (*C.nodes_t)(C.malloc(C.sizeof_struct_Nodes))
+	fi.nodes = C.get_nodes()
 	InitialiseFilesystem()
 
 	m := C.CString(mount)
@@ -113,6 +122,12 @@ func GetFilesystem() *C.nodes_t {
 	fi.mu.Unlock()
 
 	return fi.nodes
+}
+
+// allocateNodeList reserves memory for a node struct array in C.
+// This is a separate Go function so it can be used in tests
+func allocateNodeList(length int) *C.node_t {
+	return (*C.node_t)(C.malloc(C.sizeof_struct_Node * C.size_t(length)))
 }
 
 // InitialiseFilesystem initializes the in-memory filesystem database
@@ -191,6 +206,8 @@ func InitialiseFilesystem() {
 
 		for i := range segmentBuckets {
 			bucketName := strings.TrimSuffix(segmentBuckets[i].Name, segmentsSuffix)
+			// Buckets assumed to not have any weird characters so the orignal name and
+			// safe name should be the same
 			if node, ok := parentChildren[bucketName]; ok {
 				node.meta.Name = segmentBuckets[i].Name
 			}
@@ -223,7 +240,7 @@ func InitialiseFilesystem() {
 	// Construct the array of nodes for C
 	num, objs := numberOfNodes(root)
 	fi.headers = make(map[C.ino_t]string, objs)
-	fi.nodes.nodes = (*C.node_t)(C.malloc(C.sizeof_struct_Node * C.size_t(num)))
+	fi.nodes.nodes = allocateNodeList(num)
 	fi.nodes.count = 1
 	nodeSlice := unsafe.Slice(fi.nodes.nodes, num)
 	nodeSlice[0] = goNodeToC(root, "")
@@ -240,7 +257,7 @@ func InitialiseFilesystem() {
 
 func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metadata) {
 	lastIdx := len(buckets) - 1
-	for i := 0; i < lastIdx; i++ {
+	for i := 0; i <= lastIdx; i++ {
 		if strings.HasSuffix(buckets[i].Name, segmentsSuffix) {
 			for ; lastIdx > i; lastIdx-- {
 				if !strings.HasSuffix(buckets[lastIdx].Name, segmentsSuffix) {
@@ -252,7 +269,7 @@ func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metad
 		}
 	}
 
-	return buckets[:lastIdx], buckets[lastIdx:]
+	return buckets[:lastIdx+1], buckets[lastIdx+1:]
 }
 
 func numberOfNodes(node *goNode) (numNodes int, numObjects int) {
@@ -281,10 +298,13 @@ func goNodeToC(node *goNode, name string) C.node_t {
 	cNode.last_modified.tv_nsec = 0
 	cNode.offset = -1
 
+	if node.meta.LastModified != nil {
+		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
+	}
+
 	if node.children == nil {
 		cNode.stat.st_mode = syscall.S_IFREG | 0444
 		cNode.stat.st_nlink = 1
-		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
 	} else {
 		cNode.stat.st_mode = syscall.S_IFDIR | 0444
 		cNode.stat.st_nlink = C.nlink_t(2 + len(node.children))
@@ -393,10 +413,10 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 // getObjectSizesFromSegments is used for getting the object sizes for buckets that
 // have a matching segments bucket.
 func getObjectSizesFromSegments(rep, bucket string) (map[string]int64, error) {
-	logs.Debugf("Fetching object sizes for container %s from matching segments container %s", bucket, rep)
+	logs.Debugf("Fetching possible object sizes for bucket %s from matching segments bucket", rep+"/"+bucket)
 	objects, err := api.GetSegmentedObjects(rep, bucket+segmentsSuffix)
 	if err != nil {
-		return map[string]int64{}, fmt.Errorf("cannot fetch object sizes for container %s in %s: %w", bucket, rep, err)
+		return map[string]int64{}, fmt.Errorf("cannot fetch object sizes for bucket %s in %s: %w", bucket, rep, err)
 	}
 
 	objectSizes := make(map[string]int64)
@@ -443,7 +463,7 @@ func createLevel(prnt *goNode, meta []metadata, prntPath string) {
 
 // makeNode adds a node into the Go tree structure. Returns node's name in filesystem.
 func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSafe string) string {
-	name := removeInvalidChars(meta.Name) // Redundant for buckets and project
+	name := removeInvalidChars(meta.Name) // Redundant for buckets and projects
 	if !isDir {
 		name = strings.TrimSuffix(name, ".c4gh")
 	}
@@ -475,11 +495,6 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSa
 		} else {
 			name = newName
 		}
-	}
-
-	// Because cli logs cannot print name out correctly without this fix
-	if signalBridge == nil {
-		origName = strings.ReplaceAll(origName, "%", "%%")
 	}
 
 	if isDir && name != meta.Name {
