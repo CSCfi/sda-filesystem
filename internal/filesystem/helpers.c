@@ -31,17 +31,10 @@ void sort_node_children(node_t *node) {
 	qsort(node->children, node->chld_count, sizeof(node_t), compare_nodes);
 }
 
-// free_node frees the dynamically allocated fields of `node` and all the fields of its descendants
-static void free_node(node_t *node) {
-    free(node->name);
-    free(node->orig_name);
-
-    for (int i = 0; i < node->chld_count; i++) {
-        free_node(node->children + i);
-    }
-}
-
 void free_nodes(nodes_t *n) {
-    free_node(n->nodes);
+    for (int i = 0; i < n->count; i++) {
+        free(n->nodes[i].name);
+        free(n->nodes[i].orig_name);
+    }
     free(n->nodes);
 }

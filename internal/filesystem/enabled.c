@@ -26,7 +26,6 @@ static void s3_destroy(void *private_data) {
 
     nodes_t *n = (nodes_t *)private_data;
     free_nodes(n);
-    free(n);
 }
 
 static int s3_open(const char *path, struct fuse_file_info *fi) {
