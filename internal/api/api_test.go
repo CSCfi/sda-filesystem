@@ -238,7 +238,7 @@ func TestSetup(t *testing.T) {
 	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 		return newCache, nil
 	}
-	mockFiles := MockReader{Files: map[string][]byte{"filename": []byte{4, 78, 95, 90}}}
+	mockFiles := MockReader{Files: map[string][]byte{"filename": {4, 78, 95, 90}}}
 	loadCertificates = func(certFiles []FileReader) error {
 		if !reflect.DeepEqual(certFiles[0], mockFiles) {
 			return fmt.Errorf("loadCertificates() received invalid argument")
@@ -351,7 +351,7 @@ func TestGetProfile(t *testing.T) {
 
 			return nil
 		default:
-			return fmt.Errorf("ret has incorrect type %v, expected profile", reflect.TypeOf(v))
+			return fmt.Errorf("ret has incorrect type %v, expected *profile", reflect.TypeOf(v))
 		}
 	}
 	ai.repositories = []string{"mock-repo"}
@@ -595,11 +595,12 @@ func TestMakeRequest(t *testing.T) {
 			method:   "GET",
 			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				body, err := json.Marshal(VaultHeader{Added: "sometime", Header: "c2VjcmV0IG1lc3NhZ2U=", KeyVersion: 42})
-				if err != nil {
+				switch {
+				case err != nil:
 					http.Error(rw, "Error 404", 404)
-				} else if req.Method == "GET" {
+				case req.Method == "GET":
 					_, _ = rw.Write(body)
-				} else {
+				default:
 					rw.WriteHeader(http.StatusBadRequest)
 				}
 			},

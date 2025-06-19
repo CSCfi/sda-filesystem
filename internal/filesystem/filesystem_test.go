@@ -3,7 +3,6 @@ package filesystem
 import (
 	"cmp"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -16,8 +15,6 @@ import (
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 )
-
-var errExpected = errors.New("expected error for test")
 
 const rep1 = api.SDConnect
 const rep2 = api.SDApply
@@ -329,6 +326,7 @@ func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_
 		nodeSlice := unsafe.Slice(n.nodes, fsSize)
 		nodeSlice[idx+i] = goNodeToC(newGoNode(meta, bucket.Children != nil), bucket.NameSafe)
 		nodeSlice[idx+i].stat.st_ino = _Ctype_ino_t(idx + i)
+		nodeSlice[idx+i].offset = -1
 		nodeSlice[idx+i].parent = parent
 
 		if bucket.Children == nil || len(*bucket.Children) == 0 {
@@ -343,39 +341,43 @@ func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_
 	return
 }
 
-func isSameFuse(fs1 *_Ctype_struct_Node, fs2 *_Ctype_struct_Node, path string) error {
-	if fs2.stat.st_size != fs1.stat.st_size {
-		return fmt.Errorf("size not correct at node %q. Expected=%d, received=%d", path, fs1.stat.st_size, fs2.stat.st_size)
+func isValidFuse(origFs *_Ctype_struct_Node, fs *_Ctype_struct_Node, path string) error {
+	if toGoStr(fs.orig_name) != toGoStr(origFs.orig_name) {
+		return fmt.Errorf("original name not correct at node %q. Expected=%s, received=%s", path, toGoStr(origFs.orig_name), toGoStr(fs.orig_name))
 	}
-	if fs1.stat.st_ino != fs2.stat.st_ino {
-		return fmt.Errorf("ino not correct at node %q. Expected=%d, received=%d", path, fs1.stat.st_ino, fs2.stat.st_ino)
+	if fs.stat.st_size != origFs.stat.st_size {
+		return fmt.Errorf("size not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_size, fs.stat.st_size)
 	}
-	if toGoStr(fs2.orig_name) != toGoStr(fs1.orig_name) {
-		return fmt.Errorf("original name not correct at node %q. Expected=%s, received=%s", path, toGoStr(fs1.orig_name), toGoStr(fs2.orig_name))
+	if fs.stat.st_ino != origFs.stat.st_ino {
+		return fmt.Errorf("ino not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_ino, fs.stat.st_ino)
 	}
-	if fs1.last_modified != fs2.last_modified {
-		return fmt.Errorf("timestamp not correct at node %q, Expected=%+v, received=%+v", path, fs1.last_modified, fs2.last_modified)
+	if origFs.last_modified != fs.last_modified {
+		return fmt.Errorf("timestamp not correct at node %q, Expected=%+v, received=%+v", path, origFs.last_modified, fs.last_modified)
 	}
-	if fs1.children == nil && fs2.children != nil {
+	if origFs.children == nil && fs.children != nil {
 		return fmt.Errorf("node %q should not have children", path)
 	}
-	if fs1.children != nil && fs2.children == nil {
+	if origFs.children != nil && fs.children == nil {
 		return fmt.Errorf("node %q should have children", path)
 	}
-	if fs1.children == nil {
+	if fs.children == nil {
+		if origFs.offset != fs.offset {
+			return fmt.Errorf("node %q should have offset %d, received %d", path, origFs.offset, fs.offset)
+		}
+
 		return nil
 	}
 
 	// Names of children of fs1 and fs2
-	keys1 := make([]string, fs1.chld_count)
-	keys2 := make([]string, fs2.chld_count)
+	keys1 := make([]string, origFs.chld_count)
+	keys2 := make([]string, fs.chld_count)
 
-	slice1 := unsafe.Slice(fs1.children, fs1.chld_count)
+	slice1 := unsafe.Slice(origFs.children, origFs.chld_count)
 	for i := range slice1 {
 		keys1[i] = toGoStr(slice1[i].name)
 	}
 
-	slice2 := unsafe.Slice(fs2.children, fs2.chld_count)
+	slice2 := unsafe.Slice(fs.children, fs.chld_count)
 	for i := range slice2 {
 		keys2[i] = toGoStr(slice2[i].name)
 	}
@@ -385,7 +387,7 @@ func isSameFuse(fs1 *_Ctype_struct_Node, fs2 *_Ctype_struct_Node, path string) e
 	}
 
 	for i := range keys1 {
-		if err := isSameFuse(&slice1[i], &slice2[i], path+"/"+keys1[i]); err != nil {
+		if err := isValidFuse(&slice1[i], &slice2[i], path+"/"+keys1[i]); err != nil {
 			return err
 		}
 	}
@@ -436,7 +438,8 @@ func TestInitializeFilesystem(t *testing.T) {
 		return "project"
 	}
 	api.GetBuckets = func(rep string) ([]api.Metadata, error) {
-		if rep == rep1 {
+		switch rep {
+		case rep1:
 			return []api.Metadata{
 				{Name: "bucket_1_segments"},
 				{Name: "bucket_1"},
@@ -444,7 +447,7 @@ func TestInitializeFilesystem(t *testing.T) {
 				{Name: "bucket/2"},
 				{Name: "bucket_2"},
 			}, nil
-		} else if rep == rep2 {
+		case rep2:
 			return []api.Metadata{
 				{Name: "https://example.com"},
 				{Name: "bad-bucket"},
@@ -452,7 +455,7 @@ func TestInitializeFilesystem(t *testing.T) {
 				{Name: "old-bucket"},
 				{Name: "old-bucket_segments"},
 			}, nil
-		} else if rep == "Substandard-Repo" {
+		case "Substandard-Repo":
 			return nil, nil
 		}
 
@@ -519,7 +522,8 @@ func TestInitializeFilesystem(t *testing.T) {
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
 	api.GetSegmentedObjects = func(rep, bucket string) ([]api.Metadata, error) {
-		if rep == rep1 {
+		switch rep {
+		case rep1:
 			switch bucket {
 			case "bucket_1_segments":
 				return []api.Metadata{
@@ -528,7 +532,7 @@ func TestInitializeFilesystem(t *testing.T) {
 			}
 
 			return nil, fmt.Errorf("api.GetObjects() received invalid bucket %s", rep+"/"+bucket)
-		} else if rep == rep2 {
+		case rep2:
 			switch bucket {
 			case "https://example.com_segments":
 				return []api.Metadata{{Size: 5, Name: "tiedosto/gybtvtro6vtrob/00000001", LastModified: nil}}, nil
@@ -608,7 +612,7 @@ func TestInitializeFilesystem(t *testing.T) {
 	if origFs.count != fi.nodes.count {
 		t.Fatalf("Node count incorrect. Expected=%v, received=%v", origFs.count, fi.nodes.count)
 	}
-	if err := isSameFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
+	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
 	expectedHeaders := map[_Ctype_ino_t]string{28: "vlfvyugyvli", 29: "hbfyucdtkyv", 33: "bftcdvtuftu"}

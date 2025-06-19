@@ -412,7 +412,7 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 
 // getObjectSizesFromSegments is used for getting the object sizes for buckets that
 // have a matching segments bucket.
-func getObjectSizesFromSegments(rep, bucket string) (map[string]int64, error) {
+var getObjectSizesFromSegments = func(rep, bucket string) (map[string]int64, error) {
 	logs.Debugf("Fetching possible object sizes for bucket %s from matching segments bucket", rep+"/"+bucket)
 	objects, err := api.GetSegmentedObjects(rep, bucket+segmentsSuffix)
 	if err != nil {
