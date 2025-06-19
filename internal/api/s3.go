@@ -189,7 +189,7 @@ func getContext(rep string, head bool) context.Context {
 }
 
 // BucketExists checks whether or not bucket already exists in S3 storage
-func BucketExists(rep, bucket string) (bool, error) {
+var BucketExists = func(rep, bucket string) (bool, error) {
 	ctx := getContext(rep, true)
 
 	_, err := ai.hi.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
@@ -216,7 +216,7 @@ func BucketExists(rep, bucket string) (bool, error) {
 }
 
 // CreateBucket creates bucket and waits for it to be ready for subsequent requests
-func CreateBucket(rep, bucket string) error {
+var CreateBucket = func(rep, bucket string) error {
 	ctx := getContext(rep, false)
 
 	_, err := ai.hi.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -483,7 +483,7 @@ func getDataChunk(
 // UploadObject uploads object to bucket. Object is uploaded in segments of
 // size `segmentSize`. Upload Manager decides if the object is small enough
 // to use PutObject, or if multipart upload is necessary.
-func UploadObject(encryptedBody io.Reader, rep, bucket, object string, segmentSize int64) error {
+var UploadObject = func(encryptedBody io.Reader, rep, bucket, object string, segmentSize int64) error {
 	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
 		u.PartSize = segmentSize
 		u.LeavePartsOnError = false
@@ -516,7 +516,7 @@ func UploadObject(encryptedBody io.Reader, rep, bucket, object string, segmentSi
 
 // DeleteObject delets object from bucket. Function is necessary for situations where upload
 // had to be aborted because something went wrong.
-func DeleteObject(rep, bucket, object string) error {
+var DeleteObject = func(rep, bucket, object string) error {
 	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(object),

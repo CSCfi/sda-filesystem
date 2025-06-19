@@ -156,6 +156,7 @@ func TestClearPath(t *testing.T) {
 		if prefix[0] != "kansio/" {
 			t.Errorf("api.GetObjects() received incorrect prefix. Expected=kansio/, received=%s", prefix[0])
 		}
+
 		return []api.Metadata{
 			{Size: 45, Name: "kansio/file_1", LastModified: &time1},
 			{Size: 6, Name: "kansio/file_2", LastModified: &time2},
@@ -278,6 +279,7 @@ func TestClearPath_Segments(t *testing.T) {
 		if prefix[0] != "" {
 			t.Errorf("api.GetObjects() received incorrect prefix. Expected=, received=%s", prefix[0])
 		}
+
 		return []api.Metadata{
 			{Size: 42, Name: "logs", LastModified: &time1},
 			{Size: 0, Name: "dir3.2.1/file.c4gh", LastModified: &time2},

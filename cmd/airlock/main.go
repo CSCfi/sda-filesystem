@@ -83,7 +83,7 @@ func main() {
 	}
 
 	if !*override {
-		if err = airlock.CheckObjectExistence(filename, bucket); err != nil {
+		if err = airlock.CheckObjectExistence(filename, bucket, os.Stdin); err != nil {
 			logs.Fatal(err)
 		}
 	}
