@@ -18,6 +18,11 @@ type vaultInfo struct {
 	keyName    string
 }
 
+type vaultResponse struct {
+	Data     BatchHeaders `json:"data"`
+	Warnings []string     `json:"warnings"`
+}
+
 type VaultHeaderVersions struct {
 	Headers       map[string]VaultHeader `json:"headers"`
 	LatestVersion int                    `json:"latest_version"`
@@ -56,10 +61,7 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 	body = fmt.Sprintf(body, batchString, vaultService, ai.vi.keyName)
 	path := "/desktop/file-headers"
 
-	resp := struct {
-		Data     BatchHeaders `json:"data"`
-		Warnings []string     `json:"warnings"`
-	}{}
+	var resp vaultResponse
 	err = MakeRequest("GET", path, nil, nil, strings.NewReader(body), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -87,7 +89,7 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 	return resp.Data, nil
 }
 
-func whitelistKey(rep string) error {
+var whitelistKey = func(rep string) error {
 	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
 	body := `{
 		"flavor": "crypt4gh",
@@ -99,7 +101,7 @@ func whitelistKey(rep string) error {
 	return MakeRequest("POST", path, nil, nil, strings.NewReader(body), nil)
 }
 
-func deleteWhitelistedKey(rep string) error {
+var deleteWhitelistedKey = func(rep string) error {
 	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
 	path := fmt.Sprintf("/desktop/whitelist/%s/%s", vaultService, ai.vi.keyName)
 
@@ -108,7 +110,7 @@ func deleteWhitelistedKey(rep string) error {
 
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.
 // It returns the file's header re-encrypted with filesystem's own public key.
-func GetReencryptedHeader(bucket, object string) (string, int64, error) {
+var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 	path := fmt.Sprintf("/allasheader/%s", bucket)
 	query := map[string]string{"object": object}
 	headers := map[string]string{"Public-Key": ai.vi.publicKey}
@@ -123,7 +125,7 @@ func GetReencryptedHeader(bucket, object string) (string, int64, error) {
 }
 
 // PostHeader sends header of an encrypted object to be stored in Vault.
-func PostHeader(header []byte, bucket, object string) error {
+var PostHeader = func(header []byte, bucket, object string) error {
 	body := `{
 		"header": "%s"
 	}`
