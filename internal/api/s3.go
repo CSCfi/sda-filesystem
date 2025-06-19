@@ -46,7 +46,7 @@ type resolverV2 struct{}
 type EndpointKey struct{} // custom key for checking context value when resolving endpoint
 
 // ResolveEndpoint adds a prefix to the s3 endpoint based on the value in context.
-// This enables us to to use the same s3 client to call both SD Connect and SD Submit endpoints.
+// This enables us to to use the same s3 client to call both SD Connect and SD Apply endpoints.
 func (*resolverV2) ResolveEndpoint(ctx context.Context, params s3.EndpointParameters) (
 	smithyendpoints.Endpoint, error,
 ) {
@@ -359,7 +359,7 @@ func getObjects(params *s3.ListObjectsV2Input, rep, bucket string) ([]Metadata, 
 // DownloadData requests data between range [startDecrypted, endDecrypted).
 // As we want to split the data into chunks at consistent locations,
 // the requested byte interval may encompass one or two data chunks.
-func DownloadData(nodes []string, path string, header *string,
+var DownloadData = func(nodes []string, path string, header *string,
 	startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	endDecrypted = min(endDecrypted, fileSize)

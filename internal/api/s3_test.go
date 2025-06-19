@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sda-filesystem/internal/cache"
+	"sda-filesystem/test"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,9 +24,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
-	"github.com/neicnordic/crypt4gh/keys"
-	c4ghHeaders "github.com/neicnordic/crypt4gh/model/headers"
-	"github.com/neicnordic/crypt4gh/streaming"
 )
 
 func TestBucketExists(t *testing.T) {
@@ -982,90 +981,6 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 	}
 }
 
-func generateRandomText(size int) []byte {
-	var builder strings.Builder
-	builder.Grow(int(size))
-
-	r := rand.New(rand.NewSource(42)) // #nosec G404
-
-	consonants := "bcdfghjklmnpqrstvwxyz"
-	vowels := "aeiou"
-
-	generateWord := func(length int) string {
-		var b strings.Builder
-		useVowel := rand.Intn(2) == 0 // #nosec G404
-		for i := 0; i < length; i++ {
-			if useVowel {
-				b.WriteByte(vowels[r.Intn(len(vowels))]) // #nosec G404
-			} else {
-				b.WriteByte(consonants[r.Intn(len(consonants))]) // #nosec G404
-			}
-			useVowel = !useVowel
-		}
-
-		return b.String()
-	}
-
-	generateSentence := func() string {
-		wordCount := rand.Intn(10) + 5 // #nosec G404
-		var sentence strings.Builder
-		for i := 0; i < wordCount; i++ {
-			word := generateWord(r.Intn(6) + 3) // #nosec G404
-			if i == 0 {
-				word = strings.ToUpper(string(word[0])) + word[1:]
-			}
-			sentence.WriteString(word)
-			if i < wordCount-1 {
-				sentence.WriteByte(' ')
-			}
-		}
-		sentence.WriteByte('.')
-		sentence.WriteByte(' ')
-
-		return sentence.String()
-	}
-
-	for builder.Len() < size {
-		builder.WriteString(generateSentence())
-	}
-
-	return []byte(builder.String()[:size])
-}
-
-func encryptData(t *testing.T, content []byte) ([]byte, []byte) {
-	publicKey, privateKey, err := keys.GenerateKeyPair()
-	if err != nil {
-		t.Errorf("Failed to generate key pair: %s", err.Error())
-	}
-	ai.vi.privateKey = privateKey
-
-	encBuffer := bytes.Buffer{}
-	encryptWriter, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(&encBuffer, [][32]byte{publicKey}, nil)
-	if err != nil {
-		t.Fatalf("Failed to encrypt test data: %s", err.Error())
-	}
-	num, err := io.Copy(encryptWriter, bytes.NewBuffer(content))
-	if err != nil {
-		t.Fatalf("Failed to copy content for encryption: %s", err.Error())
-	}
-	encryptWriter.Close()
-	if num != int64(len(content)) {
-		t.Fatalf("Data has incorrect number of bytes. Expected=%d, received=%d", len(content), num)
-	}
-
-	encReader := bytes.NewReader(encBuffer.Bytes())
-	headerBytes, err := c4ghHeaders.ReadHeader(encReader)
-	if err != nil {
-		t.Fatalf("Failed to read header from data: %s", err.Error())
-	}
-	encryptedContent, err := io.ReadAll(encReader)
-	if err != nil {
-		t.Fatalf("Failed to read rest of data: %s", err.Error())
-	}
-
-	return headerBytes, encryptedContent
-}
-
 func TestDownloadData(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
@@ -1085,14 +1000,15 @@ func TestDownloadData(t *testing.T) {
 
 	decryptedSize := 80*1024*1024 + 10
 	encryptedSize := decryptedSize + 35992
-	content := generateRandomText(decryptedSize) // 3 chunks
+	content := test.GenerateRandomText(decryptedSize) // 3 chunks
 
-	headerBytes, encryptedContent := encryptData(t, content)
+	headerBytes, encryptedContent, privateKey := test.EncryptData(t, content)
 	if len(headerBytes)+len(encryptedContent) != encryptedSize {
 		t.Fatalf("Failed to split data correctly. Split data has header size %d and body size %d. They should sum up to %d", len(headerBytes), len(encryptedContent), encryptedSize)
 	}
 	header64 := base64.StdEncoding.EncodeToString(headerBytes)
 
+	ai.vi.privateKey = privateKey
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 
 	var tests = []struct {
@@ -1229,7 +1145,7 @@ func TestDownloadData(t *testing.T) {
 
 			storage.keys = make(map[string][]byte)
 			for _, idx := range tt.alreadyCachedIdxs {
-				key := fmt.Sprintf("/SD-Connect/project/%s/%s_%d", tt.bucket, tt.object, idx)
+				key := strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
 				ok := downloadCache.Set(key, source[idx:min(idx+chunkSize, int64(len(source)))], 0, time.Minute)
 				if !ok {
 					t.Fatalf("Failed to add key %s to cache", key)
@@ -1245,7 +1161,7 @@ func TestDownloadData(t *testing.T) {
 				t.Fatalf("Function returned incorrect data\nExpected=%v\nReceived=%v", string(expectedData), string(data))
 			}
 			for _, idx := range tt.cachedIdxs {
-				key := fmt.Sprintf("/SD-Connect/project/%s/%s_%d", tt.bucket, tt.object, idx)
+				key := strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
 				cachedData, ok := downloadCache.Get(key)
 				if !ok {
 					t.Fatalf("Data for key %s was not present in cache", key)
@@ -1257,7 +1173,7 @@ func TestDownloadData(t *testing.T) {
 				downloadCache.Del(key)
 			}
 			if len(storage.keys) > 0 {
-				t.Fatalf("Data with keys %v were stored in cache even though they shoudn't've been", storage.keys)
+				t.Fatalf("Data with keys %v were stored in cache even though they shoudn't've been", slices.Collect(maps.Keys(storage.keys)))
 			}
 		})
 	}
@@ -1282,14 +1198,15 @@ func TestDownloadData_Error(t *testing.T) {
 
 	decryptedSize := 80*1024*1024 + 10
 	encryptedSize := decryptedSize + 35992
-	content := generateRandomText(decryptedSize) // 3 chunks
+	content := test.GenerateRandomText(decryptedSize) // 3 chunks
 
-	headerBytes, encryptedContent := encryptData(t, content)
+	headerBytes, encryptedContent, privateKey := test.EncryptData(t, content)
 	if len(headerBytes)+len(encryptedContent) != encryptedSize {
 		t.Fatalf("Failed to split data correctly. Split data has header size %d and body size %d. They should sum up to %d", len(headerBytes), len(encryptedContent), encryptedSize)
 	}
 	header64 := base64.StdEncoding.EncodeToString(headerBytes)
 
+	ai.vi.privateKey = privateKey
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 
 	var tests = []struct {
@@ -1416,7 +1333,7 @@ func TestUploadObject(t *testing.T) {
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
 
-	uploadedData := generateRandomText(10003)
+	uploadedData := test.GenerateRandomText(10003)
 	reader := bytes.NewReader(uploadedData)
 
 	if err := initialiseS3Client(); err != nil {
@@ -1519,7 +1436,7 @@ func TestUploadObject_Multipart(t *testing.T) {
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
 
-	uploadedData := generateRandomText(1024*1024*18 + 573746)
+	uploadedData := test.GenerateRandomText(1024*1024*18 + 573746)
 	reader := bytes.NewReader(uploadedData)
 
 	if err := initialiseS3Client(); err != nil {
@@ -1560,7 +1477,7 @@ func TestUploadObject_TooLarge(t *testing.T) {
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
 
-	uploadedData := generateRandomText(1024)
+	uploadedData := test.GenerateRandomText(1024)
 	reader := bytes.NewReader(uploadedData)
 
 	if err := initialiseS3Client(); err != nil {
@@ -1627,7 +1544,7 @@ func TestUploadObject_Error(t *testing.T) {
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
 
-	uploadedData := generateRandomText(1024*1024*18 + 573746)
+	uploadedData := test.GenerateRandomText(1024*1024*18 + 573746)
 	reader := bytes.NewReader(uploadedData)
 
 	if err := initialiseS3Client(); err != nil {

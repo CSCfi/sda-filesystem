@@ -88,7 +88,7 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 }
 
 func whitelistKey(rep string) error {
-	_ = rep // Once SD Submit uses S3 and can be integrated here, this variable will become useful
+	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
 	body := `{
 		"flavor": "crypt4gh",
 		"pubkey": "%s"
@@ -100,7 +100,7 @@ func whitelistKey(rep string) error {
 }
 
 func deleteWhitelistedKey(rep string) error {
-	_ = rep // Once SD Submit uses S3 and can be integrated here, this variable will become useful
+	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
 	path := fmt.Sprintf("/desktop/whitelist/%s/%s", vaultService, ai.vi.keyName)
 
 	return MakeRequest("DELETE", path, nil, nil, nil, nil)

@@ -17,13 +17,14 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"sda-filesystem/internal/api"
-	"sda-filesystem/internal/logs"
-	"sda-filesystem/internal/mountpoint"
 	"slices"
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/neicnordic/crypt4gh/model/headers"
@@ -80,6 +81,15 @@ func updateParentSizes(node *C.node_t, oldSize C.off_t) {
 	diff := node.stat.st_size - oldSize
 	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
 		prnt.stat.st_size += diff
+	}
+}
+
+func updateParentTimestamps(node *C.node_t) {
+	timestamp := node.last_modified
+	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
+		if prnt.last_modified.tv_sec < timestamp.tv_sec {
+			prnt.last_modified.tv_sec = timestamp.tv_sec
+		}
 	}
 }
 
@@ -217,7 +227,7 @@ func ClearPath(path string) error {
 		if errors.As(err, &noBucket) {
 			logs.Debugf("Bucket %s does not have matching segments bucket", bucket)
 		} else {
-			logs.Warningf("Object sizes may not be correct: %s", err.Error())
+			logs.Warningf("File sizes may not be correct: %s", err.Error())
 		}
 	}
 
@@ -235,6 +245,7 @@ func ClearPath(path string) error {
 	oldSize := node.stat.st_size
 	clearNode(node, pathNames, objMap)
 	updateParentSizes(node, oldSize)
+	updateParentTimestamps(node)
 
 	logs.Info("Path cleared")
 
@@ -289,8 +300,13 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	header, ok := fi.headers[node.stat.st_ino]
 	if !ok {
 		pathNames := getNodePathNames(node)
-		if pathNames[1] != api.SDConnect { // Update once SD Submit has been added
+		if len(pathNames) > 1 && pathNames[1] != api.SDConnect {
 			logs.Errorf("Object %s has no header", path)
+
+			return
+		}
+		if len(pathNames) < 5 {
+			logs.Errorf("Path %s is too short for an object", path)
 
 			return
 		}
@@ -340,18 +356,11 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	}
 }
 
-// calculateDecryptedSize calculates the decrypted size of an encrypted file
+// calculateDecryptedSize calculates the decrypted size of an headerless encrypted file
 var calculateDecryptedSize = func(bodySize C.off_t) C.off_t {
-	// Calculate number of cipher blocks in body
-	blocks := C.off_t(math.Floor(float64(bodySize) / float64(api.CipherBlockSize)))
-	// the last block can be smaller than 64kiB
-	remainder := bodySize%C.off_t(api.CipherBlockSize) - C.off_t(api.MacSize)
-	if remainder < 0 {
-		remainder += C.off_t(api.MacSize)
-	}
+	blocks := C.off_t(math.Ceil(float64(bodySize) / float64(api.CipherBlockSize)))
 
-	// Add the previous info back together
-	return blocks*C.off_t(api.BlockSize) + remainder
+	return bodySize - C.off_t(api.MacSize)*blocks
 }
 
 // DownloadData uses s3 to download data to fill `cbuffer`. It returns the amount of bytes that were
@@ -365,7 +374,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 	pathNames := getNodePathNames(node)
 	path := C.GoString(cpath)
 
-	if len(pathNames) < 5 { // Needs to be modified once SD Submit is added
+	if len(pathNames) < 5 { // Needs to be modified once SD Apply is added
 		logs.Errorf("Path %s is too short for an object", path)
 
 		return -1
