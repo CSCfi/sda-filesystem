@@ -325,7 +325,7 @@ func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_
 
 		nodeSlice := unsafe.Slice(n.nodes, fsSize)
 		nodeSlice[idx+i] = goNodeToC(newGoNode(meta, bucket.Children != nil), bucket.NameSafe)
-		nodeSlice[idx+i].stat.st_ino = _Ctype_ino_t(idx + i)
+		nodeSlice[idx+i].stat.st_ino = _Ctype_ino_t(idx + i) // #nosec G115
 		nodeSlice[idx+i].offset = -1
 		nodeSlice[idx+i].parent = parent
 
@@ -337,8 +337,6 @@ func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_
 		nodeSlice[idx+i].chld_count = _Ctype_int64_t(len(*bucket.Children))
 		assignChildren(n, *bucket.Children, &nodeSlice[idx+i])
 	}
-
-	return
 }
 
 func isValidFuse(origFs *_Ctype_struct_Node, fs *_Ctype_struct_Node, path string) error {
@@ -524,8 +522,7 @@ func TestInitializeFilesystem(t *testing.T) {
 	api.GetSegmentedObjects = func(rep, bucket string) ([]api.Metadata, error) {
 		switch rep {
 		case rep1:
-			switch bucket {
-			case "bucket_1_segments":
+			if bucket == "bucket_1_segments" {
 				return []api.Metadata{
 					{Size: 112, Name: "dir+/another_file/fyvutilbiyni/00000001", LastModified: nil},
 				}, nil
