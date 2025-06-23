@@ -27,6 +27,7 @@ import (
 
 const SDApply string = "SD-Apply"
 const SDConnect string = "SD-Connect"
+const Findata string = "Findata"
 
 var ai = apiInfo{
 	hi: httpInfo{

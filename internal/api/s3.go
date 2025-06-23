@@ -483,7 +483,7 @@ func getDataChunk(
 // UploadObject uploads object to bucket. Object is uploaded in segments of
 // size `segmentSize`. Upload Manager decides if the object is small enough
 // to use PutObject, or if multipart upload is necessary.
-var UploadObject = func(encryptedBody io.Reader, rep, bucket, object string, segmentSize int64) error {
+var UploadObject = func(body io.Reader, rep, bucket, object string, segmentSize int64) error {
 	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
 		u.PartSize = segmentSize
 		u.LeavePartsOnError = false
@@ -496,7 +496,7 @@ var UploadObject = func(encryptedBody io.Reader, rep, bucket, object string, seg
 		ContentType: aws.String("application/octet-stream"),
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(object),
-		Body:        encryptedBody,
+		Body:        body,
 	})
 	if err != nil {
 		var re *smithyhttp.ResponseError
@@ -507,8 +507,11 @@ var UploadObject = func(encryptedBody io.Reader, rep, bucket, object string, seg
 				err = re.Err
 			}
 		}
+		if bucket != "" {
+			bucket = " to bucket " + bucket
+		}
 
-		return fmt.Errorf("failed to upload object %s to bucket %s: %w", object, bucket, err)
+		return fmt.Errorf("failed to upload object %s%s: %w", object, bucket, err)
 	}
 
 	return nil

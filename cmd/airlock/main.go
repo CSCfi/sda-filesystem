@@ -91,4 +91,6 @@ func main() {
 	if err := airlock.Upload(filename, bucket); err != nil {
 		logs.Fatal(err)
 	}
+
+	logs.Info("Upload(s) complete")
 }
