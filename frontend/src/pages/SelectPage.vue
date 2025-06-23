@@ -25,12 +25,7 @@ EventsOn("setRepositories", function(reps: {[key: string]: boolean}) {
 
 <template>
   <div style="width: 700px;">
-    <c-login-card-title>Log in to Data Gateway</c-login-card-title>
-    <p style="width: 550px;">
-      Access and import files from other SD services into SD Desktop.
-      Please select the service to access data from.
-    </p>
-
+    <c-login-card-title>Access Data Gateway</c-login-card-title>
     <c-loader :hide="initialized || disabled" />
     <RepositorySelect
       v-for="(repositoryDisabled, rep) in repositories"
@@ -39,7 +34,6 @@ EventsOn("setRepositories", function(reps: {[key: string]: boolean}) {
       :repository="(rep as string)"
       @selected="(status: boolean) => selectedRepos[rep] = status"
     />
-
     <c-button
       class="continue-button"
       :disabled="props.disabled || !validSelection"
