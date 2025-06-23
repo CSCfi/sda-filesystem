@@ -12,11 +12,15 @@ import (
 	"github.com/neicnordic/crypt4gh/streaming"
 )
 
+var r *rand.Rand
+
+func init() {
+	r = rand.New(rand.NewSource(42)) // #nosec G404
+}
+
 func GenerateRandomText(size int) []byte {
 	var builder strings.Builder
 	builder.Grow(int(size))
-
-	r := rand.New(rand.NewSource(42)) // #nosec G404
 
 	consonants := "bcdfghjklmnpqrstvwxyz"
 	vowels := "aeiou"
@@ -24,7 +28,7 @@ func GenerateRandomText(size int) []byte {
 	generateWord := func(length int) string {
 		var b strings.Builder
 		useVowel := rand.Intn(2) == 0 // #nosec G404
-		for i := 0; i < length; i++ {
+		for range length {
 			if useVowel {
 				b.WriteByte(vowels[r.Intn(len(vowels))]) // #nosec G404
 			} else {
@@ -39,7 +43,7 @@ func GenerateRandomText(size int) []byte {
 	generateSentence := func() string {
 		wordCount := rand.Intn(10) + 5 // #nosec G404
 		var sentence strings.Builder
-		for i := 0; i < wordCount; i++ {
+		for i := range wordCount {
 			word := generateWord(r.Intn(6) + 3) // #nosec G404
 			if i == 0 {
 				word = strings.ToUpper(string(word[0])) + word[1:]

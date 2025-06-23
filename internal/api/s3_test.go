@@ -95,18 +95,16 @@ func TestBucketExists(t *testing.T) {
 
 	exists, err := BucketExists(SDConnect, "my-bucket")
 	if err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
-	}
-	if !exists {
-		t.Fatalf("Function says bucket 'my-bucket' does not exist")
+		t.Errorf("Request to mock server failed: %v", err)
+	} else if !exists {
+		t.Errorf("Function says bucket 'my-bucket' does not exist")
 	}
 
 	exists, err = BucketExists(SDApply, "my-bucket-2")
 	if err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
-	}
-	if exists {
-		t.Fatalf("Function says bucket 'my-bucket-2' does exist")
+		t.Errorf("Request to mock server failed: %v", err)
+	} else if exists {
+		t.Errorf("Function says bucket 'my-bucket-2' does exist")
 	}
 }
 
@@ -147,11 +145,8 @@ func TestBucketExists_Error(t *testing.T) {
 			t.Cleanup(func() { srv.Close() })
 
 			if err := initialiseS3Client(); err != nil {
-				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-			}
-
-			_, err := BucketExists(SDConnect, "my-bucket")
-			if err == nil {
+				t.Errorf("Failed to initialize S3 client: %v", err.Error())
+			} else if _, err := BucketExists(SDConnect, "my-bucket"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -242,10 +237,9 @@ func TestCreateBucket(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if err := CreateBucket("MY-REPO", "my-bucket"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := CreateBucket("MY-REPO", "my-bucket"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	}
 }
 
@@ -301,11 +295,8 @@ func TestCreateBucket_Error(t *testing.T) {
 			t.Cleanup(func() { srv.Close() })
 
 			if err := initialiseS3Client(); err != nil {
-				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-			}
-
-			err := CreateBucket("Repository", "my-bucket")
-			if err == nil {
+				t.Errorf("Failed to initialize S3 client: %v", err.Error())
+			} else if err := CreateBucket("Repository", "my-bucket"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -367,12 +358,11 @@ func TestGetBuckets(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if buckets, err := GetBuckets("My-Repo"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if buckets, err := GetBuckets("My-Repo"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(buckets, expectedBuckets) {
-		t.Fatalf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+		t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
 	}
 }
 
@@ -459,12 +449,11 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if buckets, err := GetBuckets("My-Repo"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if buckets, err := GetBuckets("My-Repo"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(buckets, expectedBuckets) {
-		t.Fatalf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+		t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
 	}
 }
 
@@ -515,11 +504,8 @@ func TestGetBuckets_Error(t *testing.T) {
 			t.Cleanup(func() { srv.Close() })
 
 			if err := initialiseS3Client(); err != nil {
-				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-			}
-
-			_, err := GetBuckets(SDApply)
-			if err == nil {
+				t.Errorf("Failed to initialize S3 client: %v", err.Error())
+			} else if _, err := GetBuckets(SDApply); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -593,12 +579,11 @@ func TestGetObjects(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if objects, err := GetObjects(SDApply, "bucket234", "", "prefix"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if objects, err := GetObjects(SDApply, "bucket234", "", "prefix"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
-		t.Fatalf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
+		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
 	}
 }
 
@@ -690,12 +675,11 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if objects, err := GetObjects(SDConnect, "bucket23", ""); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if objects, err := GetObjects(SDConnect, "bucket23", ""); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
-		t.Fatalf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
+		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
 	}
 }
 
@@ -746,11 +730,8 @@ func TestGetObjects_Error(t *testing.T) {
 			t.Cleanup(func() { srv.Close() })
 
 			if err := initialiseS3Client(); err != nil {
-				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-			}
-
-			_, err := GetObjects(SDApply, "some-bucket", "SD-Apply/some-bucket")
-			if err == nil {
+				t.Errorf("Failed to initialize S3 client: %v", err.Error())
+			} else if _, err := GetObjects(SDApply, "some-bucket", "SD-Apply/some-bucket"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -815,12 +796,11 @@ func TestGetSegmentedObjects(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if objects, err := GetSegmentedObjects(SDApply, "bucket234"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if objects, err := GetSegmentedObjects(SDApply, "bucket234"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
-		t.Fatalf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
+		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
 	}
 }
 
@@ -912,12 +892,11 @@ func TestGetSegmentedObjects_MultiplePages(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if objects, err := GetSegmentedObjects(SDConnect, "bucket23"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if objects, err := GetSegmentedObjects(SDConnect, "bucket23"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
-		t.Fatalf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
+		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
 	}
 }
 
@@ -968,11 +947,8 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 			t.Cleanup(func() { srv.Close() })
 
 			if err := initialiseS3Client(); err != nil {
-				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-			}
-
-			_, err := GetSegmentedObjects(SDApply, "some-bucket")
-			if err == nil {
+				t.Errorf("Failed to initialize S3 client: %v", err.Error())
+			} else if _, err := GetSegmentedObjects(SDApply, "some-bucket"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -1342,13 +1318,11 @@ func TestUploadObject(t *testing.T) {
 	reader := bytes.NewReader(uploadedData)
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if err := UploadObject(reader, "some-repository", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
-	}
-	if receivedData.String() != string(uploadedData) {
-		t.Fatalf("Function uploaded incorrect data\nExpected=%s\nReceived=%s", string(uploadedData), receivedData.String())
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := UploadObject(reader, "some-repository", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
+	} else if receivedData.String() != string(uploadedData) {
+		t.Errorf("Function uploaded incorrect data\nExpected=%s\nReceived=%s", string(uploadedData), receivedData.String())
 	}
 }
 
@@ -1445,22 +1419,23 @@ func TestUploadObject_Multipart(t *testing.T) {
 	reader := bytes.NewReader(uploadedData)
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if err := UploadObject(reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
-	}
-	receivedDataStr := ""
-	for i := 1; ; i++ {
-		key := strconv.Itoa(i)
-		nextPart, ok := receivedData[key]
-		if !ok {
-			break
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := UploadObject(reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
+	} else {
+		receivedDataStr := ""
+		for i := 1; ; i++ {
+			key := strconv.Itoa(i)
+			nextPart, ok := receivedData[key]
+			if !ok {
+				break
+			}
+			receivedDataStr += string(nextPart)
 		}
-		receivedDataStr += string(nextPart)
-	}
-	if receivedDataStr != string(uploadedData) {
-		t.Fatalf("Function uploaded incorrect data\nExpected=%s\nReceived=%s", string(uploadedData), receivedDataStr)
+
+		if receivedDataStr != string(uploadedData) {
+			t.Errorf("Function uploaded incorrect data\nExpected=%s\nReceived=%s", string(uploadedData), receivedDataStr)
+		}
 	}
 }
 
@@ -1485,16 +1460,12 @@ func TestUploadObject_TooLarge(t *testing.T) {
 	uploadedData := test.GenerateRandomText(1024)
 	reader := bytes.NewReader(uploadedData)
 
+	errStr := "failed to upload object obj.txt to bucket bucket1000: object is too large"
 	if err := initialiseS3Client(); err != nil {
 		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-
-	errStr := "failed to upload object obj.txt to bucket bucket1000: object is too large"
-	err := UploadObject(reader, "repo", "bucket1000", "obj.txt", 1024*1024*5)
-	if err == nil {
-		t.Fatalf("Function did not return error")
-	}
-	if err.Error() != errStr {
+	} else if err := UploadObject(reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
 		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
@@ -1553,20 +1524,15 @@ func TestUploadObject_Error(t *testing.T) {
 	uploadedData := test.GenerateRandomText(1024*1024*18 + 573746)
 	reader := bytes.NewReader(uploadedData)
 
-	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-
 	errStr := "failed to upload object objekti.txt to bucket bucket574: api error InternalServerError: Internal Server Error"
-	err := UploadObject(reader, "repo", "bucket574", "objekti.txt", 1024*1024*5)
-	if !deleted {
+	if err := initialiseS3Client(); err != nil {
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := UploadObject(reader, "repo", "bucket574", "objekti.txt", 1024*1024*5); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	} else if !deleted {
 		t.Error("Object was not deleted")
-	}
-	if err == nil {
-		t.Fatalf("Function did not return error")
-	}
-	if err.Error() != errStr {
-		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
@@ -1610,10 +1576,9 @@ func TestDeleteBucket(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	if err := DeleteObject("SECRET-repository", "bucket007", "obj.txt"); err != nil {
-		t.Fatalf("Request to mock server failed: %v", err)
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := DeleteObject("SECRET-repository", "bucket007", "obj.txt"); err != nil {
+		t.Errorf("Request to mock server failed: %v", err)
 	}
 }
 
@@ -1637,13 +1602,10 @@ func TestDeleteBucket_Error(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
-		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	}
-	err := DeleteObject(SDConnect, "my-bucket", "obj.txt")
-	if err == nil {
-		t.Fatalf("Function did not return error")
-	}
-	if err.Error() != errStr {
-		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+		t.Errorf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := DeleteObject(SDConnect, "my-bucket", "obj.txt"); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }

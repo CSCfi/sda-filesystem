@@ -65,7 +65,7 @@ var StructureError = func(err error) []string {
 }
 
 // Error logs a message at level "Error" either on the standard logger or in the GUI
-func Error(err error) {
+var Error = func(err error) {
 	if signal != nil {
 		stErr := StructureError(err)
 		stErr[0] = strings.ToUpper(stErr[0][:1]) + stErr[0][1:]
@@ -76,7 +76,7 @@ func Error(err error) {
 }
 
 // Errorf logs a message at level "Error" either on the standard logger or in the GUI
-func Errorf(format string, args ...any) {
+var Errorf = func(format string, args ...any) {
 	err := fmt.Errorf(format, args...)
 	if signal != nil {
 		signal(logrus.ErrorLevel.String(), StructureError(err))

@@ -7,6 +7,7 @@ import (
 	"sda-filesystem/internal/logs"
 	"strings"
 
+	"github.com/neicnordic/crypt4gh/keys"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -21,6 +22,10 @@ type vaultInfo struct {
 type vaultResponse struct {
 	Data     BatchHeaders `json:"data"`
 	Warnings []string     `json:"warnings"`
+}
+
+type keyResponse struct {
+	Key64 string `json:"public_key_c4gh"`
 }
 
 type VaultHeaderVersions struct {
@@ -134,4 +139,18 @@ var PostHeader = func(header []byte, bucket, object string) error {
 	path := fmt.Sprintf("/desktop/file-headers/%s", bucket)
 
 	return MakeRequest("POST", path, query, nil, strings.NewReader(body), nil)
+}
+
+var GetPublicKey = func() ([32]byte, error) {
+	var encryptionKey keyResponse
+	path := "/desktop/project-key"
+
+	err := MakeRequest("GET", path, nil, nil, nil, &encryptionKey)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	logs.Debugf("Encryption key: %s", encryptionKey.Key64)
+
+	return keys.ReadPublicKey(strings.NewReader(encryptionKey.Key64))
 }
