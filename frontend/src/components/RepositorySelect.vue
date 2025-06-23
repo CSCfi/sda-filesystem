@@ -18,18 +18,17 @@ watch(() => selected.value, (sel: boolean) => {
 
 function getRepoDescription(repo: string) {
   if (repo.toLowerCase() === "sd-apply") {
-    return ": Access requires a permit from the data controller";
-  }
-  else if (repo.toLowerCase() === "sd-connect") {
-    return ": Access data stored in SD Connect";
+    return ": Access data stored in Federated EGA via SD Apply. This requires a permit from the data controller.";
+  } else if (repo.toLowerCase() === "sd-connect") {
+    return ": Access and export data to SD Connect";
   }
   return "";
 }
 </script>
 
 <template>
-  <c-row align="center" gap="10" class="switch-row">
-    <c-switch
+  <c-row align="center" gap="5" nowrap>
+    <c-checkbox
       v-model="selected"
       v-control
       :disabled="props.disabled"
@@ -42,11 +41,8 @@ function getRepoDescription(repo: string) {
 </template>
 
 <style scoped>
-
-.repository-name {
-  white-space: nowrap;
-}
-.switch-row {
+c-checkbox {
+  box-sizing: border-box;
   margin-top: 1rem;
 }
 </style>

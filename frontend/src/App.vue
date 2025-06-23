@@ -19,11 +19,11 @@ const initialized = ref(false);
 const selected = ref(false);
 const accessed = ref(false);
 
-const currentTab = ref("Select");
+const currentTab = ref("Log in");
 const componentData = computed<ComponentType[]>(() => ([
   {
     name: "SelectPage",
-    tab: "Select",
+    tab: "Log in",
     visible: !selected.value,
     props: {
       initialized: initialized.value,
