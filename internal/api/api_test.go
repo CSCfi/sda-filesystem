@@ -27,6 +27,7 @@ import (
 )
 
 var errExpected = errors.New("expected error for test")
+var testConfig apiEndpoints
 
 type MockReader struct {
 	Files map[string][]byte
@@ -127,6 +128,20 @@ func (ms *mockCache) Set(key string, data []byte, _ int64, _ time.Duration) bool
 	return true
 }
 
+func init() {
+	testConfig = apiEndpoints{
+		Profile:     "/profile-endpoint",
+		Password:    "/password-endpoint",
+		AllasHeader: "/allas-header-endpoint/",
+	}
+	testConfig.S3.Default = "/s3-default-endpoint/"
+	testConfig.S3.Head = "/s3-head-endpoint/"
+
+	testConfig.Vault.Key = "/project-key-endpoint"
+	testConfig.Vault.Headers = "/headers-endpoint"
+	testConfig.Vault.Whitelist = "/whitelist-endpoint/"
+}
+
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(string, []string) {})
 	os.Exit(m.Run())
@@ -210,19 +225,25 @@ func TestGetEnv(t *testing.T) {
 
 func TestSetup(t *testing.T) {
 	origGetEnv := GetEnv
+	origMakeRequest := makeRequest
 	origNewRistretto := cache.NewRistrettoCache
 	origLoadCertificates := loadCertificates
 	origInitialiseS3Client := initialiseS3Client
 	origProxy := ai.proxy
 	origToken := ai.token
+	origS3Timeout := ai.hi.s3Timeout
 	defer func() {
 		GetEnv = origGetEnv
+		makeRequest = origMakeRequest
 		cache.NewRistrettoCache = origNewRistretto
 		loadCertificates = origLoadCertificates
 		initialiseS3Client = origInitialiseS3Client
 		ai.proxy = origProxy
 		ai.token = origToken
+		ai.hi.s3Timeout = origS3Timeout
 	}()
+
+	ai.hi.endpoints = apiEndpoints{}
 
 	GetEnv = func(name string, verifyURL bool) (string, error) {
 		switch name {
@@ -230,8 +251,28 @@ func TestSetup(t *testing.T) {
 			return "test_url", nil
 		case "SDS_ACCESS_TOKEN":
 			return "test_token", nil
+		case "CONFIG_ENDPOINT":
+			return "config_url", nil
 		default:
 			return "", fmt.Errorf("unknown env %s", name)
+		}
+	}
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		if ai.proxy != "" {
+			t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
+		}
+		if path != "config_url" {
+			return fmt.Errorf("Incorrect path \nExpected=config-url\nReceived=%s", path)
+		}
+
+		switch v := ret.(type) {
+		case *configResponse:
+			v.Timeouts.S3 = 13
+			v.Endpoints = testConfig
+
+			return nil
+		default:
+			return fmt.Errorf("ret has incorrect type %v, expected *configResponse", reflect.TypeOf(v))
 		}
 	}
 	newCache := &cache.Ristretto{Cacheable: &mockCache{keys: make(map[string][]byte)}}
@@ -260,6 +301,12 @@ func TestSetup(t *testing.T) {
 	if ai.token != "test_token" {
 		t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
 	}
+	if ai.hi.s3Timeout != 18 {
+		t.Errorf("S3 timeout has incorrect value\nExpected=18\nReceived=%v", ai.hi.s3Timeout)
+	}
+	if !reflect.DeepEqual(ai.hi.endpoints, testConfig) {
+		t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.s3Timeout)
+	}
 	if downloadCache != newCache {
 		t.Errorf("downloadCache does not point to new cache")
 	}
@@ -272,17 +319,20 @@ func TestSetup(t *testing.T) {
 
 func TestSetup_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errText                            string
-		proxyErr, tokenErr, cacheErr, certErr, s3Err error
+		testname, errText                                               string
+		tokenErr, configErr, reqErr, proxyErr, cacheErr, certErr, s3Err error
 	}{
-		{"FAIL_1", "required environment variables missing", errExpected, nil, nil, nil, nil},
-		{"FAIL_2", "required environment variables missing", nil, errExpected, nil, nil, nil},
-		{"FAIL_3", "failed to create cache", nil, nil, errExpected, nil, nil},
-		{"FAIL_4", "failed to load certficates", nil, nil, nil, errExpected, nil},
-		{"FAIL_5", "failed to initialise S3 client", nil, nil, nil, nil, errExpected},
+		{"FAIL_1", "required environment variables missing", errExpected, nil, nil, nil, nil, nil, nil},
+		{"FAIL_2", "required environment variables missing", nil, errExpected, nil, nil, nil, nil, nil},
+		{"FAIL_3", "failed to get static configuration.json file", nil, nil, errExpected, nil, nil, nil, nil},
+		{"FAIL_4", "required environment variables missing", nil, nil, nil, errExpected, nil, nil, nil},
+		{"FAIL_5", "failed to create cache", nil, nil, nil, nil, errExpected, nil, nil},
+		{"FAIL_6", "failed to load certficates", nil, nil, nil, nil, nil, errExpected, nil},
+		{"FAIL_7", "failed to initialise S3 client", nil, nil, nil, nil, nil, nil, errExpected},
 	}
 
 	origGetEnv := GetEnv
+	origMakeRequest := makeRequest
 	origNewRistretto := cache.NewRistrettoCache
 	origLoadCertificates := loadCertificates
 	origInitialiseS3Client := initialiseS3Client
@@ -290,6 +340,7 @@ func TestSetup_Error(t *testing.T) {
 	origToken := ai.token
 	defer func() {
 		GetEnv = origGetEnv
+		makeRequest = origMakeRequest
 		cache.NewRistrettoCache = origNewRistretto
 		loadCertificates = origLoadCertificates
 		initialiseS3Client = origInitialiseS3Client
@@ -305,9 +356,14 @@ func TestSetup_Error(t *testing.T) {
 					return "", tt.proxyErr
 				case "SDS_ACCESS_TOKEN":
 					return "", tt.tokenErr
+				case "CONFIG_ENDPOINT":
+					return "", tt.configErr
 				default:
 					return "", fmt.Errorf("unknown env %s", name)
 				}
+			}
+			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+				return tt.reqErr
 			}
 			cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 				return nil, tt.cacheErr
@@ -336,10 +392,12 @@ func TestGetProfile(t *testing.T) {
 		makeRequest = origMakeRequest
 	}()
 
+	ai.hi.endpoints = testConfig
+
 	access := true
 	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
-		if path != "/profile" {
-			return fmt.Errorf("Incorrect path\nExpected=/profile\nReceived=%s", path)
+		if path != "/profile-endpoint" {
+			return fmt.Errorf("Incorrect path\nExpected=/profile-endpoint\nReceived=%s", path)
 		}
 
 		switch v := ret.(type) {
@@ -411,10 +469,11 @@ func TestAuthenticate(t *testing.T) {
 	}()
 
 	password := "passw0rd"
+	ai.hi.endpoints = testConfig
 
 	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
-		if path != "/credentials/check" {
-			return fmt.Errorf("Incorrect path\nExpected=/credentials/check\nReceived=%s", path)
+		if path != "/password-endpoint" {
+			return fmt.Errorf("Incorrect path\nExpected=/password-endpoint\nReceived=%s", path)
 		}
 		if ai.password != "cGFzc3cwcmQ=" {
 			return fmt.Errorf("Incorrect password\nExpected=cGFzc3cwcmQ=\nReceived=%s", ai.password)

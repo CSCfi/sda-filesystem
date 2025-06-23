@@ -195,6 +195,7 @@ services:
     environment:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
       PROXY_URL: "${PROXY_URL}"
+      CONFIG_ENDPOINT: "${CONFIG_ENDPOINT}"
     tty: true
     cap_add:
       - SYS_ADMIN

@@ -61,7 +61,9 @@ type apiInfo struct {
 // httpInfo contains variables used during HTTP requests
 type httpInfo struct {
 	requestTimeout int
+	s3Timeout      int
 	httpRetry      int
+	endpoints      apiEndpoints
 	client         *http.Client
 	s3Client       *s3.Client
 }
@@ -74,6 +76,28 @@ type profile struct {
 	PI           bool   `json:"PI"`
 	SDConnect    bool   `json:"sdConnect"`
 	S3Access     bool   `json:"s3Access"`
+}
+
+type configResponse struct {
+	Timeouts struct {
+		S3 int `json:"s3"`
+	} `json:"timeouts"`
+	Endpoints apiEndpoints `json:"endpoints"`
+}
+
+type apiEndpoints struct {
+	Profile     string `json:"profile"`
+	Password    string `json:"valid_password"`
+	AllasHeader string `json:"allas_header"`
+	S3          struct {
+		Default string `json:"default"`
+		Head    string `json:"head"`
+	} `json:"s3"`
+	Vault struct {
+		Key       string `json:"project_key"`
+		Headers   string `json:"headers"`
+		Whitelist string `json:"whitelist"`
+	} `json:"vault"`
 }
 
 // RequestError is used to obtain the status code from a HTTP request
@@ -134,12 +158,21 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 // Otherwise `files` contains all the files from the `certs` directory.
 func Setup(files ...FileReader) error {
 	var err error
-	ai.proxy, err = GetEnv("PROXY_URL", true)
+	ai.token, err = GetEnv("SDS_ACCESS_TOKEN", false)
 	if err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
 
-	ai.token, err = GetEnv("SDS_ACCESS_TOKEN", false)
+	config, err := GetEnv("CONFIG_ENDPOINT", true)
+	if err != nil {
+		return fmt.Errorf("required environment variables missing: %w", err)
+	}
+	// This needs to be called first before any other http requests
+	if err = getAPIEndpoints(config); err != nil {
+		return fmt.Errorf("failed to get static configuration.json file: %w", err)
+	}
+
+	ai.proxy, err = GetEnv("PROXY_URL", true)
 	if err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
@@ -167,8 +200,21 @@ func Setup(files ...FileReader) error {
 	return nil
 }
 
+func getAPIEndpoints(url string) error {
+	// Since ai.proxy is still empty, giving the url as path works here
+	var resp configResponse
+	if err := makeRequest("GET", url, nil, nil, nil, &resp); err != nil {
+		return err
+	}
+
+	ai.hi.s3Timeout = resp.Timeouts.S3 + 5
+	ai.hi.endpoints = resp.Endpoints
+
+	return nil
+}
+
 func GetProfile() (bool, error) {
-	err := makeRequest("GET", "/profile", nil, nil, nil, &ai.userProfile)
+	err := makeRequest("GET", ai.hi.endpoints.Profile, nil, nil, nil, &ai.userProfile)
 	if err != nil {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
 	}
@@ -183,7 +229,7 @@ func GetProfile() (bool, error) {
 // Authenticate checks that user passes the authentication checks in KrakenD with the given password.
 var Authenticate = func(password string) error {
 	ai.password = base64.StdEncoding.EncodeToString([]byte(password))
-	err := makeRequest("GET", "/credentials/check", nil, nil, nil, nil)
+	err := makeRequest("GET", ai.hi.endpoints.Password, nil, nil, nil, nil)
 	if err != nil {
 		ai.password = ""
 
