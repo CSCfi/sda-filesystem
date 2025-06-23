@@ -142,7 +142,7 @@ var initialiseS3Client = func() error {
 
 	httpClient := &http.Client{
 		Transport: tr,
-		Timeout:   time.Second * time.Duration(ai.hi.requestTimeout),
+		Timeout:   time.Second * time.Duration(ai.hi.s3Timeout),
 	}
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -180,9 +180,9 @@ var initialiseS3Client = func() error {
 }
 
 func getContext(rep string, head bool) context.Context {
-	endpoint := "/s3/"
+	endpoint := ai.hi.endpoints.S3.Default
 	if head {
-		endpoint = "/s3-head/"
+		endpoint = ai.hi.endpoints.S3.Head
 	}
 
 	return context.WithValue(context.Background(), EndpointKey{}, endpoint+strings.ToLower(rep))

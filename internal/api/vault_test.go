@@ -42,6 +42,7 @@ func TestGetHeaders(t *testing.T) {
 		"key": "some-key"
 	}`
 	ai.vi.keyName = "some-key"
+	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
 		testname, errStr                    string
@@ -87,8 +88,8 @@ func TestGetHeaders(t *testing.T) {
 				if method != "GET" {
 					return fmt.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
-				if path != "/desktop/file-headers" {
-					return fmt.Errorf("Request has incorrect path\nExpected=/desktop/fileheaders\nReceived=%v", path)
+				if path != "/headers-endpoint" {
+					return fmt.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
 				}
 				body, err := io.ReadAll(reqBody)
 				if err != nil {
@@ -148,6 +149,8 @@ func TestPublicKey(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
+	ai.hi.endpoints = testConfig
+
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			makeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
@@ -157,7 +160,7 @@ func TestPublicKey(t *testing.T) {
 				switch v := ret.(type) {
 				case *keyResponse:
 					switch path {
-					case "/desktop/project-key":
+					case "/project-key-endpoint":
 						v.Key64 = fmt.Sprintf("-----BEGIN CRYPT4GH PUBLIC KEY-----\n%s\n-----END CRYPT4GH PUBLIC KEY-----", tt.key64)
 					default:
 						return fmt.Errorf("request has incorrect path %v", path)

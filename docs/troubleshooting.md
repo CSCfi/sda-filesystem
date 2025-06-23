@@ -33,3 +33,7 @@ Write `update` in the terminal where the process is running.
 ```
 update
 ```
+
+## Environment variables don't seem to be correct even though I am sure I am running the correct commands
+
+Make sure you have not exported any of the environment variables in you command line. They will override any envs given to docker compose.
