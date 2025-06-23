@@ -425,7 +425,7 @@ func getDataChunk(
 		endEncrypted = (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
 
 		nBlocks := math.Ceil(float64(fileSize) / float64(BlockSize))
-		encryptedBodySize = fileSize + int64(nBlocks)*MacSize
+		encryptedBodySize = fileSize + int64(nBlocks)*MacSize + oldOffset
 	}
 	endEncrypted = min(endEncrypted, encryptedBodySize)
 

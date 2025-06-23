@@ -1083,6 +1083,11 @@ func TestDownloadData(t *testing.T) {
 			[]string{header64}, 53108864, 53109961, 157,
 			nil, []int64{33554432}, true,
 		},
+		{
+			"OK_OFFSET_3", "old-bucket-2", "myobject-2.c4gh",
+			[]string{header64}, 83885978, 83886090, 473,
+			nil, []int64{67108864}, true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1533,9 +1538,10 @@ func TestUploadObject_Error(t *testing.T) {
 			return
 		}
 
-		if r.Method == "PUT" {
+		switch r.Method {
+		case "PUT":
 			w.WriteHeader(http.StatusInternalServerError)
-		} else if r.Method == "DELETE" {
+		case "DELETE":
 			deleted = true
 		}
 	}))
