@@ -67,7 +67,7 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 	path := "/desktop/file-headers"
 
 	var resp vaultResponse
-	err = MakeRequest("GET", path, nil, nil, strings.NewReader(body), &resp)
+	err = makeRequest("GET", path, nil, nil, strings.NewReader(body), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -103,14 +103,14 @@ var whitelistKey = func(rep string) error {
 	body = fmt.Sprintf(body, ai.vi.publicKey)
 	path := fmt.Sprintf("/desktop/whitelist/%s/%s", vaultService, ai.vi.keyName)
 
-	return MakeRequest("POST", path, nil, nil, strings.NewReader(body), nil)
+	return makeRequest("POST", path, nil, nil, strings.NewReader(body), nil)
 }
 
 var deleteWhitelistedKey = func(rep string) error {
 	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
 	path := fmt.Sprintf("/desktop/whitelist/%s/%s", vaultService, ai.vi.keyName)
 
-	return MakeRequest("DELETE", path, nil, nil, nil, nil)
+	return makeRequest("DELETE", path, nil, nil, nil, nil)
 }
 
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.
@@ -124,7 +124,7 @@ var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		Header string `json:"header"`
 		Offset int64  `json:"offset"`
 	}{}
-	err := MakeRequest("GET", path, query, headers, nil, &resp)
+	err := makeRequest("GET", path, query, headers, nil, &resp)
 
 	return resp.Header, resp.Offset, err
 }
@@ -138,14 +138,14 @@ var PostHeader = func(header []byte, bucket, object string) error {
 	query := map[string]string{"object": object}
 	path := fmt.Sprintf("/desktop/file-headers/%s", bucket)
 
-	return MakeRequest("POST", path, query, nil, strings.NewReader(body), nil)
+	return makeRequest("POST", path, query, nil, strings.NewReader(body), nil)
 }
 
 var GetPublicKey = func() ([32]byte, error) {
 	var encryptionKey keyResponse
 	path := "/desktop/project-key"
 
-	err := MakeRequest("GET", path, nil, nil, nil, &encryptionKey)
+	err := makeRequest("GET", path, nil, nil, nil, &encryptionKey)
 	if err != nil {
 		return [32]byte{}, err
 	}
