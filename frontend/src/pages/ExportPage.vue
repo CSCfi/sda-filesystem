@@ -1,9 +1,11 @@
 <script lang="ts" setup>
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { EventsOn, EventsEmit } from "../../wailsjs/runtime/runtime";
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from "@cscfi/csc-ui/dist/types";
 import { SelectFile, CheckExistence, ExportFile } from "../../wailsjs/go/main/App";
 import { mdiTrashCanOutline } from "@mdi/js";
+import { ValidationIconType, ValidationResult } from "../types/common";
+import ValidationHelper from "../components/ValidationHelper.vue";
 
 const exportHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name", sortable: false },
@@ -68,6 +70,28 @@ watch(() => bucketQuery.value, (query: string) => {
   });
 });
 
+const validationHelperData = computed(() => {
+  type ValidationHelper = {
+    check: string;
+    message: string;
+    type: ValidationIconType;
+  };
+  let helpers: ValidationHelper[] = [
+    { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
+    { check: "inputLength", message: "Bucket name should be between 3 and 63 characters long.", type: "info"},
+    { check: "alphaNumDash", message: "Use Latin letters (a-z), numbers (0-9) and a dash (-).", type: "info"},
+    { check: "alphaNumDash", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
+    { check: "unique", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
+  ];
+  if (bucketQuery?.value) {
+    const result: ValidationResult = validateInput(bucketQuery.value);
+    helpers.forEach((item) => {
+      item.type = result[item.check as keyof ValidationResult] ? "success" : "error";
+    });
+  }
+  return helpers;
+});
+
 function selectFile() {
   SelectFile().then((filename: string) => {
     CheckExistence(filename, selectedBucket.value).then((found: boolean) => {
@@ -102,6 +126,15 @@ function exportFile() {
 
 function containsFilterString(str: string): boolean {
   return str.toLowerCase().includes(selectedBucket.value.toLowerCase());
+}
+
+function validateInput(input: string): ValidationResult {
+  return {
+    lowerCaseOrNum: !!(input[0].match(/[\p{L}0-9]/u) && input[0] === input[0].toLowerCase()),
+    inputLength: input.length >= 3 && input.length <= 63,
+    alphaNumDash: !!input.match(/^[a-z0-9-]+$/g),
+    unique: true, // TODO
+  };
 }
 </script>
 
@@ -138,28 +171,38 @@ function containsFilterString(str: string): boolean {
       <p>You need to have project manager rights to export files.</p>
     </div>
     <div v-show="pageIdx == 1">
-      <h2>Select a destination folder for your export</h2>
+      <h2>Export files to SD Connect</h2>
       <p>
-        Your export will be sent to SD Connect.
-        If the folder does not already exist in SD Connect, it will be created.
-        Please note that the folder name cannot be modified afterwards.
+        Bucket, folder and file names cannot be changed after creation or upload.
+        Remember, all bucket names are public; please do not include any confidential information.
+      </p>
+      <h3>Select or create a destination bucket</h3>
+      <p>
+        Choose a bucket from the dropdown or create a new one by entering a name.
+        It will be created at the root of your project.
       </p>
       <c-row>
         <c-autocomplete
           v-model="selectedBucket"
           v-control
-          label="Folder name"
+          label="Bucket name"
           :items="filteredBucketItems"
           items-per-page="5"
-          no-matching-items-message="You are creating a new folder"
+          no-matching-items-message="You are creating a new bucket"
           return-value
           @changeQuery="bucketQuery = $event.detail"
         />
       </c-row>
+      <ValidationHelper
+        v-for="item in validationHelperData"
+        :key="item.message"
+        :type="item.type"
+        :message="item.message"
+      />
       <c-button
         class="continue-button"
         size="large"
-        :disabled="!selectedBucket"
+        :disabled="validationHelperData.some(item => item.type !== 'success')"
         @click="pageIdx++"
       >
         Continue

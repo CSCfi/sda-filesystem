@@ -1,3 +1,9 @@
+:root {
+    --c-info-600: #0082bb;
+    --c-success-600: #51a808;
+    --c-error-600: #dd0c0c;
+}
+
 * {
     font-family: Arial, Helvetica, "FreeSans", sans-serif;
 }
