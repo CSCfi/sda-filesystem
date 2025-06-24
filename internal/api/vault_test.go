@@ -10,12 +10,12 @@ import (
 func TestGetHeaders(t *testing.T) {
 	origWhitelistKey := whitelistKey
 	origDeleteWhitelistedKey := deleteWhitelistedKey
-	origMakeRequest := MakeRequest
+	origMakeRequest := makeRequest
 	origKeyName := ai.vi.keyName
 	defer func() {
 		whitelistKey = origWhitelistKey
 		deleteWhitelistedKey = origDeleteWhitelistedKey
-		MakeRequest = origMakeRequest
+		makeRequest = origMakeRequest
 		ai.vi.keyName = origKeyName
 	}()
 
@@ -83,7 +83,7 @@ func TestGetHeaders(t *testing.T) {
 
 				return tt.deleteErr
 			}
-			MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				if method != "GET" {
 					return fmt.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
@@ -145,12 +145,12 @@ func TestPublicKey(t *testing.T) {
 		},
 	}
 
-	origMakeRequest := MakeRequest
-	defer func() { MakeRequest = origMakeRequest }()
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
+			makeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
 				if method != "GET" {
 					return fmt.Errorf("request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
@@ -180,10 +180,10 @@ func TestPublicKey(t *testing.T) {
 }
 
 func TestGetPublicKey_InvalidKey(t *testing.T) {
-	origMakeRequest := MakeRequest
-	defer func() { MakeRequest = origMakeRequest }()
+	origMakeRequest := makeRequest
+	defer func() { makeRequest = origMakeRequest }()
 
-	MakeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
+	makeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
 		switch v := ret.(type) {
 		case *keyResponse:
 			v.Key64 = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nSGVsbG8sIHdvcmxkIQ==\n-----END CRYPT4GH PUBLIC KEY-----"
