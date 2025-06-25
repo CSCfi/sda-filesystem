@@ -81,6 +81,7 @@ mock_auth_url_docker = environ.get("AAI_BASE_URL")
 mock_keystone_url_docker = environ.get("KEYSTONE_BASE_URL")
 
 project = environ.get("CSC_PROJECT", "service")
+is_findata = environ.get("IS_FINDATA", "")
 username = environ.get("CSC_USERNAME", "swift")
 password = environ.get("CSC_PASSWORD", "veryfast")
 
@@ -139,10 +140,14 @@ async def userinfo(req: web.Request) -> web.Response:
     if auth != "Bearer " + desktop_token and auth != "Bearer " + sds_access_token:
         return web.Response(status=400, text="invalid token")
 
+    findata_projects = ""
+    if is_findata.lower() in ("yes", "true", "t", "1"):
+        findata_projects = project
+
     user_info = {
         "CSCUserName": username,
         "sdDesktopProjects": project,
-        "sdDesktopFindataProjects": "",
+        "sdDesktopFindataProjects": findata_projects,
         "sdConnectProjects": project,
         "projectPI": project,
         "pouta_access_token": pouta_token,
