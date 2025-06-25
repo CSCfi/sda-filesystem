@@ -14,6 +14,7 @@ services:
       start_period: 20s
     profiles:
       - keystone
+      - keystone-creds
     ports:
       - 8080:8080
       - 5001:5001
@@ -28,8 +29,24 @@ services:
       - .env.keystone
     environment:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
+      IS_FINDATA: "${IS_FINDATA}"
     profiles:
       - keystone
+    depends_on:
+      keystone-swift:
+        condition: service_healthy
+
+  findata-creds:
+    image: docker.io/docker:28.1
+    container_name: findata-creds
+    entrypoint: sh /admin_credentials.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../scripts/admin_credentials.sh:/admin_credentials.sh
+      - .:/app/env
+    profiles:
+      - keystone
+      - keystone-creds
     depends_on:
       keystone-swift:
         condition: service_healthy
@@ -79,11 +96,13 @@ services:
         condition: service_healthy
 
   krakend:
-    image: sds-docker.artifactory.ci.csc.fi/sds/krakend-api-gateway:2025.6.0
+    image: sds-docker.artifactory.ci.csc.fi/sds/krakend-api-gateway:2025.6.1
     container_name: krakend
     env_file:
-      - .env
-      - .env.krakend
+      - path: .env
+      - path: .env.krakend
+      - path: .env.findata
+        required: false
     environment:
       API_KEY: "${KRAKEND_API_KEY}"
       KRAKEND_ADDR: "${VALIDATOR_ADDR}"
@@ -93,6 +112,9 @@ services:
       DISABLE_JWK_SECURITY: "${DISABLE_JWK_SECURITY}"
       C4GH_KEY: "${C4GH_KEY}"
       C4GH_KEY_PASSPHRASE: "${C4GH_KEY_PASSPHRASE}"
+      FINDATA_S3_HOST: "${FINDATA_S3_HOST}"
+      FINDATA_S3_REGION: "${FINDATA_S3_REGION}"
+      FINDATA_BUCKET: "${FINDATA_BUCKET}"
     volumes:
       - ../static:/static
     profiles:

@@ -21,6 +21,11 @@ until wget -o /dev/null -q --spider "${VAULT_ADDR}/v1/sys/health?standbyok=true"
 done
 
 vault login token="${VAULT_DEV_ROOT_TOKEN_ID}"
+
+if vault read auth/approle/role/"$VAULT_ROLE" >/dev/null 2>&1; then
+    exit 0
+fi
+
 vault auth enable approle
 vault secrets enable c4ghtransit
 vault policy write "$VAULT_ROLE" "$SCRIPTS"/vault_policy.hcl

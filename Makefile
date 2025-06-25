@@ -1,4 +1,4 @@
-.PHONY: help all remote local gui cli gui_build requirements clean down get_env run_profiles build_profiles exec envs _wait_for_upload _follow_logs
+.PHONY: help all remote local gui cli gui_build requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
 
 MAKEFLAGS += --no-print-directory
 
@@ -13,7 +13,7 @@ ifeq ($(IS_UBUNTU_24_04),true)
 endif
 WAILS_FLAGS += $(shell command -v upx >/dev/null && echo -upx)
 
-profile_args = $(foreach a,$1,--profile $a --env-file .env.$a)
+profile_args = $(foreach a,$1,--profile $a --env-file .env.$(firstword $(subst -, ,$a)))
 
 define write_secret
 printf "%s=" $(1) >> .env; \
@@ -27,7 +27,7 @@ endef
 
 define docker_up_aftermath
 $(MAKE) _follow_logs
-$(MAKE) _wait_for_upload
+$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 if [ "${UNAME}" = "Darwin" ]; then \
 	osascript \
 		-e 'tell application "Terminal"' \
@@ -58,7 +58,7 @@ all: down ## Run 'make local gui'
 requirements: ## Install dependencies and create .env file with vault secrets
 	cp dev-tools/.env.example dev-tools/compose/.env
 	docker login sds-docker.artifactory.ci.csc.fi
-	$(MAKE) get_env
+	@$(MAKE) get_env
 	pnpm install --prefix frontend
 	pnpm --prefix frontend run build
 
@@ -67,17 +67,20 @@ remote: down ## Only set up mock terminal-proxy and connect to test cluster Krak
 	@$(call docker_up_aftermath)
 
 local: down ## Run components locally
-	$(call docker_cmd,krakend keystone,up -d --build)
+	$(call docker_cmd,krakend keystone,build)
+	$(call docker_cmd,keystone-creds,up -d)
+	@$(MAKE) _wait_for_container CONTAINER_NAME=findata-creds
+	$(call docker_cmd,krakend keystone,up -d)
 	@$(call docker_up_aftermath)
 
 cli: ## Run CLI version of filesystem on your own computer
-	@$(MAKE) _wait_for_upload
-	@export $$(grep -E '^PROXY_URL|^SDS_ACCESS_TOKEN' dev-tools/compose/.env | xargs); \
+	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
+	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
 	trap 'exit 0' INT; go run cmd/fuse/main.go -loglevel=$(LOG)
 
 gui: ## Run GUI version of filesystem on your own computer
-	@$(MAKE) _wait_for_upload
-	@export $$(grep -E '^PROXY_URL|^SDS_ACCESS_TOKEN' dev-tools/compose/.env | xargs); \
+	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
+	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
 	trap 'exit 0' INT; cd cmd/gui; \
 	if [ $(IS_UBUNTU_24_04) = true ]; then \
 		wails dev -tags webkit2_41; \
@@ -93,6 +96,7 @@ clean: down ## Stop running containers, delete volumes, and remove vault secrets
 	cat -s .env > .env.tmp && mv .env.tmp .env; rm -f .env.bak
 
 down: ## Stop running containers and delete volumes
+	@rm -f dev-tools/compose/.env.findata
 	@$(call docker_cmd,$(PROFILES),down --volumes)
 
 get_env: clean ## Get latest secrets from vault, replacing old secrets
@@ -103,15 +107,25 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,C4GH_KEY,krakend/allas-encryption-key,key) \
 	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
 	$(call write_secret,VAULT_ROLE,krakend/vault,role) \
-	$(call write_secret,VAULT_SECRET,krakend/vault,secret)
+	$(call write_secret,VAULT_SECRET,krakend/vault,secret) \
+	$(call write_secret,FINDATA_ACCESS,krakend/findata,access) \
+	$(call write_secret,FINDATA_SECRET,krakend/findata,secret) \
+	$(call write_secret,FINDATA_S3_HOST,krakend/findata,host) \
+	$(call write_secret,FINDATA_S3_REGION,krakend/findata,region) \
+	$(call write_secret,FINDATA_BUCKET,krakend/findata,bucket)
 	@printf "### VAULT SECRETS END ###\n" >> dev-tools/compose/.env
 	@echo "Secrets written successfully"
 
 run_profiles: down ## Run componets with possible profile arguments: fuse krakend keystone
+	@if echo "$(RUN_ARGS)" | grep -q keystone; then \
+		$(call docker_cmd,keystone-creds,up -d); \
+	fi
+	@$(MAKE) _wait_for_container CONTAINER_NAME=findata-creds
 	$(call docker_cmd,$(RUN_ARGS),up)
 
 build_profiles: down ## Build and run components with possible profile arguments: fuse krakend keystone
-	$(call docker_cmd,$(RUN_ARGS),up --build)
+	$(call docker_cmd,$(RUN_ARGS),build)
+	@$(MAKE) run_profiles RUN_ARGS="$(RUN_ARGS)"
 
 exec: ## Access data-gateway container
 	@trap 'exit 0' INT; docker exec -it data-gateway /bin/bash
@@ -122,11 +136,11 @@ envs:
 
 ### Following targets are for internal use, but you can still run them ###
 
-_wait_for_upload:
-	@if [ -z `docker ps -a --format {{.Names}} --filter name=data-upload` ]; then \
+_wait_for_container:
+	@if [ -z `docker ps -a --format {{.Names}} --filter name=$(CONTAINER_NAME)` ]; then \
 		sleep 2; \
 	else \
-		until [ "`docker inspect -f {{.State.Status}} data-upload`" = "exited" ]; do \
+		until [ "`docker inspect -f {{.State.Status}} $(CONTAINER_NAME)`" = "exited" ]; do \
 			sleep 2; \
 		done; \
 	fi
