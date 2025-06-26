@@ -243,10 +243,16 @@ func (a *App) SelectFile() (string, error) {
 	return file, nil
 }
 
-func (a *App) CheckExistence(file, bucket string) (found bool) {
+func (a *App) CheckFileExistence(file, bucket string) (found bool) {
 	chld := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName() + "/" + bucket)
 
 	return slices.Contains(chld, filepath.Base(file+".c4gh"))
+}
+
+func (a *App) CheckBucketExistence(bucket string) (found bool) {
+	exists, _ := api.BucketExists(api.SDConnect, bucket)
+
+	return exists
 }
 
 func (a *App) ExportFile(file, bucket string) error {

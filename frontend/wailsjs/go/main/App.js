@@ -6,8 +6,12 @@ export function ChangeMountPoint() {
   return window['go']['main']['App']['ChangeMountPoint']();
 }
 
-export function CheckExistence(arg1, arg2) {
-  return window['go']['main']['App']['CheckExistence'](arg1, arg2);
+export function CheckBucketExistence(arg1) {
+  return window['go']['main']['App']['CheckBucketExistence'](arg1);
+}
+
+export function CheckFileExistence(arg1, arg2) {
+  return window['go']['main']['App']['CheckFileExistence'](arg1, arg2);
 }
 
 export function ExportFile(arg1, arg2) {

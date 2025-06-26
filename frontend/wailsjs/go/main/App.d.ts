@@ -3,7 +3,9 @@
 
 export function ChangeMountPoint():Promise<string>;
 
-export function CheckExistence(arg1:string,arg2:string):Promise<boolean>;
+export function CheckBucketExistence(arg1:string):Promise<boolean>;
+
+export function CheckFileExistence(arg1:string,arg2:string):Promise<boolean>;
 
 export function ExportFile(arg1:string,arg2:string):Promise<void>;
 
