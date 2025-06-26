@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import { ref, watch, computed } from "vue";
+import { ref, watch } from "vue";
 import { EventsOn, EventsEmit } from "../../wailsjs/runtime/runtime";
 import { CAutocompleteItem, CDataTableHeader, CDataTableData } from "@cscfi/csc-ui/dist/types";
-import { SelectFile, CheckExistence, ExportFile } from "../../wailsjs/go/main/App";
+import { SelectFile, CheckFileExistence, CheckBucketExistence, ExportFile } from "../../wailsjs/go/main/App";
 import { mdiTrashCanOutline } from "@mdi/js";
-import { ValidationIconType, ValidationResult } from "../types/common";
+import { ValidationHelperType, ValidationResult } from "../types/common";
 import ValidationHelper from "../components/ValidationHelper.vue";
 
 const exportHeaders: CDataTableHeader[] = [
@@ -43,9 +43,17 @@ const pageIdx = ref(0);
 const selectedBucket = ref("");
 const bucketQuery = ref("");
 
+const validationHelperData = ref<ValidationHelperType[]>([
+  { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
+  { check: "inputLength", message: "Bucket name should be between 3 and 63 characters long.", type: "info"},
+  { check: "alphaNumDash", message: "Use Latin letters (a-z), numbers (0-9) and a dash (-).", type: "info"},
+  { check: "alphaNumDash", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
+  { check: "unique", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
+]);
 const selectedFile = ref("");
 const showModal = ref(false);
 const chooseToContinue = ref(false);
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 EventsOn("exportPossible", () => {
   pageIdx.value = 1;
@@ -60,41 +68,30 @@ EventsOn("setBuckets", (buckets: string[]) => {
 });
 
 watch(() => bucketQuery.value, (query: string) => {
-  selectedBucket.value = query;
-  filteredBucketItems.value = bucketItems.value.filter((item: CAutocompleteItem) => {
-    if (selectedBucket.value) {
-      return containsFilterString(item.name);
-    }
-
-    return true;
-  });
-});
-
-const validationHelperData = computed(() => {
-  type ValidationHelper = {
-    check: string;
-    message: string;
-    type: ValidationIconType;
-  };
-  let helpers: ValidationHelper[] = [
-    { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
-    { check: "inputLength", message: "Bucket name should be between 3 and 63 characters long.", type: "info"},
-    { check: "alphaNumDash", message: "Use Latin letters (a-z), numbers (0-9) and a dash (-).", type: "info"},
-    { check: "alphaNumDash", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
-    { check: "unique", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
-  ];
-  if (bucketQuery?.value) {
-    const result: ValidationResult = validateInput(bucketQuery.value);
-    helpers.forEach((item) => {
-      item.type = result[item.check as keyof ValidationResult] ? "success" : "error";
-    });
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
   }
-  return helpers;
+
+  debounceTimer = setTimeout(async () => {
+    selectedBucket.value = query;
+    filteredBucketItems.value = bucketItems.value.filter((item: CAutocompleteItem) => {
+      if (selectedBucket.value) {
+        return containsFilterString(item.name);
+      }
+      return true;
+    });
+    const result = await validateBucketInput(bucketQuery.value);
+    validationHelperData.value.forEach((item) => {
+      item.type = result[item.check as keyof ValidationResult] ?
+        "success" : item.type = result[item.check as keyof ValidationResult]  === false ?
+          "error" : "info";
+    });
+  }, 300);
 });
 
 function selectFile() {
   SelectFile().then((filename: string) => {
-    CheckExistence(filename, selectedBucket.value).then((found: boolean) => {
+    CheckFileExistence(filename, selectedBucket.value).then((found: boolean) => {
       selectedFile.value = filename;
 
       let exportRow: CDataTableData = {
@@ -128,20 +125,35 @@ function containsFilterString(str: string): boolean {
   return str.toLowerCase().includes(selectedBucket.value.toLowerCase());
 }
 
-function validateInput(input: string): ValidationResult {
+async function validateBucketInput(input: string): Promise<ValidationResult> {
+  if (!input) {
+    return {
+      lowerCaseOrNum: undefined,
+      inputLength: undefined,
+      alphaNumDash: undefined,
+      unique: undefined,
+    };
+  }
+  let uniqueBucket: boolean;
+  const existingBucket: boolean = !!bucketItems.value.find((item) => item.name === input);
+
+  if (existingBucket) uniqueBucket = true;
+  else uniqueBucket = !(await CheckBucketExistence(selectedBucket.value));
+
   return {
     lowerCaseOrNum: !!(input[0].match(/[\p{L}0-9]/u) && input[0] === input[0].toLowerCase()),
     inputLength: input.length >= 3 && input.length <= 63,
     alphaNumDash: !!input.match(/^[a-z0-9-]+$/g),
-    unique: true, // TODO
+    unique: uniqueBucket,
   };
 }
+
 </script>
 
 <template>
   <div class="container">
     <c-steps :value="pageIdx" :style="{display: pageIdx ? 'block' : 'none'}">
-      <c-step>Choose directory</c-step>
+      <c-step>Choose bucket</c-step>
       <c-step>Export files</c-step>
       <c-step>Export complete</c-step>
     </c-steps>
@@ -181,18 +193,16 @@ function validateInput(input: string): ValidationResult {
         Choose a bucket from the dropdown or create a new one by entering a name.
         It will be created at the root of your project.
       </p>
-      <c-row>
-        <c-autocomplete
-          v-model="selectedBucket"
-          v-control
-          label="Bucket name"
-          :items="filteredBucketItems"
-          items-per-page="5"
-          no-matching-items-message="You are creating a new bucket"
-          return-value
-          @changeQuery="bucketQuery = $event.detail"
-        />
-      </c-row>
+      <c-autocomplete
+        v-model="selectedBucket"
+        v-control
+        label="Bucket name"
+        :items="filteredBucketItems"
+        items-per-page="5"
+        no-matching-items-message="You are creating a new bucket"
+        return-value
+        @changeQuery="bucketQuery = $event.detail"
+      />
       <ValidationHelper
         v-for="item in validationHelperData"
         :key="item.message"
