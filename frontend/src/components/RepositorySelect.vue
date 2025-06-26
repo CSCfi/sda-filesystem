@@ -32,6 +32,7 @@ function getRepoDescription(repo: string) {
       v-model="selected"
       v-control
       :disabled="props.disabled"
+      hide-details
     />
     <div class="repository-name">
       <span><b>{{ props.repository.replace("-", " ") }}</b></span>
@@ -39,10 +40,3 @@ function getRepoDescription(repo: string) {
     </div>
   </c-row>
 </template>
-
-<style scoped>
-c-checkbox {
-  box-sizing: border-box;
-  margin-top: 1rem;
-}
-</style>
