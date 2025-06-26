@@ -254,15 +254,14 @@ function validateFolderInput(input: string): boolean {
         id="drop-area"
       >
         <c-row align="center" gap="20">
-          <!-- <h4>Drag or drop file here or</h4> -->
+          <h4>Drag and drop files and folders here or</h4>
           <c-button outlined @click="selectFile()">
-            Select file
+            Select files and folders
           </c-button>
         </c-row>
-        <p>If you wish to export multiple files, please create a tar/zip file.</p>
         <p>
-          File will be encrypted with project-specific encryption key
-          and will be accessible via SD Desktop and SD Connect.
+          All exported files are encrypted by default but can be accessed
+          and automatically decrypted by project members via SD Connect.
         </p>
       </div>
       <c-data-table
@@ -320,7 +319,7 @@ c-autocomplete {
 }
 
 #drop-area {
-  border: 3px solid var(--c-primary-600);
+  border: 1px dashed var(--c-primary-600);
   margin-top: 20px;
   margin-bottom: 20px;
   padding: 40px;
