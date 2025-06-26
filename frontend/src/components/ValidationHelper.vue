@@ -22,15 +22,6 @@ const props = defineProps<{
           mdiCloseCircle : mdiInformation"
       :style="`color: var(--c-${props.type}-600)`"
     />
-    <span>{{ props.message }}</span>
+    <span class="smaller-text">{{ props.message }}</span>
   </c-row>
 </template>
-
-<style scoped>
-c-row {
-  margin-top: 5px;
-}
-span {
-  font-size: 0.9rem;
-}
-</style>

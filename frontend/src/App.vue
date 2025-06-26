@@ -129,12 +129,11 @@ EventsOn("fuseReady", () => (accessed.value = true));
 #main {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
 }
 
 c-toolbar {
   position: relative;
-  font-size: 0.9em;
 }
 
 c-toolbar > h4 {

@@ -215,7 +215,7 @@ function validateFolderInput(input: string): boolean {
         :type="item.type"
         :message="item.message"
       />
-      <c-accordion value="foldername">
+      <c-accordion value="">
         <c-accordion-item
           heading="Export into folder (optional)"
           value="foldername"
@@ -226,19 +226,20 @@ function validateFolderInput(input: string): boolean {
             (e.g. Folder1/Folder2).
             You can select an existing folder or create new ones inside the bucket.
           </p>
-          <c-text-field
-            v-model="selectedFolder"
-            v-control
-            label="Folder names (optional)"
-            :valid="validateFolderInput(selectedFolder)"
-            validation="Folder name is invalid"
-            trim-whitespace
-          />
+          <div>
+            <c-text-field
+              v-model="selectedFolder"
+              v-control
+              label="Folder names (optional)"
+              :valid="validateFolderInput(selectedFolder)"
+              validation="Folder name is invalid"
+              trim-whitespace
+            />
+          </div>
         </c-accordion-item>
       </c-accordion>
       <c-button
         class="continue-button"
-        size="large"
         :disabled="
           validationHelperData.some(item => item.type !== 'success') ||
             validateFolderInput(selectedFolder) === false
@@ -300,7 +301,6 @@ function validateFolderInput(input: string): boolean {
       </p>
       <c-button
         class="continue-button"
-        size="large"
         @click="exportData.pop(); chooseToContinue = false; pageIdx = 1"
       >
         New Export
@@ -311,7 +311,7 @@ function validateFolderInput(input: string): boolean {
 
 <style scoped>
 c-autocomplete {
-  width: 100%;
+  margin-bottom: -0.5rem;
 }
 
 #no-export-page {
@@ -341,7 +341,8 @@ c-autocomplete {
   margin-top: 1rem;
 }
 
-.accordion-item p {
+.accordion-item > * {
   margin-top: 0;
+  margin-left: -1rem;
 }
 </style>

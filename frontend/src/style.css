@@ -8,9 +8,18 @@
     font-family: Arial, Helvetica, "FreeSans", sans-serif;
 }
 
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+}
+
 body {
     margin: 0;
     color: #595959;
+    font-size: 0.9rem;
 }
 
 h2 {
@@ -18,11 +27,11 @@ h2 {
 }
 
 c-text-field {
-    max-width: 400px;
+    max-width: 450px;
 }
 
 c-steps {
-    font-size: 0.9em;
+    font-size: 0.8em;
     margin-bottom: 20px;
 }
 
@@ -43,7 +52,7 @@ c-loader {
 }
 
 .smaller-text {
-    font-size: 14px;
+    font-size: 0.8rem;
 }
 
 .gateway-table {
