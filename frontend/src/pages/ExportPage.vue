@@ -50,6 +50,8 @@ const validationHelperData = ref<ValidationHelperType[]>([
   { check: "alphaNumDash", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
   { check: "unique", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
 ]);
+
+const selectedFolder = ref("");
 const selectedFile = ref("");
 const showModal = ref(false);
 const chooseToContinue = ref(false);
@@ -148,6 +150,10 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
   };
 }
 
+function validateFolderInput(input: string): boolean {
+  return !input || !!input.match(/^[^/]+(\/[^/]+)*$/);
+}
+
 </script>
 
 <template>
@@ -209,10 +215,34 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
         :type="item.type"
         :message="item.message"
       />
+      <c-accordion value="foldername">
+        <c-accordion-item
+          heading="Export into folder (optional)"
+          value="foldername"
+          class="accordion-item"
+        >
+          <p>
+            To export file into a folder, type the path using "/" to separate levels
+            (e.g. Folder1/Folder2).
+            You can select an existing folder or create new ones inside the bucket.
+          </p>
+          <c-text-field
+            v-model="selectedFolder"
+            v-control
+            label="Folder names (optional)"
+            :valid="validateFolderInput(selectedFolder)"
+            validation="Folder name is invalid"
+            trim-whitespace
+          />
+        </c-accordion-item>
+      </c-accordion>
       <c-button
         class="continue-button"
         size="large"
-        :disabled="validationHelperData.some(item => item.type !== 'success')"
+        :disabled="
+          validationHelperData.some(item => item.type !== 'success') ||
+            validateFolderInput(selectedFolder) === false
+        "
         @click="pageIdx++"
       >
         Continue
@@ -282,7 +312,7 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
 
 <style scoped>
 c-autocomplete {
-  width: 500px;
+  width: 100%;
 }
 
 #no-export-page {
@@ -306,5 +336,13 @@ c-autocomplete {
 
 #export-table {
   margin-bottom: 20px;
+}
+
+.accordion-item {
+  margin-top: 1rem;
+}
+
+.accordion-item p {
+  margin-top: 0;
 }
 </style>
