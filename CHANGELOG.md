@@ -9,6 +9,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- send object unencrypted also to CESSNA if project type is not `default` (#34)
+- `findata-creds` container that enables `krakend` container to have mocked Findata EC2 credentials
+- during local development, the CESSNA endpoint is defined as the `keystone-swift` S3 endpoint. The objects are however sent to the admin project.
+- during local development, the env `IS_FINDATA` can be used to inform `mockauth` if the project has type `findata`
 - the certificates for mTLS are embedded into the binary in the build stage of the CI pipeline
 - mTLS for all PUT/POST/DELETE calls related to uploading objects, thus forcing the user to use GUI/Airlock CLI, which contain the necessary certificates
 - Add lint and format check job to CI (#28)
@@ -20,6 +24,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- Findata objects are encrypted with the project public key
+- project assumed to have either `findata` or `default` project type
 - all references to SD Submit in code are now using SD Apply
 - the way decrypted body size is calculated for encrypted files with no headers
 - (users) files can only be uploaded via Data Gateway GUI or the Airlock CLI
