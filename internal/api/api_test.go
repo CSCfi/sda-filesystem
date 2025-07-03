@@ -329,15 +329,15 @@ func TestSetup_Error(t *testing.T) {
 }
 
 func TestGetProfile(t *testing.T) {
-	origMakeRequest := MakeRequest
+	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
 	defer func() {
 		ai.repositories = origRepositories
-		MakeRequest = origMakeRequest
+		makeRequest = origMakeRequest
 	}()
 
 	access := true
-	MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		if path != "/profile" {
 			return fmt.Errorf("Incorrect path\nExpected=/profile\nReceived=%s", path)
 		}
@@ -383,14 +383,14 @@ func TestGetProfile(t *testing.T) {
 }
 
 func TestGetProfile_Error(t *testing.T) {
-	origMakeRequest := MakeRequest
+	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
 	defer func() {
 		ai.repositories = origRepositories
-		MakeRequest = origMakeRequest
+		makeRequest = origMakeRequest
 	}()
 
-	MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		return errExpected
 	}
 	errText := "failed to get user profile: " + errExpected.Error()
@@ -403,16 +403,16 @@ func TestGetProfile_Error(t *testing.T) {
 }
 
 func TestAuthenticate(t *testing.T) {
-	origMakeRequest := MakeRequest
+	origMakeRequest := makeRequest
 	origPassword := ai.password
 	defer func() {
 		ai.password = origPassword
-		MakeRequest = origMakeRequest
+		makeRequest = origMakeRequest
 	}()
 
 	password := "passw0rd"
 
-	MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		if path != "/credentials/check" {
 			return fmt.Errorf("Incorrect path\nExpected=/credentials/check\nReceived=%s", path)
 		}
@@ -437,16 +437,16 @@ func TestAuthenticate_Error(t *testing.T) {
 		{"FAIL_2", "failed to authenicate user: " + errExpected.Error(), errExpected},
 	}
 
-	origMakeRequest := MakeRequest
+	origMakeRequest := makeRequest
 	origPassword := ai.password
 	defer func() {
 		ai.password = origPassword
-		MakeRequest = origMakeRequest
+		makeRequest = origMakeRequest
 	}()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				return tt.requestErr
 			}
 
@@ -733,14 +733,14 @@ func TestMakeRequest(t *testing.T) {
 			switch tt.expectedBody.(type) {
 			case VaultHeader:
 				var objects VaultHeader
-				err = MakeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
+				err = makeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
 				ret = objects
 			case profile:
 				var objects profile
-				err = MakeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
+				err = makeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
 				ret = objects
 			default:
-				err = MakeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, ret)
+				err = makeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, ret)
 			}
 
 			switch {
@@ -775,7 +775,7 @@ func TestMakeRequest_PutRequestNil_And_ReadAll_Error(t *testing.T) {
 	ai.proxy = srv.URL
 
 	errStr := "failed to read response: unexpected EOF"
-	err := MakeRequest("GET", "/", nil, nil, nil, nil)
+	err := makeRequest("GET", "/", nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
@@ -788,7 +788,7 @@ func TestMakeRequest_NewRequest_Error(t *testing.T) {
 	buf[0] = 0x7f
 	errText := fmt.Sprintf("creating request failed: parse %q: net/url: invalid control character in URL", string(buf))
 
-	if err := MakeRequest("GET", string(buf), nil, nil, nil, nil); err == nil {
+	if err := makeRequest("GET", string(buf), nil, nil, nil, nil); err == nil {
 		t.Error("Function did not return error with invalid URL")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())

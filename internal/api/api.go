@@ -27,6 +27,7 @@ import (
 
 const SDApply string = "SD-Apply"
 const SDConnect string = "SD-Connect"
+const Findata string = "Findata"
 
 var ai = apiInfo{
 	hi: httpInfo{
@@ -167,7 +168,7 @@ func Setup(files ...FileReader) error {
 }
 
 func GetProfile() (bool, error) {
-	err := MakeRequest("GET", "/profile", nil, nil, nil, &ai.userProfile)
+	err := makeRequest("GET", "/profile", nil, nil, nil, &ai.userProfile)
 	if err != nil {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
 	}
@@ -182,7 +183,7 @@ func GetProfile() (bool, error) {
 // Authenticate checks that user passes the authentication checks in KrakenD with the given password.
 var Authenticate = func(password string) error {
 	ai.password = base64.StdEncoding.EncodeToString([]byte(password))
-	err := MakeRequest("GET", "/credentials/check", nil, nil, nil, nil)
+	err := makeRequest("GET", "/credentials/check", nil, nil, nil, nil)
 	if err != nil {
 		ai.password = ""
 
@@ -270,8 +271,8 @@ var IsProjectManager = func() bool {
 	return ai.userProfile.PI
 }
 
-// MakeRequest sends HTTP request to KrakenD and parses the response
-var MakeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+// makeRequest sends HTTP request to KrakenD and parses the response
+var makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 	var response *http.Response
 
 	// Build HTTP request

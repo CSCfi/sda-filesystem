@@ -2,6 +2,7 @@ package airlock
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,7 +14,6 @@ import (
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 
-	"github.com/neicnordic/crypt4gh/keys"
 	c4ghHeaders "github.com/neicnordic/crypt4gh/model/headers"
 	"github.com/neicnordic/crypt4gh/streaming"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -22,22 +22,12 @@ import (
 const minSegmentSize int64 = 1 << 27
 const maxParts int64 = 10000
 const maxObjectSize int64 = 5 * (1 << 40)
+const headerSize = 16 + 108 // Fixed size since we only have one public key
 
 var ai = airlockInfo{}
 
 type airlockInfo struct {
-	publicKeys [][chacha20poly1305.KeySize]byte
-}
-
-type readCloser struct {
-	io.Reader
-	io.Closer
-
-	errc chan error
-}
-
-type keyResponse struct {
-	Key64 string `json:"public_key_c4gh"`
+	publicKey [chacha20poly1305.KeySize]byte
 }
 
 // ExportPossible indicates whether or not user the user is allowed to export files outside the VM.
@@ -106,10 +96,12 @@ func CheckObjectExistence(filename, bucket string, rd io.Reader) error {
 	return nil
 }
 
-// Upload uploads a file to SD Connect
+// Upload uploads a file to SD Connect, and possibly to CESSNA
 func Upload(filename, bucket string) error {
-	if err := getPublicKeys(); err != nil {
-		return err
+	var err error
+	ai.publicKey, err = api.GetPublicKey()
+	if err != nil {
+		return fmt.Errorf("failed to get project public key: %w", err)
 	}
 
 	object, bucket := reorderNames(filename, bucket)
@@ -124,92 +116,115 @@ func Upload(filename, bucket string) error {
 		}
 	}
 
-	encryptedRC, encryptedFileSize, err := getFileDetails(filename)
+	file, encryptedFileSize, err := getFileDetails(filename)
 	if err != nil {
 		return fmt.Errorf("failed to get details for file %s: %w", filename, err)
 	}
-	defer encryptedRC.Close()
+	defer file.Close()
 
-	// Save header for vault
-	header, err := c4ghHeaders.ReadHeader(encryptedRC)
-	if err != nil {
-		return fmt.Errorf("failed to extract header from encrypted file: %w", err)
-	}
-
-	objectSize := encryptedFileSize - int64(len(header))
+	objectSize := encryptedFileSize - headerSize
 	if objectSize > maxObjectSize {
 		return fmt.Errorf("file %s is too large (%d bytes)", filename, objectSize)
 	}
+	logs.Debugf("File size %v", encryptedFileSize)
 
 	segmentSize := minSegmentSize
 	for maxParts*segmentSize < encryptedFileSize {
 		segmentSize <<= 1
 	}
-
+	logs.Debugf("Segment size %v", segmentSize)
 	logs.Info("Encrypting file ", filename)
-	logs.Info("Uploading header to vault")
+
+	errc1 := make(chan error, 1)
+	errc2 := make(chan error, 2)
+	pr, pw := io.Pipe() // So that 'c4ghWriter' can pass its contents to an io.Reader
+
+	if api.GetProjectType() == "default" {
+		go encrypt(file, pw, errc2)
+	}
+	go func() {
+		errc1 <- uploadAllas(pr, bucket, object, segmentSize)
+		pr.Close()
+	}()
+
+	err = nil
+	if api.GetProjectType() != "default" {
+		errc2 <- nil
+		findataObject := api.GetProjectName() + "/" + bucket + "/" + object
+		if err = uploadFindata(file, pw, findataObject, segmentSize); err != nil {
+			logs.Error(err)
+		}
+	}
+
+	err2 := <-errc2
+	if err2 != nil {
+		logs.Debugf("Deleting object %s from bucket %s", object, bucket)
+		if delErr := api.DeleteObject(api.SDConnect, bucket, object); delErr != nil {
+			logs.Warningf("Data left in Allas after failed upload: %w", delErr)
+		}
+		logs.Errorf("Streaming file %s failed: %w", filename, err2)
+	}
+	err1 := <-errc1
+	if err1 != nil {
+		logs.Error(err1)
+	}
+	if err != nil || err1 != nil || err2 != nil {
+		return errors.New("uploading failed")
+	}
+
+	return nil
+}
+
+// uploadAllas exports an encrypted file by uploading its header to Vault and
+// its body to SD Connect. pr is assumed to contain an encrypted file.
+func uploadAllas(pr io.Reader, bucket, object string, segmentSize int64) error {
+	logs.Infof("Beginning to upload %s object %s to bucket %s", api.ToPrint(api.SDConnect), object, bucket)
+	header, err := c4ghHeaders.ReadHeader(pr)
+	if err != nil {
+		return fmt.Errorf("failed to extract header from encrypted file: %w", err)
+	}
+	logs.Infof("Uploading header of object %s to Vault", object)
 	if err := api.PostHeader(header, bucket, object); err != nil {
 		return fmt.Errorf("failed to upload header to vault: %w", err)
 	}
 
-	logs.Infof("Beginning to upload object %s to bucket %s", object, bucket)
-	logs.Debugf("File size %v", encryptedFileSize)
-	logs.Debugf("Segment size %v", segmentSize)
+	return api.UploadObject(pr, api.SDConnect, bucket, object, segmentSize)
+}
 
-	if err = api.UploadObject(encryptedRC, api.SDConnect, bucket, object, segmentSize); err != nil {
+// uploadFindata uploads the selected file unencrypted to CESSNA. At the same time
+// it sends the read file content through a Crypt4GHWriter, which will be read via the
+// pipe reader in uploadAllas(). If upload fails, the pipe writer is closed with an error
+// resulting in the AWS SDK to fail in uploadAllas().
+func uploadFindata(file io.Reader, pw *io.PipeWriter, object string, segmentSize int64) (err error) {
+	logs.Infof("Beginning to upload %s object %s", api.Findata, object)
+	defer func() {
+		pw.CloseWithError(err) // pw.Close() if err is nil
+	}()
+
+	c4ghWriter, err := newCrypt4GHWriter(pw)
+	if err != nil {
 		return err
 	}
-	if err = <-encryptedRC.errc; err != nil {
-		logs.Debugf("Deleting object %s from bucket %s", object, bucket)
-		if err2 := api.DeleteObject(api.SDConnect, bucket, object); err2 != nil {
-			logs.Warningf("Data left in Allas after failed upload: %w", err2)
-		}
 
-		return fmt.Errorf("streaming file %s failed: %w", filename, err)
-	}
-
-	logs.Info("Upload complete")
-
-	return nil
-}
-
-var extractKey = func(path string) ([32]byte, error) {
-	var encryptionKey keyResponse
-
-	err := api.MakeRequest("GET", path, nil, nil, nil, &encryptionKey)
+	r := io.TeeReader(file, c4ghWriter)
+	err = api.UploadObject(r, api.Findata, "", object, segmentSize)
 	if err != nil {
-		return [32]byte{}, err
+		err = fmt.Errorf("failed to upload %s object: %w", api.Findata, err)
+
+		return
 	}
+	c4ghWriter.Close()
 
-	logs.Debugf("Encryption key: %s", encryptionKey.Key64)
-
-	return keys.ReadPublicKey(strings.NewReader(encryptionKey.Key64))
+	return
 }
 
-// getPublicKeys retrieves the necessary public keys and checks their validity
-var getPublicKeys = func() error {
-	ai.publicKeys = nil
-	projectType := api.GetProjectType()
-
-	if projectType != "findata" {
-		allasKey, err := extractKey("/desktop/project-key")
-		if err != nil {
-			return fmt.Errorf("failed to get project public key: %w", err)
-		}
-
-		ai.publicKeys = append(ai.publicKeys, allasKey)
+var newCrypt4GHWriter = func(wr io.Writer) (*streaming.Crypt4GHWriter, error) {
+	c4ghWriter, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(wr, [][32]byte{ai.publicKey}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create crypt4gh writer: %w", err)
 	}
 
-	if projectType == "findata" || projectType == "registry" {
-		findataKey, err := extractKey("/public-key")
-		if err != nil {
-			return fmt.Errorf("failed to get findata public key: %w", err)
-		}
-
-		ai.publicKeys = append(ai.publicKeys, findataKey)
-	}
-
-	return nil
+	return c4ghWriter, nil
 }
 
 func reorderNames(filename, directory string) (string, string) {
@@ -219,47 +234,37 @@ func reorderNames(filename, directory string) (string, string) {
 	return object, before
 }
 
-var encrypt = func(file *os.File, pw *io.PipeWriter, errc chan error) {
+var encrypt = func(file io.Reader, pw *io.PipeWriter, errc chan error) {
 	defer pw.Close()
-	c4ghWriter, err := streaming.NewCrypt4GHWriterWithoutPrivateKey(pw, ai.publicKeys, nil)
+	c4ghWriter, err := newCrypt4GHWriter(pw)
 	if err != nil {
 		errc <- err
 
 		return
 	}
-	defer c4ghWriter.Close()
 	if _, err = io.Copy(c4ghWriter, file); err != nil {
 		errc <- err
 
 		return
 	}
+	c4ghWriter.Close()
 	errc <- nil
 }
 
 var encryptedSize = func(decryptedSize int64) int64 {
-	var magicNumber int64 = 16
-	var keySize int64 = 108
-	var nKeys int64 = int64(len(ai.publicKeys))
-
 	nBlocks := math.Ceil(float64(decryptedSize) / float64(api.BlockSize))
 	bodySize := decryptedSize + int64(nBlocks)*api.MacSize
-	headerSize := magicNumber + nKeys*keySize
 
 	return headerSize + bodySize
 }
 
-var getFileDetails = func(filename string) (*readCloser, int64, error) {
+var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	fileInfo, _ := file.Stat()
-	fileSize := encryptedSize(fileInfo.Size())
 
-	errc := make(chan error, 1) // This error will be checked at the end of Upload()
-	pr, pw := io.Pipe()         // So that 'c4ghWriter' can pass its contents to an io.Reader
-	go encrypt(file, pw, errc)  // Writing from file to 'c4ghWriter' will not happen until 'pr' is being read. Code will hang without goroutine.
-
-	return &readCloser{pr, file, errc}, fileSize, nil
+	return file, encryptedSize(fileInfo.Size()), nil
 }
