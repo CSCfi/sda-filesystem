@@ -20,6 +20,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- all references to SD Submit in code are now using SD Apply
+- the way decrypted body size is calculated for encrypted files with no headers
 - (users) files can only be uploaded via Data Gateway GUI or the Airlock CLI
 - (users) uploaded files have a size limit of 5 TiB
 - (users) objects uploaded to SD Connect are encrypted with the project-specific key
