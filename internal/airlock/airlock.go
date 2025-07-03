@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -37,6 +36,10 @@ type readCloser struct {
 	errc chan error
 }
 
+type keyResponse struct {
+	Key64 string `json:"public_key_c4gh"`
+}
+
 // ExportPossible indicates whether or not user the user is allowed to export files outside the VM.
 // The user must be the project manager and have SD Connect enabled.
 func ExportPossible() bool {
@@ -58,11 +61,11 @@ func ExportPossible() bool {
 }
 
 // CheckObjectExistence checks if the file that is to be uploaded already has an
-// equivalent object in S3 storage. If object exists, user if given a choice to either
+// equivalent object in S3 storage. If object exists, user is given a choice to either
 // quit or override the object with the new file.
-func CheckObjectExistence(filename, bucket string) error {
+func CheckObjectExistence(filename, bucket string, rd io.Reader) error {
 	object, bucket := reorderNames(filename, bucket)
-	exists, err := api.BucketExists(bucket)
+	exists, err := api.BucketExists(api.SDConnect, bucket)
 	if err != nil {
 		return err
 	}
@@ -78,13 +81,13 @@ func CheckObjectExistence(filename, bucket string) error {
 		return meta.Name == object
 	})
 	if exists {
-		r := bufio.NewReader(os.Stdin)
+		r := bufio.NewReader(rd)
 
 		for {
-			fmt.Fprintf(os.Stderr, "Export will override existing object in Allas. Continue? [y/n] ")
+			fmt.Fprintf(os.Stdout, "Export will override existing object in Allas. Continue? [y/n] ")
 			ans, err := r.ReadString('\n')
 			if err != nil {
-				log.Fatal(err)
+				return fmt.Errorf("failed to read user input: %w", err)
 			}
 
 			ans = strings.ToLower(strings.TrimSpace(ans))
@@ -108,13 +111,15 @@ func Upload(filename, bucket string) error {
 	if err := getPublicKeys(); err != nil {
 		return err
 	}
-	exists, err := api.BucketExists(bucket)
+
+	object, bucket := reorderNames(filename, bucket)
+	exists, err := api.BucketExists(api.SDConnect, bucket)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		logs.Info("Creating bucket ", bucket)
-		if err := api.CreateBucket(bucket); err != nil {
+		if err := api.CreateBucket(api.SDConnect, bucket); err != nil {
 			return err
 		}
 	}
@@ -141,8 +146,6 @@ func Upload(filename, bucket string) error {
 		segmentSize <<= 1
 	}
 
-	object, bucket := reorderNames(filename, bucket)
-
 	logs.Info("Encrypting file ", filename)
 	logs.Info("Uploading header to vault")
 	if err := api.PostHeader(header, bucket, object); err != nil {
@@ -153,13 +156,12 @@ func Upload(filename, bucket string) error {
 	logs.Debugf("File size %v", encryptedFileSize)
 	logs.Debugf("Segment size %v", segmentSize)
 
-	err = api.UploadObject(encryptedRC, bucket, object, segmentSize)
-	if err != nil {
-		return fmt.Errorf("failed to upload object %s to bucket %s: %w", object, bucket, err)
+	if err = api.UploadObject(encryptedRC, api.SDConnect, bucket, object, segmentSize); err != nil {
+		return err
 	}
 	if err = <-encryptedRC.errc; err != nil {
 		logs.Debugf("Deleting object %s from bucket %s", object, bucket)
-		if err2 := api.DeleteObject(bucket, object); err2 != nil {
+		if err2 := api.DeleteObject(api.SDConnect, bucket, object); err2 != nil {
 			logs.Warningf("Data left in Allas after failed upload: %w", err2)
 		}
 
@@ -172,9 +174,7 @@ func Upload(filename, bucket string) error {
 }
 
 var extractKey = func(path string) ([32]byte, error) {
-	encryptionKey := struct {
-		Key64 string `json:"public_key_c4gh"`
-	}{}
+	var encryptionKey keyResponse
 
 	err := api.MakeRequest("GET", path, nil, nil, nil, &encryptionKey)
 	if err != nil {
@@ -187,7 +187,7 @@ var extractKey = func(path string) ([32]byte, error) {
 }
 
 // getPublicKeys retrieves the necessary public keys and checks their validity
-func getPublicKeys() error {
+var getPublicKeys = func() error {
 	ai.publicKeys = nil
 	projectType := api.GetProjectType()
 
@@ -255,12 +255,11 @@ var getFileDetails = func(filename string) (*readCloser, int64, error) {
 	}
 
 	fileInfo, _ := file.Stat()
-	fileSize := fileInfo.Size()
+	fileSize := encryptedSize(fileInfo.Size())
 
 	errc := make(chan error, 1) // This error will be checked at the end of Upload()
 	pr, pw := io.Pipe()         // So that 'c4ghWriter' can pass its contents to an io.Reader
 	go encrypt(file, pw, errc)  // Writing from file to 'c4ghWriter' will not happen until 'pr' is being read. Code will hang without goroutine.
-	fileSize = encryptedSize(fileSize)
 
 	return &readCloser{pr, file, errc}, fileSize, nil
 }

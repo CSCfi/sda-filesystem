@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/tls"
-	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -26,14 +25,14 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-const SDSubmit string = "SD-Apply"
+const SDApply string = "SD-Apply"
 const SDConnect string = "SD-Connect"
 
 var ai = apiInfo{
 	hi: httpInfo{
 		requestTimeout: 60,
 		httpRetry:      3,
-		client:         &http.Client{},
+		client:         &http.Client{Transport: http.DefaultTransport},
 	},
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
@@ -41,6 +40,11 @@ var ai = apiInfo{
 	repositories: []string{}, // SD Apply will be added here once it works with S3
 }
 var downloadCache *cache.Ristretto
+
+// FileReader is used as a variable type instead of embed.FS so that mocking during tests is easier
+type FileReader interface {
+	ReadFile(name string) ([]byte, error)
+}
 
 // apiInfo contains variables required for Data Gateway to work with KrakendD
 type apiInfo struct {
@@ -127,7 +131,7 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 // generates key pair for vault, and initialises s3 client.
 // The parameter `files` is empty if the program does not need mTLS enabled.
 // Otherwise `files` contains all the files from the `certs` directory.
-func Setup(files ...embed.FS) error {
+func Setup(files ...FileReader) error {
 	var err error
 	ai.proxy, err = GetEnv("PROXY_URL", true)
 	if err != nil {
@@ -144,12 +148,11 @@ func Setup(files ...embed.FS) error {
 		return fmt.Errorf("failed to create cache: %w", err)
 	}
 
-	certs, err := loadCertificates(files)
-	if err != nil {
+	if err := loadCertificates(files); err != nil {
 		return fmt.Errorf("failed to load certficates: %w", err)
 	}
 
-	if err = initialiseS3Client(certs); err != nil {
+	if err = initialiseS3Client(); err != nil {
 		return fmt.Errorf("failed to initialise S3 client: %w", err)
 	}
 
@@ -194,18 +197,18 @@ var Authenticate = func(password string) error {
 	return nil
 }
 
-// loadCertificates loads the certificate files from the `./certs` directory and expects
+// loadCertificates loads the certificate files from the `certs` directory and expects
 // them to be in the format <hostname>.crt and <hostname>.key. If no such files are found,
 // a warning is logged but no error is returned. If the files are successfully parsed,
 // the certificates are added to the http client.
-func loadCertificates(certFiles []embed.FS) ([]tls.Certificate, error) {
+var loadCertificates = func(certFiles []FileReader) error {
 	if len(certFiles) == 0 {
-		return nil, nil
+		return nil
 	}
 
-	u, err := url.Parse(ai.proxy)
+	u, err := url.ParseRequestURI(ai.proxy)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse proxy url: %w", err)
+		return fmt.Errorf("could not parse proxy url: %w", err)
 	}
 	proxyHost := u.Hostname()
 
@@ -215,20 +218,21 @@ func loadCertificates(certFiles []embed.FS) ([]tls.Certificate, error) {
 		err = errors.Join(errors.New("disabled mTLS for S3 upload"), err1, err2)
 		logs.Warning(err)
 
-		return nil, nil
+		return nil
 	}
 
 	cert, err := tls.X509KeyPair(certBytes, keyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load client x509 key pair for host %s", proxyHost)
+		return fmt.Errorf("failed to load client x509 key pair for host %s: %w", proxyHost, err)
 	}
 
-	certificates := []tls.Certificate{cert}
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig.Certificates = certificates
+	tr := ai.hi.client.Transport.(*http.Transport).Clone()
+	tr.TLSClientConfig.Certificates = []tls.Certificate{cert}
 	ai.hi.client = &http.Client{Transport: tr}
 
-	return certificates, nil
+	logs.Debug("Certificate successfully added to client")
+
+	return nil
 }
 
 // ToPrint returns repository name in printable format
@@ -238,11 +242,11 @@ func ToPrint(rep string) string {
 
 // GetAllRepositories returns the list of all possible repositories
 func GetAllRepositories() []string {
-	return []string{SDConnect, SDSubmit}
+	return []string{SDConnect, SDApply}
 }
 
 // GetRepositories returns the list of repositories the filesystem can access
-func GetRepositories() []string {
+var GetRepositories = func() []string {
 	return ai.repositories
 }
 
@@ -250,19 +254,19 @@ func GetUsername() string {
 	return ai.userProfile.Username
 }
 
-func GetProjectName() string {
+var GetProjectName = func() string {
 	return ai.userProfile.ProjectName
 }
 
-func GetProjectType() string {
+var GetProjectType = func() string {
 	return ai.userProfile.ProjectType
 }
 
-func SDConnectEnabled() bool {
+var SDConnectEnabled = func() bool {
 	return ai.userProfile.SDConnect
 }
 
-func IsProjectManager() bool {
+var IsProjectManager = func() bool {
 	return ai.userProfile.PI
 }
 

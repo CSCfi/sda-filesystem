@@ -17,17 +17,30 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"sda-filesystem/internal/api"
-	"sda-filesystem/internal/logs"
-	"sda-filesystem/internal/mountpoint"
 	"slices"
 	"strconv"
 	"strings"
 	"unsafe"
 
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
+
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/neicnordic/crypt4gh/model/headers"
 )
+
+// freeNodes calls C function free_nodes()
+// This is a separate Go function so it can be used in tests
+func freeNodes(n *C.nodes_t) {
+	C.free_nodes(n)
+}
+
+// toGoStr coverts C string to Go string
+// This is a separate Go function so it can be used in tests
+func toGoStr(str *C.char) string {
+	return C.GoString(str)
+}
 
 func searchNode(path string) *C.node_t {
 	cpath := C.CString(path)
@@ -40,7 +53,7 @@ func searchNode(path string) *C.node_t {
 func getNodePathNames(node *C.node_t) []string {
 	names := []string{}
 	for prnt := node; prnt != nil; prnt = prnt.parent {
-		names = append(names, C.GoString(prnt.orig_name))
+		names = append(names, toGoStr((prnt.orig_name)))
 	}
 	slices.Reverse(names)
 
@@ -71,6 +84,15 @@ func updateParentSizes(node *C.node_t, oldSize C.off_t) {
 	}
 }
 
+func updateParentTimestamps(node *C.node_t) {
+	timestamp := node.last_modified
+	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
+		if prnt.last_modified.tv_sec < timestamp.tv_sec {
+			prnt.last_modified.tv_sec = timestamp.tv_sec
+		}
+	}
+}
+
 // UnmountFilesystem unmounts fuse, which automatically frees memory in C
 func UnmountFilesystem() {
 	fi.mu.RLock()
@@ -94,7 +116,7 @@ func RefreshFilesystem() {
 	defer fi.mu.Unlock()
 
 	logs.Info("Updating Data Gateway")
-	C.free_nodes(fi.nodes)
+	freeNodes(fi.nodes)
 	api.ClearCache()
 	InitialiseFilesystem()
 }
@@ -199,11 +221,14 @@ func ClearPath(path string) error {
 		return fmt.Errorf("failed to get headers for bucket %s: %w", bucket, err)
 	}
 	// Need to check if objects are segmented
-	segmentsBucket := bucket + segmentsSuffix
-	segmentSizes, err := getObjectSizesFromSegments(rep, segmentsBucket)
+	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)
 	var noBucket *types.NoSuchBucket
-	if err != nil && !errors.As(err, &noBucket) {
-		logs.Warningf("Object sizes may not be correct: %s", err.Error())
+	if err != nil {
+		if errors.As(err, &noBucket) {
+			logs.Debugf("Bucket %s does not have matching segments bucket", bucket)
+		} else {
+			logs.Warningf("File sizes may not be correct: %s", err.Error())
+		}
 	}
 
 	bucketPath := strings.Join(pathNames[:4], "/")
@@ -220,6 +245,7 @@ func ClearPath(path string) error {
 	oldSize := node.stat.st_size
 	clearNode(node, pathNames, objMap)
 	updateParentSizes(node, oldSize)
+	updateParentTimestamps(node)
 
 	logs.Info("Path cleared")
 
@@ -274,8 +300,13 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	header, ok := fi.headers[node.stat.st_ino]
 	if !ok {
 		pathNames := getNodePathNames(node)
-		if pathNames[1] != api.SDConnect { // Update once SD Submit has been added
+		if len(pathNames) > 1 && pathNames[1] != api.SDConnect {
 			logs.Errorf("Object %s has no header", path)
+
+			return
+		}
+		if len(pathNames) < 5 {
+			logs.Errorf("Path %s is too short for an object", path)
 
 			return
 		}
@@ -288,8 +319,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 			logs.Warningf("Failed to retrieve possible header for %s: %w", path, err)
 			logs.Infof("Testing if file %s is encrypted with unknown key", path)
 
-			buffer := make([]byte, 0, 2*api.CipherBlockSize)
-			_, err := api.DownloadData(pathNames, path, nil,
+			buffer, err := api.DownloadData(pathNames, path, nil,
 				0, 2*api.CipherBlockSize, 0, int64(node.stat.st_size))
 			if err != nil {
 				logs.Errorf("Could not test if file is encrypted: %v", err)
@@ -326,18 +356,11 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	}
 }
 
-// calculateDecryptedSize calculates the decrypted size of an encrypted file
+// calculateDecryptedSize calculates the decrypted size of an headerless encrypted file
 var calculateDecryptedSize = func(bodySize C.off_t) C.off_t {
-	// Calculate number of cipher blocks in body
-	blocks := C.off_t(math.Floor(float64(bodySize) / float64(api.CipherBlockSize)))
-	// the last block can be smaller than 64kiB
-	remainder := bodySize%C.off_t(api.CipherBlockSize) - C.off_t(api.MacSize)
-	if remainder < 0 {
-		remainder += C.off_t(api.MacSize)
-	}
+	blocks := C.off_t(math.Ceil(float64(bodySize) / float64(api.CipherBlockSize)))
 
-	// Add the previous info back together
-	return blocks*C.off_t(api.BlockSize) + remainder
+	return bodySize - C.off_t(api.MacSize)*blocks
 }
 
 // DownloadData uses s3 to download data to fill `cbuffer`. It returns the amount of bytes that were
@@ -351,7 +374,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 	pathNames := getNodePathNames(node)
 	path := C.GoString(cpath)
 
-	if len(pathNames) < 5 { // Needs to be modified once SD Submit is added
+	if len(pathNames) < 5 { // Needs to be modified once SD Apply is added
 		logs.Errorf("Path %s is too short for an object", path)
 
 		return -1

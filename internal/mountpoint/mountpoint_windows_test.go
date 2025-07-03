@@ -13,7 +13,7 @@ func TestCheckMountPoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	defer os.RemoveAll(node)
+	t.Cleanup(func() { os.RemoveAll(node) })
 
 	subnode := node + string(os.PathSeparator) + "subdir"
 	if err = os.Mkdir(subnode, 0755); err != nil {
@@ -42,7 +42,7 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %s", err.Error())
 	}
-	defer os.RemoveAll(node)
+	t.Cleanup(func() { os.RemoveAll(node) })
 
 	if err = acl.Chmod(node, 0444); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
