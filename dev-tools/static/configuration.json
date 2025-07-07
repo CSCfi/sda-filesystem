@@ -1,0 +1,19 @@
+{
+    "timeouts": {
+        "s3": 60
+    },
+    "endpoints": {
+        "profile": "/profile",
+        "valid_password": "/credentials/check",
+        "allas_header": "/allasheader/",
+        "s3": {
+            "default": "/s3/",
+            "head": "/s3-head/"
+        },
+        "vault": {
+            "project_key": "/desktop/project-key",
+            "headers": "/desktop/file-headers",
+            "whitelist": "/desktop/whitelist/"
+        }
+    }
+}

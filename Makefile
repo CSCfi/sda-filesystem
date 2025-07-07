@@ -131,7 +131,7 @@ exec: ## Access data-gateway container
 	@trap 'exit 0' INT; docker exec -it data-gateway /bin/bash
 
 envs:
-	@echo "$$(grep -E '^PROXY_URL|^SDS_ACCESS_TOKEN' dev-tools/compose/.env | xargs)"
+	@echo "$$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs)"
 
 
 ### Following targets are for internal use, but you can still run them ###

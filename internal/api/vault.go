@@ -64,10 +64,9 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 		"key": "%s"
 	}`
 	body = fmt.Sprintf(body, batchString, vaultService, ai.vi.keyName)
-	path := "/desktop/file-headers"
 
 	var resp vaultResponse
-	err = makeRequest("GET", path, nil, nil, strings.NewReader(body), &resp)
+	err = makeRequest("GET", ai.hi.endpoints.Vault.Headers, nil, nil, strings.NewReader(body), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -101,14 +100,14 @@ var whitelistKey = func(rep string) error {
 		"pubkey": "%s"
 	}`
 	body = fmt.Sprintf(body, ai.vi.publicKey)
-	path := fmt.Sprintf("/desktop/whitelist/%s/%s", vaultService, ai.vi.keyName)
+	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
 
 	return makeRequest("POST", path, nil, nil, strings.NewReader(body), nil)
 }
 
 var deleteWhitelistedKey = func(rep string) error {
 	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
-	path := fmt.Sprintf("/desktop/whitelist/%s/%s", vaultService, ai.vi.keyName)
+	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
 
 	return makeRequest("DELETE", path, nil, nil, nil, nil)
 }
@@ -116,7 +115,7 @@ var deleteWhitelistedKey = func(rep string) error {
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.
 // It returns the file's header re-encrypted with filesystem's own public key.
 var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-	path := fmt.Sprintf("/allasheader/%s", bucket)
+	path := ai.hi.endpoints.AllasHeader + bucket
 	query := map[string]string{"object": object}
 	headers := map[string]string{"Public-Key": ai.vi.publicKey}
 
@@ -136,16 +135,14 @@ var PostHeader = func(header []byte, bucket, object string) error {
 	}`
 	body = fmt.Sprintf(body, base64.StdEncoding.EncodeToString(header))
 	query := map[string]string{"object": object}
-	path := fmt.Sprintf("/desktop/file-headers/%s", bucket)
+	path := fmt.Sprintf("%s/%s", ai.hi.endpoints.Vault.Headers, bucket)
 
 	return makeRequest("POST", path, query, nil, strings.NewReader(body), nil)
 }
 
 var GetPublicKey = func() ([32]byte, error) {
 	var encryptionKey keyResponse
-	path := "/desktop/project-key"
-
-	err := makeRequest("GET", path, nil, nil, nil, &encryptionKey)
+	err := makeRequest("GET", ai.hi.endpoints.Vault.Key, nil, nil, nil, &encryptionKey)
 	if err != nil {
 		return [32]byte{}, err
 	}

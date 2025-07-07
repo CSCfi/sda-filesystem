@@ -44,6 +44,7 @@ func TestBucketExists(t *testing.T) {
 			},
 		},
 	}
+	ai.hi.endpoints = testConfig
 
 	// This tests is also used to test certificates in S3 client
 	caPEM, mockReader, err := setupCerts("localhost")
@@ -67,10 +68,10 @@ func TestBucketExists(t *testing.T) {
 
 			return
 		}
-		if r.URL.Path == "/s3-head/sd-connect/my-bucket" {
+		if r.URL.Path == "/s3-head-endpoint/sd-connect/my-bucket" {
 			return
 		}
-		if r.URL.Path == "/s3-head/sd-apply/my-bucket-2" {
+		if r.URL.Path == "/s3-head-endpoint/sd-apply/my-bucket-2" {
 			w.WriteHeader(http.StatusNotFound)
 
 			return
@@ -213,12 +214,12 @@ func TestCreateBucket(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method == "PUT" && r.URL.Path == "/s3/my-repo/my-bucket" {
+		if r.Method == "PUT" && r.URL.Path == "/s3-default-endpoint/my-repo/my-bucket" {
 			created = true
 
 			return
 		}
-		if r.Method == "GET" && r.URL.Path == "/s3-head/my-repo/my-bucket" {
+		if r.Method == "GET" && r.URL.Path == "/s3-head-endpoint/my-repo/my-bucket" {
 			if created {
 				return
 			}
@@ -232,6 +233,7 @@ func TestCreateBucket(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
@@ -254,6 +256,7 @@ func TestCreateBucket_Error(t *testing.T) {
 	}()
 
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
 		testname, errStr        string
@@ -277,12 +280,12 @@ func TestCreateBucket_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "PUT" && r.URL.Path == "/s3/repository/my-bucket" {
+				if r.Method == "PUT" && r.URL.Path == "/s3-default-endpoint/repository/my-bucket" {
 					w.WriteHeader(tt.createdCode)
 
 					return
 				}
-				if r.Method == "GET" && r.URL.Path == "/s3-head/repository/my-bucket" {
+				if r.Method == "GET" && r.URL.Path == "/s3-head-endpoint/repository/my-bucket" {
 					w.WriteHeader(tt.existsCode)
 
 					return
@@ -319,7 +322,7 @@ func TestGetBuckets(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3/my-repo" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/my-repo" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -349,6 +352,7 @@ func TestGetBuckets(t *testing.T) {
 		_, _ = w.Write([]byte(xmlData))
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	expectedBuckets := []Metadata{
@@ -381,7 +385,7 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3/my-repo" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/my-repo" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -438,6 +442,7 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 		token = ""
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	expectedBuckets := []Metadata{
@@ -468,6 +473,7 @@ func TestGetBuckets_Error(t *testing.T) {
 	}()
 
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
 		testname, errStr string
@@ -491,7 +497,7 @@ func TestGetBuckets_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "GET" && r.URL.Path == "/s3/sd-apply" {
+				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply" {
 					w.WriteHeader(tt.code)
 
 					return
@@ -528,7 +534,7 @@ func TestGetObjects(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3/sd-apply/bucket234" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/bucket234" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -568,6 +574,7 @@ func TestGetObjects(t *testing.T) {
 		_, _ = w.Write([]byte(xmlData))
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	time1, _ := time.Parse(time.RFC3339, "2009-10-12T17:50:30.000Z")
@@ -602,7 +609,7 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3/sd-connect/bucket23" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-connect/bucket23" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -660,6 +667,7 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	time1, _ := time.Parse(time.RFC3339, "2000-11-09T17:50:30.000Z")
@@ -694,6 +702,7 @@ func TestGetObjects_Error(t *testing.T) {
 	}()
 
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
 		testname, errStr string
@@ -717,7 +726,7 @@ func TestGetObjects_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "GET" && r.URL.Path == "/s3/sd-apply/some-bucket" {
+				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply/some-bucket" {
 					w.WriteHeader(tt.code)
 
 					return
@@ -754,7 +763,7 @@ func TestGetSegmentedObjects(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3/sd-apply/bucket234" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/bucket234" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -785,6 +794,7 @@ func TestGetSegmentedObjects(t *testing.T) {
 		_, _ = w.Write([]byte(xmlData))
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	time1, _ := time.Parse(time.RFC3339, "2009-10-12T17:50:30.000Z")
@@ -819,7 +829,7 @@ func TestGetSegmentedObjects_MultiplePages(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3/sd-connect/bucket23" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-connect/bucket23" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -877,6 +887,7 @@ func TestGetSegmentedObjects_MultiplePages(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	time1, _ := time.Parse(time.RFC3339, "2000-11-09T17:50:30.000Z")
@@ -911,6 +922,7 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 	}()
 
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
 		testname, errStr string
@@ -934,7 +946,7 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "GET" && r.URL.Path == "/s3/sd-apply/some-bucket" {
+				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply/some-bucket" {
 					w.WriteHeader(tt.code)
 
 					return
@@ -986,6 +998,7 @@ func TestDownloadData(t *testing.T) {
 
 	ai.vi.privateKey = privateKey
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
 		testname, bucket, object      string
@@ -1060,7 +1073,7 @@ func TestDownloadData(t *testing.T) {
 			nil, []int64{33554432}, true,
 		},
 		{
-			"OK_OFFSET_3", "old-bucket-2", "myobject-2.c4gh",
+			"OK_OFFSET_3", "old-bucket-3", "myobject-3.c4gh",
 			[]string{header64}, 83885978, 83886090, 473,
 			nil, []int64{67108864}, true,
 		},
@@ -1072,7 +1085,7 @@ func TestDownloadData(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method != "GET" || r.URL.Path != "/s3/sd-connect/"+tt.bucket+"/" {
+				if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-connect/"+tt.bucket+"/" {
 					t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 					w.WriteHeader(http.StatusBadRequest)
 
@@ -1288,7 +1301,7 @@ func TestUploadObject(t *testing.T) {
 
 			return
 		}
-		if r.URL.Path != "/s3/some-repository/bucket1000/" {
+		if r.URL.Path != "/s3-default-endpoint/some-repository/bucket1000/" {
 			t.Errorf("Request has incorrect path %v", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -1310,6 +1323,7 @@ func TestUploadObject(t *testing.T) {
 		}
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
@@ -1341,7 +1355,7 @@ func TestUploadObject_Multipart(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
-		if r.URL.Path != "/s3/repo/bucket1000/" {
+		if r.URL.Path != "/s3-default-endpoint/repo/bucket1000/" {
 			t.Errorf("Request has incorrect path %v", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -1411,6 +1425,7 @@ func TestUploadObject_Multipart(t *testing.T) {
 		}
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
@@ -1556,7 +1571,7 @@ func TestDeleteBucket(t *testing.T) {
 
 			return
 		}
-		if r.URL.Path != "/s3/secret-repository/bucket007/" {
+		if r.URL.Path != "/s3-default-endpoint/secret-repository/bucket007/" {
 			t.Errorf("Request has incorrect path %v", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -1571,6 +1586,7 @@ func TestDeleteBucket(t *testing.T) {
 		}
 	}))
 
+	ai.hi.endpoints = testConfig
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	t.Cleanup(func() { srv.Close() })
