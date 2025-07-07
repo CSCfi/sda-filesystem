@@ -9,6 +9,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- (admins) env `CONFIG_ENDPOINT`, which is used to fetch the static `configuration.json` file from KrakenD
+- an example `configuration.json` that can be used during development
 - send object unencrypted also to CESSNA if project type is not `default` (#34)
 - `findata-creds` container that enables `krakend` container to have mocked Findata EC2 credentials
 - during local development, the CESSNA endpoint is defined as the `keystone-swift` S3 endpoint. The objects are however sent to the admin project.
@@ -24,6 +26,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- S3 timeout is separate from the regular http timeout, determined by the timeout value in the `configuration.json` (#18)
+- the KrakenD endpoints are determined from a `configuration.json` file that is fetched from env `CONFIG_ENDPOINT` during startup (#18)
 - Findata objects are encrypted with the project public key
 - project assumed to have either `findata` or `default` project type
 - all references to SD Submit in code are now using SD Apply
