@@ -7,6 +7,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2025.7.0] - 2025-07-07
+
 ### Added
 
 - (admins) env `CONFIG_ENDPOINT`, which is used to fetch the static `configuration.json` file from KrakenD
@@ -26,6 +28,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) Update export page (#32)
+- (users) Updated login page (#29)
 - S3 timeout is separate from the regular http timeout, determined by the timeout value in the `configuration.json` (#18)
 - the KrakenD endpoints are determined from a `configuration.json` file that is fetched from env `CONFIG_ENDPOINT` during startup (#18)
 - Findata objects are encrypted with the project public key
@@ -287,7 +291,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2024.6.0...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.0...HEAD
+[2025.7.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2024.6.0...2025.7.0
 [2024.6.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.05.0...2024.6.0
 [2024.05.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.03.1...2024.05.0
 [2024.03.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.03.0...2024.03.1
