@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { ref, watch } from "vue";
-import { EventsOn, EventsEmit } from "../../wailsjs/runtime/runtime";
-import { CAutocompleteItem, CDataTableHeader, CDataTableData } from "@cscfi/csc-ui/dist/types";
+import { ref, watch, computed } from "vue";
+import { EventsOn, EventsEmit, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+import { CAutocompleteItem, CDataTableHeader } from "@cscfi/csc-ui/dist/types";
 import { SelectFile, CheckFileExistence, CheckBucketExistence, ExportFile } from "../../wailsjs/go/main/App";
 import { mdiTrashCanOutline } from "@mdi/js";
 import { ValidationHelperType, ValidationResult } from "../types/common";
@@ -9,33 +9,15 @@ import ValidationHelper from "../components/ValidationHelper.vue";
 
 const exportHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name", sortable: false },
-  { key: "folder", value: "Target Folder", sortable: false },
+  { key: "folder", value: "Destination folder", sortable: false },
 ];
 
 const exportHeadersModifiable: CDataTableHeader[] = [
   { key: "name", value: "Name", sortable: false },
-  { key: "folder", value: "Target Folder", sortable: false },
-  { key: "actions", value: null, sortable: false, justify: "end",
-    children: [
-    {
-      value: "Remove",
-      component: {
-      tag: "c-button",
-      params: {
-        text: true,
-        size: "small",
-        title: "Remove",
-        path: mdiTrashCanOutline,
-        onClick: () =>
-          { exportData.value.pop(); chooseToContinue.value = false; }
-        },
-      },
-    },
-    ],
-  },
+  { key: "folder", value: "Destination folder", sortable: false },
+  { key: "actions", value: null, sortable: false, justify: "end"},
 ];
 
-const exportData = ref<CDataTableData[]>([]);
 const bucketItems = ref<CAutocompleteItem[]>([]);
 const filteredBucketItems = ref<CAutocompleteItem[]>([]);
 
@@ -52,9 +34,9 @@ const validationHelperData = ref<ValidationHelperType[]>([
 ]);
 
 const selectedFolder = ref("");
-const selectedFile = ref("");
-const showModal = ref(false);
-const chooseToContinue = ref(false);
+const selectedFiles = ref<string[]>([]);
+const filesToOverwrite = ref<string[]>([]);
+const isDraggingFile = ref<boolean>(false);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 EventsOn("exportPossible", () => {
@@ -67,6 +49,58 @@ EventsOn("setBuckets", (buckets: string[]) => {
     name: bucket,
   }));
   filteredBucketItems.value = bucketItems.value;
+});
+
+const exportData = computed(() => {
+  return selectedFiles.value.map((filename) => {
+    return {
+      name: {value: filename.split("/").reverse()[0] + ".c4gh"},
+      folder: {value: selectedBucket.value},
+      actions: {
+        children: [
+        {
+          value: "Remove",
+          component: {
+          tag: "c-button",
+          params: {
+            text: true,
+            size: "small",
+            title: "Remove",
+            onClick: () =>
+              { selectedFiles.value = selectedFiles.value.filter((file) => file !== filename); }
+          }},
+          children: [
+            {
+              value: "",
+              component: {
+                tag: "c-icon",
+                params: {
+                  path: mdiTrashCanOutline,
+                },
+              },
+            },
+            {
+              value: "Remove",
+              component: {
+                tag: "span",
+              },
+            },
+          ],
+        }],
+      },
+    };
+  });
+});
+
+watch(() => pageIdx.value, (newPage: number) => {
+  if (newPage === 2) {
+    OnFileDrop((_x, _y, paths) => {
+      addFiles(paths);
+    }, true);
+  } else {
+    // Disable file drop if the drop zone is hidden
+    OnFileDropOff();
+  }
 });
 
 watch(() => bucketQuery.value, (query: string) => {
@@ -91,36 +125,46 @@ watch(() => bucketQuery.value, (query: string) => {
   }, 300);
 });
 
-function selectFile() {
-  SelectFile().then((filename: string) => {
-    CheckFileExistence(filename, selectedBucket.value).then((found: boolean) => {
-      selectedFile.value = filename;
-
-      let exportRow: CDataTableData = {
-        "name": {"value": filename.split("/").reverse()[0] + ".c4gh"},
-        "folder": {"value": selectedBucket.value}
-      };
-      exportData.value = [];
-      exportData.value.push(exportRow);
-
-      if (found) { // If exists
-        showModal.value = true;
+async function addFiles(filenames: string[]) {
+  for (const filename of filenames) {
+    // Check if file name is unique to other added
+    if (selectedFiles.value.find((file) => file === filename)) {
+      EventsEmit("showToast", `Could not choose file ${filename}`, "File name is not unique");
+      continue;
+    }
+    // Check if file name is unique to bucket
+    try {
+      const found = await CheckFileExistence(filename, selectedBucket.value);
+      if (found) {
+        filesToOverwrite.value.push(filename);
       } else {
-        chooseToContinue.value = true;
+        selectedFiles.value.push(filename);
       }
-    });
-  }).catch((e) => {
-    EventsEmit("showToast", "Could not choose file", e as string);
+    } catch (e) {
+      EventsEmit("showToast", "Could not choose file", e as string);
+    }
+  }
+}
+
+function selectFile() {
+  // TODO selecting multiple files/folders
+  SelectFile().then((filename: string) => {
+    if (filename) addFiles([filename]);
   });
 }
 
-function exportFile() {
-  ExportFile(selectedFile.value, selectedBucket.value).then(() => {
-    pageIdx.value = 4;
-  }).catch((e) => {
-    pageIdx.value = 2;
-    EventsEmit("showToast", "Exporting file failed", e as string);
-  });
+async function exportFiles() {
+  // TODO exporting to subfolders; proper export for multiple files ?
+  let success = true;
+  for (const file of selectedFiles.value) {
+    try {
+      await ExportFile(file, selectedBucket.value);
+    } catch (e)  {
+      success = false;
+      EventsEmit("showToast", `Exporting file ${file} failed`, e as string);
+    };
+  };
+  pageIdx.value = success ? 4 : 2;
 }
 
 function containsFilterString(str: string): boolean {
@@ -164,21 +208,21 @@ function validateFolderInput(input: string): boolean {
       <c-step>Export complete</c-step>
     </c-steps>
 
-    <c-modal :value="showModal">
+    <c-modal :value="!!filesToOverwrite.length" disable-backdrop-blur>
       <c-card>
         <c-card-title>File already exists</c-card-title>
 
         <c-card-content>
-          Airlock wants to upload file {{ exportData.length ? exportData[0]['name']['value'] : "" }}
+          Airlock wants to upload file {{ filesToOverwrite[0] }}
           but a similar file already exists in SD Connect. Overwrite file?
         </c-card-content>
 
         <c-card-actions justify="end">
-          <c-button outlined @click="showModal = false">
+          <c-button outlined @click="filesToOverwrite.shift()">
             Cancel
           </c-button>
-          <c-button @click="showModal = false; chooseToContinue = true">
-            Overwrite and Continue
+          <c-button @click="selectedFiles.push(filesToOverwrite[0]); filesToOverwrite.shift()">
+            Overwrite and continue
           </c-button>
         </c-card-actions>
       </c-card>
@@ -251,12 +295,15 @@ function validateFolderInput(input: string): boolean {
     </div>
     <div v-show="pageIdx == 2">
       <div
-        v-if="!chooseToContinue"
         id="drop-area"
+        :class="{ 'dragging': isDraggingFile }"
+        @dragover.prevent="isDraggingFile = true"
+        @dragleave="isDraggingFile = false"
+        @drop.prevent="isDraggingFile = false"
       >
         <c-row align="center" gap="20">
           <h4>Drag and drop files and folders here or</h4>
-          <c-button outlined @click="selectFile()">
+          <c-button id="select-files-button" outlined @click="selectFile()">
             Select files and folders
           </c-button>
         </c-row>
@@ -266,7 +313,7 @@ function validateFolderInput(input: string): boolean {
         </p>
       </div>
       <c-data-table
-        v-else
+        v-if="exportData.length"
         id="export-table"
         class="gateway-table"
         :data.prop="exportData"
@@ -274,17 +321,20 @@ function validateFolderInput(input: string): boolean {
         hide-footer="true"
       />
       <c-row justify="space-between">
-        <c-button outlined @click="pageIdx--; exportData.pop(); chooseToContinue = false">
+        <c-button outlined @click="pageIdx--; selectedFiles = [];">
           Cancel
         </c-button>
-        <c-button :disabled="!chooseToContinue" @click="pageIdx++; exportFile()">
+        <c-button
+          :disabled="!selectedFiles.length"
+          @click="pageIdx++; exportFiles()"
+        >
           Export
         </c-button>
       </c-row>
     </div>
     <div v-show="pageIdx == 3">
-      <h2>Exporting File</h2>
-      <p>Please wait, this might take few minutes.</p>
+      <h2>Exporting files to SD Connect</h2>
+      <p>Please wait, this might take a few minutes.</p>
       <c-progress-bar indeterminate />
       <c-data-table
         class="gateway-table"
@@ -301,7 +351,7 @@ function validateFolderInput(input: string): boolean {
       </p>
       <c-button
         class="continue-button"
-        @click="exportData.pop(); chooseToContinue = false; pageIdx = 1"
+        @click="selectedFiles = []; pageIdx = 1"
       >
         New Export
       </c-button>
@@ -319,6 +369,7 @@ c-autocomplete {
 }
 
 #drop-area {
+  --wails-drop-target: drop;
   border: 1px dashed var(--c-primary-600);
   margin-top: 20px;
   margin-bottom: 20px;
@@ -333,8 +384,17 @@ c-autocomplete {
   text-align: center;
 }
 
+
+#drop-area.dragging {
+  border: 3px dashed var(--c-primary-600);
+}
+
 #export-table {
   margin-bottom: 20px;
+}
+
+#select-files-button {
+  background-color: white;
 }
 
 .accordion-item {

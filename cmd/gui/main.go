@@ -42,6 +42,9 @@ func main() {
 			Icon:             build.Icon,
 			WebviewGpuPolicy: linux.WebviewGpuPolicyNever,
 		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop: true,
+		},
 	})
 
 	if err != nil {
