@@ -91,6 +91,12 @@ gui: ## Run GUI version of filesystem on your own computer
 gui_build:
 	cd cmd/gui; wails build $(WAILS_FLAGS) -trimpath -clean -s
 
+gui_prod:
+	@$(MAKE) gui_build
+	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
+	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
+	./build/bin/data-gateway
+
 clean: down ## Stop running containers, delete volumes, and remove vault secrets from .env
 	@cd dev-tools/compose/; sed -i.bak '/### VAULT SECRETS START ###/,/### VAULT SECRETS END ###/d' .env; \
 	cat -s .env > .env.tmp && mv .env.tmp .env; rm -f .env.bak
