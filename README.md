@@ -115,12 +115,12 @@ cd cmd/gui
 wails dev
 ```
 
-In development mode, the application assets are automatically reloaded when they are changed, and you can inspect elements. However, in some computers, the development mode does not function properly, and you will have to open the application in the browser (the wails logs will tell you which localhost port to use). The issue should no longer be present in the [production-ready](https://wails.io/docs/reference/cli#build) binary, which can be created by running:
+In development mode, the application assets are automatically reloaded when they are changed, and you can inspect elements. However, in some computers, the development mode does not function properly, and you will have to open the application in the browser (the wails logs will tell you which localhost port to use). The issue should no longer be present in the [production-ready](https://wails.io/docs/reference/cli#build) binary. You can build and run it with  `make gui_prod`. It builds the binary with `make gui_build`:
 ```bash
 cd cmd/gui
 wails build -upx -trimpath -clean -s
 ```
-or by simply with `make gui_build`. Note that the `-upx` flag is optional and the app will build faster without it. You may need to add `-tags webkit2_41` to the wails commands to be able to build/run on Ubuntu 24.04. This is already taken care of in the Makefile.
+Note that the `-upx` flag is optional and the app will build faster without it. You may need to add `-tags webkit2_41` to the wails commands to be able to build/run on Ubuntu 24.04. This is already taken care of in the Makefile.
 
 [comment]: # (# For Windows)
 [comment]: # (wails build -upx -trimpath -clean -s -webview2=embed)
