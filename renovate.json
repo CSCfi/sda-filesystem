@@ -7,7 +7,8 @@
         "commands": [
           "pnpm --prefix frontend run build",
           "go install github.com/wailsapp/wails/v2/cmd/wails@{{{prettyNewVersion}}}",
-          "cd cmd/gui && wails generate module"
+          "mkdir dummy-pkgconfig && cat > dummy-pkgconfig/fuse3.pc <<EOF\nprefix=/usr\nlibdir=\\${prefix}/lib\nincludedir=\\${prefix}/include\n\nName: fuse3\nDescription: Dummy fuse3\nVersion: 3.0.0\nLibs:\nCflags:\nEOF",
+          "export PKG_CONFIG_PATH=$(pwd)/dummy-pkgconfig CGO_CFLAGS='-DRENOVATE=1' && cd cmd/gui && wails generate module"
         ],
         "fileFilters": ["frontend/wailsjs/**"]
       }
