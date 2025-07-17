@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -14,6 +15,7 @@ type Project struct {
 type ProjectHandler struct {
 	ctx      context.Context
 	progress map[Project][]int
+	lock     sync.Mutex
 }
 
 func NewProjectHandler() *ProjectHandler {
@@ -25,6 +27,9 @@ func (ph *ProjectHandler) SetContext(ctx context.Context) {
 }
 
 func (ph *ProjectHandler) trackProjectProgress(rep, name string, count int) {
+	ph.lock.Lock()
+	defer ph.lock.Unlock()
+
 	if rep == "" {
 		wailsruntime.EventsEmit(ph.ctx, "showProgress")
 

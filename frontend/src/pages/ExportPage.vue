@@ -161,7 +161,7 @@ async function exportFiles() {
       await ExportFile(file, selectedBucket.value);
     } catch (e)  {
       success = false;
-      EventsEmit("showToast", `Exporting file ${file} failed`, e as string);
+      EventsEmit("showToast", `Export failed`, e as string);
     };
   };
   pageIdx.value = success ? 4 : 2;

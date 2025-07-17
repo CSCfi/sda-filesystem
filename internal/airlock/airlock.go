@@ -2,7 +2,6 @@ package airlock
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -169,7 +168,7 @@ func Upload(filename, bucket string) error {
 		logs.Error(err1)
 	}
 	if err != nil || err1 != nil || err2 != nil {
-		return errors.New("uploading failed")
+		return fmt.Errorf("uploading file %s failed", filename)
 	}
 
 	return nil
