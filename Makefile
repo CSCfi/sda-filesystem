@@ -1,4 +1,4 @@
-.PHONY: help all remote local gui cli gui_build requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
+.PHONY: help all remote local cli gui gui_build gui_prod requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
 
 MAKEFLAGS += --no-print-directory
 
@@ -88,10 +88,10 @@ gui: ## Run GUI version of filesystem on your own computer
 		wails dev; \
 	fi
 
-gui_build:
+gui_build: ## Compile a production-ready GUI binary and save it in build/bin
 	cd cmd/gui; wails build $(WAILS_FLAGS) -trimpath -clean -s
 
-gui_prod:
+gui_prod: ## Build and run a production-ready GUI binary
 	@$(MAKE) gui_build
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
