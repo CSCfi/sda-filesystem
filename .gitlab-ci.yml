@@ -167,3 +167,15 @@ release:
           url: https://$ARTIFACTORY_SERVER/artifactory/$ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/go-airlock-cli-amd64-${RELEASE_VERSION}
         - name: data-gateway-amd64-${RELEASE_VERSION} (artifactory)
           url: https://$ARTIFACTORY_SERVER/artifactory/$ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-amd64-${RELEASE_VERSION}
+
+# This is a manual dry-run for developers to run in the merge request
+update-versions-dryrun:
+  extends: .update-versions-dryrun
+  variables:
+    UPDATE_VERSION_FILES_LIST: "cmd/gui/wails.json;docs/linux-setup.md;frontend/package.json"
+
+# This job updates the versions
+update-versions:
+  extends: .update-versions
+  variables:
+    UPDATE_VERSION_FILES_LIST: "cmd/gui/wails.json;docs/linux-setup.md;frontend/package.json"
