@@ -83,9 +83,9 @@ gui: wails_update ## Run GUI version of filesystem on your own computer
 	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
 	trap 'exit 0' INT; cd cmd/gui; \
 	if [ $(IS_UBUNTU_24_04) = true ]; then \
-		wails dev -tags webkit2_41; \
+		wails dev -race -tags webkit2_41; \
 	else \
-		wails dev; \
+		wails dev -race; \
 	fi
 
 gui_build: wails_update ## Compile a production-ready GUI binary and save it in build/bin
