@@ -4,6 +4,12 @@
 #define FUSE_USE_VERSION 29
 #endif
 
+#ifdef RENOVATE
+int mount_filesystem(const char *mount, int debug) {
+    return 0;
+}
+#else
+
 #include <fuse.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -227,3 +233,5 @@ int mount_filesystem(const char *mount, int debug) {
 
     return res;
 }
+
+#endif
