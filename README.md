@@ -8,7 +8,7 @@ Data Gateway builds a FUSE (Filesystem in Userspace) layer and uses an [Amazon S
 - Graphical User Interface
 - Command Line Interface
 
-Released binaries are built for Linux and are available in [Artifactory](https://artifactory.ci.csc.fi/ui/repos/tree/General/sds-generic-local/desktop). **New releases will no longer be available in Github**.
+Released binaries are built for Linux and are available in Artifactory. **New releases will no longer be available in Github**.
 
 ## 💻 Development
 
@@ -46,13 +46,13 @@ You can run `make` to see the commands available to you.
 
 #### Setting up
 
-Start with the following command:
+Since internal URLs are recommended not to be public, the environmental variable `VAULT_ADDR` has to be defined manually. Follow the instructions [here](https://gitlab.ci.csc.fi/groups/sds-dev/-/wikis/Guides/Development-tools/using-vault#accessing-vault-via-terminal) on how to make the Vault address available to shell commands. Once the address is defined, continue with the following command:
 
 ```
 make requirements
 ```
 
-This command ensures that you are logged in to Artifactory, generates the frontend assests for the GUI, and creates an `.env` file under [`dev-tools/compose`](./dev-tools/compose). This file is then filled with secrets from our test [vault](http://vault.sdd.csc.fi:8200), an action which will require you to login via the browser.
+This command ensures that you are logged in to Artifactory, generates the frontend assests for the GUI, and creates an `.env` file under [`dev-tools/compose`](./dev-tools/compose). This file is then filled with secrets from our test Vault, an action which will require you to login via the browser.
 
 Once the `.env` file is created, there is one environment variable, `SDS_ACCESS_TOKEN`, that you need to fill in youself. `SDS_ACCESS_TOKEN` is an opaque token for authenticating to the api gateway with the help of the AAI. Instructions for getting a valid access token are [here](https://gitlab.ci.csc.fi/groups/sds-dev/-/wikis/KrakenD/Other-resources/OIDC-Client-and-Access-Tokens). This token will expire after a certain amount of hours, so it will have to be refetched at set intervals. In SD Desktop, the user gets a new token every time they log in.
 
