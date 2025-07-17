@@ -130,7 +130,7 @@ services:
     env_file:
       - .env.krakend
     environment:
-      DB_PROJECTS: "${CSC_PROJECT}:${EPOUTA_IP_ADDRESS}:normal"
+      DB_PROJECTS: "${CSC_PROJECT}:${EPOUTA_IP_ADDRESS}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_USER} -U ${POSTGRES_USER}"]
       interval: 5s
