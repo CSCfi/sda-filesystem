@@ -45,7 +45,14 @@ onMounted(() => {
     initialized.value = true;
     if (!access) {
       disabled.value = true;
-      EventsEmit("showToast", "Relogin to SD Desktop", "Your session has expired");
+      const message: CToastMessage = {
+        message: "Data Gateway connection needs to be refreshed. Please log out from the virtual machine and SD Desktop, and log in again.",
+        type: "warning" as CToastType,
+        persistent: true,
+        indeterminate: true
+      };
+
+      toasts.value?.addToast(message);
     }
   }).catch((e) => {
     disabled.value = true;
