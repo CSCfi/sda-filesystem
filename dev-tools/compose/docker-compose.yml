@@ -37,7 +37,7 @@ services:
         condition: service_healthy
 
   findata-creds:
-    image: docker.io/docker:28.1
+    image: docker.io/docker:28.3
     container_name: findata-creds
     entrypoint: sh /admin_credentials.sh
     volumes:
@@ -52,7 +52,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: docker.io/hashicorp/vault:1.19.5
+    image: docker.io/hashicorp/vault:1.20.0
     container_name: vault
     env_file:
       - .env.keystone
@@ -82,7 +82,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: docker.io/hashicorp/vault:1.19.5
+    image: docker.io/hashicorp/vault:1.20.0
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
@@ -144,7 +144,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: sds-docker.artifactory.ci.csc.fi/sds/guacamole-test-initdb:2025.2.0
+    image: sds-docker.artifactory.ci.csc.fi/sds/guacamole-test-initdb:2025.7.0
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
@@ -173,7 +173,7 @@ services:
         condition: service_started
 
   terminal-proxy:
-    image: docker.io/nginx:1.28
+    image: docker.io/nginx:1.29
     container_name: terminal-proxy
     environment:
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
