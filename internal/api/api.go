@@ -163,6 +163,7 @@ func Setup(files ...FileReader) error {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
 
+	ai.proxy = ""
 	config, err := GetEnv("CONFIG_ENDPOINT", true)
 	if err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
