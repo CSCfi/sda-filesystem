@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- automated version number updating procedure
 - macro `RENOVATE` that is enabled during `postUpgradeTasks` so that code builds during `wails generate module`
 - `postUpgradeTasks` creates a dummy `fuse3.pc` file for pkg-config
 
