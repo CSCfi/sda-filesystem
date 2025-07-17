@@ -137,7 +137,7 @@ function refresh() {
     <div v-if="pageIdx == 1">
       <h2>Start by creating access to your files</h2>
       <p>Choose in which local directory your files will be available.</p>
-      <c-row gap="40">
+      <c-row gap="20">
         <c-text-field :value="mountpoint" hide-details readonly />
         <c-button outlined @click="changeMountPoint">
           Change

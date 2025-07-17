@@ -106,7 +106,7 @@ EventsOn("fuseReady", () => (accessed.value = true));
         no-radius
         @click="Quit"
       >
-        Disconnect and sign out
+        {{ accessed ? 'Disconnect and sign out' : 'Sign out' }}
         <c-icon :path="mdiLogoutVariant" />
       </c-button>
     </c-toolbar>
@@ -170,9 +170,5 @@ c-button {
   align-items: center;
   /* Keep itemsPerPage dropdown in place */
   overflow-y: auto;
-}
-
-#sign-out-button {
-  margin-right: 2rem;
 }
 </style>
