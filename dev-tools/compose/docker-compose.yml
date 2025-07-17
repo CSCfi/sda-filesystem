@@ -57,6 +57,7 @@ services:
     env_file:
       - .env.keystone
     environment:
+      ARTIFACTORY_URL: "${ARTIFACTORY_URL}"
       ARTIFACTORY_TOKEN: "${ARTIFACTORY_TOKEN}"
     entrypoint: /vault/helpers/vault.sh
     volumes:
@@ -96,7 +97,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: REDACTED
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.7.1"
     container_name: krakend
     env_file:
       - path: .env
@@ -115,6 +116,7 @@ services:
       FINDATA_S3_HOST: "${FINDATA_S3_HOST}"
       FINDATA_S3_REGION: "${FINDATA_S3_REGION}"
       FINDATA_BUCKET: "${FINDATA_BUCKET}"
+      VAULT_ADDR: "${VAULT_ADDR}"
     volumes:
       - ../static:/static
     profiles:
@@ -144,7 +146,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: REDACTED
+    image: "${ARTIFACTORY_SERVER}/sds/guacamole-test-initdb:2025.7.0"
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d

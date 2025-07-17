@@ -46,7 +46,7 @@ You can run `make` to see the commands available to you.
 
 #### Setting up
 
-Start with the following command:
+Since internal URLs are recommended not to be public, the environmental variable `VAULT_ADDR` has to be defined manually. Follow the instructions [here](https://gitlab.ci.csc.fi/groups/sds-dev/-/wikis/Guides/Development-tools/using-vault#accessing-vault-via-terminal) on how to make the Vault address available to shell commands. Once the address is defined, continue with the following command:
 
 ```
 make requirements

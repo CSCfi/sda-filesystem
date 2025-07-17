@@ -20,7 +20,7 @@ mkdir -p "${C4GH_TRANSIT_DIR}"
 wget \
     -O "${C4GH_TRANSIT_DIR}/c4ghtransit" \
     --header "X-JFrog-Art-Api: ${ARTIFACTORY_TOKEN}" \
-    "REDACTED/artifactory/sds-generic-local/c4gh-transit/c4ghtransit"
+    "${ARTIFACTORY_URL}/artifactory/sds-generic-local/c4gh-transit/c4ghtransit"
 chmod +x "${C4GH_TRANSIT_DIR}/c4ghtransit"
 
 # start vault server in development mode
