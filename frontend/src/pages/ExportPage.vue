@@ -386,9 +386,9 @@ c-autocomplete {
   text-align: center;
 }
 
-
 #drop-area.dragging {
   border: 3px dashed var(--c-primary-600);
+  padding: 38px;
 }
 
 #export-table {
