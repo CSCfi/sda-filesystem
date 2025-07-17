@@ -172,6 +172,8 @@ In an SD Desktop VM, the user will only be able to upload files with either the 
 
 The file that is being uploaded is assumed to be unencrypted; the program encrypts it with public keys that it fetches via KrakenD.
 
+If you wish to test out file export with Findata projects, redefine environment variable `IS_FINDATA` in `.env` as `true`. Notice that this will only affect the project type if you run everything locally.
+
 </details>
 
 
