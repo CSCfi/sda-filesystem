@@ -8,7 +8,7 @@ Data Gateway builds a FUSE (Filesystem in Userspace) layer and uses an [Amazon S
 - Graphical User Interface
 - Command Line Interface
 
-Binaries are built on each release for all supported Operating Systems in Github. In addition, [Artifactory](https://artifactory.ci.csc.fi/ui/repos/tree/General/sds-generic-local/desktop) contains binaries for Linux.
+Released binaries are built for Linux and are available in [Artifactory](https://artifactory.ci.csc.fi/ui/repos/tree/General/sds-generic-local/desktop). **New releases will no longer be available in Github**.
 
 ## 💻 Development
 
