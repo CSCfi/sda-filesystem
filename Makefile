@@ -1,4 +1,4 @@
-.PHONY: help all remote local cli gui gui_build gui_prod requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
+.PHONY: help all remote local cli gui gui_build gui_prod wails_update requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
 
 MAKEFLAGS += --no-print-directory
 
@@ -78,7 +78,7 @@ cli: ## Run CLI version of filesystem on your own computer
 	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
 	trap 'exit 0' INT; go run cmd/fuse/main.go -loglevel=$(LOG)
 
-gui: ## Run GUI version of filesystem on your own computer
+gui: wails_update ## Run GUI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
 	trap 'exit 0' INT; cd cmd/gui; \
@@ -88,7 +88,7 @@ gui: ## Run GUI version of filesystem on your own computer
 		wails dev; \
 	fi
 
-gui_build: ## Compile a production-ready GUI binary and save it in build/bin
+gui_build: wails_update ## Compile a production-ready GUI binary and save it in build/bin
 	cd cmd/gui; wails build $(WAILS_FLAGS) -trimpath -clean -s
 
 gui_prod: ## Build and run a production-ready GUI binary
@@ -96,6 +96,14 @@ gui_prod: ## Build and run a production-ready GUI binary
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
 	./build/bin/data-gateway
+
+wails_update: ## Update Wails version to match go.mod
+	@wails_cli_version=$$(wails version | head -n 1); \
+	go_mod_version=$$(grep -w 'github.com/wailsapp/wails/v2' go.mod | awk '{print $$2}'); \
+	if [ "$$wails_cli_version" != "$$go_mod_version" ]; then \
+		echo "❗ Wails version does not match go.mod. Updating Wails..."; \
+		go install github.com/wailsapp/wails/v2/cmd/wails@$${go_mod_version}; \
+	fi
 
 clean: down ## Stop running containers, delete volumes, and remove vault secrets from .env
 	@cd dev-tools/compose/; sed -i.bak '/### VAULT SECRETS START ###/,/### VAULT SECRETS END ###/d' .env; \
