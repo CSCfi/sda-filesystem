@@ -45,7 +45,14 @@ onMounted(() => {
     initialized.value = true;
     if (!access) {
       disabled.value = true;
-      EventsEmit("showToast", "Relogin to SD Desktop", "Your session has expired");
+      const message: CToastMessage = {
+        message: "Data Gateway connection needs to be refreshed. Please log out from the virtual machine and SD Desktop, and log in again.",
+        type: "warning" as CToastType,
+        persistent: true,
+        indeterminate: true
+      };
+
+      toasts.value?.addToast(message);
     }
   }).catch((e) => {
     disabled.value = true;
@@ -106,7 +113,7 @@ EventsOn("fuseReady", () => (accessed.value = true));
         no-radius
         @click="Quit"
       >
-        Disconnect and sign out
+        {{ accessed ? 'Disconnect and sign out' : 'Sign out' }}
         <c-icon :path="mdiLogoutVariant" />
       </c-button>
     </c-toolbar>
@@ -170,9 +177,5 @@ c-button {
   align-items: center;
   /* Keep itemsPerPage dropdown in place */
   overflow-y: auto;
-}
-
-#sign-out-button {
-  margin-right: 2rem;
 }
 </style>

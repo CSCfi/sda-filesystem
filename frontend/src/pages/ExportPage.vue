@@ -161,7 +161,7 @@ async function exportFiles() {
       await ExportFile(file, selectedBucket.value);
     } catch (e)  {
       success = false;
-      EventsEmit("showToast", `Exporting file ${file} failed`, e as string);
+      EventsEmit("showToast", `Export failed`, e as string);
     };
   };
   pageIdx.value = success ? 4 : 2;
@@ -249,6 +249,7 @@ function validateFolderInput(input: string): boolean {
         label="Bucket name"
         :items="filteredBucketItems"
         items-per-page="5"
+        spellcheck="false"
         no-matching-items-message="You are creating a new bucket"
         return-value
         @changeQuery="bucketQuery = $event.detail"
@@ -277,6 +278,7 @@ function validateFolderInput(input: string): boolean {
               label="Folder names (optional)"
               :valid="validateFolderInput(selectedFolder)"
               validation="Folder name is invalid"
+              spellcheck="false"
               trim-whitespace
             />
           </div>
@@ -384,9 +386,9 @@ c-autocomplete {
   text-align: center;
 }
 
-
 #drop-area.dragging {
   border: 3px dashed var(--c-primary-600);
+  padding: 38px;
 }
 
 #export-table {

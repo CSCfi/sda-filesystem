@@ -544,7 +544,7 @@ func TestUpload_Error(t *testing.T) {
 			nil, nil, nil, errExpected, nil, nil, nil,
 		},
 		{
-			"FAIL_HEADER", "uploading failed", "default",
+			"FAIL_HEADER", "uploading file test-file.txt failed", "default",
 			[]string{
 				"Streaming file test-file.txt failed: failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
 				"failed to extract header from encrypted file: EOF",
@@ -559,19 +559,19 @@ func TestUpload_Error(t *testing.T) {
 			nil, nil, nil, nil, nil, nil, nil,
 		},
 		{
-			"FAIL_POST_HEADER", "uploading failed", "default",
+			"FAIL_POST_HEADER", "uploading file test-file.txt failed", "default",
 			[]string{"failed to upload header to vault: " + errExpected.Error()},
 			94567376, true, false,
 			nil, nil, nil, nil, errExpected, nil, nil,
 		},
 		{
-			"FAIL_UPLOAD", "uploading failed", "default",
+			"FAIL_UPLOAD", "uploading file test-file.txt failed", "default",
 			[]string{errExpected.Error()},
 			456, true, false,
 			nil, nil, nil, nil, nil, errExpected, nil,
 		},
 		{
-			"FAIL_CRYPT", "uploading failed", "findata",
+			"FAIL_CRYPT", "uploading file test-file.txt failed", "findata",
 			[]string{
 				"failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
 				"failed to extract header from encrypted file: failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
@@ -580,7 +580,7 @@ func TestUpload_Error(t *testing.T) {
 			nil, nil, nil, nil, nil, nil, nil,
 		},
 		{
-			"FAIL_FINDATA", "uploading failed", "findata",
+			"FAIL_FINDATA", "uploading file test-file.txt failed", "findata",
 			[]string{
 				"failed to upload " + api.Findata + " object: " + errExpected.Error(),
 				"failed to read file body: failed to upload " + api.Findata + " object: " + errExpected.Error(),
@@ -589,13 +589,13 @@ func TestUpload_Error(t *testing.T) {
 			nil, nil, nil, nil, nil, errExpected, nil,
 		},
 		{
-			"FAIL_COPY_1", "uploading failed", "default",
+			"FAIL_COPY_1", "uploading file test-file.txt failed", "default",
 			[]string{"Streaming file test-file.txt failed: " + errExpected.Error()},
 			456, true, true,
 			nil, nil, nil, nil, nil, nil, nil,
 		},
 		{
-			"FAIL_COPY_2", "uploading failed", "findata",
+			"FAIL_COPY_2", "uploading file test-file.txt failed", "findata",
 			[]string{
 				"failed to upload Findata object: failed to read file body: " + errExpected.Error(),
 				"failed to read file body: failed to upload Findata object: failed to read file body: " + errExpected.Error(),
@@ -604,7 +604,7 @@ func TestUpload_Error(t *testing.T) {
 			nil, nil, nil, nil, nil, nil, nil,
 		},
 		{
-			"FAIL_DELETE", "uploading failed", "default",
+			"FAIL_DELETE", "uploading file test-file.txt failed", "default",
 			[]string{"Streaming file test-file.txt failed: " + errExpected.Error()},
 			456, true, true,
 			nil, nil, nil, nil, nil, nil, errExpected,

@@ -8,7 +8,7 @@ Data Gateway builds a FUSE (Filesystem in Userspace) layer and uses an [Amazon S
 - Graphical User Interface
 - Command Line Interface
 
-Binaries are built on each release for all supported Operating Systems in Github. In addition, [Artifactory](https://artifactory.ci.csc.fi/ui/repos/tree/General/sds-generic-local/desktop) contains binaries for Linux.
+Released binaries are built for Linux and are available in [Artifactory](https://artifactory.ci.csc.fi/ui/repos/tree/General/sds-generic-local/desktop). **New releases will no longer be available in Github**.
 
 ## 💻 Development
 
@@ -171,6 +171,8 @@ Example run `./airlock username example-bucket exampleFile.txt` will export file
 In an SD Desktop VM, the user will only be able to upload files with either the GUI binary or the Airlock CLI due to mutual TLS being enabled at certain endpoints in terminal-proxy. The necessary certificate files will be embedded into the binaries during a CI job.
 
 The file that is being uploaded is assumed to be unencrypted; the program encrypts it with public keys that it fetches via KrakenD.
+
+If you wish to test out file export with Findata projects, redefine environment variable `IS_FINDATA` in `.env` as `true`. Notice that this will only affect the project type if you run everything locally.
 
 </details>
 
