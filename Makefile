@@ -2,7 +2,6 @@
 
 MAKEFLAGS += --no-print-directory
 
-export VAULT_ADDR = https://vault.sdd.csc.fi:8200
 PROFILES := fuse krakend keystone
 IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)), $(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
 LOG ?= info
@@ -57,8 +56,8 @@ all: down ## Run 'make local gui'
 
 requirements: ## Install dependencies and create .env file with vault secrets
 	cp dev-tools/.env.example dev-tools/compose/.env
-	docker login sds-docker.artifactory.ci.csc.fi
 	@$(MAKE) get_env
+	set -a; source dev-tools/compose/.env; docker login $${ARTIFACTORY_SERVER}
 	pnpm install --prefix frontend
 	pnpm --prefix frontend run build
 
@@ -126,7 +125,15 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,FINDATA_SECRET,krakend/findata,secret) \
 	$(call write_secret,FINDATA_S3_HOST,krakend/findata,host) \
 	$(call write_secret,FINDATA_S3_REGION,krakend/findata,region) \
-	$(call write_secret,FINDATA_BUCKET,krakend/findata,bucket)
+	$(call write_secret,FINDATA_BUCKET,krakend/findata,bucket) \
+	$(call write_secret,ARTIFACTORY_SERVER,internal-urls,artifactory-docker) \
+	$(call write_secret,ARTIFACTORY_URL,internal-urls,artifactory) \
+	$(call write_secret,AAI_BASE_URL,internal-urls,test-aai) \
+	$(call write_secret,S3_HOST,internal-urls,test-allas) \
+	$(call write_secret,KRAKEND_ADDR,internal-urls,test-krakend-backend) \
+	$(call write_secret,VALIDATOR_ADDR,internal-urls,test-krakend-backend) \
+	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta)
+	@set -a; source dev-tools/compose/.env; printf "BACKEND_HOST=$${KRAKEND_ADDR#*://}\n" >> dev-tools/compose/.env
 	@printf "### VAULT SECRETS END ###\n" >> dev-tools/compose/.env
 	@echo "Secrets written successfully"
 
