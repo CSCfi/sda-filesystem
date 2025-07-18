@@ -17,12 +17,14 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Removed
 
+- references to internal URLs in project files. However, Gitlab links still remain intact
 - (users) text fields during file export no longer have spell check
 - Github releases
 - `krakend-db` no longer requires project type for env `DB_PROJECTS`
 
 ### Changed
 
+- address to Vault needs to be separately exported by the developer
 - when user's session has expired, the GUI shows a warning toast that informs the user that they have to log out of SD Desktop and log in again
 
 ### Fixed
