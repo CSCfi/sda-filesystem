@@ -7,6 +7,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2025.7.2] - 2025-07-18
+
 ### Added
 
 - Binaries are built with ldflags `-w` and `-s`
@@ -17,6 +19,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Removed
 
+- URL encoding bucket name as it will happen in KrakenD
 - references to internal URLs in project files. However, Gitlab links still remain intact
 - (users) text fields during file export no longer have spell check
 - Github releases
@@ -323,7 +326,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.1...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.2...HEAD
+[2025.7.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.1...2025.7.2
 [2025.7.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.0...2025.7.1
 [2025.7.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2024.6.0...2025.7.0
 [2024.6.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/-/compare/2024.05.0...2024.6.0
