@@ -5,16 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
-	"strings"
 	"testing"
-	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
-	"sda-filesystem/internal/mountpoint"
-
-	"github.com/sirupsen/logrus"
 )
 
 var errExpected = errors.New("expected error for test")
@@ -65,58 +59,6 @@ func (s *testStream) Read(p []byte) (int, error) {
 func TestMain(m *testing.M) {
 	logs.SetSignal(func(l string, s []string) {})
 	os.Exit(m.Run())
-}
-
-func TestUserInput(t *testing.T) {
-	finished := false
-	expectedOutput := [][]string{{"continue"}, {"hello", "sunshine"}, {"update"}}
-	reader := strings.NewReader("continue\nhello sunshine\nupdate")
-
-	var ch = make(chan []string)
-	go func() {
-		userInput(reader, ch)
-	}()
-	go func() {
-		for i := range expectedOutput {
-			nextLine := <-ch
-			if !reflect.DeepEqual(nextLine, expectedOutput[i]) {
-				return
-			}
-		}
-		finished = true
-	}()
-
-	time.Sleep(10 * time.Millisecond)
-
-	if !finished {
-		t.Fatal("Function did not read input correctly.")
-	}
-}
-
-func TestUserInput_Error(t *testing.T) {
-	buf := &testStream{err: errExpected}
-
-	var level string
-	var strs []string
-	logs.SetSignal(func(ll string, s []string) {
-		level, strs = ll, s
-	})
-	defer logs.SetSignal(func(l string, s []string) {})
-
-	var ch = make(chan []string)
-	go func() {
-		userInput(buf, ch)
-	}()
-
-	time.Sleep(10 * time.Millisecond)
-
-	err := []string{"Could not read input", errExpected.Error()}
-	if level != logrus.ErrorLevel.String() {
-		t.Fatal("Function did not log an error")
-	}
-	if !reflect.DeepEqual(strs, err) {
-		t.Fatalf("Logged output incorrect\nExpected: %q\nReceived: %q", err, strs)
-	}
 }
 
 func TestAskForPassword(t *testing.T) {
@@ -308,120 +250,6 @@ func TestLogin(t *testing.T) {
 				t.Error("Function should have returned error")
 			case err.Error() != tt.errorText:
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errorText, err.Error())
-			}
-		})
-	}
-}
-
-func TestProcessFlags(t *testing.T) {
-	defaultMount := "default_dir"
-
-	var tests = []struct {
-		testname, mount, logLevel string
-		timeout                   int
-	}{
-		{"OK_1", "/hello", "debug", 45},
-		{"OK_2", "/goodbye", "warning", 87},
-		{"OK_3", "/hi/hello", "error", 2},
-		{"OK_4", "", "info", 20},
-	}
-
-	origDefaultMountPoint := mountpoint.DefaultMountPoint
-	origCheckMountPoint := mountpoint.CheckMountPoint
-	origSetRequestTimeout := api.SetRequestTimeout
-	origSetLevel := logs.SetLevel
-
-	defer func() {
-		mountpoint.DefaultMountPoint = origDefaultMountPoint
-		mountpoint.CheckMountPoint = origCheckMountPoint
-		api.SetRequestTimeout = origSetRequestTimeout
-		logs.SetLevel = origSetLevel
-	}()
-
-	var testTimeout int
-	var testLevel, testMount string
-
-	mountpoint.DefaultMountPoint = func() (string, error) {
-		return defaultMount, nil
-	}
-	mountpoint.CheckMountPoint = func(mount string) error {
-		testMount = mount
-
-		return nil
-	}
-	api.SetRequestTimeout = func(timeout int) {
-		testTimeout = timeout
-	}
-	logs.SetLevel = func(level string) {
-		testLevel = level
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			mount = tt.mount
-			logLevel = tt.logLevel
-			requestTimeout = tt.timeout
-
-			testTimeout = 0
-			testLevel, testMount = "", ""
-
-			err := processFlags()
-
-			switch {
-			case err != nil:
-				t.Errorf("Returned unexpected error: %s", err.Error())
-			case tt.timeout != testTimeout:
-				t.Errorf("SetRequestTimeout() received incorrect timeout. Expected=%d, received=%d", tt.timeout, testTimeout)
-			case tt.logLevel != testLevel:
-				t.Errorf("SetLevel() received incorrect log level. Expected=%s, received=%s", tt.logLevel, testLevel)
-			case tt.mount == "" && mount != defaultMount:
-				t.Errorf("Expected default mount point %s, received=%s", defaultMount, mount)
-			case tt.mount != testMount:
-				t.Errorf("CheckMountPoint() received incorrect mount point. Expected=%s, received=%s", tt.mount, testMount)
-			}
-		})
-	}
-}
-
-func TestProcessFlags_Error(t *testing.T) {
-	var tests = []struct {
-		testname, repository, mount        string
-		checkMountError, defaultMountError error
-	}{
-		{"FAIL_DEFAULT_MOUNT", "misc", "", nil, errExpected},
-		{"FAIL_CHECK_MOUNT", "all", "/bad/directory", errExpected, nil},
-	}
-
-	origDefaultMountPoint := mountpoint.DefaultMountPoint
-	origCheckMountPoint := mountpoint.CheckMountPoint
-	origSetRequestTimeout := api.SetRequestTimeout
-	origSetLevel := logs.SetLevel
-
-	defer func() {
-		mountpoint.DefaultMountPoint = origDefaultMountPoint
-		mountpoint.CheckMountPoint = origCheckMountPoint
-		api.SetRequestTimeout = origSetRequestTimeout
-		logs.SetLevel = origSetLevel
-	}()
-
-	api.SetRequestTimeout = func(timeout int) {}
-	logs.SetLevel = func(level string) {}
-
-	for _, tt := range tests {
-		t.Run(tt.testname, func(t *testing.T) {
-			mount = tt.mount
-
-			mountpoint.DefaultMountPoint = func() (string, error) {
-				return "", tt.defaultMountError
-			}
-			mountpoint.CheckMountPoint = func(mount string) error {
-				return tt.checkMountError
-			}
-
-			if err := processFlags(); err == nil {
-				t.Error("Function should have returned error")
-			} else if !errors.Is(err, errExpected) {
-				t.Errorf("Function returned incorrect error: %s", err.Error())
 			}
 		})
 	}

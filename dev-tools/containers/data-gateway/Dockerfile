@@ -10,7 +10,7 @@ WORKDIR /go/src/gateway
 
 COPY . .
 RUN go mod tidy
-RUN go build -o /go/bin/gateway cmd/fuse/main.go
+RUN go build -o /go/bin/gateway ./cmd/cli
 
 
 FROM ubuntu:24.04

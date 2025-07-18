@@ -137,13 +137,9 @@ build-artifacts:
       echo "${SECRETS}" | jq -r '.data.data["server.crt"]' > "certs/${TERMINAL_PROXY_TEST}.crt"
       echo "${SECRETS}" | jq -r '.data.data["server.key"]' > "certs/${TERMINAL_PROXY_TEST}.key"
     - |
-      go build -ldflags '-w -s' -o go-fuse-cli-amd64-${CI_COMMIT_TAG:-devel} ./cmd/fuse/main.go
-      jf s --licenses go-fuse-cli-amd64-${CI_COMMIT_TAG:-devel} --repo ${ARTIFACTORY_SERVER_BINARY_REPO}
-      jf rt u go-fuse-cli-amd64-${CI_COMMIT_TAG:-devel}  $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/go-fuse-cli-amd64-${CI_COMMIT_TAG:-devel}
-    - |
-      go build -ldflags '-w -s' -o go-airlock-cli-amd64-${CI_COMMIT_TAG:-devel} ./cmd/airlock/main.go
-      jf s --licenses go-airlock-cli-amd64-${CI_COMMIT_TAG:-devel} --repo ${ARTIFACTORY_SERVER_BINARY_REPO}
-      jf rt u go-airlock-cli-amd64-${CI_COMMIT_TAG:-devel}  $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/go-airlock-cli-amd64-${CI_COMMIT_TAG:-devel}
+      go build -ldflags '-w -s' -o data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} ./cmd/cli
+      jf s --licenses data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} --repo ${ARTIFACTORY_SERVER_BINARY_REPO}
+      jf rt u data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel}  $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel}
     - |
       go install github.com/wailsapp/wails/v2/cmd/wails@latest
       /usr/local/go/bin/wails doctor

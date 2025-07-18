@@ -75,7 +75,7 @@ local: down ## Run components locally
 cli: ## Run CLI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
-	trap 'exit 0' INT; go run cmd/fuse/main.go -loglevel=$(LOG)
+	trap 'exit 0' INT; go run ./cmd/cli -loglevel=$(LOG) import
 
 gui: wails_update ## Run GUI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
