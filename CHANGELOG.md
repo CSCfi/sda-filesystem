@@ -9,9 +9,27 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- Binaries are built with ldflags `-w` and `-s`
+- Makefile target `wails_update` that automatically updates old wails version before running the GUI binary
 - automated version number updating procedure
 - macro `RENOVATE` that is enabled during `postUpgradeTasks` so that code builds during `wails generate module`
 - `postUpgradeTasks` creates a dummy `fuse3.pc` file for pkg-config
+
+### Removed
+
+- (users) text fields during file export no longer have spell check
+- Github releases
+- `krakend-db` no longer requires project type for env `DB_PROJECTS`
+
+### Changed
+
+- when user's session has expired, the GUI shows a warning toast that informs the user that they have to log out of SD Desktop and log in again
+
+### Fixed
+
+- a data race that occurred during filesystem initialization
+- drop area no longer changes size during drag event
+- proxy URL value in `Setup()` is explicitly defined as an empty string so that `getAPIEndpoints()` works after GUI refresh
 
 ## [2025.7.1] - 2025-07-10
 
