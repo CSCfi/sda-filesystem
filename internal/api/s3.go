@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -290,7 +289,7 @@ var GetBuckets = func(rep string) ([]Metadata, error) {
 // begin with that particular value.
 var GetObjects = func(rep, bucket, path string, prefix ...string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
-		Bucket: aws.String(url.PathEscape(bucket)),
+		Bucket: aws.String(bucket),
 	}
 	if len(prefix) > 0 {
 		params.Prefix = aws.String(prefix[0])
@@ -308,7 +307,7 @@ var GetObjects = func(rep, bucket, path string, prefix ...string) ([]Metadata, e
 
 var GetSegmentedObjects = func(rep, bucket string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
-		Bucket: aws.String(url.PathEscape(bucket)),
+		Bucket: aws.String(bucket),
 	}
 
 	meta, err := getObjects(params, rep, bucket)
