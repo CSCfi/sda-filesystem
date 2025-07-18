@@ -250,7 +250,8 @@ func (a *App) CheckFileExistence(file, bucket string) (found bool) {
 }
 
 func (a *App) CheckBucketExistence(bucket string) (found bool) {
-	exists, _ := api.BucketExists(api.SDConnect, bucket)
+	exists, err := api.BucketExists(api.SDConnect, bucket)
+	logs.Error(err)
 
 	return exists
 }
