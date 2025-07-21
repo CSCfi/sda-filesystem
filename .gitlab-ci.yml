@@ -34,7 +34,7 @@ backend-lint:
     - pnpm run --dir frontend build
     - go mod tidy && go mod vendor
   script:
-    - golangci-lint run -v ./... --allow-parallel-runners --timeout 10m -E bodyclose,gocritic,gofmt,gosec,govet,nestif,nlreturn,revive,rowserrcheck --out-format code-climate | tee gl-code-quality-report.json
+    - golangci-lint run -v ./... --allow-parallel-runners --timeout 10m --output.code-climate.path stdout | tee gl-code-quality-report.json
     - go fmt ./...
     - go vet -tags=fuse3 ./...
   artifacts:
