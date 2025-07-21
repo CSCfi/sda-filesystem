@@ -213,7 +213,7 @@ function validateFolderInput(input: string): boolean {
         <c-card-title>File already exists</c-card-title>
 
         <c-card-content>
-          Airlock wants to upload file {{ filesToOverwrite[0] }}
+          Data Gateway wants to upload file {{ filesToOverwrite[0] }}
           but a similar file already exists in SD Connect. Overwrite file?
         </c-card-content>
 
