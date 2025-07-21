@@ -95,6 +95,15 @@ func (a *App) GetUsername() string {
 }
 
 func (a *App) InitializeAPI() (bool, error) {
+	defer func() {
+		reps := make(map[string]bool)
+		enabled := api.GetRepositories()
+		for _, r := range api.GetAllRepositories() {
+			reps[r] = !slices.Contains(enabled, r)
+		}
+		wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
+	}()
+
 	if err := api.Setup(certs.Files); err != nil {
 		logs.Error(err)
 		outer, _ := logs.Wrapper(err)
@@ -111,13 +120,6 @@ func (a *App) InitializeAPI() (bool, error) {
 	if !access {
 		logs.Errorf("Your session has expired")
 	}
-
-	reps := make(map[string]bool)
-	enabled := api.GetRepositories()
-	for _, r := range api.GetAllRepositories() {
-		reps[r] = !slices.Contains(enabled, r)
-	}
-	wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 
 	if airlock.ExportPossible() {
 		wailsruntime.EventsEmit(a.ctx, "exportPossible")
