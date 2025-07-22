@@ -7,6 +7,15 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- (users) the two CLI binaries are combined into one CLI with subcommands `import` and `export`
+- CI will release one CLI binary and two GUI binaries, one for Ubuntu 24 and one for Ubuntu 22
+
+### Added
+
+- copies of the binaries are placed under `sds-generic-local/desktop` in Artifactory
+
 ## [2025.7.2] - 2025-07-18
 
 ### Added
