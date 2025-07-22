@@ -31,7 +31,7 @@ type airlockInfo struct {
 
 // ExportPossible indicates whether or not user the user is allowed to export files outside the VM.
 // The user must be the project manager and have SD Connect enabled.
-func ExportPossible() bool {
+var ExportPossible = func() bool {
 	var insert string
 	enabled := api.SDConnectEnabled()
 	if !enabled {

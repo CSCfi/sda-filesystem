@@ -127,48 +127,49 @@ Note that the `-upx` flag is optional and the app will build faster without it. 
 
 #### Command Line Interface
 
-Two CLI binaries are released, one for mounting the FUSE ([SDA-Filesystem](#sda-fileystem)) and one for exporting files ([Airlock](#airlock)). The Makefile target `cli` runs the former.
-
-##### SDA-Fileystem
+The CLI binary has two subcommands, `import` and `export`, which can be used to setup the filesystem and upload files to SD Connect, respectively.
 
 To build the binary:
 ```bash
-go build -o ./go-fuse ./cmd/fuse/main.go
+go build -o ./data-gateway-cli ./cmd/cli
 ```
-Accepted command line arguments:
-```bash
-./go-fuse -help
-Usage of ./go-fuse:
-  -http_timeout int
-    	Number of seconds to wait before timing out an HTTP request (default 60)
-  -loglevel string
+
+Accepted common command line arguments:
+```
+-http_timeout int
+    	Number of seconds to wait before timing out an HTTP request (default 20)
+-loglevel string
     	Logging level. Possible values: {trace,debug,info,warning,error} (default "info")
+```
+
+When running the binary, the common arguments are placed before the subcommand, and the subcommand-specific arguments are placed after the subcommand:
+```bash
+./data-gateway-cli [arguments] [subcommand] [subcommand arguments]
+```
+
+##### Import
+
+Accepted command line arguments for import:
+```
+./data-gateway-cli import -help
+Usage of import:
   -mount string
     	Path to Data Gateway mount point
-
 ```
-Example run `./go-fuse -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both `SD Connect` and `SD Apply`. If no mount point is specified, the filesystem will be mounted in `$HOME/Projects`.
+Example run `./data-gateway-cli import -mount=$HOME/ExampleMount` will create the FUSE layer in the directory `$HOME/ExampleMount` for both `SD Connect` and `SD Apply`. If no mount point is specified, the filesystem will be mounted in `$HOME/Projects`.
 
-##### Airlock
+##### Export
 
-To build the binary:
-```bash
-go build -o ./airlock ./cmd/airlock/main.go
+Accepted command line arguments for export:
 ```
-Accepted command line arguments:
-```bash
-./airlock -help
-Usage of ./airlock:
-  -debug
-    	Enable debug prints
+./data-gateway-cli export -help
+Usage of export:
   -override
-      Forcibly override data in SD Connect
-  -quiet
-    	Print only errors
+    	Forcibly override data in SD Connect
 ```
-Example run `./airlock username example-bucket exampleFile.txt` will export file `exampleFile.txt` to bucket `example-bucket`.
+Example run `./data-gateway-cli export example-bucket exampleFile.txt` will export file `exampleFile.txt` to bucket `example-bucket`.
 
-In an SD Desktop VM, the user will only be able to upload files with either the GUI binary or the Airlock CLI due to mutual TLS being enabled at certain endpoints in terminal-proxy. The necessary certificate files will be embedded into the binaries during a CI job.
+In an SD Desktop VM, the user will only be able to upload files with either the GUI or CLI binary due to mutual TLS being enabled at certain endpoints in terminal-proxy. The necessary certificate files will be embedded into the binaries during a CI job.
 
 The file that is being uploaded is assumed to be unencrypted; the program encrypts it with public keys that it fetches via KrakenD.
 

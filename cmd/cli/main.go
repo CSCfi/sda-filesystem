@@ -1,29 +1,31 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
+	"maps"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
+	"slices"
 	"syscall"
 
+	"sda-filesystem/certs"
 	"sda-filesystem/internal/api"
-	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
-	"sda-filesystem/internal/mountpoint"
 
 	"golang.org/x/term"
 )
 
-var mount, logLevel string
+var logLevel string
 var requestTimeout int
 
-// var sdapplyOnly bool
+var handlers = map[string]handlerFuncs{}
+
+type handlerFuncs struct {
+	setup   func([]string) (int, error)
+	execute func() (int, error)
+}
 
 type loginReader interface {
 	readPassword() (string, error)
@@ -50,48 +52,6 @@ func (r *stdinReader) getState() (err error) {
 
 func (r *stdinReader) restoreState() error {
 	return term.Restore(int(syscall.Stdin), r.originalState)
-}
-
-// userInput reads user's input from io.Reader and sends it into a channel
-func userInput(r io.Reader, ch chan<- []string) {
-	scanner := bufio.NewScanner(r)
-	var answer string
-
-	for {
-		if scanner.Scan() {
-			answer = scanner.Text()
-		}
-		if err := scanner.Err(); err != nil {
-			logs.Errorf("Could not read input: %w", err)
-		}
-		ch <- strings.Fields(answer)
-	}
-}
-
-func applyCommand(ch <-chan []string) {
-	for {
-		input := <-ch
-		if len(input) == 0 {
-			continue
-		}
-		switch strings.ToLower(input[0]) {
-		case "update":
-			if filesystem.FilesOpen() {
-				logs.Errorf("You have files in use which prevents updating Data Gateway")
-			} else {
-				filesystem.RefreshFilesystem()
-			}
-		case "clear":
-			if len(input) > 1 {
-				path := filepath.Clean(input[1])
-				if err := filesystem.ClearPath(path); err != nil {
-					logs.Error(err)
-				}
-			} else {
-				logs.Errorf("Cannot clear cache without path")
-			}
-		}
-	}
 }
 
 var askForPassword = func(lr loginReader) (string, error) {
@@ -151,37 +111,37 @@ var login = func(lr loginReader) error {
 	}
 }
 
-func processFlags() error {
-	if mount == "" {
-		defaultMount, err := mountpoint.DefaultMountPoint()
-		if err != nil {
-			return err
-		}
-		mount = defaultMount
-	} else if err := mountpoint.CheckMountPoint(mount); err != nil {
-		return err
+func init() {
+	flag.Usage = func() {
+		fmt.Printf("Usage: %s [arguments] [subcommand] [subcommand arguments]\n", os.Args[0])
+
+		flag.PrintDefaults()
+
+		fmt.Printf("\nRun %s [subcommand] -help to learn more about subcommands\n", os.Args[0])
+		fmt.Println("\nAvailable subcommands:")
+		fmt.Println("import: Setup a filesystem that has access to files in SD Connect and SD Apply")
+		fmt.Println("export: Upload files and folders from VM to SD Connect")
+		fmt.Println()
 	}
 
-	mount = filepath.Clean(mount)
-	api.SetRequestTimeout(requestTimeout)
-	logs.SetLevel(logLevel)
-
-	return nil
-}
-
-func init() {
-	flag.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {trace,debug,info,warning,error}")
-	// flag.BoolVar(&sdapplyOnly, "sdapply", false, "Connect only to SD Apply")
 	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
 func main() {
 	flag.Parse()
-	if err := processFlags(); err != nil {
-		logs.Fatal(err)
+
+	subcommandOptions := slices.Collect(maps.Keys(handlers))
+	if flag.NArg() < 1 || !slices.Contains(subcommandOptions, flag.Args()[0]) {
+		flag.Usage()
+		os.Exit(2)
 	}
-	if err := api.Setup(); err != nil {
+	subcommand := flag.Args()[0]
+
+	api.SetRequestTimeout(requestTimeout)
+	logs.SetLevel(logLevel)
+
+	if err := api.Setup(certs.Files); err != nil {
 		logs.Fatal(err)
 	}
 
@@ -190,37 +150,24 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	// if !sdapplyOnly {
-	if !api.SDConnectEnabled() {
-		// logs.Warningf("You do not have SD Connect enabled")
-		logs.Fatal("You do not have SD Connect enabled")
-	} else if !access {
+	code, err := handlers[subcommand].setup(flag.Args()[1:])
+	if err != nil {
+		logs.Fatal(err)
+	}
+	if code != 0 {
+		os.Exit(code)
+	}
+
+	if !access {
 		logs.Info("Passwordless session not possible")
 		if err := login(&stdinReader{}); err != nil {
 			logs.Fatal(err)
 		}
 	}
-	// }
 
-	var wait = make(chan any)
-	var cmd = make(chan []string)
-	go func() {
-		<-wait // Wait for fuse to be ready
-		go mountpoint.WaitForUpdateSignal(cmd)
-		go userInput(os.Stdin, cmd)
-		go applyCommand(cmd)
-	}()
-
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, os.Interrupt)
-	go func() {
-		for range s {
-			logs.Info("Shutting down Data Gateway")
-			filesystem.UnmountFilesystem()
-		}
-	}()
-
-	ret := filesystem.MountFilesystem(mount, nil, wait)
-
-	os.Exit(ret)
+	code, err = handlers[subcommand].execute()
+	if err != nil {
+		logs.Fatal(err)
+	}
+	os.Exit(code)
 }
