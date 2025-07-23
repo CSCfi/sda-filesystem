@@ -282,6 +282,10 @@ var loadCertificates = func(certFiles []FileReader) error {
 	if err != nil {
 		return fmt.Errorf("failed to load client x509 key pair for host %s: %w", proxyHost, err)
 	}
+	logs.Debugf("Client certificates will expire at %s", cert.Leaf.NotAfter.String())
+	if cert.Leaf.NotAfter.Compare(time.Now()) != 1 {
+		logs.Warningf("Client certificates have expired! Fetch a newer Data Gateway if you want to export data")
+	}
 
 	tr := ai.hi.client.Transport.(*http.Transport).Clone()
 	tr.TLSClientConfig.Certificates = []tls.Certificate{cert}
