@@ -1,11 +1,30 @@
-linters-settings:
-  nestif:
-    min-complexity: 10
-issues:
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - revive
+version: "2"
 run:
   build-tags:
     - fuse3
+linters:
+  enable:
+    - bodyclose
+    - gocritic
+    - gosec
+    - govet
+    - nestif
+    - nlreturn
+    - revive
+    - rowserrcheck
+  settings:
+    nestif:
+      min-complexity: 10
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - revive
+        path: _test.go
+formatters:
+  enable:
+    - gofmt

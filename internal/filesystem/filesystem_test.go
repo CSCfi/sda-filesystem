@@ -460,7 +460,8 @@ func TestInitializeFilesystem(t *testing.T) {
 		return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
 	}
 	api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
-		if rep == rep1 {
+		switch rep {
+		case rep1:
 			switch bucket {
 			case "bucket_1":
 				time1, _ := time.Parse(time.RFC3339, "2020-12-30T10:00:00Z")
@@ -493,7 +494,7 @@ func TestInitializeFilesystem(t *testing.T) {
 			default:
 				return nil, fmt.Errorf("api.GetObjects() received invalid project %s", rep+"/"+bucket)
 			}
-		} else if rep == rep2 {
+		case rep2:
 			switch bucket {
 			case "https://example.com":
 				time1, _ := time.Parse(time.RFC3339, "2025-07-31T23:00:05Z")
@@ -554,7 +555,8 @@ func TestInitializeFilesystem(t *testing.T) {
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
 	api.GetHeaders = func(rep string, buckets []api.Metadata) (api.BatchHeaders, error) {
-		if rep == rep1 {
+		switch rep {
+		case rep1:
 			expectedBuckets := []string{"bucket/2", "bucket_1", "bucket_2"}
 			bucketsCopy := slices.Clone(buckets)
 			sort.Slice(bucketsCopy, func(i, j int) bool { return buckets[i].Name < buckets[j].Name })
@@ -593,7 +595,7 @@ func TestInitializeFilesystem(t *testing.T) {
 			}
 
 			return batch, nil
-		} else if rep == "Substandard-Repo" {
+		case "Substandard-Repo":
 			return nil, fmt.Errorf("api.GetHeaders() received invalid repository %sv", rep)
 		}
 
