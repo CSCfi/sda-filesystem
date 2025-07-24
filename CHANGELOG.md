@@ -7,6 +7,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2025.7.3] - 2025-07-24
+
 ### Changed
 
 - update Github workflows
@@ -16,6 +18,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- (admins) binaries for Ubuntu 24 are called `data-gateway-cli-amd64-<version>` and `data-gateway-gui-amd64-<version>`, while for Ubuntu 22 they are called `data-gateway-cli-22-amd64-<version>` and `data-gateway-gui-22-amd64-<version>`
+- binaries for Ubuntu 22 have the port of the proxy URL overwritten by a value predefined at build time
 - copies of the binaries are placed under `sds-generic-local/desktop` in Artifactory
 
 ## [2025.7.2] - 2025-07-18
@@ -337,7 +341,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.2...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.3...HEAD
+[2025.7.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.2...2025.7.3
 [2025.7.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.1...2025.7.2
 [2025.7.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.0...2025.7.1
 [2025.7.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2024.6.0...2025.7.0
