@@ -124,18 +124,15 @@ build-artifacts:
     - docker-exec
   services:
     - docker:dind
+  variables:
+    SECURE_FILES_DOWNLOAD_PATH: './certs'
   before_script:
     - jf config import "${JF_CONFIG}"
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
     - go mod tidy && go mod vendor
   script:
-    - |
-      VAULT_RESPONSE=$(curl -X POST -d '{"role_id":"'"${VAULT_TEST_ROLE}"'","secret_id":"'"${VAULT_TEST_SECRET}"'"}' ${VAULT_TEST_ADDR}/v1/auth/approle/login)
-      VAULT_TOKEN=$(jq -r  '.auth.client_token' <<< $VAULT_RESPONSE)
-      SECRETS=$(curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" "${VAULT_TEST_ADDR}/v1/secret/data/gitlab/${CI_PROJECT_NAME}/certs")
-      echo "${SECRETS}" | jq -r '.data.data["server.crt"]' > "certs/${TERMINAL_PROXY_TEST}.crt"
-      echo "${SECRETS}" | jq -r '.data.data["server.key"]' > "certs/${TERMINAL_PROXY_TEST}.key"
+    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - |
       go build -ldflags '-w -s' -o data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} ./cmd/cli
       jf s --licenses data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} --repo-path ${ARTIFACTORY_SERVER_BINARY_REPO}
