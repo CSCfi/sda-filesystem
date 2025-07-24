@@ -29,6 +29,8 @@ const SDApply string = "SD-Apply"
 const SDConnect string = "SD-Connect"
 const Findata string = "Findata"
 
+var Port string // Defined at build time if binary is for older Ubuntu
+
 var ai = apiInfo{
 	hi: httpInfo{
 		requestTimeout: 60,
@@ -154,29 +156,36 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 
 // Setup reads the necessary environment varibles needed for requests,
 // generates key pair for vault, and initialises s3 client.
-// The parameter `files` is empty if the program does not need mTLS enabled.
-// Otherwise `files` contains all the files from the `certs` directory.
+// `files` contains all the files from the `certs` directory.
 func Setup(files ...FileReader) error {
 	var err error
 	ai.token, err = GetEnv("SDS_ACCESS_TOKEN", false)
 	if err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
-
-	ai.proxy = ""
-	config, err := GetEnv("CONFIG_ENDPOINT", true)
+	proxy, err := GetEnv("PROXY_URL", true)
 	if err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
+
+	var config string
+	if Port != "" {
+		proxyURL, _ := url.ParseRequestURI(proxy)
+		proxyHost := proxyURL.Hostname()
+		proxyURL.Host = fmt.Sprintf("%s:%s", proxyHost, Port)
+		proxy = proxyURL.String()
+
+		config = proxy + "/static/configuration.json"
+	} else if config, err = GetEnv("CONFIG_ENDPOINT", true); err != nil {
+		return fmt.Errorf("required environment variables missing: %w", err)
+	}
+
+	ai.proxy = "" // So that GUI refresh works during development
 	// This needs to be called first before any other http requests
 	if err = getAPIEndpoints(config); err != nil {
 		return fmt.Errorf("failed to get static configuration.json file: %w", err)
 	}
-
-	ai.proxy, err = GetEnv("PROXY_URL", true)
-	if err != nil {
-		return fmt.Errorf("required environment variables missing: %w", err)
-	}
+	ai.proxy = proxy
 
 	downloadCache, err = cache.NewRistrettoCache()
 	if err != nil {

@@ -262,7 +262,7 @@ func TestSetup(t *testing.T) {
 			t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
 		}
 		if path != "config_url" {
-			return fmt.Errorf("Incorrect path \nExpected=config-url\nReceived=%s", path)
+			return fmt.Errorf("Incorrect path \nExpected=config_url\nReceived=%s", path)
 		}
 
 		switch v := ret.(type) {
@@ -297,6 +297,103 @@ func TestSetup(t *testing.T) {
 	}
 	if ai.proxy != "test_url" {
 		t.Errorf("Proxy has incorrect value\nExpected=test_url\nReceived=%s", ai.proxy)
+	}
+	if ai.token != "test_token" {
+		t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
+	}
+	if ai.hi.s3Timeout != 18 {
+		t.Errorf("S3 timeout has incorrect value\nExpected=18\nReceived=%v", ai.hi.s3Timeout)
+	}
+	if !reflect.DeepEqual(ai.hi.endpoints, testConfig) {
+		t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.s3Timeout)
+	}
+	if downloadCache != newCache {
+		t.Errorf("downloadCache does not point to new cache")
+	}
+	publicKey := keys.DerivePublicKey(ai.vi.privateKey)
+	publicKey64 := base64.StdEncoding.EncodeToString(publicKey[:])
+	if publicKey64 != ai.vi.publicKey {
+		t.Errorf("Public key has incorrect value\nExpected=%v\nReceived=%v", publicKey, ai.vi.publicKey)
+	}
+}
+
+func TestSetup_Port(t *testing.T) {
+	origGetEnv := GetEnv
+	origMakeRequest := makeRequest
+	origNewRistretto := cache.NewRistrettoCache
+	origLoadCertificates := loadCertificates
+	origInitialiseS3Client := initialiseS3Client
+	origProxy := ai.proxy
+	origToken := ai.token
+	origS3Timeout := ai.hi.s3Timeout
+	defer func() {
+		GetEnv = origGetEnv
+		makeRequest = origMakeRequest
+		cache.NewRistrettoCache = origNewRistretto
+		loadCertificates = origLoadCertificates
+		initialiseS3Client = origInitialiseS3Client
+		ai.proxy = origProxy
+		ai.token = origToken
+		ai.hi.s3Timeout = origS3Timeout
+		Port = ""
+	}()
+
+	ai.hi.endpoints = apiEndpoints{}
+
+	GetEnv = func(name string, verifyURL bool) (string, error) {
+		switch name {
+		case "PROXY_URL":
+			return "http://localhost:80", nil
+		case "SDS_ACCESS_TOKEN":
+			return "test_token", nil
+		case "CONFIG_ENDPOINT":
+			return "config_url", nil
+		default:
+			return "", fmt.Errorf("unknown env %s", name)
+		}
+	}
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		if ai.proxy != "" {
+			t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
+		}
+		expectedPath := "http://localhost:8081/static/configuration.json"
+		if path != expectedPath {
+			return fmt.Errorf("Incorrect path \nExpected=%s\nReceived=%s", expectedPath, path)
+		}
+
+		switch v := ret.(type) {
+		case *configResponse:
+			v.Timeouts.S3 = 13
+			v.Endpoints = testConfig
+
+			return nil
+		default:
+			return fmt.Errorf("ret has incorrect type %v, expected *configResponse", reflect.TypeOf(v))
+		}
+	}
+	newCache := &cache.Ristretto{Cacheable: &mockCache{keys: make(map[string][]byte)}}
+	cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
+		return newCache, nil
+	}
+	mockFiles := MockReader{Files: map[string][]byte{"filename": {4, 78, 95, 90}}}
+	loadCertificates = func(certFiles []FileReader) error {
+		if !reflect.DeepEqual(certFiles[0], mockFiles) {
+			return fmt.Errorf("loadCertificates() received invalid argument")
+		}
+
+		return nil
+	}
+	initialiseS3Client = func() error {
+		return nil
+	}
+
+	Port = "8081"
+	err := Setup(mockFiles)
+	if err != nil {
+		t.Fatalf("Function returned error: %s", err.Error())
+	}
+	if ai.proxy != "http://localhost:8081" {
+		t.Errorf("Proxy has incorrect value\nExpected=http://localhost:8081\nReceived=%s", ai.proxy)
 	}
 	if ai.token != "test_token" {
 		t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
