@@ -9,6 +9,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- update Github workflows
+- update CI to use `golanci-lint` v2 (#31)
 - (users) the two CLI binaries are combined into one CLI with subcommands `import` and `export`
 - CI will release one CLI binary and two GUI binaries, one for Ubuntu 24 and one for Ubuntu 22
 
