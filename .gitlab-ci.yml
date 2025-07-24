@@ -140,12 +140,12 @@ build-artifacts:
       go build -ldflags '-w -s' -o data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} ./cmd/cli
       jf s --licenses data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} --repo-path ${ARTIFACTORY_SERVER_BINARY_REPO}
       jf rt u data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel}
-      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/
+      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/
     - |
       go build -ldflags '-w -s -X sda-filesystem/internal/api.Port=8283' -o data-gateway-cli-22-amd64-${CI_COMMIT_TAG:-devel} ./cmd/cli
       jf s --licenses data-gateway-cli-22-amd64-${CI_COMMIT_TAG:-devel} --repo-path ${ARTIFACTORY_SERVER_BINARY_REPO}
       jf rt u data-gateway-cli-22-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG:-devel}
-      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/
+      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/
     - |
       go install github.com/wailsapp/wails/v2/cmd/wails@latest
       /usr/local/go/bin/wails doctor
@@ -156,7 +156,7 @@ build-artifacts:
       mv build/bin/data-gateway data-gateway-gui-amd64-${CI_COMMIT_TAG:-devel}
       jf s --licenses data-gateway-gui-amd64-${CI_COMMIT_TAG:-devel} --repo-path ${ARTIFACTORY_SERVER_BINARY_REPO}
       jf rt u data-gateway-gui-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG:-devel}
-      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/
+      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/
     - |
       cd cmd/gui
       /usr/local/go/bin/wails build -clean -upx -trimpath -s -ldflags "-X sda-filesystem/internal/api.Port=8283"
@@ -164,7 +164,7 @@ build-artifacts:
       mv build/bin/data-gateway data-gateway-gui-22-amd64-${CI_COMMIT_TAG:-devel}
       jf s --licenses data-gateway-gui-22-amd64-${CI_COMMIT_TAG:-devel} --repo-path ${ARTIFACTORY_SERVER_BINARY_REPO}
       jf rt u data-gateway-gui-22-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG:-devel}
-      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/
+      jf rt cp $ARTIFACTORY_SERVER_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG:-devel} $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/
 
 release:
   extends: .automated-release
