@@ -44,7 +44,7 @@ jobs:
       - name: Test
         run: |
           echo "Test all packages except Wails"
-          CI=true go test -tags=fuse3 -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v frontend)
+          CI=true go test -tags=fuse3 -v -coverpkg=./... -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v frontend)
 
       - name: Coveralls
         uses: coverallsapp/github-action@v2
