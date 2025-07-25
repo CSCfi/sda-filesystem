@@ -7,6 +7,14 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- client certificates are not fetched from Vault but from Gitlab secure files
+
+### Fixed
+
+- the destination to where the binaries are copied under `desktop/`
+
 ## [2025.7.3] - 2025-07-24
 
 ### Changed
