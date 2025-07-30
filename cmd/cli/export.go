@@ -9,7 +9,8 @@ import (
 	"slices"
 )
 
-var bucket, filename string
+var exportPrefix string
+var selection []string
 var override bool
 
 func init() {
@@ -40,8 +41,8 @@ func exportSetup(args []string) (int, error) {
 		set.PrintDefaults()
 
 		fmt.Println("Examples:")
-		fmt.Println(" ", os.Args[0], "export testbucket path/to/file")
-		fmt.Println(" ", os.Args[0], "export -override testbucket/subfolder path/to/another/file")
+		fmt.Println(" ", os.Args[0], "export testbucket path/to/file/or/folder")
+		fmt.Println(" ", os.Args[0], "export -override testbucket/subfolder path/to/file/or/folder path/to/another/file")
 	}
 
 	// We want the non-flag arguments to be first
@@ -54,14 +55,14 @@ func exportSetup(args []string) (int, error) {
 		return arg[0] == '-'
 	})
 
-	if len(args) != 2 {
+	if len(args) < 2 {
 		set.Usage()
 
 		return 2, nil
 	}
 
-	bucket = args[0]
-	filename = args[1]
+	exportPrefix = args[0]
+	selection = args[1:]
 
 	if ok := airlock.ExportPossible(); !ok {
 		return 0, fmt.Errorf("you are not allowed to export files")
@@ -71,13 +72,23 @@ func exportSetup(args []string) (int, error) {
 }
 
 func exportHandler() (int, error) {
-	if !override {
-		if err := airlock.CheckObjectExistence(filename, bucket, os.Stdin); err != nil {
+	set, err := airlock.WalkDirs(selection, nil, exportPrefix)
+	if err != nil {
+		return 0, fmt.Errorf("failed to select files for export: %w", err)
+	}
+
+	created, err := airlock.ValidateBucket(set.Bucket)
+	if err != nil {
+		return 0, fmt.Errorf("cannot use bucket %s: %w", set.Bucket, err)
+	}
+
+	if !created && !override {
+		if err := airlock.CheckObjectExistences(&set, os.Stdin); err != nil {
 			return 0, err
 		}
 	}
 
-	if err := airlock.Upload(filename, bucket); err != nil {
+	if err := airlock.Upload(set); err != nil {
 		return 0, err
 	}
 

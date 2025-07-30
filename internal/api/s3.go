@@ -178,13 +178,18 @@ var initialiseS3Client = func() error {
 	return nil
 }
 
-func getContext(rep string, head bool) context.Context {
+func getContext(rep string, head bool, parent ...context.Context) context.Context {
 	endpoint := ai.hi.endpoints.S3.Default
 	if head {
 		endpoint = ai.hi.endpoints.S3.Head
 	}
 
-	return context.WithValue(context.Background(), EndpointKey{}, endpoint+strings.ToLower(rep))
+	ctx := context.Background()
+	if len(parent) > 0 {
+		ctx = parent[0]
+	}
+
+	return context.WithValue(ctx, EndpointKey{}, endpoint+strings.ToLower(rep))
 }
 
 // BucketExists checks whether or not bucket already exists in S3 storage
@@ -206,7 +211,7 @@ var BucketExists = func(rep, bucket string) (bool, error) {
 			err = re.Err
 		}
 
-		return true, fmt.Errorf("could not use bucket %s: %w", bucket, err)
+		return true, fmt.Errorf("could not determine if bucket %s exists: %w", bucket, err)
 	}
 
 	logs.Infof("Bucket %s exists", bucket)
@@ -315,7 +320,7 @@ var GetSegmentedObjects = func(rep, bucket string) ([]Metadata, error) {
 		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, ToPrint(rep), err)
 	}
 
-	logs.Debugf("Retrieved objects for container %s in %s", bucket, ToPrint(rep))
+	logs.Debugf("Retrieved objects from bucket %s in %s", bucket, ToPrint(rep))
 
 	return meta, nil
 }
@@ -482,14 +487,14 @@ func getDataChunk(
 // UploadObject uploads object to bucket. Object is uploaded in segments of
 // size `segmentSize`. Upload Manager decides if the object is small enough
 // to use PutObject, or if multipart upload is necessary.
-var UploadObject = func(body io.Reader, rep, bucket, object string, segmentSize int64) error {
+var UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
 	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
 		u.PartSize = segmentSize
 		u.LeavePartsOnError = false
 		u.Concurrency = 1
 	})
 
-	ctx := getContext(rep, false)
+	ctx = getContext(rep, false, ctx)
 
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		ContentType: aws.String("application/octet-stream"),

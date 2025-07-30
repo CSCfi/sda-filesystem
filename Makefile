@@ -132,7 +132,8 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,S3_HOST,internal-urls,test-allas) \
 	$(call write_secret,KRAKEND_ADDR,internal-urls,test-krakend-backend) \
 	$(call write_secret,VALIDATOR_ADDR,internal-urls,test-krakend-backend) \
-	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta)
+	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta) \
+	$(call write_secret,CLAMAV_MIRROR,internal-urls,test-clamav)
 	@set -a; source dev-tools/compose/.env; printf "BACKEND_HOST=$${KRAKEND_ADDR#*://}\n" >> dev-tools/compose/.env
 	@printf "### VAULT SECRETS END ###\n" >> dev-tools/compose/.env
 	@echo "Secrets written successfully"

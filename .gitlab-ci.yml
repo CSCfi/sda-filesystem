@@ -109,7 +109,7 @@ test:
     - pnpm run --dir frontend build
     - go mod tidy && go mod vendor
   script:
-    - CI=true go test -tags=fuse3 -v -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v frontend)
+    - CI=true go test -race -tags=fuse3 -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v -e frontend -e test)
 
 build-artifacts:
   stage: build
