@@ -2,6 +2,7 @@ package airlock
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
@@ -60,6 +63,322 @@ func TestExportPossible(t *testing.T) {
 	}
 }
 
+func TestWalkDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	var tests = []struct {
+		testname, prefix, expectedBucket                   string
+		selection, objects, expectedFiles, expectedObjects []string
+	}{
+		{
+			"OK_1", "bucket/subfolder", "bucket",
+			[]string{tmpDir + "/file.txt", tmpDir + "/dir/../dir/"},
+			[]string{"old-file.txt.c4gh", "hello.txt.c4gh", "another-file.txt.c4gh"},
+			[]string{
+				tmpDir + "/file.txt", tmpDir + "/dir/file2.txt", tmpDir + "/dir/subdir/file.txt",
+				tmpDir + "/dir/subdir/another-file.txt", tmpDir + "/dir/subdir2/event.log",
+				tmpDir + "/dir/subdir2/fatal.log",
+			},
+			[]string{
+				"subfolder/file.txt.c4gh", "subfolder/file2.txt.c4gh", "subfolder/subdir/file.txt.c4gh",
+				"subfolder/subdir/another-file.txt.c4gh", "subfolder/subdir2/event.log.c4gh",
+				"subfolder/subdir2/fatal.log.c4gh",
+			},
+		},
+		{
+			"OK_2", "test-bucket", "test-bucket",
+			[]string{tmpDir + "/file.txt", tmpDir + "/run.sh", tmpDir + "/dir/subdir2"}, nil,
+			[]string{
+				tmpDir + "/file.txt", tmpDir + "/run.sh",
+				tmpDir + "/dir/subdir2/event.log", tmpDir + "/dir/subdir2/fatal.log",
+			},
+			[]string{"file.txt.c4gh", "run.sh.c4gh", "event.log.c4gh", "fatal.log.c4gh"},
+		},
+	}
+
+	if err := os.MkdirAll(tmpDir+"/dir/subdir", 0755); err != nil {
+		t.Fatalf("Failed to create folder: %s", err.Error())
+	}
+	if err := os.MkdirAll(tmpDir+"/dir/subdir2", 0755); err != nil {
+		t.Fatalf("Failed to create folder: %s", err.Error())
+	}
+
+	content := []byte("hello world\n")
+	err := os.WriteFile(tmpDir+"/file.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/run.sh", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/file2.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir/file.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir/another-file.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir2/event.log", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir2/fatal.log", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.Symlink(tmpDir+"/file.txt", tmpDir+"/file-link.txt")
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %s", err.Error())
+	}
+	err = os.Symlink(tmpDir+"/file.txt", tmpDir+"/dir/subdir/file-link.txt")
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %s", err.Error())
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			set, err := WalkDirs(tt.selection, tt.objects, tt.prefix)
+
+			if err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else {
+				slices.Sort(set.Objects)
+				slices.Sort(set.Files)
+				slices.Sort(tt.expectedFiles)
+				slices.Sort(tt.expectedObjects)
+
+				switch {
+				case set.Bucket != tt.expectedBucket:
+					t.Errorf("Received incorrect bucket\nExpected=%s\nReceived=%s", tt.expectedBucket, set.Bucket)
+				case !reflect.DeepEqual(set.Files, tt.expectedFiles):
+					t.Errorf("Received incorrect files\nExpected=%q\nReceived=%q", tt.expectedFiles, set.Files)
+				case !reflect.DeepEqual(set.Objects, tt.expectedObjects):
+					t.Errorf("Received incorrect objects\nExpected=%q\nReceived=%q", tt.expectedObjects, set.Objects)
+				}
+			}
+		})
+	}
+}
+
+func TestWalkDirs_Error(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	var tests = []struct {
+		testname, newFilename, errStr string
+		selection                     []string
+	}{
+		{
+			"FAIL_1", tmpDir + "/dir/file.txt",
+			"objects derived from the selection of files are not unique",
+			[]string{tmpDir + "/file.txt", tmpDir + "/dir"},
+		},
+		{
+			"FAIL_2", tmpDir + "/dir/subdir/hello.txt",
+			"you have already selected files with similar object names",
+			[]string{tmpDir + "/dir/subdir"},
+		},
+		{
+			"FAIL_3", "",
+			"lstat " + tmpDir + "/dir2/file.txt: no such file or directory",
+			[]string{tmpDir + "/file.txt", tmpDir + "/dir/subdir2", tmpDir + "/dir2/file.txt"},
+		},
+	}
+
+	if err := os.MkdirAll(tmpDir+"/dir/subdir", 0755); err != nil {
+		t.Fatalf("Failed to create folder: %s", err.Error())
+	}
+	if err := os.MkdirAll(tmpDir+"/dir/subdir2", 0755); err != nil {
+		t.Fatalf("Failed to create folder: %s", err.Error())
+	}
+
+	content := []byte("hello world\n")
+	err := os.WriteFile(tmpDir+"/file.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/run.sh", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/file2.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir/file.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir/another-file.txt", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir2/event.log", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.WriteFile(tmpDir+"/dir/subdir2/fatal.log", content, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create file: %s", err.Error())
+	}
+	err = os.Symlink(tmpDir+"/file.txt", tmpDir+"/file-link.txt")
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %s", err.Error())
+	}
+	err = os.Symlink(tmpDir+"/file.txt", tmpDir+"/dir/subdir/file-link.txt")
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %s", err.Error())
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			if tt.newFilename != "" {
+				err = os.WriteFile(tt.newFilename, []byte("data"), 0600)
+				if err != nil {
+					t.Fatalf("Failed to create file: %s", err.Error())
+				}
+				t.Cleanup(func() { os.Remove(tt.newFilename) })
+			}
+
+			existingObjects := []string{"old-file.txt.c4gh", "hello.txt.c4gh", "another-file.txt.c4gh"}
+			_, err := WalkDirs(tt.selection, existingObjects, "test-bucket")
+
+			if err == nil {
+				t.Error("Function did not return error")
+			} else if err.Error() != tt.errStr {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			}
+		})
+	}
+}
+
+func TestValidateBucket(t *testing.T) {
+	var tests = []struct {
+		testname, bucket string
+		createBucket     bool
+	}{
+		{"OK_1", "i-am-a-bucket-that-has-a-long-long-long-name", true},
+		{"OK_2", "42istheanswertoeverything", false},
+		{"OK_3", "h3ll0-w0r1d", true},
+	}
+
+	origBucketExists := api.BucketExists
+	origCreateBucket := api.CreateBucket
+	defer func() {
+		api.BucketExists = origBucketExists
+		api.CreateBucket = origCreateBucket
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			api.BucketExists = func(rep, bucket string) (bool, error) {
+				if rep != api.SDConnect {
+					t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
+				}
+				if bucket != tt.bucket {
+					t.Errorf("api.BucketExists() received incorrect bucket. Expected=%s, received=%s", tt.bucket, bucket)
+				}
+
+				return !tt.createBucket, nil
+			}
+			createBucketCalled := false
+			api.CreateBucket = func(rep, bucket string) error {
+				if rep != api.SDConnect {
+					t.Errorf("api.CreateBucket() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
+				}
+				if bucket != tt.bucket {
+					t.Errorf("api.CreateBucket() received incorrect bucket. Expected=%s, received=%s", tt.bucket, bucket)
+				}
+				if !tt.createBucket {
+					t.Errorf("api.CreateBucket() should not have been called for bucket %s", bucket)
+				}
+				createBucketCalled = true
+
+				return nil
+			}
+
+			created, err := ValidateBucket(tt.bucket)
+			if err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			}
+			if created != tt.createBucket {
+				t.Errorf("Function returned incorrect boolean value for bucket %s\nExpected=%t\nReceived=%t", tt.bucket, tt.createBucket, created)
+			}
+			if tt.createBucket && !createBucketCalled {
+				t.Errorf("api.CreateBucket() was not called for bucket %s", tt.bucket)
+			}
+		})
+	}
+}
+
+func TestValidateBucket_Error(t *testing.T) {
+	var tests = []struct {
+		testname, bucket, errStr string
+		createBucket             bool
+		existsErr, createErr     error
+	}{
+		{
+			"FAIL_1",
+			"i-am-a-bucket-that-has-a-long-long-long-long-long-long-long-name",
+			"bucket name should be between 3 and 63 characters long",
+			false, nil, nil,
+		},
+		{
+			"FAIL_2", "hi",
+			"bucket name should be between 3 and 63 characters long",
+			false, nil, nil,
+		},
+		{
+			"FAIL_3", "no spaces allowed",
+			"bucket name should only contain Latin letters (a-z), numbers (0-9) and hyphens (-)",
+			false, nil, nil,
+		},
+		{
+			"FAIL_4", "-bucket",
+			"bucket name should start with a lowercase letter or a number",
+			false, nil, nil,
+		},
+		{
+			"FAIL_5", "test-bucket",
+			errExpected.Error(), false, errExpected, nil,
+		},
+		{
+			"FAIL_6", "test-bucket",
+			errExpected.Error(), true, nil, errExpected,
+		},
+	}
+
+	origBucketExists := api.BucketExists
+	origCreateBucket := api.CreateBucket
+	defer func() {
+		api.BucketExists = origBucketExists
+		api.CreateBucket = origCreateBucket
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			api.BucketExists = func(rep, bucket string) (bool, error) {
+				return !tt.createBucket, tt.existsErr
+			}
+			api.CreateBucket = func(rep, bucket string) error {
+				return tt.createErr
+			}
+
+			_, err := ValidateBucket(tt.bucket)
+			if err == nil {
+				t.Error("Function did not return error")
+			} else if err.Error() != tt.errStr {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			}
+		})
+	}
+}
+
 func TestGetFileDetails(t *testing.T) {
 	var tests = []struct {
 		testname, message string
@@ -69,20 +388,17 @@ func TestGetFileDetails(t *testing.T) {
 		{"OK_2", "another_message", 167},
 	}
 
+	tmpDir := t.TempDir()
+
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			file, err := os.CreateTemp("", "file")
+			filename := tmpDir + "/file.txt"
+			err := os.WriteFile(filename, []byte(tt.message), 0600)
 			if err != nil {
 				t.Fatalf("Failed to create file: %s", err.Error())
 			}
-			t.Cleanup(func() { os.RemoveAll(file.Name()) })
 
-			if _, err := file.WriteString(tt.message); err != nil {
-				t.Fatalf("Failed to write to file: %s", err.Error())
-			}
-			file.Close()
-
-			rc, bytes, err := getFileDetails(file.Name())
+			rc, bytes, err := getFileDetails(filename)
 			if err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			}
@@ -106,48 +422,27 @@ func TestGetFileDetails(t *testing.T) {
 }
 
 func TestFileDetails_NoFile(t *testing.T) {
-	file, err := os.CreateTemp("", "file")
-	if err != nil {
-		t.Fatalf("Failed to create file: %s", err.Error())
-	}
-	os.RemoveAll(file.Name())
-
-	errStr := fmt.Sprintf("open %s: no such file or directory", file.Name())
-	if _, _, err := getFileDetails(file.Name()); err == nil {
+	tmpDir := t.TempDir()
+	errStr := fmt.Sprintf("open %s/file.txt: no such file or directory", tmpDir)
+	if _, _, err := getFileDetails(tmpDir + "/file.txt"); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
-func TestCheckObjectExistence_NoBucket(t *testing.T) {
-	origBucketExists := api.BucketExists
-	defer func() { api.BucketExists = origBucketExists }()
-
-	api.BucketExists = func(rep, bucket string) (bool, error) {
-		if rep != api.SDConnect {
-			t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
-		}
-		if bucket != "bucket" {
-			t.Errorf("api.BucketExists() received incorrect bucket. Expected=bucket, received=%s", bucket)
-		}
-
-		return false, nil
-	}
-
-	err := CheckObjectExistence("file.txt", "bucket/subfolder/another-dir", strings.NewReader(""))
-	if err != nil {
-		t.Errorf("Function returned unexpected error: %s", err.Error())
-	}
-}
-
-func TestCheckObjectExistence_UserInput(t *testing.T) {
+func TestCheckObjectExistences_UserInput(t *testing.T) {
 	var tests = []struct {
 		testname, userInput, errStr string
-		objects                     []api.Metadata
+		inputObjects                []string
+		existingObjects             []api.Metadata
 	}{
 		{
 			"OK_1", "", "",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+				"file.out.c4gh",
+			},
 			[]api.Metadata{
 				{Name: "some-object"},
 				{Name: "subfolder/another-object"},
@@ -155,23 +450,33 @@ func TestCheckObjectExistence_UserInput(t *testing.T) {
 		},
 		{
 			"OK_2", "yes\n", "",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+			},
 			[]api.Metadata{
 				{Name: "some-object"},
-				{Name: "subfolder/dir/file.txt"},
 				{Name: "subfolder/another-dir/file.txt.c4gh"},
 				{Name: "subfolder/another-object"},
+				{Name: "subfolder/dir/file.txt"},
 			},
 		},
 		{
 			"OK_3", "y\nno\n", "",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+				"some-object",
+			},
 			[]api.Metadata{
-				{Name: "subfolder/another-dir/file.txt.c4gh"},
 				{Name: "some-object"},
+				{Name: "subfolder/another-dir/file.txt.c4gh"},
 				{Name: "subfolder/another-object"},
 			},
 		},
 		{
 			"FAIL_NO", "ye\nno\n", "not permitted to override data",
+			[]string{
+				"some-object",
+			},
 			[]api.Metadata{
 				{Name: "some-object"},
 				{Name: "subfolder/another-dir/file.txt.c4gh"},
@@ -179,6 +484,9 @@ func TestCheckObjectExistence_UserInput(t *testing.T) {
 		},
 		{
 			"FAIL_INPUT", "blaa", "failed to read user input: EOF",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+			},
 			[]api.Metadata{
 				{Name: "subfolder/another-dir/file.txt.c4gh"},
 			},
@@ -216,7 +524,7 @@ func TestCheckObjectExistence_UserInput(t *testing.T) {
 					t.Errorf("api.GetObjects() should not have received prefix")
 				}
 
-				return tt.objects, nil
+				return tt.existingObjects, nil
 			}
 
 			// Ignore prints to stdout
@@ -224,7 +532,8 @@ func TestCheckObjectExistence_UserInput(t *testing.T) {
 			sout := os.Stdout
 			os.Stdout = null
 
-			err := CheckObjectExistence("file.txt", "bucket/subfolder/another-dir", strings.NewReader(tt.userInput))
+			set := UploadSet{Bucket: "bucket", Objects: tt.inputObjects, Exists: make([]bool, len(tt.inputObjects))}
+			err := CheckObjectExistences(&set, strings.NewReader(tt.userInput))
 
 			os.Stdout = sout
 			null.Close()
@@ -243,17 +552,51 @@ func TestCheckObjectExistence_UserInput(t *testing.T) {
 	}
 }
 
-func TestCheckObjectExistence_Error(t *testing.T) {
+func TestCheckObjectExistences_NilReader(t *testing.T) {
 	var tests = []struct {
-		testname, errStr     string
-		bucketErr, objectErr error
+		testname        string
+		inputObjects    []string
+		existingObjects []api.Metadata
+		expectedExists  []bool
 	}{
 		{
-			"FAIL_1", errExpected.Error(), errExpected, nil,
+			"OK_1",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+				"file.out.c4gh",
+			},
+			[]api.Metadata{
+				{Name: "some-object"},
+				{Name: "subfolder/another-object"},
+			},
+			[]bool{false, false},
 		},
 		{
-			"FAIL_2", "could not determine if export will override data: " + errExpected.Error(),
-			nil, errExpected,
+			"OK_2",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+			},
+			[]api.Metadata{
+				{Name: "some-object"},
+				{Name: "subfolder/another-dir/file.txt.c4gh"},
+				{Name: "subfolder/another-object"},
+				{Name: "subfolder/dir/file.txt"},
+			},
+			[]bool{true},
+		},
+		{
+			"OK_3",
+			[]string{
+				"subfolder/another-dir/file.txt.c4gh",
+				"some-object",
+				"file.txt",
+			},
+			[]api.Metadata{
+				{Name: "some-object"},
+				{Name: "subfolder/another-dir/file.txt.c4gh"},
+				{Name: "subfolder/another-object"},
+			},
+			[]bool{true, true, false},
 		},
 	}
 
@@ -264,52 +607,107 @@ func TestCheckObjectExistence_Error(t *testing.T) {
 		api.GetObjects = origGetObjects
 	}()
 
+	api.BucketExists = func(rep, bucket string) (bool, error) {
+		if rep != api.SDConnect {
+			t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
+		}
+		if bucket != "bucket" {
+			t.Errorf("api.BucketExists() received incorrect bucket. Expected=bucket, received=%s", bucket)
+		}
+
+		return true, nil
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.BucketExists = func(rep, bucket string) (bool, error) {
-				return true, tt.bucketErr
-			}
 			api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
-				return nil, tt.objectErr
+				if rep != api.SDConnect {
+					t.Errorf("api.GetObjects() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
+				}
+				if bucket != "bucket" {
+					t.Errorf("api.GetObjects() received incorrect bucket. Expected=bucket, received=%s", bucket)
+				}
+				if len(prefix) > 0 {
+					t.Errorf("api.GetObjects() should not have received prefix")
+				}
+
+				return tt.existingObjects, nil
 			}
 
-			err := CheckObjectExistence("file.txt", "bucket/subfolder/another-dir", strings.NewReader(""))
-			if err == nil {
-				t.Error("Function did not return error")
-			} else if err.Error() != tt.errStr {
-				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			// Ignore prints to stdout
+			null, _ := os.Open(os.DevNull)
+			sout := os.Stdout
+			os.Stdout = null
+
+			set := UploadSet{Bucket: "bucket", Objects: tt.inputObjects, Exists: make([]bool, len(tt.inputObjects))}
+			err := CheckObjectExistences(&set, nil)
+
+			os.Stdout = sout
+			null.Close()
+
+			if err != nil {
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			} else if !reflect.DeepEqual(tt.expectedExists, set.Exists) {
+				t.Errorf("Set has incorrect values for 'exists' field\nExpected=%v\nReceived=%v", tt.expectedExists, set.Exists)
 			}
 		})
 	}
 }
 
+func TestCheckObjectExistence_Error(t *testing.T) {
+	origBucketExists := api.BucketExists
+	origGetObjects := api.GetObjects
+	defer func() {
+		api.BucketExists = origBucketExists
+		api.GetObjects = origGetObjects
+	}()
+
+	api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+		return nil, errExpected
+	}
+
+	errStr := "could not determine if export will overwrite data: " + errExpected.Error()
+	set := UploadSet{Bucket: "bucket", Objects: []string{"file.txt.c4gh"}, Exists: make([]bool, 1)}
+	err := CheckObjectExistences(&set, strings.NewReader(""))
+	if err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
 func TestUpload(t *testing.T) {
 	var tests = []struct {
-		testname, projectType, bucket, filename, object string
-		createBucket                                    bool
-		fileSize, segmentSize                           int64
+		testname, projectType, bucket string
+		files, objects                []string
+		createBucket                  bool
+		fileSize, segmentSize         int64
 	}{
 		{
-			"OK_1", "default", "test-bucket", "test-file.txt", "test-file.txt.c4gh",
+			"OK_1", "default", "test-bucket",
+			[]string{"test-file.txt"}, []string{"test-file.txt.c4gh"},
 			false, 9463686, 1 << 27,
 		},
 		{
-			"OK_2", "default", "test-bucket/subfolder", "test-file.txt", "subfolder/test-file.txt.c4gh",
+			"OK_2", "default", "test-bucket",
+			[]string{"test-file.txt", "subfolder/test-file.txt"},
+			[]string{"test-file.txt.c4gh", "subfolder/test-file.txt.c4gh"},
 			true, (1 << 40) * 1.5, 1 << 28,
 		},
 		{
-			"OK_3", "findata", "test-bucket", "test-file.txt", "test-file.txt.c4gh",
+			"OK_3", "findata", "test-bucket",
+			[]string{"test-file.txt"}, []string{"test-file.txt.c4gh"},
 			false, 9463686, 1 << 27,
 		},
 		{
-			"OK_4", "findata", "test-bucket/subfolder", "test-file.txt", "subfolder/test-file.txt.c4gh",
+			"OK_4", "findata", "test-bucket",
+			[]string{"test-file.txt", "subfolder/test-file.txt", "another-file.txt"},
+			[]string{"test-file.txt.c4gh", "subfolder/test-file.txt.c4gh", "another-file.txt.c4gh"},
 			true, (1 << 40) * 1.5, 1 << 28,
 		},
 	}
 
 	origGetPublicKey := api.GetPublicKey
-	origBucketExists := api.BucketExists
-	origCreateBucket := api.CreateBucket
 	origGetFileDetails := getFileDetails
 	origProjectName := api.GetProjectName
 	origGetProjectType := api.GetProjectType
@@ -319,8 +717,6 @@ func TestUpload(t *testing.T) {
 	origPublicKey := ai.publicKey
 	defer func() {
 		api.GetPublicKey = origGetPublicKey
-		api.BucketExists = origBucketExists
-		api.CreateBucket = origCreateBucket
 		getFileDetails = origGetFileDetails
 		api.GetProjectName = origProjectName
 		api.GetProjectType = origGetProjectType
@@ -340,7 +736,12 @@ func TestUpload(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Could not generate key pair: %s", err.Error())
 			}
-			content := test.GenerateRandomText(100)
+			var content sync.Map
+			var receivedContent sync.Map
+			for i := range tt.objects {
+				content.Store(tt.objects[i], test.GenerateRandomText(100))
+				receivedContent.Store(tt.objects[i], make([]byte, 0))
+			}
 
 			api.GetPublicKey = func() ([32]byte, error) {
 				return publicKey, nil
@@ -348,55 +749,40 @@ func TestUpload(t *testing.T) {
 			api.GetProjectType = func() string {
 				return tt.projectType
 			}
-			api.BucketExists = func(rep, bucket string) (bool, error) {
-				if rep != api.SDConnect {
-					t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
-				}
-				if bucket != "test-bucket" {
-					t.Errorf("api.BucketExists() received incorrect bucket. Expected=test-bucket, received=%s", bucket)
-				}
-
-				return !tt.createBucket, nil
-			}
-			api.CreateBucket = func(rep, bucket string) error {
-				if rep != api.SDConnect {
-					t.Errorf("api.CreateBucket() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
-				}
-				if bucket != "test-bucket" {
-					t.Errorf("api.CreateBucket() received incorrect bucket. Expected=test-bucket, received=%s", bucket)
-				}
-
-				return nil
-			}
 			getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
-				rc := io.NopCloser(bytes.NewReader(content))
+				idx := slices.Index(tt.files, filename)
+				if idx < 0 {
+					return nil, 0, fmt.Errorf("getFileDetails() received invalid file name %s, expectd to be one of %v", filename, tt.files)
+				}
+				obj := tt.objects[idx]
+				value, _ := content.Load(obj)
+				rc := io.NopCloser(bytes.NewReader(value.([]byte)))
 
 				return rc, tt.fileSize, nil
 			}
-
-			receivedContent := make([]byte, 0)
 			api.PostHeader = func(header []byte, bucket, object string) error {
 				if bucket != "test-bucket" {
 					t.Errorf("api.PostHeader() received incorrect bucket. Expected=test-bucket, received=%s", bucket)
 				}
-				if object != tt.object {
-					t.Errorf("api.PostHeader() received incorrect object. Expected=%s, received=%s", tt.object, object)
+				if !slices.Contains(tt.objects, object) {
+					t.Errorf("api.PostHeader() received incorrect object %s, expected to be one of %q", object, tt.objects)
 				}
-				receivedContent = append(receivedContent, header...)
+				value, _ := receivedContent.Load(object)
+				receivedContent.Store(object, append(value.([]byte), header...))
 
 				return nil
 			}
 			//nolint:nestif
 			if tt.projectType == "default" {
-				api.UploadObject = func(body io.Reader, rep, bucket, object string, segmentSize int64) error {
+				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
 					if rep != api.SDConnect {
 						t.Errorf("api.UploadObject() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 					}
 					if bucket != "test-bucket" {
 						t.Errorf("api.UploadObject() received incorrect bucket. Expected=test-bucket, received=%s", bucket)
 					}
-					if object != tt.object {
-						t.Errorf("api.UploadObject() received incorrect object. Expected=%s, received=%s", tt.object, object)
+					if !slices.Contains(tt.objects, object) {
+						t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
 					}
 					if segmentSize != tt.segmentSize {
 						t.Errorf("api.UploadObject() received incorrect segment size. Expected=%d, received=%d", tt.segmentSize, segmentSize)
@@ -406,35 +792,41 @@ func TestUpload(t *testing.T) {
 					if err != nil {
 						return fmt.Errorf("failed to read file body: %w", err)
 					}
-					receivedContent = append(receivedContent, bodyBytes...)
+					value, _ := receivedContent.Load(object)
+					receivedObjContent := append(value.([]byte), bodyBytes...)
 
-					c4ghr, err := streaming.NewCrypt4GHReader(bytes.NewReader(receivedContent), privateKey, nil)
+					value, _ = content.Load(object)
+					expectedObjContent := string(value.([]byte))
+
+					c4ghr, err := streaming.NewCrypt4GHReader(bytes.NewReader(receivedObjContent), privateKey, nil)
 					if err != nil {
 						t.Errorf("Failed to create crypt4gh reader: %s", err.Error())
 					} else if message, err := io.ReadAll(c4ghr); err != nil {
 						t.Errorf("Failed to read from encrypted file: %s", err.Error())
-					} else if string(message) != string(content) {
-						t.Errorf("Reader received incorrect message\nExpected=%s\nReceived=%s", string(content), string(message))
+					} else if string(message) != expectedObjContent {
+						t.Errorf("Reader received incorrect message for object %s\nExpected=%s\nReceived=%s", object, expectedObjContent, string(message))
 					}
 
 					return nil
 				}
 			} else {
-				api.UploadObject = func(body io.Reader, rep, bucket, object string, segmentSize int64) error {
+				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
 					switch rep {
 					case api.SDConnect:
 						if bucket != "test-bucket" {
 							t.Errorf("api.UploadObject() received incorrect %s bucket. Expected=test-bucket, received=%s", api.SDConnect, bucket)
 						}
-						if object != tt.object {
-							t.Errorf("api.UploadObject() received incorrect %s object. Expected=%s, received=%s", api.SDConnect, tt.object, object)
+						if !slices.Contains(tt.objects, object) {
+							t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
 						}
 					case api.Findata:
 						if bucket != "" {
 							t.Errorf("api.UploadObject() received incorrect %s bucket. Expected=, received=%s", api.Findata, bucket)
 						}
-						if object != "findata-project/test-bucket/"+tt.object {
-							t.Errorf("api.UploadObject() received incorrect %s object\nExpected=findata-project/test-bucket/%s\nReceived=%s", api.Findata, tt.object, object)
+						if !slices.ContainsFunc(tt.objects, func(obj string) bool {
+							return "test-bucket/"+obj == object
+						}) {
+							t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
 						}
 					default:
 						t.Fatalf("api.UploadObject() received incorrect repository %s", rep)
@@ -450,22 +842,29 @@ func TestUpload(t *testing.T) {
 					}
 
 					if rep == api.Findata {
-						if !reflect.DeepEqual(bodyBytes, content) {
-							t.Fatalf("findata reader returned incorrect body.\nExpected=%s\nReceived=%s", string(content), string(bodyBytes))
+						origObject := strings.TrimPrefix(object, "test-bucket/")
+						value, _ := content.Load(origObject)
+						expectedObjContent := string(value.([]byte))
+						if string(bodyBytes) != expectedObjContent {
+							t.Fatalf("findata reader returned incorrect body for object %s.\nExpected=%s\nReceived=%s", object, expectedObjContent, string(bodyBytes))
 						}
 
 						return nil
 					}
 
-					receivedContent = append(receivedContent, bodyBytes...)
+					value, _ := receivedContent.Load(object)
+					receivedObjContent := append(value.([]byte), bodyBytes...)
 
-					c4ghr, err := streaming.NewCrypt4GHReader(bytes.NewReader(receivedContent), privateKey, nil)
+					value, _ = content.Load(object)
+					expectedObjContent := string(value.([]byte))
+
+					c4ghr, err := streaming.NewCrypt4GHReader(bytes.NewReader(receivedObjContent), privateKey, nil)
 					if err != nil {
 						t.Fatalf("failed to create crypt4gh reader: %s", err.Error())
 					} else if message, err := io.ReadAll(c4ghr); err != nil {
 						t.Errorf("Failed to read from encrypted file: %s", err.Error())
-					} else if string(message) != string(content) {
-						t.Errorf("Reader received incorrect message\nExpected=%s\nReceived=%s", string(content), string(message))
+					} else if string(message) != expectedObjContent {
+						t.Errorf("Reader received incorrect message for object %s\nExpected=%s\nReceived=%s", object, expectedObjContent, string(message))
 					}
 
 					return nil
@@ -477,8 +876,151 @@ func TestUpload(t *testing.T) {
 				return nil
 			}
 
-			if err := Upload(tt.filename, tt.bucket); err != nil {
+			set := UploadSet{
+				Bucket:  tt.bucket,
+				Files:   tt.files,
+				Objects: tt.objects,
+			}
+			if err := Upload(set); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
+			}
+		})
+	}
+}
+
+func TestUpload_Error(t *testing.T) {
+	var tests = []struct {
+		testname, errStr, projectType string
+		fileSize                      int64
+		header                        bool
+		keyErr, uploadErr             error
+	}{
+		{
+			"FAIL_KEY", "failed to get project public key: " + errExpected.Error(), "default",
+			500, false, errExpected, nil,
+		},
+		{
+			"FAIL_UPLOAD", "upload interrupted due to errors", "default",
+			456, true, nil, errExpected,
+		},
+	}
+
+	origGetPublicKey := api.GetPublicKey
+	origGetFileDetails := getFileDetails
+	origGetProjectType := api.GetProjectType
+	origUploadAllas := uploadAllas
+	origDeleteObject := api.DeleteObject
+	origPublicKey := ai.publicKey
+	origError := logs.Error
+	origErrorf := logs.Errorf
+	defer func() {
+		api.GetPublicKey = origGetPublicKey
+		getFileDetails = origGetFileDetails
+		api.GetProjectType = origGetProjectType
+		uploadAllas = origUploadAllas
+		api.DeleteObject = origDeleteObject
+		ai.publicKey = origPublicKey
+		logs.Error = origError
+		logs.Errorf = origErrorf
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			publicKey, _, err := keys.GenerateKeyPair()
+			if err != nil {
+				t.Fatalf("Could not generate key pair: %s", err.Error())
+			}
+
+			api.GetPublicKey = func() ([32]byte, error) {
+				return publicKey, tt.keyErr
+			}
+			getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
+				rc := io.NopCloser(strings.NewReader("I am content"))
+
+				return rc, 100, nil
+			}
+			api.GetProjectType = func() string {
+				return "default"
+			}
+			uploadAllas = func(ctx context.Context, pr io.Reader, bucket, object string, segmentSize int64) error {
+				if tt.uploadErr != nil {
+					if object == "subfolder/test-file.txt.c4gh" {
+						time.Sleep(10 * time.Millisecond) // We have to be sure other goroutines have called the function
+						_, cancel := context.WithCancel(ctx)
+						cancel()
+					}
+					time.Sleep(20 * time.Millisecond) // Make sure cancel() has been called
+				}
+				_, _ = io.ReadAll(pr)
+
+				return tt.uploadErr
+			}
+			api.DeleteObject = func(rep, bucket, object string) error {
+				return nil
+			}
+
+			errs := make([]string, 0)
+			errc := make(chan error)
+			wait := make(chan any)
+
+			go func() {
+				for e := range errc {
+					errs = append(errs, e.Error())
+				}
+
+				wait <- nil
+			}()
+
+			logs.Error = func(err error) {
+				errc <- err
+			}
+			logs.Errorf = func(format string, args ...any) {
+				errc <- fmt.Errorf(format, args...)
+			}
+
+			set := UploadSet{
+				Bucket: "test-bucket",
+				Files: []string{
+					"test-file.txt",
+					"subfolder/test-file.txt",
+					"another-file.txt",
+					"subfolder/another-file.txt",
+					"dir/cover.out",
+					"script.py",
+					"run.sh",
+					"log.txt",
+				},
+				Objects: []string{
+					"test-file.txt.c4gh",
+					"subfolder/test-file.txt.c4gh",
+					"another-file.txt.c4gh",
+					"subfolder/another-file.txt.c4gh",
+					"dir/cover.out.c4gh",
+					"script.py.c4gh",
+					"run.sh.c4gh",
+					"log.txt.c4gh",
+				},
+			}
+			if err = Upload(set); err == nil {
+				t.Error("Function did not return error")
+			} else if err.Error() != tt.errStr {
+				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			}
+			close(errc)
+			<-wait
+
+			expectedLogs := []string{
+				"uploading file test-file.txt failed",
+				"uploading file subfolder/test-file.txt failed",
+				"uploading file another-file.txt failed",
+				"uploading file subfolder/another-file.txt failed",
+			}
+			expectedLogs = append(expectedLogs, slices.Repeat([]string{errExpected.Error()}, numRoutines)...)
+			slices.Sort(expectedLogs)
+			slices.Sort(errs)
+
+			if tt.uploadErr != nil && !reflect.DeepEqual(expectedLogs, errs) {
+				t.Errorf("Function logged incorrect errors\nExpected=%q\nReceived=%q", expectedLogs, errs)
 			}
 		})
 	}
@@ -511,37 +1053,19 @@ func (br *badReader) Close() error {
 	return nil
 }
 
-func TestUpload_Error(t *testing.T) {
+func TestUploadObject_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errStr, projectType                                             string
-		loggedErrors                                                              []string
-		fileSize                                                                  int64
-		header, badCopy                                                           bool
-		keyErr, existsErr, createErr, detailsErr, headerErr, uploadErr, deleteErr error
+		testname, errStr, projectType               string
+		loggedErrors                                []string
+		fileSize                                    int64
+		header, badCopy                             bool
+		detailsErr, headerErr, uploadErr, deleteErr error
 	}{
-		{
-			"FAIL_KEY", "failed to get project public key: " + errExpected.Error(), "default",
-			[]string{},
-			500, false, false,
-			errExpected, nil, nil, nil, nil, nil, nil,
-		},
-		{
-			"FAIL_EXISTS", errExpected.Error(), "default",
-			[]string{},
-			458478, false, false,
-			nil, errExpected, nil, nil, nil, nil, nil,
-		},
-		{
-			"FAIL_CREATE", errExpected.Error(), "default",
-			[]string{},
-			234, false, false,
-			nil, nil, errExpected, nil, nil, nil, nil,
-		},
 		{
 			"FAIL_DETAILS", "failed to get details for file test-file.txt: " + errExpected.Error(), "default",
 			[]string{},
 			65986, false, false,
-			nil, nil, nil, errExpected, nil, nil, nil,
+			errExpected, nil, nil, nil,
 		},
 		{
 			"FAIL_HEADER", "uploading file test-file.txt failed", "default",
@@ -550,25 +1074,25 @@ func TestUpload_Error(t *testing.T) {
 				"failed to extract header from encrypted file: EOF",
 			},
 			2375680, false, false,
-			nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil,
 		},
 		{
 			"FAIL_SIZE", "file test-file.txt is too large (5497558139316 bytes)", "default",
 			[]string{},
 			5*(1<<40) + 560, true, false,
-			nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil,
 		},
 		{
 			"FAIL_POST_HEADER", "uploading file test-file.txt failed", "default",
 			[]string{"failed to upload header to vault: " + errExpected.Error()},
 			94567376, true, false,
-			nil, nil, nil, nil, errExpected, nil, nil,
+			nil, errExpected, nil, nil,
 		},
 		{
 			"FAIL_UPLOAD", "uploading file test-file.txt failed", "default",
 			[]string{errExpected.Error()},
 			456, true, false,
-			nil, nil, nil, nil, nil, errExpected, nil,
+			nil, nil, errExpected, nil,
 		},
 		{
 			"FAIL_CRYPT", "uploading file test-file.txt failed", "findata",
@@ -577,7 +1101,7 @@ func TestUpload_Error(t *testing.T) {
 				"failed to extract header from encrypted file: failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
 			},
 			74869, true, false,
-			nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil,
 		},
 		{
 			"FAIL_FINDATA", "uploading file test-file.txt failed", "findata",
@@ -586,13 +1110,13 @@ func TestUpload_Error(t *testing.T) {
 				"failed to read file body: failed to upload " + api.Findata + " object: " + errExpected.Error(),
 			},
 			98, true, false,
-			nil, nil, nil, nil, nil, errExpected, nil,
+			nil, nil, errExpected, nil,
 		},
 		{
 			"FAIL_COPY_1", "uploading file test-file.txt failed", "default",
 			[]string{"Streaming file test-file.txt failed: " + errExpected.Error()},
 			456, true, true,
-			nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil,
 		},
 		{
 			"FAIL_COPY_2", "uploading file test-file.txt failed", "findata",
@@ -601,32 +1125,25 @@ func TestUpload_Error(t *testing.T) {
 				"failed to read file body: failed to upload Findata object: failed to read file body: " + errExpected.Error(),
 			},
 			456, true, true,
-			nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil,
 		},
 		{
 			"FAIL_DELETE", "uploading file test-file.txt failed", "default",
 			[]string{"Streaming file test-file.txt failed: " + errExpected.Error()},
 			456, true, true,
-			nil, nil, nil, nil, nil, nil, errExpected,
+			nil, nil, nil, errExpected,
 		},
 	}
 
-	origGetPublicKey := api.GetPublicKey
-	origBucketExists := api.BucketExists
-	origCreateBucket := api.CreateBucket
 	origGetFileDetails := getFileDetails
 	origGetProjectType := api.GetProjectType
 	origPostHeader := api.PostHeader
 	origUploadObject := api.UploadObject
 	origDeleteObject := api.DeleteObject
 	origPublicKey := ai.publicKey
-	origNewCrypt4GHWriter := newCrypt4GHWriter
 	origError := logs.Error
 	origErrorf := logs.Errorf
 	defer func() {
-		api.GetPublicKey = origGetPublicKey
-		api.BucketExists = origBucketExists
-		api.CreateBucket = origCreateBucket
 		getFileDetails = origGetFileDetails
 		api.GetProjectType = origGetProjectType
 		api.PostHeader = origPostHeader
@@ -643,20 +1160,11 @@ func TestUpload_Error(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Could not generate key pair: %s", err.Error())
 			}
+			ai.publicKey = publicKey
+			if tt.testname == "FAIL_HEADER" || tt.testname == "FAIL_CRYPT" {
+				ai.publicKey = [32]byte{}
+			}
 
-			api.GetPublicKey = func() ([32]byte, error) {
-				if tt.testname == "FAIL_HEADER" || tt.testname == "FAIL_CRYPT" {
-					return [32]byte{}, nil
-				}
-
-				return publicKey, tt.keyErr
-			}
-			api.BucketExists = func(rep, bucket string) (bool, error) {
-				return false, tt.existsErr
-			}
-			api.CreateBucket = func(rep, bucket string) error {
-				return tt.createErr
-			}
 			api.GetProjectType = func() string {
 				return tt.projectType
 			}
@@ -679,19 +1187,13 @@ func TestUpload_Error(t *testing.T) {
 			api.PostHeader = func(header []byte, bucket, object string) error {
 				return tt.headerErr
 			}
-			api.UploadObject = func(body io.Reader, rep, bucket, object string, segmentSize int64) error {
+			api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
 				_, err := io.ReadAll(body)
 				if err != nil {
 					return fmt.Errorf("failed to read file body: %s", err.Error())
 				}
 
 				return tt.uploadErr
-			}
-			if tt.createErr != nil {
-				newCrypt4GHWriter = func(wr io.Writer) (*streaming.Crypt4GHWriter, error) {
-					return nil, tt.createErr
-				}
-				t.Cleanup(func() { newCrypt4GHWriter = origNewCrypt4GHWriter })
 			}
 
 			deleted := false
@@ -719,7 +1221,7 @@ func TestUpload_Error(t *testing.T) {
 			}
 			slices.Sort(errs)
 
-			if err = Upload("test-file.txt", "test-bucket"); err == nil {
+			if err = UploadObject(context.Background(), "test-file.txt", "test-file.txt.c4gh", "test-bucket"); err == nil {
 				t.Error("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())

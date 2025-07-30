@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"reflect"
 	"sda-filesystem/internal/airlock"
 	"strings"
 	"testing"
@@ -9,13 +10,14 @@ import (
 
 func TestExportSetup(t *testing.T) {
 	var tests = []struct {
-		testname, args, bucket, filename string
-		override                         bool
+		testname, args, prefix string
+		selection              []string
+		override               bool
 	}{
-		{"OK_1", "-override test-bucket test-file", "test-bucket", "test-file", true},
-		{"OK_2", "test-bucket test-file --override", "test-bucket", "test-file", true},
-		{"OK_3", "test-bucket-2 test-file", "test-bucket-2", "test-file", false},
-		{"OK_3", "test-bucket-2 test-file-2 --override=false", "test-bucket-2", "test-file-2", false},
+		{"OK_1", "-override test-bucket test-file", "test-bucket", []string{"test-file"}, true},
+		{"OK_2", "test-bucket test-file --override", "test-bucket", []string{"test-file"}, true},
+		{"OK_3", "test-bucket-2 test-file test-dir", "test-bucket-2", []string{"test-file", "test-dir"}, false},
+		{"OK_3", "test-bucket-2 test-file-2 --override=false", "test-bucket-2", []string{"test-file-2"}, false},
 	}
 
 	origExportPossible := airlock.ExportPossible
@@ -29,7 +31,7 @@ func TestExportSetup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			bucket, filename = "", ""
+			exportPrefix, selection = "", []string{}
 			override = false
 
 			// Ignore prints to stdout
@@ -47,10 +49,10 @@ func TestExportSetup(t *testing.T) {
 				t.Errorf("Returned unexpected error: %s", err.Error())
 			case code != 0:
 				t.Errorf("Received incorrect status code. Expected=0, received=%d", code)
-			case tt.bucket != bucket:
-				t.Errorf("Received incorrect bucket. Expected=%s, received=%s", tt.bucket, bucket)
-			case tt.filename != filename:
-				t.Errorf("Received incorrect file. Expected=%s, received=%s", tt.filename, filename)
+			case tt.prefix != exportPrefix:
+				t.Errorf("Received incorrect prefix. Expected=%s, received=%s", tt.prefix, exportPrefix)
+			case !reflect.DeepEqual(tt.selection, selection):
+				t.Errorf("Received incorrect selection. Expected=%v, received=%v", tt.selection, selection)
 			case tt.override != override:
 				t.Errorf("Received incorrect override value. Expected=%t, received=%t", tt.override, override)
 			}
@@ -66,7 +68,7 @@ func TestExportSetup_Error(t *testing.T) {
 	}{
 		{"FAIL_BAD_ARG_1", "-overrid test-bucket test-file", "", 2, true},
 		{"FAIL_BAD_ARG_2", "test-bucket --override", "", 2, true},
-		{"FAIL_EXPORT", "test-bucket test-file", "you are not allowed to export files", 0, false},
+		{"FAIL_EXPORT", "test-bucket test-file test-folder", "you are not allowed to export files", 0, false},
 	}
 
 	origExportPossible := airlock.ExportPossible

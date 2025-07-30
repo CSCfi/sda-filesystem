@@ -12,13 +12,8 @@ import (
 )
 
 func TestCheckMountPoint(t *testing.T) {
-	node, err := os.MkdirTemp("", "dir")
-	if err != nil {
-		t.Fatalf("Failed to create folder: %s", err.Error())
-	}
-	t.Cleanup(func() { os.RemoveAll(node) })
-
-	if err = CheckMountPoint(node); err != nil {
+	node := t.TempDir()
+	if err := CheckMountPoint(node); err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
 	}
 }
@@ -38,12 +33,9 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			node, err := os.MkdirTemp("", tt.name)
-			t.Cleanup(func() { os.RemoveAll(node) })
+			node := t.TempDir()
 
-			if err != nil {
-				t.Errorf("Failed to create folder: %s", err.Error())
-			} else if err = os.Chmod(node, os.FileMode(tt.mode)); err != nil {
+			if err := os.Chmod(node, os.FileMode(tt.mode)); err != nil {
 				t.Errorf("Changing permission bits failed: %s", err.Error())
 			} else if err = CheckMountPoint(node); err == nil {
 				t.Error("Function should have returned error")
@@ -54,25 +46,27 @@ func TestCheckMountPoint_Permissions(t *testing.T) {
 }
 
 func TestCheckMountPoint_Not_Dir(t *testing.T) {
-	file, err := os.CreateTemp("", "file")
+	node := t.TempDir()
+	filename := node + "/file.txt"
+	err := os.WriteFile(filename, []byte("hello world"), 0600)
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
 	}
-	t.Cleanup(func() { os.RemoveAll(file.Name()) })
 
-	if err = CheckMountPoint(file.Name()); err == nil {
+	if err = CheckMountPoint(filename); err == nil {
 		t.Error("Function should have returned error")
 	}
 }
 
 func TestCheckMountPoint_Fail_Stat(t *testing.T) {
-	file, err := os.CreateTemp("", "file_parent")
+	node := t.TempDir()
+	filename := node + "/parent-file"
+	err := os.WriteFile(filename, []byte("hello world"), 0600)
 	if err != nil {
 		t.Fatalf("Failed to create file: %s", err.Error())
 	}
-	t.Cleanup(func() { os.RemoveAll(file.Name()) })
 
-	if err = CheckMountPoint(file.Name() + "/folder"); err == nil {
+	if err = CheckMountPoint(filename + "/folder"); err == nil {
 		t.Error("Function should have returned error")
 	}
 }
@@ -81,29 +75,20 @@ func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping fuse test for ci docker")
 	}
-	node, err := os.MkdirTemp("", "dir")
-	if err != nil {
-		t.Fatalf("Failed to create folder: %s", err.Error())
-	}
-	t.Cleanup(func() { os.RemoveAll(node) })
 
-	if err = os.Chmod(node, os.FileMode(0555)); err != nil {
+	node := t.TempDir()
+	if err := os.Chmod(node, os.FileMode(0555)); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
 	} else if err = CheckMountPoint(node + "/child"); err == nil {
 		t.Error("Function should have returned error")
 	}
-
 }
 
 func TestCheckMountPoint_Not_Exist(t *testing.T) {
-	node, err := os.MkdirTemp("", "dir") // get unique folder name
-	if err != nil {
-		t.Fatalf("Failed to create folder: %s", err.Error())
-	}
-	os.RemoveAll(node)                       // make sure folder does not exist
-	t.Cleanup(func() { os.RemoveAll(node) }) // if folder was created in function
+	node := t.TempDir()
+	os.RemoveAll(node) // make sure folder does not exist
 
-	if err = CheckMountPoint(node); err != nil {
+	if err := CheckMountPoint(node); err != nil {
 		t.Errorf("Function returned error: %s", err.Error())
 	} else if _, err := os.Stat(node); os.IsNotExist(err) {
 		t.Error("Directory was not created")
@@ -111,14 +96,10 @@ func TestCheckMountPoint_Not_Exist(t *testing.T) {
 }
 
 func TestCheckMountPoint_Not_Empty(t *testing.T) {
-	node, err := os.MkdirTemp("", "dir")
-	if err != nil {
-		t.Fatalf("Failed to create folder: %s", err.Error())
-	}
-	t.Cleanup(func() { os.RemoveAll(node) })
-
-	if file, err := os.CreateTemp(node, "file"); err != nil {
-		t.Errorf("Failed to create file %s: %s", file.Name(), err.Error())
+	node := t.TempDir()
+	filename := node + "/file.txt"
+	if err := os.WriteFile(filename, []byte("hello world"), 0600); err != nil {
+		t.Errorf("Failed to create file %s: %s", filename, err.Error())
 	} else if err = CheckMountPoint(node); err == nil {
 		t.Error("Function should have returned error")
 	}
@@ -141,15 +122,11 @@ func (t *Testfs) Readdir(_ string,
 }
 
 func TestCheckMountPoint_Fail_Read(t *testing.T) {
-	basepath, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Could not retrieve working directory: %s", err.Error())
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping fuse test for ci docker")
 	}
-	node, err := os.MkdirTemp(basepath, "filesystem")
-	if err != nil {
-		t.Fatalf("Failed to create folder: %s", err.Error())
-	}
-	t.Cleanup(func() { os.RemoveAll(node) })
+
+	node := t.TempDir()
 
 	options := []string{}
 	if runtime.GOOS == "darwin" {
@@ -160,16 +137,17 @@ func TestCheckMountPoint_Fail_Read(t *testing.T) {
 	Unmount = func(mount string) error {
 		return nil
 	}
-	defer func() { Unmount = origUnmount }()
 
 	testfs := &Testfs{}
 	host := fuse.NewFileSystemHost(testfs)
 	go host.Mount(node, options)
-	t.Cleanup(func() { host.Unmount() })
 
 	time.Sleep(2 * time.Second)
 
-	if err = CheckMountPoint(node); err == nil {
+	if err := CheckMountPoint(node); err == nil {
 		t.Error("Function should have returned error")
 	}
+
+	Unmount = origUnmount
+	_ = Unmount(node)
 }

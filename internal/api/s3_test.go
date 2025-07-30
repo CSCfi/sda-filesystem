@@ -132,7 +132,7 @@ func TestBucketExists_Error(t *testing.T) {
 		},
 		{
 			"FAIL_2",
-			"could not use bucket my-bucket: api error InternalServerError: Internal Server Error",
+			"could not determine if bucket my-bucket exists: api error InternalServerError: Internal Server Error",
 			http.StatusInternalServerError,
 		},
 	}
@@ -1333,7 +1333,7 @@ func TestUploadObject(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(reader, "some-repository", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
+	} else if err := UploadObject(context.Background(), reader, "some-repository", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if receivedData.String() != string(uploadedData) {
 		t.Errorf("Function uploaded incorrect data\nExpected=%s\nReceived=%s", string(uploadedData), receivedData.String())
@@ -1435,7 +1435,7 @@ func TestUploadObject_Multipart(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
+	} else if err := UploadObject(context.Background(), reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else {
 		receivedDataStr := ""
@@ -1478,7 +1478,39 @@ func TestUploadObject_TooLarge(t *testing.T) {
 	errStr := "failed to upload object obj.txt to bucket bucket1000: object is too large"
 	if err := initialiseS3Client(); err != nil {
 		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err == nil {
+	} else if err := UploadObject(context.Background(), reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err == nil {
+		t.Error("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestUploadObject_ContextCancel(t *testing.T) {
+	origClient := ai.hi.client
+	origProxy := ai.proxy
+	origS3Client := ai.hi.s3Client
+	defer func() {
+		ai.hi.client = origClient
+		ai.proxy = origProxy
+		ai.hi.s3Client = origS3Client
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cancel()
+	}))
+
+	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.proxy = srv.URL
+	t.Cleanup(func() { srv.Close() })
+
+	uploadedData := test.GenerateRandomText(1024)
+	reader := bytes.NewReader(uploadedData)
+
+	errStr := "failed to upload object obj.txt to bucket bucket1000: canceled, context canceled" // `canceled,` comes from aws sdk
+	if err := initialiseS3Client(); err != nil {
+		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
+	} else if err := UploadObject(ctx, reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -1542,7 +1574,7 @@ func TestUploadObject_Error(t *testing.T) {
 	errStr := "failed to upload object objekti.txt to bucket bucket574: api error InternalServerError: Internal Server Error"
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(reader, "repo", "bucket574", "objekti.txt", 1024*1024*5); err == nil {
+	} else if err := UploadObject(context.Background(), reader, "repo", "bucket574", "objekti.txt", 1024*1024*5); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
