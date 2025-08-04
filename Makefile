@@ -1,5 +1,6 @@
 .PHONY: help all remote local cli gui gui_build gui_prod wails_update requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
 
+SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 PROFILES := fuse krakend keystone
