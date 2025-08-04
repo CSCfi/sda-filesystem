@@ -30,6 +30,8 @@ const selectedFolder = ref("");
 const uniqueBucket = ref<boolean | undefined>(undefined); // true if user is allowed to create the bucket, false if they already own it
 // eslint-disable-next-line no-undef
 const exportAutocomplete = ref<HTMLCAutocompleteElement | null>(null);
+// eslint-disable-next-line no-undef
+const exportTable = ref<HTMLCDataTableElement | null>(null);
 
 const validationHelperData = ref<ValidationHelperType[]>([
   { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
@@ -68,7 +70,7 @@ EventsOn("setBuckets", (buckets: string[]) => {
 const exportData = computed(() => {
   return selectedSet.value.objects.map((object: string) => {
     return {
-      name: {value: object },
+      name: {value: object},
       bucket: {value: selectedSet.value.bucket},
       actions: {
         children: [
@@ -86,6 +88,19 @@ const exportData = computed(() => {
                 selectedSet.value.objects.splice(idx, 1);
                 selectedSet.value.files.splice(idx, 1);
                 selectedSet.value.exists.splice(idx, 1);
+
+                const startFrom = exportTable.value?.pagination.startFrom;
+                const endTo = exportTable.value?.pagination.endTo;
+                const count = exportTable.value?.pagination.itemCount;
+                const currentPage = exportTable.value?.pagination.currentPage;
+                const perPage = exportTable.value?.pagination.itemsPerPage;
+
+                if (startFrom && endTo && count && currentPage && perPage &&
+                    exportTable.value && count - 2 < startFrom) {
+                  exportTable.value.pagination.currentPage = currentPage - 1;
+                  exportTable.value.pagination.startFrom = startFrom - perPage;
+                  exportTable.value.pagination.endTo = endTo - perPage;
+                }
               }
           }},
           children: [
@@ -370,11 +385,11 @@ function reset() {
       <c-data-table
         v-if="exportData.length"
         id="export-table"
+        ref="exportTable"
         class="gateway-table"
         :data.prop="exportData"
         :headers.prop="exportHeadersModifiable"
         :pagination="paginationOptions"
-        :hide-footer="selectedSet.files.length <= 5"
       />
       <c-row justify="space-between">
         <c-button outlined @click="pageIdx--; clearSet()">
@@ -396,7 +411,7 @@ function reset() {
         class="gateway-table"
         :data.prop="exportData"
         :headers.prop="exportHeaders"
-        hide-footer="true"
+        :pagination="paginationOptions"
       />
     </div>
     <div v-show="pageIdx == 4">
