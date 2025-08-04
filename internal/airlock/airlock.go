@@ -108,7 +108,7 @@ func WalkDirs(selection, currentObjects []string, prefix string) (UploadSet, err
 				if path == root {
 					obj = subfolder + filepath.Base(path+".c4gh")
 				} else {
-					obj = subfolder + strings.TrimPrefix(path, root+"/") + ".c4gh"
+					obj = subfolder + strings.TrimPrefix(path, filepath.Dir(root)+"/") + ".c4gh"
 				}
 				if slices.Contains(currentObjects, obj) {
 					return errors.New("you have already selected files with similar object names")
