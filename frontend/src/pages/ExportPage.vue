@@ -70,7 +70,7 @@ EventsOn("setBuckets", (buckets: string[]) => {
 const exportData = computed(() => {
   return selectedSet.value.objects.map((object: string) => {
     return {
-      name: {value: object},
+      name: {value: object.endsWith(".c4gh") ? object.slice(0, -5) : object},
       bucket: {value: selectedSet.value.bucket},
       actions: {
         children: [
