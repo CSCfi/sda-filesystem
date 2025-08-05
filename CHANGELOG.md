@@ -9,11 +9,25 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) the export file dialog allows the selection of multiple files
+- Makefile defaults to bash shell
+- while exporting files in GUI, object existence is checked with S3 instead of traversing the filesystem
 - client certificates are not fetched from Vault but from Gitlab secure files
 
 ### Fixed
 
+- data races in tests
 - the destination to where the binaries are copied under `desktop/`
+
+### Added
+
+- (users) a warning log if client certificates have expired
+- (users) CLI can export multiple files and folders with one call
+- (users) support for uploading folders (#10,#30)
+
+### Removed
+
+- project name from the Findata object name when exporting to CESSNA
 
 ## [2025.7.3] - 2025-07-24
 
