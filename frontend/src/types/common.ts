@@ -11,6 +11,6 @@ type ValidationType = boolean | undefined;
 export type ValidationResult = {
   lowerCaseOrNum: ValidationType;
   inputLength: ValidationType;
-  alphaNumDash: ValidationType;
-  unique: ValidationType;
+  alphaNumHyphen: ValidationType;
+  ownable: ValidationType;
 };

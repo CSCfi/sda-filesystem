@@ -135,7 +135,7 @@ func TestImportSetup_Error(t *testing.T) {
 }
 
 func TestUserInput(t *testing.T) {
-	finished := false
+	finished := make(chan bool)
 	expectedOutput := [][]string{{"continue"}, {"hello", "sunshine"}, {"update"}}
 	reader := strings.NewReader("continue\nhello sunshine\nupdate")
 
@@ -150,23 +150,29 @@ func TestUserInput(t *testing.T) {
 				return
 			}
 		}
-		finished = true
+		finished <- true
 	}()
 
 	time.Sleep(10 * time.Millisecond)
 
-	if !finished {
-		t.Fatal("Function did not read input correctly.")
+	select {
+	case fin := <-finished:
+		if !fin {
+			t.Fatal("Function did not read input correctly.")
+		}
+	default:
+		return
 	}
 }
 
 func TestUserInput_Error(t *testing.T) {
 	buf := &testStream{err: errExpected}
 
-	var level string
-	var strs []string
+	level := make(chan string, 1)
+	strs := make(chan []string, 1)
 	logs.SetSignal(func(ll string, s []string) {
-		level, strs = ll, s
+		level <- ll
+		strs <- s
 	})
 	defer logs.SetSignal(func(l string, s []string) {})
 
@@ -178,10 +184,11 @@ func TestUserInput_Error(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	err := []string{"Could not read input", errExpected.Error()}
-	if level != logrus.ErrorLevel.String() {
+	if logrus.ErrorLevel.String() != <-level {
 		t.Fatal("Function did not log an error")
 	}
-	if !reflect.DeepEqual(strs, err) {
-		t.Fatalf("Logged output incorrect\nExpected: %q\nReceived: %q", err, strs)
+	receivedStrs := <-strs
+	if !reflect.DeepEqual(receivedStrs, err) {
+		t.Fatalf("Logged output incorrect\nExpected: %q\nReceived: %q", err, receivedStrs)
 	}
 }

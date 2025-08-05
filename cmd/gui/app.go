@@ -232,35 +232,67 @@ func (a *App) RefreshFuse() {
 	wailsruntime.EventsEmit(a.ctx, "fuseReady")
 }
 
-func (a *App) SelectFile() (string, error) {
+func (a *App) SelectFiles() ([]string, error) {
 	home, _ := os.UserHomeDir()
 	options := wailsruntime.OpenDialogOptions{DefaultDirectory: home}
-	file, err := wailsruntime.OpenFileDialog(a.ctx, options)
+	files, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, options)
 	if err != nil {
 		logs.Error(err)
 
-		return "", err
+		return nil, err
 	}
 
-	return file, nil
+	return files, nil
 }
 
-func (a *App) CheckFileExistence(file, bucket string) (found bool) {
-	chld := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName() + "/" + bucket)
+func (a *App) CheckObjectExistences(set airlock.UploadSet) ([]bool, error) {
+	err := airlock.CheckObjectExistences(&set, nil)
+	if err != nil {
+		logs.Error(err)
+		message, _ := logs.Wrapper(err)
 
-	return slices.Contains(chld, filepath.Base(file+".c4gh"))
+		err = errors.New(message)
+	}
+
+	return set.Exists, err
 }
 
-func (a *App) CheckBucketExistence(bucket string) (found bool) {
+func (a *App) CheckBucketExistence(bucket string) (bool, error) {
 	exists, err := api.BucketExists(api.SDConnect, bucket)
-	logs.Error(err)
+	if err != nil {
+		logs.Error(err)
+		message, _ := logs.Wrapper(err)
 
-	return exists
+		err = errors.New(message)
+	}
+
+	return exists, err
 }
 
-func (a *App) ExportFile(file, bucket string) error {
-	time.Sleep(1000 * time.Millisecond)
-	err := airlock.Upload(file, bucket)
+func (a *App) WalkDirs(selection, currentObjects []string, prefix string) (airlock.UploadSet, error) {
+	set, err := airlock.WalkDirs(selection, currentObjects, prefix)
+	if err != nil {
+		logs.Error(err)
+		message, _ := logs.Wrapper(err)
+
+		err = errors.New(message)
+	}
+
+	return set, err
+}
+
+func (a *App) ExportFiles(set airlock.UploadSet, exists bool) error {
+	var err error
+	time.Sleep(1000 * time.Millisecond) // So that progressbar animation is detectable
+	if !exists {
+		logs.Info("Creating bucket ", set.Bucket)
+		err = api.CreateBucket(api.SDConnect, set.Bucket)
+	}
+
+	if err == nil {
+		err = airlock.Upload(set)
+	}
+
 	if err != nil {
 		logs.Error(err)
 		message, _ := logs.Wrapper(err)

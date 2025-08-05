@@ -10,12 +10,12 @@ export function CheckBucketExistence(arg1) {
   return window['go']['main']['App']['CheckBucketExistence'](arg1);
 }
 
-export function CheckFileExistence(arg1, arg2) {
-  return window['go']['main']['App']['CheckFileExistence'](arg1, arg2);
+export function CheckObjectExistences(arg1) {
+  return window['go']['main']['App']['CheckObjectExistences'](arg1);
 }
 
-export function ExportFile(arg1, arg2) {
-  return window['go']['main']['App']['ExportFile'](arg1, arg2);
+export function ExportFiles(arg1, arg2) {
+  return window['go']['main']['App']['ExportFiles'](arg1, arg2);
 }
 
 export function FilesOpen() {
@@ -54,6 +54,10 @@ export function RefreshFuse() {
   return window['go']['main']['App']['RefreshFuse']();
 }
 
-export function SelectFile() {
-  return window['go']['main']['App']['SelectFile']();
+export function SelectFiles() {
+  return window['go']['main']['App']['SelectFiles']();
+}
+
+export function WalkDirs(arg1, arg2, arg3) {
+  return window['go']['main']['App']['WalkDirs'](arg1, arg2, arg3);
 }

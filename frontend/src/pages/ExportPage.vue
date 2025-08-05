@@ -1,22 +1,24 @@
 <script lang="ts" setup>
 import { ref, watch, computed } from "vue";
+import { airlock } from "../../wailsjs/go/models";
 import { EventsOn, EventsEmit, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
-import { CAutocompleteItem, CDataTableHeader } from "@cscfi/csc-ui/dist/types";
-import { SelectFile, CheckFileExistence, CheckBucketExistence, ExportFile } from "../../wailsjs/go/main/App";
+import { CAutocompleteItem, CDataTableHeader, CPaginationOptions } from "@cscfi/csc-ui/dist/types";
+import { SelectFiles, CheckObjectExistences, CheckBucketExistence, ExportFiles, WalkDirs } from "../../wailsjs/go/main/App";
 import { mdiTrashCanOutline } from "@mdi/js";
 import { ValidationHelperType, ValidationResult } from "../types/common";
 import ValidationHelper from "../components/ValidationHelper.vue";
 
 const exportHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name", sortable: false },
-  { key: "folder", value: "Destination folder", sortable: false },
+  { key: "bucket", value: "Destination bucket", sortable: false },
 ];
 
 const exportHeadersModifiable: CDataTableHeader[] = [
-  { key: "name", value: "Name", sortable: false },
-  { key: "folder", value: "Destination folder", sortable: false },
+  { key: "name", value: "Name" },
+  { key: "bucket", value: "Destination bucket", sortable: false },
   { key: "actions", value: null, sortable: false, justify: "end"},
 ];
+
 
 const bucketItems = ref<CAutocompleteItem[]>([]);
 const filteredBucketItems = ref<CAutocompleteItem[]>([]);
@@ -24,20 +26,32 @@ const filteredBucketItems = ref<CAutocompleteItem[]>([]);
 const pageIdx = ref(0);
 const selectedBucket = ref("");
 const bucketQuery = ref("");
+const selectedFolder = ref("");
+const uniqueBucket = ref<boolean | undefined>(undefined); // true if user is allowed to create the bucket, false if they already own it
+// eslint-disable-next-line no-undef
+const exportAutocomplete = ref<HTMLCAutocompleteElement | null>(null);
 
 const validationHelperData = ref<ValidationHelperType[]>([
   { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
   { check: "inputLength", message: "Bucket name should be between 3 and 63 characters long.", type: "info"},
-  { check: "alphaNumDash", message: "Use Latin letters (a-z), numbers (0-9) and a dash (-).", type: "info"},
-  { check: "alphaNumDash", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
-  { check: "unique", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
+  { check: "alphaNumHyphen", message: "Use Latin letters (a-z), numbers (0-9) and a hyphen (-).", type: "info"},
+  { check: "alphaNumHyphen", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
+  { check: "ownable", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
 ]);
 
-const selectedFolder = ref("");
-const selectedFiles = ref<string[]>([]);
-const filesToOverwrite = ref<string[]>([]);
+const selectedSet = ref<airlock.UploadSet>({bucket: "", files: [], objects: [], exists: []});
+const selectedPrefix = computed(() => selectedBucket.value + (selectedFolder.value ? "/" + selectedFolder.value : ""));
+const filesToOverwrite = computed(() => selectedSet.value.exists.includes(true));
 const isDraggingFile = ref<boolean>(false);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+const paginationOptions: CPaginationOptions = {
+  itemCount: selectedSet.value.files.length,
+  itemsPerPage: 5,
+  currentPage: 1,
+  startFrom: 0,
+  endTo: 4,
+};
 
 EventsOn("exportPossible", () => {
   pageIdx.value = 1;
@@ -52,10 +66,10 @@ EventsOn("setBuckets", (buckets: string[]) => {
 });
 
 const exportData = computed(() => {
-  return selectedFiles.value.map((filename) => {
+  return selectedSet.value.objects.map((object: string) => {
     return {
-      name: {value: filename.split("/").reverse()[0] + ".c4gh"},
-      folder: {value: selectedBucket.value},
+      name: {value: object },
+      bucket: {value: selectedSet.value.bucket},
       actions: {
         children: [
         {
@@ -67,7 +81,12 @@ const exportData = computed(() => {
             size: "small",
             title: "Remove",
             onClick: () =>
-              { selectedFiles.value = selectedFiles.value.filter((file) => file !== filename); }
+              {
+                let idx = selectedSet.value.objects.indexOf(object);
+                selectedSet.value.objects.splice(idx, 1);
+                selectedSet.value.files.splice(idx, 1);
+                selectedSet.value.exists.splice(idx, 1);
+              }
           }},
           children: [
             {
@@ -125,46 +144,33 @@ watch(() => bucketQuery.value, (query: string) => {
   }, 300);
 });
 
-async function addFiles(filenames: string[]) {
-  for (const filename of filenames) {
-    // Check if file name is unique to other added
-    if (selectedFiles.value.find((file) => file === filename)) {
-      EventsEmit("showToast", `Could not choose file ${filename}`, "File name is not unique");
-      continue;
+async function addFiles(paths: string[]) {
+  if (!paths || !paths.length) {
+    return;
+  }
+
+  try {
+    let set: airlock.UploadSet =
+      await WalkDirs(paths, selectedSet.value.objects, selectedPrefix.value);
+    let exists: boolean[] = set.exists;
+    if (!uniqueBucket.value) {
+      exists = await CheckObjectExistences(set);
     }
-    // Check if file name is unique to bucket
-    try {
-      const found = await CheckFileExistence(filename, selectedBucket.value);
-      if (found) {
-        filesToOverwrite.value.push(filename);
-      } else {
-        selectedFiles.value.push(filename);
-      }
-    } catch (e) {
-      EventsEmit("showToast", "Could not choose file", e as string);
-    }
+
+    selectedSet.value.bucket = set.bucket;
+    selectedSet.value.objects.push(...set.objects);
+    selectedSet.value.files.push(...set.files);
+    selectedSet.value.exists.push(...exists);
+  } catch (e) {
+    EventsEmit("showToast", "File selection failed", e as string);
   }
 }
 
-function selectFile() {
-  // TODO selecting multiple files/folders
-  SelectFile().then((filename: string) => {
-    if (filename) addFiles([filename]);
+function selectFiles() {
+  // TODO select files and folders
+  SelectFiles().then((files: string[]) => {
+    addFiles(files);
   });
-}
-
-async function exportFiles() {
-  // TODO exporting to subfolders; proper export for multiple files ?
-  let success = true;
-  for (const file of selectedFiles.value) {
-    try {
-      await ExportFile(file, selectedBucket.value);
-    } catch (e)  {
-      success = false;
-      EventsEmit("showToast", `Export failed`, e as string);
-    };
-  };
-  pageIdx.value = success ? 4 : 2;
 }
 
 function containsFilterString(str: string): boolean {
@@ -176,26 +182,72 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
     return {
       lowerCaseOrNum: undefined,
       inputLength: undefined,
-      alphaNumDash: undefined,
-      unique: undefined,
+      alphaNumHyphen: undefined,
+      ownable: undefined,
     };
   }
-  let uniqueBucket: boolean;
-  const existingBucket: boolean = !!bucketItems.value.find((item) => item.name === input);
 
-  if (existingBucket) uniqueBucket = true;
-  else uniqueBucket = !(await CheckBucketExistence(selectedBucket.value));
-
-  return {
+  let result: ValidationResult = {
     lowerCaseOrNum: !!(input[0].match(/[\p{L}0-9]/u) && input[0] === input[0].toLowerCase()),
     inputLength: input.length >= 3 && input.length <= 63,
-    alphaNumDash: !!input.match(/^[a-z0-9-]+$/g),
-    unique: uniqueBucket,
+    alphaNumHyphen: !!input.match(/^[a-z0-9-]+$/g),
+    ownable: undefined,
   };
+
+  if (result.lowerCaseOrNum && result.inputLength && result.alphaNumHyphen) {
+    try {
+      uniqueBucket.value = !(await CheckBucketExistence(selectedBucket.value));
+      result.ownable = true;
+    } catch (e) {
+      result.ownable = false;
+      EventsEmit("showToast", "Bucket cannot be selected", e as string);
+    }
+  }
+
+  return result;
+}
+
+function exportFiles() {
+  window.scrollTo({top: 0});
+  ExportFiles(selectedSet.value, !uniqueBucket.value).then(() => {
+    pageIdx.value = 4;
+  }).catch((_e) => {
+    pageIdx.value = 2;
+    EventsEmit("showToast", "Export interrupted", "Check logs for further details");
+  });
 }
 
 function validateFolderInput(input: string): boolean {
   return !input || !!input.match(/^[^/]+(\/[^/]+)*$/);
+}
+
+function deleteExisting() {
+  selectedSet.value.files = selectedSet.value.files.filter(
+    (_, i) => !selectedSet.value.exists[i]
+  );
+  selectedSet.value.objects = selectedSet.value.objects.filter(
+    (_, i) => !selectedSet.value.exists[i]
+  );
+  selectedSet.value.exists = selectedSet.value.exists.filter(
+    (_, i) => !selectedSet.value.exists[i]
+  );
+}
+
+function clearSet() {
+  selectedSet.value.bucket = "";
+  selectedSet.value.files = [];
+  selectedSet.value.objects = [];
+  selectedSet.value.exists = [];
+}
+
+function reset() {
+  exportAutocomplete.value?.reset();
+  uniqueBucket.value = undefined;
+  bucketQuery.value = "";
+  selectedBucket.value = "";
+  selectedFolder.value = "";
+  clearSet();
+  pageIdx.value = 1;
 }
 
 </script>
@@ -208,20 +260,20 @@ function validateFolderInput(input: string): boolean {
       <c-step>Export complete</c-step>
     </c-steps>
 
-    <c-modal :value="!!filesToOverwrite.length" disable-backdrop-blur>
+    <c-modal :value="filesToOverwrite" disable-backdrop-blur>
       <c-card>
-        <c-card-title>File already exists</c-card-title>
+        <c-card-title>Objects already exist</c-card-title>
 
         <c-card-content>
-          Data Gateway wants to upload file {{ filesToOverwrite[0] }}
-          but a similar file already exists in SD Connect. Overwrite file?
+          You have selected files that would overwrite objects
+          that already exists in SD Connect. Overwrite objects?
         </c-card-content>
 
         <c-card-actions justify="end">
-          <c-button outlined @click="filesToOverwrite.shift()">
-            Cancel
+          <c-button outlined @click="deleteExisting">
+            Cancel and discard files
           </c-button>
-          <c-button @click="selectedFiles.push(filesToOverwrite[0]); filesToOverwrite.shift()">
+          <c-button @click="selectedSet.exists.fill(false)">
             Overwrite and continue
           </c-button>
         </c-card-actions>
@@ -244,6 +296,7 @@ function validateFolderInput(input: string): boolean {
         It will be created at the root of your project.
       </p>
       <c-autocomplete
+        ref="exportAutocomplete"
         v-model="selectedBucket"
         v-control
         label="Bucket name"
@@ -305,8 +358,8 @@ function validateFolderInput(input: string): boolean {
       >
         <c-row align="center" gap="20">
           <h4>Drag and drop files and folders here or</h4>
-          <c-button id="select-files-button" outlined @click="selectFile()">
-            Select files and folders
+          <c-button id="select-files-button" outlined @click="selectFiles()">
+            Select files
           </c-button>
         </c-row>
         <p>
@@ -320,14 +373,15 @@ function validateFolderInput(input: string): boolean {
         class="gateway-table"
         :data.prop="exportData"
         :headers.prop="exportHeadersModifiable"
-        hide-footer="true"
+        :pagination="paginationOptions"
+        :hide-footer="selectedSet.files.length <= 5"
       />
       <c-row justify="space-between">
-        <c-button outlined @click="pageIdx--; selectedFiles = [];">
+        <c-button outlined @click="pageIdx--; clearSet()">
           Cancel
         </c-button>
         <c-button
-          :disabled="!selectedFiles.length"
+          :disabled="!selectedSet.files.length"
           @click="pageIdx++; exportFiles()"
         >
           Export
@@ -353,7 +407,7 @@ function validateFolderInput(input: string): boolean {
       </p>
       <c-button
         class="continue-button"
-        @click="selectedFiles = []; pageIdx = 1"
+        @click="reset"
       >
         New Export
       </c-button>

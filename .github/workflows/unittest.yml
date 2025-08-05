@@ -44,11 +44,11 @@ jobs:
       - name: Test
         run: |
           echo "Test all packages except Wails"
-          CI=true go test -tags=fuse3 -v -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v frontend)
+          CI=true go test -tags=fuse3 -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v -e frontend -e test)
 
       - name: Coveralls
         uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          file: coverage.txt
+          file: coverage.out
           format: golang

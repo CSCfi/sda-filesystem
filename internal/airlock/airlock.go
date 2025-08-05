@@ -2,11 +2,15 @@ package airlock
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -16,17 +20,28 @@ import (
 	c4ghHeaders "github.com/neicnordic/crypt4gh/model/headers"
 	"github.com/neicnordic/crypt4gh/streaming"
 	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/sync/errgroup"
 )
 
+const numRoutines = 4
 const minSegmentSize int64 = 1 << 27
 const maxParts int64 = 10000
 const maxObjectSize int64 = 5 * (1 << 40)
 const headerSize = 16 + 108 // Fixed size since we only have one public key
 
+var isLowerAlphaNumericHyphen = regexp.MustCompile(`^[a-z0-9-]+$`).MatchString
+
 var ai = airlockInfo{}
 
 type airlockInfo struct {
 	publicKey [chacha20poly1305.KeySize]byte
+}
+
+type UploadSet struct {
+	Bucket  string   `json:"bucket"`
+	Files   []string `json:"files"`
+	Objects []string `json:"objects"`
+	Exists  []bool   `json:"exists"` // Used only in GUI
 }
 
 // ExportPossible indicates whether or not user the user is allowed to export files outside the VM.
@@ -49,31 +64,138 @@ var ExportPossible = func() bool {
 	return enabled && isManager
 }
 
-// CheckObjectExistence checks if the file that is to be uploaded already has an
-// equivalent object in S3 storage. If object exists, user is given a choice to either
-// quit or override the object with the new file.
-func CheckObjectExistence(filename, bucket string, rd io.Reader) error {
-	object, bucket := reorderNames(filename, bucket)
+// WalkDirs receives a selection of files and folders, and returns all the files
+// that can be found in this selection, including the files recursively found under the folders.
+// The function also returns the bucket name and the objects that will be uploaded from the files.
+func WalkDirs(selection, currentObjects []string, prefix string) (UploadSet, error) {
+	bucket, subfolder, _ := strings.Cut(filepath.Clean(prefix), "/")
+	if subfolder != "" {
+		subfolder += "/"
+	}
+
+	g, ctx := errgroup.WithContext(context.Background())
+	files := make([]string, 0, len(selection))
+	objects := make([]string, 0, len(selection))
+	filesChan := make(chan [2]string)
+	wait := make(chan any)
+
+	go func() {
+		for f := range filesChan {
+			files = append(files, f[0])
+			objects = append(objects, f[1])
+		}
+
+		wait <- nil
+	}()
+
+	for i := range selection {
+		root := filepath.Clean(selection[i])
+
+		g.Go(func() error {
+			return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !d.Type().IsRegular() {
+					if !d.IsDir() {
+						logs.Warningf("%s is not a regular file or directory, skipping...", path)
+					}
+
+					return nil
+				}
+
+				var obj string
+				if path == root {
+					obj = subfolder + filepath.Base(path+".c4gh")
+				} else {
+					obj = subfolder + strings.TrimPrefix(path, root+"/") + ".c4gh"
+				}
+				if slices.Contains(currentObjects, obj) {
+					return errors.New("you have already selected files with similar object names")
+				}
+
+				select {
+				case filesChan <- [2]string{path, obj}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				return nil
+			})
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return UploadSet{}, err
+	}
+	close(filesChan)
+	<-wait
+
+	sortedObjects := slices.Clone(objects)
+	slices.Sort(sortedObjects)
+
+	if len(slices.Compact(sortedObjects)) != len(objects) {
+		return UploadSet{}, errors.New("objects derived from the selection of files are not unique")
+	}
+
+	return UploadSet{bucket, files, objects, make([]bool, len(objects))}, nil
+}
+
+// ValidateBucket validates the bucket name and creates a valid bucket if it does not yet exist
+// Called only from CLI
+func ValidateBucket(bucket string) (bool, error) {
+	if len(bucket) < 3 || len(bucket) > 63 {
+		return false, fmt.Errorf("bucket name should be between 3 and 63 characters long")
+	}
+	if !isLowerAlphaNumericHyphen(bucket) {
+		return false, fmt.Errorf("bucket name should only contain Latin letters (a-z), numbers (0-9) and hyphens (-)")
+	}
+	if bucket[0] == '-' {
+		return false, fmt.Errorf("bucket name should start with a lowercase letter or a number")
+	}
+
 	exists, err := api.BucketExists(api.SDConnect, bucket)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if !exists { // No such bucket, object cannot exist
+	if !exists {
+		logs.Info("Creating bucket ", bucket)
+		if err := api.CreateBucket(api.SDConnect, bucket); err != nil {
+			return false, err
+		}
+	}
+
+	return !exists, nil
+}
+
+// CheckObjectExistences checks if the files that are to be uploaded already have
+// equivalent objects in S3 storage. If any objects exists, user is given a choice to either
+// quit or overwrite the objects with the new files. Function assumes bucket exists.
+func CheckObjectExistences(set *UploadSet, rd io.Reader) error {
+	// these objects should already be sorted
+	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, api.SDConnect+"/"+api.GetProjectName()+"/"+set.Bucket)
+	if err != nil {
+		return fmt.Errorf("could not determine if export will overwrite data: %w", err)
+	}
+
+	for i := range set.Objects {
+		_, found := slices.BinarySearchFunc(existingObjects, set.Objects[i], func(meta api.Metadata, obj string) int {
+			return strings.Compare(meta.Name, obj)
+		})
+		if found {
+			set.Exists[i] = true
+		}
+	}
+
+	if rd == nil {
 		return nil
 	}
 
-	objects, err := api.GetObjects(api.SDConnect, bucket, api.SDConnect+"/"+api.GetProjectName()+"/"+bucket)
-	if err != nil {
-		return fmt.Errorf("could not determine if export will override data: %w", err)
-	}
-	exists = slices.ContainsFunc(objects, func(meta api.Metadata) bool {
-		return meta.Name == object
-	})
-	if exists {
+	if slices.Contains(set.Exists, true) {
 		r := bufio.NewReader(rd)
 
 		for {
-			fmt.Fprintf(os.Stdout, "Export will override existing object in Allas. Continue? [y/n] ")
+			fmt.Fprintf(os.Stdout, "Export will overwrite existing objects in Allas. Continue? [y/n] ")
 			ans, err := r.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("failed to read user input: %w", err)
@@ -90,29 +212,43 @@ func CheckObjectExistence(filename, bucket string, rd io.Reader) error {
 		}
 	}
 
-	logs.Info("New object will not override current objects")
+	logs.Info("New objects will not override current objects")
 
 	return nil
 }
 
-// Upload uploads a file to SD Connect, and possibly to CESSNA
-func Upload(filename, bucket string) error {
+// Upload uploads files to a bucket with object names taken from the matching index in `objects`
+func Upload(set UploadSet) error {
 	var err error
-	ai.publicKey, err = api.GetPublicKey()
+	ai.publicKey, err = api.GetPublicKey() // May rotate between uploads so have to fetch it each time
 	if err != nil {
 		return fmt.Errorf("failed to get project public key: %w", err)
 	}
 
-	object, bucket := reorderNames(filename, bucket)
-	exists, err := api.BucketExists(api.SDConnect, bucket)
-	if err != nil {
-		return err
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(numRoutines)
+	for i := range set.Objects {
+		filename := set.Files[i]
+		object := set.Objects[i]
+		g.Go(func() error {
+			err := UploadObject(ctx, filename, object, set.Bucket)
+			if err != nil {
+				logs.Error(err)
+
+				return errors.New("upload interrupted due to errors")
+			}
+
+			return nil
+		})
 	}
-	if !exists {
-		logs.Info("Creating bucket ", bucket)
-		if err := api.CreateBucket(api.SDConnect, bucket); err != nil {
-			return err
-		}
+
+	return g.Wait()
+}
+
+// UploadObject uploads a file to SD Connect, and possibly to CESSNA
+var UploadObject = func(ctx context.Context, filename, object, bucket string) error {
+	if err := ctx.Err(); err != nil {
+		return nil // We don't need to print out the same context error over and over again
 	}
 
 	file, encryptedFileSize, err := getFileDetails(filename)
@@ -125,14 +261,14 @@ func Upload(filename, bucket string) error {
 	if objectSize > maxObjectSize {
 		return fmt.Errorf("file %s is too large (%d bytes)", filename, objectSize)
 	}
-	logs.Debugf("File size %v", encryptedFileSize)
 
 	segmentSize := minSegmentSize
 	for maxParts*segmentSize < encryptedFileSize {
 		segmentSize <<= 1
 	}
-	logs.Debugf("Segment size %v", segmentSize)
 	logs.Info("Encrypting file ", filename)
+	logs.Debugf("Encrypted file size %v for %s", encryptedFileSize, filename)
+	logs.Debugf("Segment size %v for %s", segmentSize, filename)
 
 	errc1 := make(chan error, 1)
 	errc2 := make(chan error, 2)
@@ -142,15 +278,15 @@ func Upload(filename, bucket string) error {
 		go encrypt(file, pw, errc2)
 	}
 	go func() {
-		errc1 <- uploadAllas(pr, bucket, object, segmentSize)
+		errc1 <- uploadAllas(ctx, pr, bucket, object, segmentSize)
 		pr.Close()
 	}()
 
 	err = nil
 	if api.GetProjectType() != "default" {
 		errc2 <- nil
-		findataObject := api.GetProjectName() + "/" + bucket + "/" + object
-		if err = uploadFindata(file, pw, findataObject, segmentSize); err != nil {
+		findataObject := bucket + "/" + object
+		if err = uploadFindata(ctx, file, pw, findataObject, segmentSize); err != nil {
 			logs.Error(err)
 		}
 	}
@@ -170,31 +306,33 @@ func Upload(filename, bucket string) error {
 	if err != nil || err1 != nil || err2 != nil {
 		return fmt.Errorf("uploading file %s failed", filename)
 	}
+	logs.Info("Finished uploading file ", filename)
 
 	return nil
 }
 
 // uploadAllas exports an encrypted file by uploading its header to Vault and
 // its body to SD Connect. pr is assumed to contain an encrypted file.
-func uploadAllas(pr io.Reader, bucket, object string, segmentSize int64) error {
+var uploadAllas = func(ctx context.Context, pr io.Reader, bucket, object string, segmentSize int64) error {
 	logs.Infof("Beginning to upload %s object %s to bucket %s", api.ToPrint(api.SDConnect), object, bucket)
 	header, err := c4ghHeaders.ReadHeader(pr)
 	if err != nil {
 		return fmt.Errorf("failed to extract header from encrypted file: %w", err)
 	}
-	logs.Infof("Uploading header of object %s to Vault", object)
+	logs.Debugf("Uploading header of object %s to Vault", object)
 	if err := api.PostHeader(header, bucket, object); err != nil {
 		return fmt.Errorf("failed to upload header to vault: %w", err)
 	}
+	logs.Debugf("Uploading body of object %s to Allas", object)
 
-	return api.UploadObject(pr, api.SDConnect, bucket, object, segmentSize)
+	return api.UploadObject(ctx, pr, api.SDConnect, bucket, object, segmentSize)
 }
 
 // uploadFindata uploads the selected file unencrypted to CESSNA. At the same time
 // it sends the read file content through a Crypt4GHWriter, which will be read via the
 // pipe reader in uploadAllas(). If upload fails, the pipe writer is closed with an error
 // resulting in the AWS SDK to fail in uploadAllas().
-func uploadFindata(file io.Reader, pw *io.PipeWriter, object string, segmentSize int64) (err error) {
+func uploadFindata(ctx context.Context, file io.Reader, pw *io.PipeWriter, object string, segmentSize int64) (err error) {
 	logs.Infof("Beginning to upload %s object %s", api.Findata, object)
 	defer func() {
 		pw.CloseWithError(err) // pw.Close() if err is nil
@@ -206,7 +344,7 @@ func uploadFindata(file io.Reader, pw *io.PipeWriter, object string, segmentSize
 	}
 
 	r := io.TeeReader(file, c4ghWriter)
-	err = api.UploadObject(r, api.Findata, "", object, segmentSize)
+	err = api.UploadObject(ctx, r, api.Findata, "", object, segmentSize)
 	if err != nil {
 		err = fmt.Errorf("failed to upload %s object: %w", api.Findata, err)
 
@@ -224,13 +362,6 @@ var newCrypt4GHWriter = func(wr io.Writer) (*streaming.Crypt4GHWriter, error) {
 	}
 
 	return c4ghWriter, nil
-}
-
-func reorderNames(filename, directory string) (string, string) {
-	before, after, _ := strings.Cut(strings.TrimRight(directory, "/"), "/")
-	object := strings.TrimLeft(after+"/"+filepath.Base(filename+".c4gh"), "/")
-
-	return object, before
 }
 
 var encrypt = func(file io.Reader, pw *io.PipeWriter, errc chan error) {
