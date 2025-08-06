@@ -10,12 +10,12 @@ import ValidationHelper from "../components/ValidationHelper.vue";
 
 const exportHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name", sortable: false },
-  { key: "bucket", value: "Destination bucket", sortable: false },
+  { key: "path", value: "Path", sortable: false },
 ];
 
 const exportHeadersModifiable: CDataTableHeader[] = [
   { key: "name", value: "Name" },
-  { key: "bucket", value: "Destination bucket", sortable: false },
+  { key: "path", value: "Path" },
   { key: "actions", value: null, sortable: false, justify: "end"},
 ];
 
@@ -69,19 +69,20 @@ EventsOn("setBuckets", (buckets: string[]) => {
 
 const exportData = computed(() => {
   return selectedSet.value.objects.map((object: string) => {
+    const withoutC4gh = object.endsWith(".c4gh") ? object.slice(0, -5) : object;
     return {
-      name: {value: object.endsWith(".c4gh") ? object.slice(0, -5) : object},
-      bucket: {value: selectedSet.value.bucket},
+      name: { value: withoutC4gh.split("/").pop() },
+      path: { value: selectedBucket.value + "/" + withoutC4gh },
       actions: {
         children: [
         {
-          value: "Remove",
+          value: "Remove from list",
           component: {
           tag: "c-button",
           params: {
             text: true,
             size: "small",
-            title: "Remove",
+            title: "Remove from list",
             onClick: () =>
               {
                 let idx = selectedSet.value.objects.indexOf(object);
@@ -114,7 +115,7 @@ const exportData = computed(() => {
               },
             },
             {
-              value: "Remove",
+              value: "Remove from list",
               component: {
                 tag: "span",
               },
@@ -364,6 +365,8 @@ function reset() {
       </c-button>
     </div>
     <div v-show="pageIdx == 2">
+      <p><strong>Destination bucket: </strong>{{ selectedBucket }}</p>
+      <p><strong>Destination folder: </strong>{{ selectedFolder ? selectedFolder : '-' }}</p>
       <div
         id="drop-area"
         :class="{ 'dragging': isDraggingFile }"
@@ -380,6 +383,10 @@ function reset() {
         <p>
           All exported files are encrypted by default but can be accessed
           and automatically decrypted by project members via SD Connect.
+        </p>
+        <p>
+          In secondary use projects one copy of the exported data will be uploaded to
+          SD Connect and one copy will be automatically transferred to Findata for scrutiny.
         </p>
       </div>
       <c-data-table

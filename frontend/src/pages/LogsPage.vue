@@ -111,7 +111,6 @@ function containsFilterString(str: string): boolean {
       :data.prop="logDataTableFiltered"
       :headers.prop="logHeaders"
       :pagination.prop="paginationOptions"
-      :hide-footer="logDataTable.length <= 5"
     />
   </div>
 </template>
