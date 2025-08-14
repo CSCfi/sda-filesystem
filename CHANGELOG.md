@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) export table will list objects without the `.c4gh` extension
 - (users) the export file dialog allows the selection of multiple files
 - Makefile defaults to bash shell
 - while exporting files in GUI, object existence is checked with S3 instead of traversing the filesystem
@@ -16,6 +17,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- export table showing `no data` after the last item in a page was removed (#45)
 - data races in tests
 - the destination to where the binaries are copied under `desktop/`
 
