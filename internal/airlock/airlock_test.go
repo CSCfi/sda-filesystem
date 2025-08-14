@@ -80,9 +80,9 @@ func TestWalkDirs(t *testing.T) {
 				tmpDir + "/dir/subdir2/fatal.log",
 			},
 			[]string{
-				"subfolder/file.txt.c4gh", "subfolder/file2.txt.c4gh", "subfolder/subdir/file.txt.c4gh",
-				"subfolder/subdir/another-file.txt.c4gh", "subfolder/subdir2/event.log.c4gh",
-				"subfolder/subdir2/fatal.log.c4gh",
+				"subfolder/file.txt.c4gh", "subfolder/dir/file2.txt.c4gh", "subfolder/dir/subdir/file.txt.c4gh",
+				"subfolder/dir/subdir/another-file.txt.c4gh", "subfolder/dir/subdir2/event.log.c4gh",
+				"subfolder/dir/subdir2/fatal.log.c4gh",
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestWalkDirs(t *testing.T) {
 				tmpDir + "/file.txt", tmpDir + "/run.sh",
 				tmpDir + "/dir/subdir2/event.log", tmpDir + "/dir/subdir2/fatal.log",
 			},
-			[]string{"file.txt.c4gh", "run.sh.c4gh", "event.log.c4gh", "fatal.log.c4gh"},
+			[]string{"file.txt.c4gh", "run.sh.c4gh", "subdir2/event.log.c4gh", "subdir2/fatal.log.c4gh"},
 		},
 	}
 
@@ -170,23 +170,23 @@ func TestWalkDirs_Error(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	var tests = []struct {
-		testname, newFilename, errStr string
-		selection                     []string
+		testname, errStr string
+		selection        []string
 	}{
 		{
-			"FAIL_1", tmpDir + "/dir/file.txt",
+			"FAIL_1",
 			"objects derived from the selection of files are not unique",
-			[]string{tmpDir + "/file.txt", tmpDir + "/dir"},
+			[]string{tmpDir + "/file.txt", tmpDir + "/file.txt"},
 		},
 		{
-			"FAIL_2", tmpDir + "/dir/subdir/hello.txt",
+			"FAIL_2",
 			"you have already selected files with similar object names",
-			[]string{tmpDir + "/dir/subdir"},
+			[]string{tmpDir + "/dir/subdir2"},
 		},
 		{
-			"FAIL_3", "",
+			"FAIL_3",
 			"lstat " + tmpDir + "/dir2/file.txt: no such file or directory",
-			[]string{tmpDir + "/file.txt", tmpDir + "/dir/subdir2", tmpDir + "/dir2/file.txt"},
+			[]string{tmpDir + "/file.txt", tmpDir + "/dir/subdir", tmpDir + "/dir2/file.txt"},
 		},
 	}
 
@@ -237,16 +237,8 @@ func TestWalkDirs_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			if tt.newFilename != "" {
-				err = os.WriteFile(tt.newFilename, []byte("data"), 0600)
-				if err != nil {
-					t.Fatalf("Failed to create file: %s", err.Error())
-				}
-				t.Cleanup(func() { os.Remove(tt.newFilename) })
-			}
-
-			existingObjects := []string{"old-file.txt.c4gh", "hello.txt.c4gh", "another-file.txt.c4gh"}
-			_, err := WalkDirs(tt.selection, existingObjects, "test-bucket")
+			existingObjects := []string{"old-file.txt.c4gh", "dir/subdir2/fatal.log.c4gh", "another-file.txt.c4gh"}
+			_, err := WalkDirs(tt.selection, existingObjects, "test-bucket/dir")
 
 			if err == nil {
 				t.Error("Function did not return error")

@@ -10,12 +10,12 @@ import ValidationHelper from "../components/ValidationHelper.vue";
 
 const exportHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name", sortable: false },
-  { key: "bucket", value: "Destination bucket", sortable: false },
+  { key: "path", value: "Path", sortable: false },
 ];
 
 const exportHeadersModifiable: CDataTableHeader[] = [
   { key: "name", value: "Name" },
-  { key: "bucket", value: "Destination bucket", sortable: false },
+  { key: "path", value: "Path" },
   { key: "actions", value: null, sortable: false, justify: "end"},
 ];
 
@@ -30,6 +30,8 @@ const selectedFolder = ref("");
 const uniqueBucket = ref<boolean | undefined>(undefined); // true if user is allowed to create the bucket, false if they already own it
 // eslint-disable-next-line no-undef
 const exportAutocomplete = ref<HTMLCAutocompleteElement | null>(null);
+// eslint-disable-next-line no-undef
+const exportTable = ref<HTMLCDataTableElement | null>(null);
 
 const validationHelperData = ref<ValidationHelperType[]>([
   { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
@@ -67,25 +69,39 @@ EventsOn("setBuckets", (buckets: string[]) => {
 
 const exportData = computed(() => {
   return selectedSet.value.objects.map((object: string) => {
+    const withoutC4gh = object.endsWith(".c4gh") ? object.slice(0, -5) : object;
     return {
-      name: {value: object },
-      bucket: {value: selectedSet.value.bucket},
+      name: { value: withoutC4gh.split("/").pop() },
+      path: { value: selectedBucket.value + "/" + withoutC4gh },
       actions: {
         children: [
         {
-          value: "Remove",
+          value: "Remove from list",
           component: {
           tag: "c-button",
           params: {
             text: true,
             size: "small",
-            title: "Remove",
+            title: "Remove from list",
             onClick: () =>
               {
                 let idx = selectedSet.value.objects.indexOf(object);
                 selectedSet.value.objects.splice(idx, 1);
                 selectedSet.value.files.splice(idx, 1);
                 selectedSet.value.exists.splice(idx, 1);
+
+                const startFrom = exportTable.value?.pagination.startFrom;
+                const endTo = exportTable.value?.pagination.endTo;
+                const count = exportTable.value?.pagination.itemCount;
+                const currentPage = exportTable.value?.pagination.currentPage;
+                const perPage = exportTable.value?.pagination.itemsPerPage;
+
+                if (startFrom && endTo && count && currentPage && perPage &&
+                    exportTable.value && count - 2 < startFrom) {
+                  exportTable.value.pagination.currentPage = currentPage - 1;
+                  exportTable.value.pagination.startFrom = startFrom - perPage;
+                  exportTable.value.pagination.endTo = endTo - perPage;
+                }
               }
           }},
           children: [
@@ -99,7 +115,7 @@ const exportData = computed(() => {
               },
             },
             {
-              value: "Remove",
+              value: "Remove from list",
               component: {
                 tag: "span",
               },
@@ -349,6 +365,8 @@ function reset() {
       </c-button>
     </div>
     <div v-show="pageIdx == 2">
+      <p><strong>Destination bucket: </strong>{{ selectedBucket }}</p>
+      <p><strong>Destination folder: </strong>{{ selectedFolder ? selectedFolder : '-' }}</p>
       <div
         id="drop-area"
         :class="{ 'dragging': isDraggingFile }"
@@ -366,15 +384,19 @@ function reset() {
           All exported files are encrypted by default but can be accessed
           and automatically decrypted by project members via SD Connect.
         </p>
+        <p>
+          In secondary use projects one copy of the exported data will be uploaded to
+          SD Connect and one copy will be automatically transferred to Findata for scrutiny.
+        </p>
       </div>
       <c-data-table
         v-if="exportData.length"
         id="export-table"
+        ref="exportTable"
         class="gateway-table"
         :data.prop="exportData"
         :headers.prop="exportHeadersModifiable"
         :pagination="paginationOptions"
-        :hide-footer="selectedSet.files.length <= 5"
       />
       <c-row justify="space-between">
         <c-button outlined @click="pageIdx--; clearSet()">
@@ -396,7 +418,7 @@ function reset() {
         class="gateway-table"
         :data.prop="exportData"
         :headers.prop="exportHeaders"
-        hide-footer="true"
+        :pagination="paginationOptions"
       />
     </div>
     <div v-show="pageIdx == 4">
