@@ -4,10 +4,11 @@ import { ref, computed, onMounted } from "vue";
 import { EventsOn, EventsEmit } from "../wailsjs/runtime";
 import { InitializeAPI, Quit } from "../wailsjs/go/main/App";
 import { mdiLogoutVariant } from "@mdi/js";
+import { TabType } from "./types/common";
 
 interface ComponentType {
   name: string
-  tab: string
+  tab: TabType
   visible: boolean
   props?: {[key:string]:boolean}
   active?: boolean
@@ -19,7 +20,7 @@ const initialized = ref(false);
 const selected = ref(false);
 const accessed = ref(false);
 
-const currentTab = ref("Log in");
+const currentTab = ref<TabType>("Log in");
 const componentData = computed<ComponentType[]>(() => ([
   {
     name: "SelectPage",
@@ -69,6 +70,10 @@ EventsOn("showToast", (title: string, err: string) => {
   };
 
   toasts.value?.addToast(message);
+});
+
+EventsOn("changeTab", (value: TabType) => {
+  currentTab.value = value;
 });
 
 EventsOn("selectFinished", () => {

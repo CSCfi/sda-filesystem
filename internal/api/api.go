@@ -64,6 +64,7 @@ type apiInfo struct {
 	token        string
 	password     string // base64 encoded
 	repositories []string
+	scan         chan<- bool
 	userProfile  profile
 	hi           httpInfo
 	vi           vaultInfo
@@ -172,7 +173,7 @@ var GetEnv = func(name string, verifyURL bool) (string, error) {
 // Setup reads the necessary environment varibles needed for requests,
 // generates key pair for vault, and initialises s3 client.
 // `files` contains all the files from the `certs` directory.
-func Setup(files ...FileReader) error {
+func Setup(files FileReader) error {
 	var err error
 	ai.token, err = GetEnv("SDS_ACCESS_TOKEN", false)
 	if err != nil {
@@ -238,7 +239,7 @@ func getAPIEndpoints(url string) error {
 	return nil
 }
 
-func GetProfile() (bool, error) {
+func GetProfile(scanChannel ...chan<- bool) (bool, error) {
 	err := makeRequest("GET", ai.hi.endpoints.Profile, nil, nil, nil, &ai.userProfile)
 	if err != nil {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
@@ -250,6 +251,15 @@ func GetProfile() (bool, error) {
 	ai.token = ai.userProfile.DesktopToken
 	if ai.userProfile.SDConnect && !slices.Contains(ai.repositories, SDConnect) {
 		ai.repositories = append(ai.repositories, SDConnect)
+	}
+
+	// To inform GUI about virus scan results
+	if len(scanChannel) > 0 {
+		if ai.userProfile.ProjectType == "default" {
+			close(scanChannel[0]) // Do not need in this case
+		} else {
+			ai.scan = scanChannel[0]
+		}
 	}
 
 	return ai.userProfile.S3Access, nil
@@ -277,19 +287,15 @@ var Authenticate = func(password string) error {
 // them to be in the format <hostname>.crt and <hostname>.key. If no such files are found,
 // a warning is logged but no error is returned. If the files are successfully parsed,
 // the certificates are added to the http client.
-var loadCertificates = func(certFiles []FileReader) error {
-	if len(certFiles) == 0 {
-		return nil
-	}
-
+var loadCertificates = func(certFiles FileReader) error {
 	u, err := url.ParseRequestURI(ai.proxy)
 	if err != nil {
 		return fmt.Errorf("could not parse proxy url: %w", err)
 	}
 	proxyHost := u.Hostname()
 
-	certBytes, err1 := certFiles[0].ReadFile(proxyHost + ".crt")
-	keyBytes, err2 := certFiles[0].ReadFile(proxyHost + ".key")
+	certBytes, err1 := certFiles.ReadFile(proxyHost + ".crt")
+	keyBytes, err2 := certFiles.ReadFile(proxyHost + ".key")
 	if err1 != nil || err2 != nil {
 		err = errors.Join(errors.New("disabled mTLS for S3 upload"), err1, err2)
 		logs.Warning(err)
@@ -444,11 +450,13 @@ var DeleteFileFromCache = func(nodes []string, size int64) {
 }
 
 // scanForViruses sends data chunks to clamAV for scanning. It is only
-// applied for Findata projects.
+// applied for Findata projects. If an error occurred during scanning,
+// ai.scan channel sends value false. If a virus is found, the value is true.
 var scanForViruses = func(data []byte, path string) {
 	conn, err := ai.ui.dial()
 	if err != nil {
 		logs.Errorf("failed to connect to clamav socket: %w", err)
+		ai.scan <- false
 
 		return
 	}
@@ -477,6 +485,8 @@ var scanForViruses = func(data []byte, path string) {
 	}
 
 	if err != nil {
+		ai.scan <- false
+
 		return
 	}
 
@@ -484,6 +494,7 @@ var scanForViruses = func(data []byte, path string) {
 	response, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		logs.Errorf("Failed to read ClamAV response: %w", err)
+		ai.scan <- false
 
 		return
 	}
@@ -495,7 +506,9 @@ var scanForViruses = func(data []byte, path string) {
 	}
 	if strings.Contains(response, "FOUND") {
 		logs.Warningf("%s is infected: %s", path, response)
+		ai.scan <- true
 	} else {
 		logs.Errorf("ClamAV did not return a valid response for %s: %s", path, response)
+		ai.scan <- false
 	}
 }
