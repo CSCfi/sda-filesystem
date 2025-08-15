@@ -479,6 +479,10 @@ func getDataChunk(
 	if header != nil {
 		downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
 		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
+
+		if GetProjectType() != "default" {
+			go scanForViruses(buffer, path)
+		}
 	}
 
 	return buffer[ofst:endofst], nil

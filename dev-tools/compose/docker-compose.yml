@@ -36,9 +36,9 @@ services:
       keystone-swift:
         condition: service_healthy
 
-  findata-creds:
+  admin-creds:
     image: docker.io/docker:28.3
-    container_name: findata-creds
+    container_name: admin-creds
     entrypoint: sh /admin_credentials.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -97,12 +97,12 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.7.2"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.8.0"
     container_name: krakend
     env_file:
       - path: .env
       - path: .env.krakend
-      - path: .env.findata
+      - path: .env.admin
         required: false
     environment:
       API_KEY: "${KRAKEND_API_KEY}"
@@ -117,6 +117,12 @@ services:
       FINDATA_S3_REGION: "${FINDATA_S3_REGION}"
       FINDATA_BUCKET: "${FINDATA_BUCKET}"
       VAULT_ADDR: "${VAULT_ADDR}"
+    healthcheck:
+      test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     volumes:
       - ../static:/static
     profiles:
@@ -174,6 +180,28 @@ services:
       terminal-proxy:
         condition: service_started
 
+  clamav:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/clamav/Dockerfile
+      args:
+        PROXY_URL: "${PROXY_URL}"
+    image: clamav
+    container_name: clamav
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    profiles:
+      - findata
+    depends_on:
+      krakend:
+        condition: service_healthy
+    ports:
+      - 3310:3310
+
   terminal-proxy:
     image: docker.io/nginx:1.29
     container_name: terminal-proxy
@@ -198,6 +226,7 @@ services:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
       PROXY_URL: "${PROXY_URL}"
       CONFIG_ENDPOINT: "${CONFIG_ENDPOINT}"
+      CLAMAV_SOCKET: "${CLAMAV_SOCKET}"
     tty: true
     cap_add:
       - SYS_ADMIN

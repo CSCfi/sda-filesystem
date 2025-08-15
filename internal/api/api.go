@@ -1,13 +1,16 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,6 +47,12 @@ var ai = apiInfo{
 }
 var downloadCache *cache.Ristretto
 
+func init() {
+	ai.ui.dial = func() (net.Conn, error) {
+		return net.Dial("unix", ai.ui.address)
+	}
+}
+
 // FileReader is used as a variable type instead of embed.FS so that mocking during tests is easier
 type FileReader interface {
 	ReadFile(name string) ([]byte, error)
@@ -58,6 +67,7 @@ type apiInfo struct {
 	userProfile  profile
 	hi           httpInfo
 	vi           vaultInfo
+	ui           unixInfo
 }
 
 // httpInfo contains variables used during HTTP requests
@@ -68,6 +78,11 @@ type httpInfo struct {
 	endpoints      apiEndpoints
 	client         *http.Client
 	s3Client       *s3.Client
+}
+
+type unixInfo struct {
+	address string
+	dial    func() (net.Conn, error)
 }
 
 type profile struct {
@@ -227,6 +242,10 @@ func GetProfile() (bool, error) {
 	err := makeRequest("GET", ai.hi.endpoints.Profile, nil, nil, nil, &ai.userProfile)
 	if err != nil {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
+	}
+	ai.ui.address, err = GetEnv("CLAMAV_SOCKET", false)
+	if ai.userProfile.ProjectType != "default" && err != nil {
+		return false, fmt.Errorf("required environment variables missing: %w", err)
 	}
 	ai.token = ai.userProfile.DesktopToken
 	if ai.userProfile.SDConnect && !slices.Contains(ai.repositories, SDConnect) {
@@ -421,5 +440,62 @@ var DeleteFileFromCache = func(nodes []string, size int64) {
 		key := toCacheKey(nodes, i)
 		downloadCache.Del(key)
 		i += chunkSize
+	}
+}
+
+// scanForViruses sends data chunks to clamAV for scanning. It is only
+// applied for Findata projects.
+var scanForViruses = func(data []byte, path string) {
+	conn, err := ai.ui.dial()
+	if err != nil {
+		logs.Errorf("failed to connect to clamav socket: %w", err)
+
+		return
+	}
+	defer conn.Close()
+
+	logs.Debugf("Starting to scan file %s", path)
+
+	size := [4]byte{}
+	binary.BigEndian.PutUint32(size[:], uint32(len(data)))
+
+	// Start stream command
+	if _, err = fmt.Fprintf(conn, "zINSTREAM\x00"); err != nil {
+		logs.Errorf("Failed to send command to ClamAV: %w", err)
+	} else if _, err = conn.Write(size[:]); err != nil {
+		// ClamAV expects first to receive size of next chunk
+		logs.Errorf("Failed to send size to ClamAV: %w", err)
+	} else if _, err = conn.Write(data); err != nil {
+		// Then ClamAV expects to receive data of size of the previous message
+		logs.Errorf("Failed to send file data to ClamAV: %w", err)
+	}
+
+	// Send zero-length chunk to end stream
+	binary.BigEndian.PutUint32(size[:], uint32(0))
+	if _, err = conn.Write(size[:]); err != nil {
+		logs.Errorf("Failed to end streaming to ClamAV: %w", err)
+	}
+
+	if err != nil {
+		return
+	}
+
+	reader := bufio.NewReader(conn)
+	response, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		logs.Errorf("Failed to read ClamAV response: %w", err)
+
+		return
+	}
+	response = strings.TrimSpace(response)
+
+	logs.Debugf("ClamAV response for %s: %s", path, response)
+	if strings.Contains(response, "stream: OK") {
+		return
+	}
+	if strings.Contains(response, "FOUND") {
+		logs.Warningf("%s is infected: %s", path, response)
+	} else {
+		logs.Errorf("ClamAV did not return a valid response for %s: %s", path, response)
 	}
 }

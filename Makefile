@@ -1,11 +1,13 @@
-.PHONY: help all remote local cli gui gui_build gui_prod wails_update requirements clean down get_env run_profiles build_profiles exec envs _wait_for_container _follow_logs
+.PHONY: help all remote local cli gui gui_build gui_prod wails_update requirements clean down get_env run_profiles build_profiles exec envs _run_findata_profiles _wait_for_container _follow_logs
 
 SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
-PROFILES := fuse krakend keystone
+PROFILES := findata fuse krakend keystone
 IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)), $(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
 LOG ?= info
+SOCKET_DIR := $(HOME)/.clamav
+SOCKET_PATH := $(SOCKET_DIR)/clamd.sock
 
 WAILS_FLAGS =
 ifeq ($(IS_UBUNTU_24_04),true)
@@ -61,26 +63,27 @@ requirements: ## Install dependencies and create .env file with vault secrets
 	set -a; source dev-tools/compose/.env; docker login $${ARTIFACTORY_SERVER}
 	pnpm install --prefix frontend
 	pnpm --prefix frontend run build
+	mkdir -p $(SOCKET_DIR)
 
 remote: down ## Only set up mock terminal-proxy and connect to test cluster KrakenD
 	$(call docker_cmd,,up -d --build)
 	@$(call docker_up_aftermath)
 
-local: down ## Run components locally
+local: down ## Run all components locally
 	$(call docker_cmd,krakend keystone,build)
 	$(call docker_cmd,keystone-creds,up -d)
-	@$(MAKE) _wait_for_container CONTAINER_NAME=findata-creds
+	@$(MAKE) _wait_for_container CONTAINER_NAME=admin-creds
 	$(call docker_cmd,krakend keystone,up -d)
 	@$(call docker_up_aftermath)
 
 cli: ## Run CLI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
-	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
+	@export $$($(MAKE) envs); \
 	trap 'exit 0' INT; go run ./cmd/cli -loglevel=$(LOG) import
 
 gui: wails_update ## Run GUI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
-	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
+	@export $$($(MAKE) envs); \
 	trap 'exit 0' INT; cd cmd/gui; \
 	if [ $(IS_UBUNTU_24_04) = true ]; then \
 		wails dev -race -tags webkit2_41; \
@@ -94,7 +97,7 @@ gui_build: wails_update ## Compile a production-ready GUI binary and save it in 
 gui_prod: ## Build and run a production-ready GUI binary
 	@$(MAKE) gui_build
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
-	@export $$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs); \
+	@export $$($(MAKE) envs); \
 	./build/bin/data-gateway
 
 wails_update: ## Update Wails version to match go.mod
@@ -108,10 +111,12 @@ wails_update: ## Update Wails version to match go.mod
 clean: down ## Stop running containers, delete volumes, and remove vault secrets from .env
 	@cd dev-tools/compose/; sed -i.bak '/### VAULT SECRETS START ###/,/### VAULT SECRETS END ###/d' .env; \
 	cat -s .env > .env.tmp && mv .env.tmp .env; rm -f .env.bak
+	@rm -rf $(SOCKET_DIR)
 
 down: ## Stop running containers and delete volumes
-	@rm -f dev-tools/compose/.env.findata
 	@$(call docker_cmd,$(PROFILES),down --volumes)
+	@rm -f dev-tools/compose/.env.admin
+	@rm -f $(SOCKET_PATH)
 
 get_env: clean ## Get latest secrets from vault, replacing old secrets
 	@vault -v > /dev/null 2>&1 || { echo "⚠️  \033[31;1mVault CLI is not installed\033[0m ⚠️"; exit 1; }
@@ -134,19 +139,24 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,KRAKEND_ADDR,internal-urls,test-krakend-backend) \
 	$(call write_secret,VALIDATOR_ADDR,internal-urls,test-krakend-backend) \
 	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta) \
-	$(call write_secret,CLAMAV_MIRROR,internal-urls,test-clamav)
+	$(call write_secret,CLAMAV_MIRROR,internal-urls,test-clamav) \
+	$(call write_secret,SBDB_CONNECTION_STRING,krakend/sd-connect-shares-db,SBDB_CONNECTION_STRING)
 	@set -a; source dev-tools/compose/.env; printf "BACKEND_HOST=$${KRAKEND_ADDR#*://}\n" >> dev-tools/compose/.env
 	@printf "### VAULT SECRETS END ###\n" >> dev-tools/compose/.env
 	@echo "Secrets written successfully"
 
-run_profiles: down ## Run componets with possible profile arguments: fuse krakend keystone
+run_profiles: down ## Run componets with possible profile arguments: findata fuse krakend keystone
 	@if echo "$(RUN_ARGS)" | grep -q keystone; then \
 		$(call docker_cmd,keystone-creds,up -d); \
 	fi
-	@$(MAKE) _wait_for_container CONTAINER_NAME=findata-creds
-	$(call docker_cmd,$(RUN_ARGS),up)
+	@$(MAKE) _wait_for_container CONTAINER_NAME=admin-creds
+	@if echo "$(RUN_ARGS)" | grep -q findata; then \
+		$(MAKE) _run_findata_profiles RUN_ARGS="$(RUN_ARGS)"; \
+	else \
+		$(call docker_cmd,$(RUN_ARGS),up); \
+	fi
 
-build_profiles: down ## Build and run components with possible profile arguments: fuse krakend keystone
+build_profiles: down ## Build and run components with possible profile arguments: findata fuse krakend keystone
 	$(call docker_cmd,$(RUN_ARGS),build)
 	@$(MAKE) run_profiles RUN_ARGS="$(RUN_ARGS)"
 
@@ -154,10 +164,14 @@ exec: ## Access data-gateway container
 	@trap 'exit 0' INT; docker exec -it data-gateway /bin/bash
 
 envs:
-	@echo "$$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs)"
-
+	@echo "$$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs) CLAMAV_SOCKET=$(SOCKET_PATH)"
 
 ### Following targets are for internal use, but you can still run them ###
+
+_run_findata_profiles:
+	@bash -c 'trap "pkill -P $$$$; exit 0" EXIT;\
+		socat UNIX-LISTEN:$(SOCKET_PATH),fork,reuseaddr TCP:127.0.0.1:3310 & \
+		$(call docker_cmd,$(RUN_ARGS),up)'
 
 _wait_for_container:
 	@if [ -z `docker ps -a --format {{.Names}} --filter name=$(CONTAINER_NAME)` ]; then \
