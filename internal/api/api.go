@@ -349,7 +349,7 @@ var GetProjectType = func() string {
 	return ai.userProfile.ProjectType
 }
 
-func GetUserEmail() string {
+var GetUserEmail = func() string {
 	return ai.userProfile.Email
 }
 

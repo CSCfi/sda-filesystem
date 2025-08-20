@@ -30,10 +30,14 @@ func TestBucketExists(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
 	origS3Client := ai.hi.s3Client
+	origProfile := ai.userProfile
+	origPassword := ai.password
 	defer func() {
 		ai.hi.client = origClient
 		ai.proxy = origProxy
 		ai.hi.s3Client = origS3Client
+		ai.userProfile = origProfile
+		ai.password = origPassword
 	}()
 
 	ai.proxy = "http://localhost:8080"
@@ -45,6 +49,8 @@ func TestBucketExists(t *testing.T) {
 		},
 	}
 	ai.hi.endpoints = testConfig
+	ai.userProfile.DesktopToken = "desktop-token"
+	ai.password = "my-secret-password"
 
 	// This tests is also used to test certificates in S3 client
 	caPEM, mockReader, err := setupCerts("localhost")
@@ -68,6 +74,20 @@ func TestBucketExists(t *testing.T) {
 
 			return
 		}
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer desktop-token" {
+			t.Errorf("Header parameter 'Authorization' has incorrect value\nExpected=Bearer desktop-token\nReceived=%s", auth)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		pass := r.Header.Get("CSC-Password")
+		if pass != "my-secret-password" {
+			t.Errorf("Header parameter 'CSC-Passwors' has incorrect value\nExpected=my-secret-password\nReceived=%s", pass)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
 		if r.URL.Path == "/s3-head-endpoint/sd-connect/my-bucket" {
 			return
 		}
@@ -75,6 +95,7 @@ func TestBucketExists(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 
 			return
+
 		}
 
 		t.Errorf("Request has incorrect path %v", r.URL.Path)
@@ -203,10 +224,12 @@ func TestCreateBucket(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
 	origS3Client := ai.hi.s3Client
+	origProfile := ai.userProfile
 	defer func() {
 		ai.hi.client = origClient
 		ai.proxy = origProxy
 		ai.hi.s3Client = origS3Client
+		ai.userProfile = origProfile
 	}()
 
 	created := false
@@ -1314,6 +1337,20 @@ func TestUploadObject(t *testing.T) {
 
 			return
 		}
+		hdr1 := r.Header.Get("X-Amz-Meta-Key")
+		if hdr1 != "value" {
+			t.Errorf("Header parameter 'X-Amz-Meta-Key' has incorrect value\nExpected=value\nReceived=%s", hdr1)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		hdr2 := r.Header.Get("X-Amz-Meta-Another-key")
+		if hdr2 != "another value" {
+			t.Errorf("Header parameter 'X-Amz-Meta-Another-key' has incorrect value\nExpected=another value\nReceived=%s", hdr2)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
 
 		nextChunk, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -1330,10 +1367,11 @@ func TestUploadObject(t *testing.T) {
 
 	uploadedData := test.GenerateRandomText(10003)
 	reader := bytes.NewReader(uploadedData)
+	metadata := map[string]string{"key": "value", "another-key": "another value"}
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(context.Background(), reader, "some-repository", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
+	} else if err := UploadObject(context.Background(), reader, "some-repository", "bucket1000", "obj.txt", 1024*1024*5, metadata); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if receivedData.String() != string(uploadedData) {
 		t.Errorf("Function uploaded incorrect data\nExpected=%s\nReceived=%s", string(uploadedData), receivedData.String())
@@ -1435,7 +1473,7 @@ func TestUploadObject_Multipart(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(context.Background(), reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err != nil {
+	} else if err := UploadObject(context.Background(), reader, "repo", "bucket1000", "obj.txt", 1024*1024*5, nil); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else {
 		receivedDataStr := ""
@@ -1478,7 +1516,7 @@ func TestUploadObject_TooLarge(t *testing.T) {
 	errStr := "failed to upload object obj.txt to bucket bucket1000: object is too large"
 	if err := initialiseS3Client(); err != nil {
 		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(context.Background(), reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err == nil {
+	} else if err := UploadObject(context.Background(), reader, "repo", "bucket1000", "obj.txt", 1024*1024*5, nil); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -1510,7 +1548,7 @@ func TestUploadObject_ContextCancel(t *testing.T) {
 	errStr := "failed to upload object obj.txt to bucket bucket1000: canceled, context canceled" // `canceled,` comes from aws sdk
 	if err := initialiseS3Client(); err != nil {
 		t.Fatalf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(ctx, reader, "repo", "bucket1000", "obj.txt", 1024*1024*5); err == nil {
+	} else if err := UploadObject(ctx, reader, "repo", "bucket1000", "obj.txt", 1024*1024*5, nil); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
@@ -1574,7 +1612,7 @@ func TestUploadObject_Error(t *testing.T) {
 	errStr := "failed to upload object objekti.txt to bucket bucket574: api error InternalServerError: Internal Server Error"
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if err := UploadObject(context.Background(), reader, "repo", "bucket574", "objekti.txt", 1024*1024*5); err == nil {
+	} else if err := UploadObject(context.Background(), reader, "repo", "bucket574", "objekti.txt", 1024*1024*5, nil); err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())

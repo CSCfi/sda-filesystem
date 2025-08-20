@@ -674,28 +674,30 @@ func TestUpload(t *testing.T) {
 		files, objects                []string
 		createBucket                  bool
 		fileSize, segmentSize         int64
+		metadata                      map[string]string
 	}{
 		{
 			"OK_1", "default", "test-bucket",
 			[]string{"test-file.txt"}, []string{"test-file.txt.c4gh"},
-			false, 9463686, 1 << 27,
+			false, 9463686, 1 << 27, nil,
 		},
 		{
 			"OK_2", "default", "test-bucket",
 			[]string{"test-file.txt", "subfolder/test-file.txt"},
 			[]string{"test-file.txt.c4gh", "subfolder/test-file.txt.c4gh"},
-			true, (1 << 40) * 1.5, 1 << 28,
+			true, (1 << 40) * 1.5, 1 << 28, nil,
 		},
 		{
 			"OK_3", "findata", "test-bucket",
 			[]string{"test-file.txt"}, []string{"test-file.txt.c4gh"},
-			false, 9463686, 1 << 27,
+			false, 9463686, 1 << 27, map[string]string{"journal_number": "journal890"},
 		},
 		{
 			"OK_4", "findata", "test-bucket",
 			[]string{"test-file.txt", "subfolder/test-file.txt", "another-file.txt"},
 			[]string{"test-file.txt.c4gh", "subfolder/test-file.txt.c4gh", "another-file.txt.c4gh"},
 			true, (1 << 40) * 1.5, 1 << 28,
+			map[string]string{"journal_number": "journal456", "author_email": "some.address@gmail.com"},
 		},
 	}
 
@@ -766,7 +768,7 @@ func TestUpload(t *testing.T) {
 			}
 			//nolint:nestif
 			if tt.projectType == "default" {
-				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
+				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
 					if rep != api.SDConnect {
 						t.Errorf("api.UploadObject() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 					}
@@ -802,7 +804,7 @@ func TestUpload(t *testing.T) {
 					return nil
 				}
 			} else {
-				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
+				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
 					switch rep {
 					case api.SDConnect:
 						if bucket != "test-bucket" {
@@ -834,6 +836,10 @@ func TestUpload(t *testing.T) {
 					}
 
 					if rep == api.Findata {
+						if !reflect.DeepEqual(metadata, tt.metadata) {
+							t.Errorf("api.UploadObject() received incorrect metadata\nExpected=%v\nReceived=%v", tt.metadata, metadata)
+						}
+
 						origObject := strings.TrimPrefix(object, "test-bucket/")
 						value, _ := content.Load(origObject)
 						expectedObjContent := string(value.([]byte))
@@ -873,7 +879,8 @@ func TestUpload(t *testing.T) {
 				Files:   tt.files,
 				Objects: tt.objects,
 			}
-			if err := Upload(set); err != nil {
+			fmt.Println(tt.metadata)
+			if err := Upload(set, tt.metadata); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			}
 		})
@@ -993,7 +1000,7 @@ func TestUpload_Error(t *testing.T) {
 					"log.txt.c4gh",
 				},
 			}
-			if err = Upload(set); err == nil {
+			if err = Upload(set, nil); err == nil {
 				t.Error("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -1179,7 +1186,7 @@ func TestUploadObject_Error(t *testing.T) {
 			api.PostHeader = func(header []byte, bucket, object string) error {
 				return tt.headerErr
 			}
-			api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
+			api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
 				_, err := io.ReadAll(body)
 				if err != nil {
 					return fmt.Errorf("failed to read file body: %s", err.Error())
@@ -1213,7 +1220,7 @@ func TestUploadObject_Error(t *testing.T) {
 			}
 			slices.Sort(errs)
 
-			if err = UploadObject(context.Background(), "test-file.txt", "test-file.txt.c4gh", "test-bucket"); err == nil {
+			if err = UploadObject(context.Background(), "test-file.txt", "test-file.txt.c4gh", "test-bucket", nil); err == nil {
 				t.Error("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
