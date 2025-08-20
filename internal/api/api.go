@@ -91,6 +91,7 @@ type profile struct {
 	ProjectName  string `json:"project"`
 	ProjectType  string `json:"projectType"`
 	DesktopToken string `json:"access_token"`
+	Email        string `json:"email"`
 	PI           bool   `json:"PI"`
 	SDConnect    bool   `json:"sdConnect"`
 	S3Access     bool   `json:"s3Access"`
@@ -348,6 +349,10 @@ var GetProjectType = func() string {
 	return ai.userProfile.ProjectType
 }
 
+func GetUserEmail() string {
+	return ai.userProfile.Email
+}
+
 var SDConnectEnabled = func() bool {
 	return ai.userProfile.SDConnect
 }
@@ -498,7 +503,6 @@ var scanForViruses = func(data []byte, path string) {
 
 		return
 	}
-	response = strings.TrimSpace(response)
 
 	logs.Debugf("ClamAV response for %s: %s", path, response)
 	if strings.Contains(response, "stream: OK") {

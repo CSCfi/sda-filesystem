@@ -14,8 +14,8 @@ export function CheckObjectExistences(arg1) {
   return window['go']['main']['App']['CheckObjectExistences'](arg1);
 }
 
-export function ExportFiles(arg1, arg2) {
-  return window['go']['main']['App']['ExportFiles'](arg1, arg2);
+export function ExportFiles(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExportFiles'](arg1, arg2, arg3);
 }
 
 export function FilesOpen() {
@@ -56,6 +56,10 @@ export function RefreshFuse() {
 
 export function SelectFiles() {
   return window['go']['main']['App']['SelectFiles']();
+}
+
+export function ValidateEmail(arg1) {
+  return window['go']['main']['App']['ValidateEmail'](arg1);
 }
 
 export function WalkDirs(arg1, arg2, arg3) {

@@ -3,7 +3,14 @@ import { ref, watch, computed } from "vue";
 import { airlock } from "../../wailsjs/go/models";
 import { EventsOn, EventsEmit, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import { CAutocompleteItem, CDataTableHeader, CPaginationOptions } from "@cscfi/csc-ui/dist/types";
-import { SelectFiles, CheckObjectExistences, CheckBucketExistence, ExportFiles, WalkDirs } from "../../wailsjs/go/main/App";
+import {
+  SelectFiles,
+  CheckObjectExistences,
+  CheckBucketExistence,
+  ExportFiles,
+  WalkDirs,
+  ValidateEmail,
+} from "../../wailsjs/go/main/App";
 import { mdiTrashCanOutline } from "@mdi/js";
 import { ValidationHelperType, ValidationResult } from "../types/common";
 import ValidationHelper from "../components/ValidationHelper.vue";
@@ -47,6 +54,13 @@ const filesToOverwrite = computed(() => selectedSet.value.exists.includes(true))
 const isDraggingFile = ref<boolean>(false);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+const isFindata = ref<boolean>(false);
+const validEmail = ref<boolean>(true);
+const defaultEmail = ref<string>("");
+const selectedEmail = ref<string>("");
+const parsedEmail = ref<string>("");
+const selectedJournalNumber = ref<string>("");
+
 const paginationOptions: CPaginationOptions = {
   itemCount: selectedSet.value.files.length,
   itemsPerPage: 5,
@@ -57,6 +71,12 @@ const paginationOptions: CPaginationOptions = {
 
 EventsOn("exportPossible", () => {
   pageIdx.value = 1;
+});
+
+EventsOn("findataProject", (email: string) => {
+  isFindata.value = true;
+  defaultEmail.value = email;
+  selectedEmail.value = email;
 });
 
 EventsOn("setBuckets", (buckets: string[]) => {
@@ -137,6 +157,10 @@ watch(() => pageIdx.value, (newPage: number) => {
     OnFileDropOff();
   }
 });
+
+watch(() => selectedEmail.value, () => {
+  validEmail.value = true;
+})
 
 watch(() => bucketQuery.value, (query: string) => {
   if (debounceTimer) {
@@ -223,9 +247,35 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
   return result;
 }
 
+function toFileSelectionPage() {
+  if (!isFindata.value) {
+    pageIdx.value++;
+
+    return;
+  }
+
+  ValidateEmail(selectedEmail.value).then((email: string) => {
+    parsedEmail.value = email;
+
+    if (email != "") {
+      pageIdx.value++;
+    } else {
+      validEmail.value = false;
+      window.scrollTo({top: 0});
+    }
+  });
+}
+
 function exportFiles() {
   window.scrollTo({top: 0});
-  ExportFiles(selectedSet.value, !uniqueBucket.value).then(() => {
+  let metadata: { [key:string]:string } = {};
+  if (isFindata.value) {
+    metadata = {
+      "journal_number": selectedJournalNumber.value,
+      "author_email":   parsedEmail.value,
+    }
+  }
+  ExportFiles(selectedSet.value, !uniqueBucket.value, metadata).then(() => {
     pageIdx.value = 4;
   }).catch((_e) => {
     pageIdx.value = 2;
@@ -264,6 +314,9 @@ function reset() {
   selectedFolder.value = "";
   clearSet();
   pageIdx.value = 1;
+  selectedEmail.value = defaultEmail.value;
+  selectedJournalNumber.value = "";
+  validEmail.value = true;
 }
 
 </script>
@@ -302,11 +355,36 @@ function reset() {
     </div>
     <div v-show="pageIdx == 1">
       <h2>Export files to SD Connect</h2>
+      <div v-show="isFindata">
+        <h3>Details for Findata</h3>
+        <p>
+          In secondary use projects one copy of the exported data will be uploaded to SD Connect
+          and one copy will be automatically transferred to Findata for scrutiny.
+        </p>
+        <c-text-field
+          v-model="selectedJournalNumber"
+          v-control
+          label="Journal number"
+          spellcheck="false"
+          trim-whitespace
+          required
+        />
+        <c-text-field
+          v-model="selectedEmail"
+          v-control
+          label="Your email"
+          :valid="validEmail"
+          validation="Email is invalid"
+          spellcheck="false"
+          trim-whitespace
+          required
+        />
+      </div>
+      <h3>Select or create a destination bucket</h3>
       <p>
         Bucket, folder and file names cannot be changed after creation or upload.
         Remember, all bucket names are public; please do not include any confidential information.
       </p>
-      <h3>Select or create a destination bucket</h3>
       <p>
         Choose a bucket from the dropdown or create a new one by entering a name.
         It will be created at the root of your project.
@@ -357,9 +435,10 @@ function reset() {
         class="continue-button"
         :disabled="
           validationHelperData.some(item => item.type !== 'success') ||
-            validateFolderInput(selectedFolder) === false
+            validateFolderInput(selectedFolder) === false ||
+            (isFindata && (selectedEmail == '' || selectedJournalNumber == ''))
         "
-        @click="pageIdx++"
+        @click="toFileSelectionPage"
       >
         Continue
       </c-button>

@@ -491,7 +491,13 @@ func getDataChunk(
 // UploadObject uploads object to bucket. Object is uploaded in segments of
 // size `segmentSize`. Upload Manager decides if the object is small enough
 // to use PutObject, or if multipart upload is necessary.
-var UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64) error {
+var UploadObject = func(
+	ctx context.Context,
+	body io.Reader,
+	rep, bucket, object string,
+	segmentSize int64,
+	metadata map[string]string,
+) error {
 	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
 		u.PartSize = segmentSize
 		u.LeavePartsOnError = false
@@ -505,6 +511,7 @@ var UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(object),
 		Body:        body,
+		Metadata:    metadata,
 	})
 	if err != nil {
 		var re *smithyhttp.ResponseError

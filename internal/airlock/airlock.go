@@ -218,7 +218,7 @@ func CheckObjectExistences(set *UploadSet, rd io.Reader) error {
 }
 
 // Upload uploads files to a bucket with object names taken from the matching index in `objects`
-func Upload(set UploadSet) error {
+func Upload(set UploadSet, metadata map[string]string) error {
 	var err error
 	ai.publicKey, err = api.GetPublicKey() // May rotate between uploads so have to fetch it each time
 	if err != nil {
@@ -231,7 +231,7 @@ func Upload(set UploadSet) error {
 		filename := set.Files[i]
 		object := set.Objects[i]
 		g.Go(func() error {
-			err := UploadObject(ctx, filename, object, set.Bucket)
+			err := UploadObject(ctx, filename, object, set.Bucket, metadata)
 			if err != nil {
 				logs.Error(err)
 
@@ -246,7 +246,7 @@ func Upload(set UploadSet) error {
 }
 
 // UploadObject uploads a file to SD Connect, and possibly to CESSNA
-var UploadObject = func(ctx context.Context, filename, object, bucket string) error {
+var UploadObject = func(ctx context.Context, filename, object, bucket string, metadata map[string]string) error {
 	if err := ctx.Err(); err != nil {
 		return nil // We don't need to print out the same context error over and over again
 	}
@@ -286,7 +286,7 @@ var UploadObject = func(ctx context.Context, filename, object, bucket string) er
 	if api.GetProjectType() != "default" {
 		errc2 <- nil
 		findataObject := bucket + "/" + object
-		if err = uploadFindata(ctx, file, pw, findataObject, segmentSize); err != nil {
+		if err = uploadFindata(ctx, file, pw, findataObject, segmentSize, metadata); err != nil {
 			logs.Error(err)
 		}
 	}
@@ -325,14 +325,21 @@ var uploadAllas = func(ctx context.Context, pr io.Reader, bucket, object string,
 	}
 	logs.Debugf("Uploading body of object %s to Allas", object)
 
-	return api.UploadObject(ctx, pr, api.SDConnect, bucket, object, segmentSize)
+	return api.UploadObject(ctx, pr, api.SDConnect, bucket, object, segmentSize, nil)
 }
 
 // uploadFindata uploads the selected file unencrypted to CESSNA. At the same time
 // it sends the read file content through a Crypt4GHWriter, which will be read via the
 // pipe reader in uploadAllas(). If upload fails, the pipe writer is closed with an error
 // resulting in the AWS SDK to fail in uploadAllas().
-func uploadFindata(ctx context.Context, file io.Reader, pw *io.PipeWriter, object string, segmentSize int64) (err error) {
+func uploadFindata(
+	ctx context.Context,
+	file io.Reader,
+	pw *io.PipeWriter,
+	object string,
+	segmentSize int64,
+	metadata map[string]string,
+) (err error) {
 	logs.Infof("Beginning to upload %s object %s", api.Findata, object)
 	defer func() {
 		pw.CloseWithError(err) // pw.Close() if err is nil
@@ -344,7 +351,7 @@ func uploadFindata(ctx context.Context, file io.Reader, pw *io.PipeWriter, objec
 	}
 
 	r := io.TeeReader(file, c4ghWriter)
-	err = api.UploadObject(ctx, r, api.Findata, "", object, segmentSize)
+	err = api.UploadObject(ctx, r, api.Findata, "", object, segmentSize, metadata)
 	if err != nil {
 		err = fmt.Errorf("failed to upload %s object: %w", api.Findata, err)
 
