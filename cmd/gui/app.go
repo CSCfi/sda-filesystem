@@ -7,14 +7,17 @@ import (
 	"net/mail"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"syscall"
 	"time"
 
 	"sda-filesystem/certs"
 	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/common"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
@@ -27,15 +30,15 @@ type App struct {
 	ctx         context.Context
 	ph          *ProjectHandler
 	lh          *LogHandler
+	loginRepo   common.Repo
 	mountpoint  string
-	loginRepo   string
 	paniced     bool
 	preventQuit bool
 }
 
 // NewApp creates a new App application struct
 func NewApp(ph *ProjectHandler, lh *LogHandler) *App {
-	return &App{ph: ph, lh: lh, loginRepo: api.SDConnect}
+	return &App{ph: ph, lh: lh, loginRepo: common.SDConnect}
 }
 
 // startup is called when the app starts. The context is saved
@@ -100,7 +103,7 @@ func (a *App) InitializeAPI() (bool, error) {
 		reps := make(map[string]bool)
 		enabled := api.GetRepositories()
 		for _, r := range api.GetAllRepositories() {
-			reps[r] = !slices.Contains(enabled, r)
+			reps[r.ForPath()] = !slices.Contains(enabled, r)
 		}
 		wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 	}()
@@ -184,7 +187,14 @@ func (a *App) InitFuse() {
 			<-wait // Wait for fuse to be ready
 
 			var cmd = make(chan []string)
-			go mountpoint.WaitForUpdateSignal(cmd)
+			go func() {
+				s := make(chan os.Signal, 1)
+				signal.Notify(s, syscall.SIGUSR2)
+				for {
+					<-s
+					cmd <- []string{"update"}
+				}
+			}()
 			go func() {
 				for {
 					<-cmd
@@ -192,7 +202,7 @@ func (a *App) InitFuse() {
 				}
 			}()
 			go func() {
-				buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
+				buckets := filesystem.GetNodeChildren(api.SDConnect.ForPath() + "/" + api.GetProjectName())
 				if len(buckets) > 0 {
 					wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 				}
@@ -243,7 +253,7 @@ func (a *App) RefreshFuse() {
 	a.ph.DeleteProjects()
 	filesystem.RefreshFilesystem()
 
-	buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
+	buckets := filesystem.GetNodeChildren(api.SDConnect.ForPath() + "/" + api.GetProjectName())
 	if len(buckets) > 0 {
 		wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 	}

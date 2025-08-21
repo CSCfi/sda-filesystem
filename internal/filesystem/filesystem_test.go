@@ -429,13 +429,13 @@ func TestInitializeFilesystem(t *testing.T) {
 		fi.headers = origHeaders
 	}()
 
-	api.GetRepositories = func() []string {
-		return []string{api.SDConnect, api.SDApply, "Bad-Repo", "Substandard-Repo"}
+	api.GetRepositories = func() []api.Repo {
+		return []api.Repo{rep1, rep2, "Bad-Repo", "Substandard-Repo"}
 	}
 	api.GetProjectName = func() string {
 		return "project"
 	}
-	api.GetBuckets = func(rep string) ([]api.Metadata, error) {
+	api.GetBuckets = func(rep api.Repo) ([]api.Metadata, error) {
 		switch rep {
 		case rep1:
 			return []api.Metadata{
@@ -459,7 +459,7 @@ func TestInitializeFilesystem(t *testing.T) {
 
 		return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
 	}
-	api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		switch rep {
 		case rep1:
 			switch bucket {
@@ -492,7 +492,7 @@ func TestInitializeFilesystem(t *testing.T) {
 					{Size: 151, Name: "test", LastModified: &time1},
 				}, nil
 			default:
-				return nil, fmt.Errorf("api.GetObjects() received invalid project %s", rep+"/"+bucket)
+				return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
 			}
 		case rep2:
 			switch bucket {
@@ -515,12 +515,12 @@ func TestInitializeFilesystem(t *testing.T) {
 				}, nil
 			}
 
-			return nil, fmt.Errorf("api.GetObjects() received invalid bucket %s", rep+"/"+bucket)
+			return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
 		}
 
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
-	api.GetSegmentedObjects = func(rep, bucket string) ([]api.Metadata, error) {
+	api.GetSegmentedObjects = func(rep api.Repo, bucket string) ([]api.Metadata, error) {
 		switch rep {
 		case rep1:
 			if bucket == "bucket_1_segments" {
@@ -529,7 +529,7 @@ func TestInitializeFilesystem(t *testing.T) {
 				}, nil
 			}
 
-			return nil, fmt.Errorf("api.GetObjects() received invalid bucket %s", rep+"/"+bucket)
+			return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
 		case rep2:
 			switch bucket {
 			case "https://example.com_segments":
@@ -549,12 +549,14 @@ func TestInitializeFilesystem(t *testing.T) {
 				}, nil
 			}
 
-			return nil, fmt.Errorf("api.GetObjects() received invalid bucket %s", rep+"/"+bucket)
+			return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
 		}
 
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
-	api.GetHeaders = func(rep string, buckets []api.Metadata) (api.BatchHeaders, error) {
+	api.GetHeaders = func(rep api.Repo,
+		buckets []api.Metadata,
+	) (api.BatchHeaders, error) {
 		switch rep {
 		case rep1:
 			expectedBuckets := []string{"bucket/2", "bucket_1", "bucket_2"}

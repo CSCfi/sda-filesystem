@@ -65,18 +65,12 @@ func TestGetHeaders(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			whitelisted := false
-			whitelistKey = func(rep string) error {
-				if rep != "some repo" {
-					t.Errorf("whitelistKey() received invalis repository. Expected=some repo, received=%v", rep)
-				}
+			whitelistKey = func() error {
 				whitelisted = true
 
 				return tt.whitelistErr
 			}
-			deleteWhitelistedKey = func(rep string) error {
-				if rep != "some repo" {
-					t.Errorf("deleteWhitelistedKey() received invalis repository. Expected=some repo, received=%v", rep)
-				}
+			deleteWhitelistedKey = func() error {
 				if !whitelisted {
 					t.Errorf("deleteWhitelistedKey() was called before key was whitelisted")
 				}

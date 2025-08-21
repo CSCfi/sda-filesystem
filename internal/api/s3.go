@@ -26,13 +26,13 @@ import (
 	"github.com/neicnordic/crypt4gh/streaming"
 )
 
+// chunkSize is the size of a single request when requesting object content from storage
+const chunkSize = 1 << 25
+
 // Crypt4GH constants
 const BlockSize int64 = 65536
 const MacSize int64 = 28
 const CipherBlockSize = BlockSize + MacSize
-
-// chunkSize is the size of a single request when requesting object content from storage
-const chunkSize = 1 << 25
 
 // Metadata standardises the metadata received for both buckets and objects
 type Metadata struct {
@@ -178,7 +178,7 @@ var initialiseS3Client = func() error {
 	return nil
 }
 
-func getContext(rep string, head bool, parent ...context.Context) context.Context {
+func getContext(rep Repo, head bool, parent ...context.Context) context.Context {
 	endpoint := ai.hi.endpoints.S3.Default
 	if head {
 		endpoint = ai.hi.endpoints.S3.Head
@@ -189,11 +189,11 @@ func getContext(rep string, head bool, parent ...context.Context) context.Contex
 		ctx = parent[0]
 	}
 
-	return context.WithValue(ctx, EndpointKey{}, endpoint+strings.ToLower(rep))
+	return context.WithValue(ctx, EndpointKey{}, endpoint+strings.ToLower(rep.String()))
 }
 
 // BucketExists checks whether or not bucket already exists in S3 storage
-var BucketExists = func(rep, bucket string) (bool, error) {
+var BucketExists = func(rep Repo, bucket string) (bool, error) {
 	ctx := getContext(rep, true)
 
 	_, err := ai.hi.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
@@ -220,7 +220,7 @@ var BucketExists = func(rep, bucket string) (bool, error) {
 }
 
 // CreateBucket creates bucket and waits for it to be ready for subsequent requests
-var CreateBucket = func(rep, bucket string) error {
+var CreateBucket = func(rep Repo, bucket string) error {
 	ctx := getContext(rep, false)
 
 	_, err := ai.hi.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -251,7 +251,8 @@ var CreateBucket = func(rep, bucket string) error {
 }
 
 // GetBuckets returns metadata for all the buckets in a certain repository
-var GetBuckets = func(rep string) ([]Metadata, error) {
+// For SD Connect the function also returns the buckets shared with the project.
+var GetBuckets = func(rep Repo) ([]Metadata, error) {
 	params := &s3.ListBucketsInput{}
 	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params, func(o *s3.ListBucketsPaginatorOptions) {
 		o.Limit = 1000 // Allas does not currently support this and returns all buckets in one request
@@ -268,19 +269,20 @@ var GetBuckets = func(rep string) ([]Metadata, error) {
 				err = re.Err
 			}
 
-			return nil, fmt.Errorf("failed to list buckets for %s: %w", ToPrint(rep), err)
+			return nil, fmt.Errorf("failed to list buckets for %s: %w", rep, err)
 		}
 
 		buckets = append(buckets, output.Buckets...)
 	}
 
-	if len(buckets) == 0 {
-		return nil, fmt.Errorf("no buckets found for %s", ToPrint(rep))
+	numBuckets := len(buckets)
+	if numBuckets == 0 {
+		return nil, fmt.Errorf("no buckets found for %s", rep)
 	}
 
-	logs.Infof("Retrieved buckets for %s", ToPrint(rep))
+	logs.Infof("Retrieved buckets for %s", rep)
 
-	meta := make([]Metadata, len(buckets))
+	meta := make([]Metadata, numBuckets)
 	for i := range meta {
 		// Size and modification time of bucket will be calculated later based on the objects it contains
 		meta[i] = Metadata{*buckets[i].Name, 0, nil}
@@ -292,7 +294,7 @@ var GetBuckets = func(rep string) ([]Metadata, error) {
 // GetObjects returns metadata for all the objects in a particular bucket.
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
-var GetObjects = func(rep, bucket, path string, prefix ...string) ([]Metadata, error) {
+var GetObjects = func(rep Repo, bucket, path string, prefix ...string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 	}
@@ -310,22 +312,22 @@ var GetObjects = func(rep, bucket, path string, prefix ...string) ([]Metadata, e
 	return meta, nil
 }
 
-var GetSegmentedObjects = func(rep, bucket string) ([]Metadata, error) {
+var GetSegmentedObjects = func(rep Repo, bucket string) ([]Metadata, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 	}
 
 	meta, err := getObjects(params, rep, bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, ToPrint(rep), err)
+		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, rep, err)
 	}
 
-	logs.Debugf("Retrieved objects from bucket %s in %s", bucket, ToPrint(rep))
+	logs.Debugf("Retrieved objects from bucket %s in %s", bucket, rep)
 
 	return meta, nil
 }
 
-func getObjects(params *s3.ListObjectsV2Input, rep, bucket string) ([]Metadata, error) {
+func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metadata, error) {
 	paginator := s3.NewListObjectsV2Paginator(ai.hi.s3Client, params, func(o *s3.ListObjectsV2PaginatorOptions) {
 		o.Limit = 10000
 	})
@@ -391,6 +393,13 @@ var DownloadData = func(nodes []string, path string, header *string,
 	return data, nil
 }
 
+// calculateEncryptedSize calculates the headerless encrypted size of an unencrypted file
+func calculateEncryptedSize(decryptedSize int64) int64 {
+	nBlocks := math.Ceil(float64(decryptedSize) / float64(BlockSize))
+
+	return decryptedSize + int64(nBlocks)*MacSize
+}
+
 func getDataChunk(
 	nodes []string, path string, header *string,
 	chunk, startDecrypted, endDecrypted, oldOffset, fileSize int64,
@@ -428,12 +437,11 @@ func getDataChunk(
 		startEncrypted = chByteStart/BlockSize*CipherBlockSize + oldOffset
 		endEncrypted = (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
 
-		nBlocks := math.Ceil(float64(fileSize) / float64(BlockSize))
-		encryptedBodySize = fileSize + int64(nBlocks)*MacSize + oldOffset
+		encryptedBodySize = calculateEncryptedSize(fileSize) + oldOffset
 	}
 	endEncrypted = min(endEncrypted, encryptedBodySize)
 
-	rep := nodes[1]
+	rep := Repo(nodes[1])
 	bucket := nodes[3]
 	object := strings.Join(nodes[4:], "/")
 
@@ -494,7 +502,8 @@ func getDataChunk(
 var UploadObject = func(
 	ctx context.Context,
 	body io.Reader,
-	rep, bucket, object string,
+	rep Repo,
+	bucket, object string,
 	segmentSize int64,
 	metadata map[string]string,
 ) error {
@@ -534,7 +543,7 @@ var UploadObject = func(
 
 // DeleteObject delets object from bucket. Function is necessary for situations where upload
 // had to be aborted because something went wrong.
-var DeleteObject = func(rep, bucket, object string) error {
+var DeleteObject = func(rep Repo, bucket, object string) error {
 	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(object),

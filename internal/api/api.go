@@ -28,10 +28,6 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-const SDApply string = "SD-Apply"
-const SDConnect string = "SD-Connect"
-const Findata string = "Findata"
-
 var Port string // Defined at build time if binary is for older Ubuntu
 
 var ai = apiInfo{
@@ -43,7 +39,7 @@ var ai = apiInfo{
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
 	},
-	repositories: []string{}, // SD Apply will be added here once it works with S3
+	repositories: []Repo{}, // SD Apply will be added here once it works with S3
 }
 var downloadCache *cache.Ristretto
 
@@ -63,7 +59,7 @@ type apiInfo struct {
 	proxy        string
 	token        string
 	password     string // base64 encoded
-	repositories []string
+	repositories []Repo
 	scan         chan<- bool
 	userProfile  profile
 	hi           httpInfo
@@ -149,6 +145,26 @@ type CredentialsError struct {
 
 func (e *CredentialsError) Error() string {
 	return "Incorrect password"
+}
+
+// Repo is used as a type to make it easier to remember in which
+// format the repositories should be in in various situations
+type Repo string
+
+const SDApply Repo = "SD-Apply"
+const SDConnect Repo = "SD-Connect"
+const Findata Repo = "Findata"
+
+func (r Repo) String() string {
+	return strings.ReplaceAll(string(r), "-", " ")
+}
+
+func (r Repo) ForURL() string {
+	return strings.ToLower(string(r))
+}
+
+func (r Repo) ForPath() string {
+	return string(r)
 }
 
 // SetRequestTimeout redefines the timeout for an http request
@@ -322,18 +338,14 @@ var loadCertificates = func(certFiles FileReader) error {
 	return nil
 }
 
-// ToPrint returns repository name in printable format
-func ToPrint(rep string) string {
-	return strings.ReplaceAll(rep, "-", " ")
-}
-
-// GetAllRepositories returns the list of all possible repositories
-func GetAllRepositories() []string {
-	return []string{SDConnect, SDApply}
+// GetAllRepositories returns the list of all possible repositories the user can access.
+// Findata is not listed because it is only used for export
+func GetAllRepositories() []Repo {
+	return []Repo{SDConnect, SDApply}
 }
 
 // GetRepositories returns the list of repositories the filesystem can access
-var GetRepositories = func() []string {
+var GetRepositories = func() []Repo {
 	return ai.repositories
 }
 

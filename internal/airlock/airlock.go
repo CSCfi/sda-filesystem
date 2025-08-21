@@ -28,6 +28,8 @@ const minSegmentSize int64 = 1 << 27
 const maxParts int64 = 10000
 const maxObjectSize int64 = 5 * (1 << 40)
 const headerSize = 16 + 108 // Fixed size since we only have one public key
+const blockSize float64 = 65536
+const macSize int64 = 28
 
 var isLowerAlphaNumericHyphen = regexp.MustCompile(`^[a-z0-9-]+$`).MatchString
 
@@ -35,6 +37,11 @@ var ai = airlockInfo{}
 
 type airlockInfo struct {
 	publicKey [chacha20poly1305.KeySize]byte
+}
+
+type walkPacket struct {
+	file   string
+	object string
 }
 
 type UploadSet struct {
@@ -76,13 +83,13 @@ func WalkDirs(selection, currentObjects []string, prefix string) (UploadSet, err
 	g, ctx := errgroup.WithContext(context.Background())
 	files := make([]string, 0, len(selection))
 	objects := make([]string, 0, len(selection))
-	filesChan := make(chan [2]string)
+	filesChan := make(chan walkPacket)
 	wait := make(chan any)
 
 	go func() {
-		for f := range filesChan {
-			files = append(files, f[0])
-			objects = append(objects, f[1])
+		for pkt := range filesChan {
+			files = append(files, pkt.file)
+			objects = append(objects, pkt.object)
 		}
 
 		wait <- nil
@@ -115,7 +122,7 @@ func WalkDirs(selection, currentObjects []string, prefix string) (UploadSet, err
 				}
 
 				select {
-				case filesChan <- [2]string{path, obj}:
+				case filesChan <- walkPacket{file: path, object: obj}:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -173,7 +180,8 @@ func ValidateBucket(bucket string) (bool, error) {
 // quit or overwrite the objects with the new files. Function assumes bucket exists.
 func CheckObjectExistences(set *UploadSet, rd io.Reader) error {
 	// these objects should already be sorted
-	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, api.SDConnect+"/"+api.GetProjectName()+"/"+set.Bucket)
+	path := api.SDConnect.ForPath() + "/" + api.GetProjectName() + "/" + set.Bucket
+	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, path)
 	if err != nil {
 		return fmt.Errorf("could not determine if export will overwrite data: %w", err)
 	}
@@ -313,7 +321,7 @@ var UploadObject = func(ctx context.Context, filename, object, bucket string, me
 // uploadAllas exports an encrypted file by uploading its header to Vault and
 // its body to SD Connect. pr is assumed to contain an encrypted file.
 var uploadAllas = func(ctx context.Context, pr io.Reader, bucket, object string, segmentSize int64) error {
-	logs.Infof("Beginning to upload %s object %s to bucket %s", api.ToPrint(api.SDConnect), object, bucket)
+	logs.Infof("Beginning to upload %s object %s to bucket %s", api.SDConnect, object, bucket)
 	header, err := c4ghHeaders.ReadHeader(pr)
 	if err != nil {
 		return fmt.Errorf("failed to extract header from encrypted file: %w", err)
@@ -387,11 +395,11 @@ var encrypt = func(file io.Reader, pw *io.PipeWriter, errc chan error) {
 	errc <- nil
 }
 
-var encryptedSize = func(decryptedSize int64) int64 {
-	nBlocks := math.Ceil(float64(decryptedSize) / float64(api.BlockSize))
-	bodySize := decryptedSize + int64(nBlocks)*api.MacSize
+// calculateEncryptedSize calculates the headerless encrypted size of an unencrypted file
+var calculateEncryptedSize = func(decryptedSize int64) int64 {
+	nBlocks := math.Ceil(float64(decryptedSize) / blockSize)
 
-	return headerSize + bodySize
+	return decryptedSize + int64(nBlocks)*macSize
 }
 
 var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
@@ -402,5 +410,5 @@ var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 
 	fileInfo, _ := file.Stat()
 
-	return file, encryptedSize(fileInfo.Size()), nil
+	return file, calculateEncryptedSize(fileInfo.Size()) + headerSize, nil
 }

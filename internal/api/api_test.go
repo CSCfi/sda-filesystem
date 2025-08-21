@@ -527,8 +527,8 @@ func TestGetProfile(t *testing.T) {
 			return "", fmt.Errorf("unknown env %s", name)
 		}
 	}
-	ai.repositories = []string{"mock-repo"}
-	finalRepositories := []string{"mock-repo", SDConnect}
+	ai.repositories = []Repo{"mock-repo"}
+	finalRepositories := []Repo{"mock-repo", SDConnect}
 	testCh := make(chan bool)
 
 	access, err := GetProfile(testCh)

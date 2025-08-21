@@ -7,11 +7,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sda-filesystem/internal/logs"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -92,13 +90,4 @@ var Unmount = func(mount string) error {
 	logs.Debug("Filesystem unmounted")
 
 	return nil
-}
-
-func WaitForUpdateSignal(ch chan<- []string) {
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGUSR2)
-	for {
-		<-s
-		ch <- []string{"update"}
-	}
 }

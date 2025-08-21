@@ -4,8 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"sda-filesystem/internal/logs"
 	"strings"
+
+	"sda-filesystem/internal/logs"
 
 	"github.com/neicnordic/crypt4gh/keys"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -43,8 +44,8 @@ type BatchHeaders map[string]map[string]VaultHeaderVersions
 type Headers map[string]map[string]string
 
 // GetHeaders gets all the file headers from header storage for bucket
-var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
-	if err := whitelistKey(rep); err != nil {
+var GetHeaders = func(rep Repo, buckets []Metadata) (BatchHeaders, error) {
+	if err := whitelistKey(); err != nil {
 		return nil, fmt.Errorf("failed to whitelist public key: %w", err)
 	}
 
@@ -86,15 +87,14 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 		}
 	}
 
-	if err = deleteWhitelistedKey(rep); err != nil {
+	if err = deleteWhitelistedKey(); err != nil {
 		logs.Warningf("Could not delete key %s: %w", ai.vi.keyName, err)
 	}
 
 	return resp.Data, nil
 }
 
-var whitelistKey = func(rep string) error {
-	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
+var whitelistKey = func() error {
 	body := `{
 		"flavor": "crypt4gh",
 		"pubkey": "%s"
@@ -105,8 +105,7 @@ var whitelistKey = func(rep string) error {
 	return makeRequest("POST", path, nil, nil, strings.NewReader(body), nil)
 }
 
-var deleteWhitelistedKey = func(rep string) error {
-	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
+var deleteWhitelistedKey = func() error {
 	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
 
 	return makeRequest("DELETE", path, nil, nil, nil, nil)

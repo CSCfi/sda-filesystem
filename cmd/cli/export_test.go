@@ -3,10 +3,11 @@ package main
 import (
 	"os"
 	"reflect"
-	"sda-filesystem/internal/airlock"
-	"sda-filesystem/internal/api"
 	"strings"
 	"testing"
+
+	"sda-filesystem/internal/airlock"
+	"sda-filesystem/internal/api"
 )
 
 func TestExportSetup(t *testing.T) {

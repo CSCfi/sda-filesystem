@@ -146,7 +146,7 @@ func TestClearPath(t *testing.T) {
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	time2, _ := time.Parse(time.RFC3339, "2017-01-24T08:30:45Z")
 	time3, _ := time.Parse(time.RFC3339, "2001-05-01T10:04:05Z")
-	api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "bucket_1" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
@@ -163,7 +163,7 @@ func TestClearPath(t *testing.T) {
 			{Size: 142, Name: "kansio/file_3", LastModified: &time3},
 		}, nil
 	}
-	api.GetHeaders = func(rep string, buckets []api.Metadata) (api.BatchHeaders, error) {
+	api.GetHeaders = func(rep api.Repo, buckets []api.Metadata) (api.BatchHeaders, error) {
 		exists := slices.ContainsFunc(buckets, func(meta api.Metadata) bool {
 			return meta.Name == "bucket_1"
 		})
@@ -190,7 +190,7 @@ func TestClearPath(t *testing.T) {
 
 		return batch, nil
 	}
-	getObjectSizesFromSegments = func(rep, bucket string) (map[string]int64, error) {
+	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
 		return nil, errExpected
 	}
 
@@ -269,7 +269,7 @@ func TestClearPath_Segments(t *testing.T) {
 	time1, _ := time.Parse(time.RFC3339, "2011-04-24T03:38:45Z")
 	time2, _ := time.Parse(time.RFC3339, "2023-07-10T23:11:00Z")
 	time3, _ := time.Parse(time.RFC3339, "2021-05-01T10:04:05Z")
-	api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "dir+2" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
@@ -286,7 +286,7 @@ func TestClearPath_Segments(t *testing.T) {
 			{Size: 0, Name: "dir3.2.1/file/h%e%ll+o", LastModified: &time3},
 		}, nil
 	}
-	api.GetHeaders = func(rep string, buckets []api.Metadata) (api.BatchHeaders, error) {
+	api.GetHeaders = func(rep api.Repo, buckets []api.Metadata) (api.BatchHeaders, error) {
 		exists := slices.ContainsFunc(buckets, func(meta api.Metadata) bool {
 			return meta.Name == "dir+2"
 		})
@@ -296,7 +296,7 @@ func TestClearPath_Segments(t *testing.T) {
 
 		return nil, nil
 	}
-	getObjectSizesFromSegments = func(rep, bucket string) (map[string]int64, error) {
+	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
 		if rep != rep1 || bucket != "dir+2" {
 			t.Errorf("getObjectSizesFromSegments() received incorrect repository or bucket")
 		}
@@ -432,10 +432,10 @@ func TestClearPath_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 				return nil, tt.objectErr
 			}
-			api.GetHeaders = func(rep string, buckets []api.Metadata) (api.BatchHeaders, error) {
+			api.GetHeaders = func(rep api.Repo, buckets []api.Metadata) (api.BatchHeaders, error) {
 				return nil, tt.headerErr
 			}
 			fi.nodes = getTestFuse(t)

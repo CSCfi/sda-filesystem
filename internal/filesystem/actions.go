@@ -29,6 +29,11 @@ import (
 	"github.com/neicnordic/crypt4gh/model/headers"
 )
 
+// Crypt4GH constants
+const BlockSize int64 = 65536
+const MacSize int64 = 28
+const CipherBlockSize = BlockSize + MacSize
+
 // freeNodes calls C function free_nodes()
 // This is a separate Go function so it can be used in tests
 func freeNodes(n *C.nodes_t) {
@@ -177,14 +182,14 @@ func ClearPath(path string) error {
 	}
 
 	pathNames := getNodePathNames(node)
-	if pathNames[1] != api.SDConnect {
-		return fmt.Errorf("clearing cache only enabled for SD Connect")
+	if pathNames[1] != api.SDConnect.ForPath() {
+		return fmt.Errorf("clearing cache only enabled for %s", api.SDConnect)
 	}
 	if len(pathNames) < 4 {
 		return fmt.Errorf("path needs to include at least a bucket")
 	}
 
-	rep := pathNames[1]
+	rep := api.SDConnect
 	bucket := pathNames[3]
 	prefix := strings.Join(pathNames[4:], "/")
 	if node.children != nil && prefix != "" {
@@ -278,7 +283,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	header, ok := fi.headers[node.stat.st_ino]
 	if !ok {
 		pathNames := getNodePathNames(node)
-		if len(pathNames) > 1 && pathNames[1] != api.SDConnect {
+		if len(pathNames) > 1 && pathNames[1] != api.SDConnect.ForPath() {
 			logs.Errorf("Object %s has no header", path)
 
 			return
@@ -298,7 +303,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 			logs.Infof("Testing if file %s is encrypted with unknown key", path)
 
 			buffer, err := api.DownloadData(pathNames, path, nil,
-				0, 2*api.CipherBlockSize, 0, int64(node.stat.st_size))
+				0, 2*CipherBlockSize, 0, int64(node.stat.st_size))
 			if err != nil {
 				logs.Errorf("Could not test if file is encrypted: %v", err)
 
@@ -336,9 +341,9 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 
 // calculateDecryptedSize calculates the decrypted size of an headerless encrypted file
 var calculateDecryptedSize = func(bodySize C.off_t) C.off_t {
-	blocks := C.off_t(math.Ceil(float64(bodySize) / float64(api.CipherBlockSize)))
+	nBlocks := C.off_t(math.Ceil(float64(bodySize) / float64(CipherBlockSize)))
 
-	return bodySize - C.off_t(api.MacSize)*blocks
+	return bodySize - nBlocks*C.off_t(MacSize)
 }
 
 // DownloadData uses s3 to download data to fill `cbuffer`. It returns the amount of bytes that were
