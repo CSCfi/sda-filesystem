@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"slices"
@@ -140,17 +139,6 @@ func IsValidOpen(pid C.int) bool {
 				}
 			}
 		}
-	case "windows":
-		filter := fmt.Sprintf("PID eq %d", pid)
-		task := exec.Command("tasklist", "/FI", filter, "/fo", "table", "/nh")
-		if res, err := task.Output(); err == nil {
-			parts := strings.Fields(string(res))
-			if parts[0] == "explorer.exe" {
-				logs.Debug("Explorer trying to preview files")
-
-				return false
-			}
-		}
 	}
 
 	return true
@@ -172,16 +160,6 @@ func FilesOpen() bool {
 		}
 
 		return len(output) > 0
-	case "windows":
-		volume, _ := os.Readlink(fi.mount)
-		output, err := exec.Command("handle.exe", "-a", "-nobanner", volume).Output()
-		if err != nil {
-			logs.Errorf("Update halted, could not determine if files are open: %w", err)
-
-			return true
-		}
-
-		return strings.Contains(string(output), volume)
 	}
 
 	return false

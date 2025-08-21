@@ -222,8 +222,6 @@ func (a *App) OpenFuse() {
 		cmd = exec.Command("open", userPath)
 	case "linux":
 		cmd = exec.Command("xdg-open", userPath)
-	case "windows":
-		cmd = exec.Command("cmd", "/C", "start", userPath)
 	default:
 		logs.Errorf("Unrecognized OS")
 
