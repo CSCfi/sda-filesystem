@@ -117,6 +117,8 @@ services:
       FINDATA_S3_REGION: "${FINDATA_S3_REGION}"
       FINDATA_BUCKET: "${FINDATA_BUCKET}"
       VAULT_ADDR: "${VAULT_ADDR}"
+      VAULT_SECRET: "${VAULT_SECRET}"
+      VAULT_ROLE: "${VAULT_ROLE}"
     healthcheck:
       test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
       interval: 10s
@@ -139,6 +141,7 @@ services:
       - .env.krakend
     environment:
       DB_PROJECTS: "${CSC_PROJECT}:${EPOUTA_IP_ADDRESS}"
+      SBDB_CONNECTION_STRING: "${SBDB_CONNECTION_STRING}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_USER} -U ${POSTGRES_USER}"]
       interval: 5s
@@ -152,7 +155,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: "${ARTIFACTORY_SERVER}/sds/guacamole-test-initdb:2025.7.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2025.8.0"
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d

@@ -48,6 +48,10 @@ ifneq ($(filter $(firstword $(MAKECMDGOALS)),run_profiles build_profiles),)
   $(eval $(RUN_ARGS):;@:)
 endif
 
+ifneq (,$(findstring keystone,$(RUN_ARGS)))
+    unexport VAULT_ADDR
+endif
+
 # Default target
 # Print list of available targets. Only rows in the format `target: ## description` are printed
 help:
