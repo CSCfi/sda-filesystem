@@ -101,10 +101,11 @@ type configResponse struct {
 }
 
 type apiEndpoints struct {
-	Profile     string `json:"profile"`
-	Password    string `json:"valid_password"`
-	AllasHeader string `json:"allas_header"`
-	S3          struct {
+	Profile       string `json:"profile"`
+	Password      string `json:"valid_password"`
+	AllasHeader   string `json:"allas_header"`
+	SharedBuckets string `json:"shared_buckets"`
+	S3            struct {
 		Default string `json:"default"`
 		Head    string `json:"head"`
 	} `json:"s3"`
@@ -426,18 +427,19 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 	}
 	defer response.Body.Close()
 
-	// Read response body (size unknown)
-	respBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
 	if response.StatusCode >= 400 {
+		// Read response body (size unknown)
+		respBody, err := io.ReadAll(response.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read error response: %w", err)
+		}
+
 		return &RequestError{response.StatusCode, string(respBody)}
 	}
 
 	// Parse response
 	if ret != nil {
-		if err := json.Unmarshal(respBody, ret); err != nil {
+		if err := json.NewDecoder(response.Body).Decode(&ret); err != nil {
 			return fmt.Errorf("unable to decode response: %w", err)
 		}
 	}
@@ -445,6 +447,20 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 	logs.Debugf("Request %s returned a response", escapedURL)
 
 	return nil
+}
+
+var GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
+	resp := make(map[string]SharedBucketsMeta)
+
+	return resp, makeRequest("GET", ai.hi.endpoints.SharedBuckets, nil, nil, nil, &resp)
+}
+
+var SharedBucketProject = func(bucket string) (string, error) {
+	resp := struct {
+		Owner string `json:"owner"`
+	}{}
+
+	return resp.Owner, makeRequest("GET", ai.hi.endpoints.SharedBuckets+"/"+bucket, nil, nil, nil, &resp)
 }
 
 func toCacheKey(nodes []string, chunkIdx int64) string {

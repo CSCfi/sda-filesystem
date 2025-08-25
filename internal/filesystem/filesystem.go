@@ -147,22 +147,30 @@ func InitialiseFilesystem() {
 		logs.Infof("Beginning filling in %s", rep)
 
 		// Create folder for repository
-		meta := api.Metadata{Name: rep.String(), Size: 0, LastModified: nil}
+		meta := api.Metadata{Name: rep.ForPath(), Size: 0, LastModified: nil}
 		makeNode(root.children, meta, true, "")
 
-		parentChildren := root.children[rep.String()].children
-		parentPath := rep.String()
+		parentChildren := root.children[rep.ForPath()].children
+		parentPath := rep.ForPath()
 
 		// Get buckets for repository
-		buckets, err := api.GetBuckets(rep)
+		buckets, sharedBuckets, ownedBucketsNum, err := api.GetBuckets(rep)
 		if err != nil {
 			logs.Error(err)
 
 			continue
 		}
+		// Fetching headers
+		// This needs to be done before the buckets slice is sorted
+		headers, err := api.GetHeaders(rep, buckets[:ownedBucketsNum], sharedBuckets)
+		if err != nil {
+			logs.Errorf("Failed to retrieve file headers for %s: %s", rep, err.Error())
+
+			continue
+		}
+		logs.Infof("Retrieved file headers for %s", rep)
 
 		buckets, segmentBuckets := separateSegmentBuckets(buckets)
-
 		numJobs += len(buckets)
 
 		if rep == api.SDConnect {
@@ -180,17 +188,8 @@ func InitialiseFilesystem() {
 			}
 		}
 
-		// Fetching headers
-		headers, err := api.GetHeaders(rep, buckets)
-		if err != nil {
-			logs.Errorf("Failed to retrieve file headers for %s: %s", rep, err.Error())
-
-			continue
-		}
-		logs.Infof("Retrieved file headers for %s", rep)
-		batchHeaders[parentPath] = headers
-
 		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
+		batchHeaders[parentPath] = headers
 
 		// Create bucket directories
 		for i := range buckets {

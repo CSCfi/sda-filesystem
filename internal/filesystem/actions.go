@@ -14,11 +14,14 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"sda-filesystem/internal/api"
@@ -44,6 +47,15 @@ func freeNodes(n *C.nodes_t) {
 // This is a separate Go function so it can be used in tests
 func toGoStr(str *C.char) string {
 	return C.GoString(str)
+}
+
+func WaitForUpdateSignal(ch chan<- []string) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGUSR2)
+	for {
+		<-s
+		ch <- []string{"update"}
+	}
 }
 
 func searchNode(path string) *C.node_t {
@@ -127,8 +139,7 @@ func RefreshFilesystem() {
 
 //export IsValidOpen
 func IsValidOpen(pid C.int) bool {
-	switch runtime.GOOS {
-	case "darwin":
+	if runtime.GOOS == "darwin" {
 		for _, process := range []string{"Finder", "QuickLook"} {
 			grep := exec.Command("pgrep", "-f", process)
 			if res, err := grep.Output(); err == nil {
@@ -195,13 +206,28 @@ func ClearPath(path string) error {
 	if node.children != nil && prefix != "" {
 		prefix += "/"
 	}
-	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:3], "/"), prefix)
+
+	projectBuckets := []api.Metadata{{Name: bucket}}
+	sharedBuckets := make(map[string]api.SharedBucketsMeta)
+	// Need to know if bucket is shared or not. This will determine how vault is called
+	ownerProject, err := api.SharedBucketProject(bucket)
 	if err != nil {
-		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
+		return fmt.Errorf("Could not determine if bucket %s is shared: %w", bucket, err)
 	}
-	batchHeaders, err := api.GetHeaders(rep, []api.Metadata{{Name: bucket}})
+	if ownerProject != "" {
+		logs.Debugf("Bucket %s in %s is shared by project %s", bucket, rep, ownerProject)
+		projectBuckets = nil
+		sharedBuckets[ownerProject] = api.SharedBucketsMeta{bucket}
+	}
+	batchHeaders, err := api.GetHeaders(rep, projectBuckets, sharedBuckets)
 	if err != nil {
 		return fmt.Errorf("failed to get headers for bucket %s: %w", bucket, err)
+	}
+
+	// Get the objects that fulfill the user's request
+	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), prefix)
+	if err != nil {
+		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
 	}
 	// Need to check if objects are segmented
 	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)

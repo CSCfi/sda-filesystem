@@ -423,23 +423,6 @@ func TestFileDetails_NoFile(t *testing.T) {
 	}
 }
 
-func TestCalculateEncryptedSize(t *testing.T) {
-	size := calculateEncryptedSize(484)
-	if size != 512 {
-		t.Errorf("Function failed to calculate headerless encrypted size for decrypted size 484. Expected=512, received=%d", size)
-	}
-
-	size = calculateEncryptedSize(58993401)
-	if size != 59018629 {
-		t.Errorf("Function failed to calculate headerless encrypted size for decrypted size 58993401. Expected=58993401, received=%d", size)
-	}
-
-	size = calculateEncryptedSize(393220)
-	if size != 393416 {
-		t.Errorf("Function failed to calculate headerless encrypted size for decrypted size 393220. Expected=393416, received=%d", size)
-	}
-}
-
 func TestCheckObjectExistences_UserInput(t *testing.T) {
 	var tests = []struct {
 		testname, userInput, errStr string

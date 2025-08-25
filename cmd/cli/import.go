@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
@@ -97,21 +96,12 @@ func applyCommand(ch <-chan []string) {
 	}
 }
 
-func waitForUpdateSignal(ch chan<- []string) {
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGUSR2)
-	for {
-		<-s
-		ch <- []string{"update"}
-	}
-}
-
 func importHandler() (int, error) {
 	var wait = make(chan any)
 	var cmd = make(chan []string)
 	go func() {
 		<-wait // Wait for fuse to be ready
-		go waitForUpdateSignal(cmd)
+		go filesystem.WaitForUpdateSignal(cmd)
 		go userInput(os.Stdin, cmd)
 		go applyCommand(cmd)
 	}()

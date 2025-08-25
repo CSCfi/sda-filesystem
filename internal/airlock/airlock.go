@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,8 +27,6 @@ const minSegmentSize int64 = 1 << 27
 const maxParts int64 = 10000
 const maxObjectSize int64 = 5 * (1 << 40)
 const headerSize = 16 + 108 // Fixed size since we only have one public key
-const blockSize float64 = 65536
-const macSize int64 = 28
 
 var isLowerAlphaNumericHyphen = regexp.MustCompile(`^[a-z0-9-]+$`).MatchString
 
@@ -395,13 +392,6 @@ var encrypt = func(file io.Reader, pw *io.PipeWriter, errc chan error) {
 	errc <- nil
 }
 
-// calculateEncryptedSize calculates the headerless encrypted size of an unencrypted file
-var calculateEncryptedSize = func(decryptedSize int64) int64 {
-	nBlocks := math.Ceil(float64(decryptedSize) / blockSize)
-
-	return decryptedSize + int64(nBlocks)*macSize
-}
-
 var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -410,5 +400,5 @@ var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 
 	fileInfo, _ := file.Stat()
 
-	return file, calculateEncryptedSize(fileInfo.Size()) + headerSize, nil
+	return file, api.CalculateEncryptedSize(fileInfo.Size()) + headerSize, nil
 }

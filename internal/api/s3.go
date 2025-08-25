@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
+	"maps"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,6 +42,39 @@ type Metadata struct {
 	Name         string
 	Size         int64
 	LastModified *time.Time
+}
+
+// Named is an interface used during Vault header requests so that both slices
+// of Metadata structs and strings can be used to traverse a list of buckets
+type Named interface {
+	GetNames() iter.Seq[string]
+}
+
+type MetadataSlice []Metadata
+
+func (m MetadataSlice) GetNames() iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for _, v := range m {
+			if strings.HasSuffix(v.Name, "_segments") {
+				continue
+			}
+			if !yield(v.Name) {
+				return
+			}
+		}
+	}
+}
+
+type SharedBucketsMeta []string
+
+func (s SharedBucketsMeta) GetNames() iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for _, v := range s {
+			if !yield(v) {
+				return
+			}
+		}
+	}
 }
 
 type resolverV2 struct{}
@@ -189,7 +225,7 @@ func getContext(rep Repo, head bool, parent ...context.Context) context.Context 
 		ctx = parent[0]
 	}
 
-	return context.WithValue(ctx, EndpointKey{}, endpoint+strings.ToLower(rep.String()))
+	return context.WithValue(ctx, EndpointKey{}, endpoint+rep.ForURL())
 }
 
 // BucketExists checks whether or not bucket already exists in S3 storage
@@ -252,7 +288,7 @@ var CreateBucket = func(rep Repo, bucket string) error {
 
 // GetBuckets returns metadata for all the buckets in a certain repository
 // For SD Connect the function also returns the buckets shared with the project.
-var GetBuckets = func(rep Repo) ([]Metadata, error) {
+var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, error) {
 	params := &s3.ListBucketsInput{}
 	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params, func(o *s3.ListBucketsPaginatorOptions) {
 		o.Limit = 1000 // Allas does not currently support this and returns all buckets in one request
@@ -269,26 +305,47 @@ var GetBuckets = func(rep Repo) ([]Metadata, error) {
 				err = re.Err
 			}
 
-			return nil, fmt.Errorf("failed to list buckets for %s: %w", rep, err)
+			return nil, nil, 0, fmt.Errorf("failed to list buckets for %s: %w", rep, err)
 		}
 
 		buckets = append(buckets, output.Buckets...)
 	}
 
-	numBuckets := len(buckets)
-	if numBuckets == 0 {
-		return nil, fmt.Errorf("no buckets found for %s", rep)
-	}
-
 	logs.Infof("Retrieved buckets for %s", rep)
 
+	numBuckets := len(buckets)
 	meta := make([]Metadata, numBuckets)
 	for i := range meta {
 		// Size and modification time of bucket will be calculated later based on the objects it contains
 		meta[i] = Metadata{*buckets[i].Name, 0, nil}
 	}
 
-	return meta, nil
+	// Only SD Connect has shared buckets
+	var sharedMap map[string]SharedBucketsMeta
+	if rep == SDConnect {
+		var err error
+		sharedMap, err = GetSharedBuckets()
+		if err != nil {
+			logs.Errorf("Failed to list shared buckets for %s: %w", rep, err)
+		} else {
+			delete(sharedMap, ai.userProfile.ProjectName)
+
+			logs.Infof("Retrieved shared buckets for %s", rep)
+		}
+	}
+
+	if numBuckets+len(sharedMap) == 0 {
+		return nil, nil, 0, fmt.Errorf("no buckets found for %s", rep)
+	}
+
+	sharedBuckets := slices.Concat(slices.Collect(maps.Values(sharedMap))...)
+	meta = slices.Grow(meta, len(sharedBuckets))
+
+	for i := range sharedBuckets {
+		meta = append(meta, Metadata{sharedBuckets[i], 0, nil})
+	}
+
+	return meta, sharedMap, numBuckets, nil
 }
 
 // GetObjects returns metadata for all the objects in a particular bucket.
@@ -393,8 +450,8 @@ var DownloadData = func(nodes []string, path string, header *string,
 	return data, nil
 }
 
-// calculateEncryptedSize calculates the headerless encrypted size of an unencrypted file
-func calculateEncryptedSize(decryptedSize int64) int64 {
+// CalculateEncryptedSize calculates the headerless encrypted size of an unencrypted file
+func CalculateEncryptedSize(decryptedSize int64) int64 {
 	nBlocks := math.Ceil(float64(decryptedSize) / float64(BlockSize))
 
 	return decryptedSize + int64(nBlocks)*MacSize
@@ -437,7 +494,7 @@ func getDataChunk(
 		startEncrypted = chByteStart/BlockSize*CipherBlockSize + oldOffset
 		endEncrypted = (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
 
-		encryptedBodySize = calculateEncryptedSize(fileSize) + oldOffset
+		encryptedBodySize = CalculateEncryptedSize(fileSize) + oldOffset
 	}
 	endEncrypted = min(endEncrypted, encryptedBodySize)
 
