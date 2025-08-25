@@ -16,7 +16,7 @@ var exportPrefix string
 var selection []string
 
 var override bool
-var metadata map[string]string = make(map[string]string)
+var metadata = make(map[string]string)
 
 func init() {
 	handlers["export"] = handlerFuncs{setup: exportSetup, execute: exportHandler}
@@ -51,7 +51,7 @@ func refineArgs(args []string, name string) []string {
 				args[idx] = args[idx] + "=" + args[idx+1]
 				args = append(args[:idx+1], args[idx+2:]...)
 			} else {
-				args[idx] = args[idx] + "="
+				args[idx] += "="
 			}
 		} else {
 			break

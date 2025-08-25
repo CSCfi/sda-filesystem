@@ -879,7 +879,6 @@ func TestUpload(t *testing.T) {
 				Files:   tt.files,
 				Objects: tt.objects,
 			}
-			fmt.Println(tt.metadata)
 			if err := Upload(set, tt.metadata); err != nil {
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			}

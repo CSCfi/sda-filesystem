@@ -306,6 +306,7 @@ func (a *App) ValidateEmail(email string) string {
 	if err != nil {
 		return ""
 	}
+
 	return e.Address
 }
 
