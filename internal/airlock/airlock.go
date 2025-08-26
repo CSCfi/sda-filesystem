@@ -285,8 +285,7 @@ var UploadObject = func(ctx context.Context, filename, object, bucket string, me
 	err = nil
 	if api.GetProjectType() != "default" {
 		errc2 <- nil
-		findataObject := bucket + "/" + object
-		if err = uploadFindata(ctx, file, pw, findataObject, segmentSize, metadata); err != nil {
+		if err = uploadFindata(ctx, file, pw, bucket, object, segmentSize, metadata); err != nil {
 			logs.Error(err)
 		}
 	}
@@ -336,11 +335,11 @@ func uploadFindata(
 	ctx context.Context,
 	file io.Reader,
 	pw *io.PipeWriter,
-	object string,
+	bucket, object string,
 	segmentSize int64,
 	metadata map[string]string,
 ) (err error) {
-	logs.Infof("Beginning to upload %s object %s", api.Findata, object)
+	logs.Infof("Beginning to upload %s object %s/%s", api.Findata, bucket, object)
 	defer func() {
 		pw.CloseWithError(err) // pw.Close() if err is nil
 	}()
@@ -351,7 +350,7 @@ func uploadFindata(
 	}
 
 	r := io.TeeReader(file, c4ghWriter)
-	err = api.UploadObject(ctx, r, api.Findata, "", object, segmentSize, metadata)
+	err = api.UploadObject(ctx, r, api.Findata, bucket, object, segmentSize, metadata)
 	if err != nil {
 		err = fmt.Errorf("failed to upload %s object: %w", api.Findata, err)
 

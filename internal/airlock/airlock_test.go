@@ -805,27 +805,15 @@ func TestUpload(t *testing.T) {
 				}
 			} else {
 				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
-					switch rep {
-					case api.SDConnect:
-						if bucket != "test-bucket" {
-							t.Errorf("api.UploadObject() received incorrect %s bucket. Expected=test-bucket, received=%s", api.SDConnect, bucket)
-						}
-						if !slices.Contains(tt.objects, object) {
-							t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
-						}
-					case api.Findata:
-						if bucket != "" {
-							t.Errorf("api.UploadObject() received incorrect %s bucket. Expected=, received=%s", api.Findata, bucket)
-						}
-						if !slices.ContainsFunc(tt.objects, func(obj string) bool {
-							return "test-bucket/"+obj == object
-						}) {
-							t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
-						}
-					default:
+					if rep != api.SDConnect && rep != api.Findata {
 						t.Fatalf("api.UploadObject() received incorrect repository %s", rep)
 					}
-
+					if bucket != "test-bucket" {
+						t.Errorf("api.UploadObject() received incorrect %s bucket. Expected=test-bucket, received=%s", api.SDConnect, bucket)
+					}
+					if !slices.Contains(tt.objects, object) {
+						t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
+					}
 					if segmentSize != tt.segmentSize {
 						t.Errorf("api.UploadObject() received incorrect segment size. Expected=%d, received=%d", tt.segmentSize, segmentSize)
 					}
