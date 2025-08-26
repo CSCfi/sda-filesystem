@@ -18,7 +18,7 @@ html, body {
 
 body {
     margin: 0;
-    color: #595959;
+    color: var(--c-tertiary-800);
     font-size: 0.9rem;
 }
 
@@ -48,7 +48,7 @@ c-loader {
 
 .continue-button {
     margin-top: 1rem;
-    float: right; 
+    float: right;
 }
 
 .smaller-text {

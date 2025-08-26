@@ -69,7 +69,7 @@ func GenerateRandomText(size int) []byte {
 func EncryptData(t *testing.T, content []byte) ([]byte, []byte, [32]byte) {
 	publicKey, privateKey, err := keys.GenerateKeyPair()
 	if err != nil {
-		t.Errorf("Failed to generate key pair: %s", err.Error())
+		t.Fatalf("Failed to generate key pair: %s", err.Error())
 	}
 
 	encBuffer := bytes.Buffer{}

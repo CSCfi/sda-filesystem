@@ -51,7 +51,7 @@ func TestBucketExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
-	if err := loadCertificates([]FileReader{mockReader}); err != nil {
+	if err := loadCertificates(mockReader); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
 

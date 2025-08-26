@@ -12,7 +12,7 @@ frontend/package.json.md5
 __pycache__
 dev-tools/scripts/*.json
 dev-tools/compose/.env
-dev-tools/compose/.env.findata
+dev-tools/compose/.env.admin
 go-fuse
 /certs/*
 !/certs/certs.go

@@ -1,17 +1,20 @@
 package api
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -280,8 +283,8 @@ func TestSetup(t *testing.T) {
 		return newCache, nil
 	}
 	mockFiles := MockReader{Files: map[string][]byte{"filename": {4, 78, 95, 90}}}
-	loadCertificates = func(certFiles []FileReader) error {
-		if !reflect.DeepEqual(certFiles[0], mockFiles) {
+	loadCertificates = func(certFiles FileReader) error {
+		if !reflect.DeepEqual(certFiles, mockFiles) {
 			return fmt.Errorf("loadCertificates() received invalid argument")
 		}
 
@@ -376,8 +379,8 @@ func TestSetup_Port(t *testing.T) {
 		return newCache, nil
 	}
 	mockFiles := MockReader{Files: map[string][]byte{"filename": {4, 78, 95, 90}}}
-	loadCertificates = func(certFiles []FileReader) error {
-		if !reflect.DeepEqual(certFiles[0], mockFiles) {
+	loadCertificates = func(certFiles FileReader) error {
+		if !reflect.DeepEqual(certFiles, mockFiles) {
 			return fmt.Errorf("loadCertificates() received invalid argument")
 		}
 
@@ -465,14 +468,14 @@ func TestSetup_Error(t *testing.T) {
 			cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
 				return nil, tt.cacheErr
 			}
-			loadCertificates = func(certFiles []FileReader) error {
+			loadCertificates = func(certFiles FileReader) error {
 				return tt.certErr
 			}
 			initialiseS3Client = func() error {
 				return tt.s3Err
 			}
 
-			err := Setup()
+			err := Setup(MockReader{})
 			errText := tt.errText + ": " + errExpected.Error()
 			if err.Error() != errText {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
@@ -484,14 +487,16 @@ func TestSetup_Error(t *testing.T) {
 func TestGetProfile(t *testing.T) {
 	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
+	origGetEnv := GetEnv
 	defer func() {
 		ai.repositories = origRepositories
 		makeRequest = origMakeRequest
+		GetEnv = origGetEnv
 	}()
 
 	ai.hi.endpoints = testConfig
 
-	access := true
+	accessOnce := true
 	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		if path != "/profile-endpoint" {
 			return fmt.Errorf("Incorrect path\nExpected=/profile-endpoint\nReceived=%s", path)
@@ -500,19 +505,33 @@ func TestGetProfile(t *testing.T) {
 		switch v := ret.(type) {
 		case *profile:
 			v.DesktopToken = "test_token"
-			v.S3Access = access
+			v.S3Access = accessOnce
 			v.SDConnect = true
-			access = false
+			if accessOnce {
+				v.ProjectType = "findata"
+			} else {
+				v.ProjectType = "default"
+			}
+			accessOnce = false
 
 			return nil
 		default:
 			return fmt.Errorf("ret has incorrect type %v, expected *profile", reflect.TypeOf(v))
 		}
 	}
+	GetEnv = func(name string, verifyURL bool) (string, error) {
+		switch name {
+		case "CLAMAV_SOCKET":
+			return "socket_path", nil
+		default:
+			return "", fmt.Errorf("unknown env %s", name)
+		}
+	}
 	ai.repositories = []string{"mock-repo"}
 	finalRepositories := []string{"mock-repo", SDConnect}
+	testCh := make(chan bool)
 
-	access, err := GetProfile()
+	access, err := GetProfile(testCh)
 	switch {
 	case err != nil:
 		t.Errorf("First call returned error: %s", err.Error())
@@ -522,31 +541,50 @@ func TestGetProfile(t *testing.T) {
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
 	case !reflect.DeepEqual(ai.repositories, finalRepositories):
 		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", finalRepositories, ai.repositories)
+	case ai.scan != testCh:
+		t.Errorf("Incorrect scanning channel\nExpected=%v\nReceived=%v", testCh, ai.scan)
+	case ai.ui.address != "socket_path":
+		t.Errorf("Incorrect ClamAV socket path\nExpected=socket_path\nReceived=%s", ai.ui.address)
 	}
 
-	access, err = GetProfile()
+	GetEnv = func(name string, verifyURL bool) (string, error) {
+		return "", fmt.Errorf("unknown env %s", name)
+	}
+
+	access, err = GetProfile(testCh)
 	switch {
 	case err != nil:
 		t.Errorf("Second call returned error: %s", err.Error())
-	case !access:
+	case access:
 		t.Errorf("User should not have access")
 	case ai.token != "test_token":
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
 	case !reflect.DeepEqual(ai.repositories, finalRepositories):
 		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", finalRepositories, ai.repositories)
 	}
+
+	select {
+	case <-testCh:
+	default:
+		t.Error("Scanning channel is not closed")
+	}
 }
 
 func TestGetProfile_Error(t *testing.T) {
 	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
+	origGetEnv := GetEnv
 	defer func() {
 		ai.repositories = origRepositories
 		makeRequest = origMakeRequest
+		GetEnv = origGetEnv
 	}()
 
 	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		return errExpected
+	}
+	GetEnv = func(name string, verifyURL bool) (string, error) {
+		return "", nil
 	}
 	errText := "failed to get user profile: " + errExpected.Error()
 
@@ -554,6 +592,45 @@ func TestGetProfile_Error(t *testing.T) {
 		t.Error("Function should have returned error")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
+	}
+}
+
+func TestGetProfile_Clamav(t *testing.T) {
+	origMakeRequest := makeRequest
+	origRepositories := ai.repositories
+	origGetEnv := GetEnv
+	defer func() {
+		ai.repositories = origRepositories
+		makeRequest = origMakeRequest
+		GetEnv = origGetEnv
+	}()
+
+	projectType := "findata"
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		switch v := ret.(type) {
+		case *profile:
+			v.ProjectType = projectType
+
+			return nil
+		default:
+			return fmt.Errorf("ret has incorrect type %v, expected *profile", reflect.TypeOf(v))
+		}
+	}
+	GetEnv = func(name string, verifyURL bool) (string, error) {
+		return "", errExpected
+	}
+	errText := "required environment variables missing: " + errExpected.Error()
+
+	if _, err := GetProfile(); err == nil {
+		t.Error("Function should have returned error")
+	} else if err.Error() != errText {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
+	}
+
+	projectType = "default"
+
+	if _, err := GetProfile(); err != nil {
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
 }
 
@@ -636,7 +713,7 @@ func TestLoadCertificates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
-	if err := loadCertificates([]FileReader{mockReader}); err != nil {
+	if err := loadCertificates(mockReader); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
 
@@ -668,12 +745,6 @@ func TestLoadCertificates(t *testing.T) {
 	}
 }
 
-func TestLoadCertificates_NoFileReader(t *testing.T) {
-	if err := loadCertificates(nil); err != nil {
-		t.Fatalf("Function returned unexpected error: %s", err.Error())
-	}
-}
-
 func TestLoadCertificates_InvalidProxy(t *testing.T) {
 	origProxy := ai.proxy
 	defer func() { ai.proxy = origProxy }()
@@ -687,7 +758,7 @@ func TestLoadCertificates_InvalidProxy(t *testing.T) {
 
 	errStr := "could not parse proxy url: parse \"not-a-proper-url\": invalid URI for request"
 
-	err = loadCertificates([]FileReader{mockReader})
+	err = loadCertificates(mockReader)
 	if err == nil {
 		t.Fatal("Function did not return error")
 	}
@@ -708,7 +779,7 @@ func TestLoadCertificates_MissingFiles(t *testing.T) {
 	}
 	delete(mockReader.Files, "github.crt")
 
-	if err = loadCertificates([]FileReader{mockReader}); err != nil {
+	if err = loadCertificates(mockReader); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
 }
@@ -727,7 +798,7 @@ func TestLoadCertificates_InvalidCertificates(t *testing.T) {
 
 	errStr := "failed to load client x509 key pair for host localhost: tls: private key does not match public key"
 
-	err = loadCertificates([]FileReader{mockReader})
+	err = loadCertificates(mockReader)
 	if err == nil {
 		t.Fatal("Function did not return error")
 	}
@@ -976,5 +1047,425 @@ func TestDeleteFileFromCache(t *testing.T) {
 			missedKeys = append(missedKeys, key)
 		}
 		t.Fatalf("Function did not delete the entire file from cache, missed %v", missedKeys)
+	}
+}
+
+func handleConnection(conn net.Conn, expectedData string, errc chan<- error) {
+	cmdPrefix := "zINSTREAM\x00"
+	defer conn.Close()
+
+	buf := make([]byte, len(cmdPrefix))
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		errc <- fmt.Errorf("failed reading command: %w", err)
+
+		return
+	}
+	if string(buf) != cmdPrefix {
+		errc <- fmt.Errorf("expected zINSTREAM command, not %s", string(buf))
+
+		return
+	}
+
+	var streamData bytes.Buffer
+
+	for {
+		var size uint32
+		if err := binary.Read(conn, binary.BigEndian, &size); err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				errc <- errors.New("incomplete stream")
+			} else {
+				errc <- fmt.Errorf("read error: %w", err)
+			}
+
+			return
+		}
+
+		if size == 0 {
+			if strings.Compare(streamData.String(), expectedData) != 0 {
+				errc <- fmt.Errorf("server received incorrect data\nExpected=%s\nReceived=%s", expectedData, streamData.String())
+			}
+			if strings.Contains(streamData.String(), "VIRUS123") {
+				_, _ = conn.Write([]byte("Virus FOUND\n"))
+			} else {
+				_, _ = conn.Write([]byte("stream: OK\n"))
+			}
+
+			return
+		}
+
+		chunk := make([]byte, size)
+		if _, err := io.ReadFull(conn, chunk); err != nil {
+			errc <- fmt.Errorf("reading chunk failed: %w", err)
+
+			return
+		}
+
+		streamData.Write(chunk)
+	}
+
+}
+
+func TestScanForViruses(t *testing.T) {
+	tmpdir := t.TempDir()
+	socket, err := net.Listen("unix", tmpdir+"/test.sock")
+	if err != nil {
+		t.Fatalf("Could not create a Unix socket: %s", err.Error())
+	}
+	defer socket.Close()
+
+	origScan := ai.scan
+	origAddress := ai.ui.address
+	defer func() {
+		ai.scan = origScan
+		ai.ui.address = origAddress
+	}()
+
+	data := []byte("I am good data")
+
+	errc := make(chan error, 1)
+	go func() {
+		conn, err := socket.Accept()
+		if err != nil {
+			t.Errorf("Socket failed to accept a connection: %s", err.Error())
+
+			return
+		}
+
+		handleConnection(conn, string(data), errc)
+	}()
+
+	testCh := make(chan bool)
+	ai.scan = testCh
+	ai.ui.address = tmpdir + "/test.sock"
+
+	done := make(chan bool)
+	go func() {
+		scanForViruses(data, "test.txt")
+		done <- true
+	}()
+
+	select {
+	case v := <-testCh:
+		t.Errorf("Scanning channel returned %t", v)
+	case <-done:
+		break
+	}
+
+	select {
+	case err := <-errc:
+		t.Errorf("Scanning failed: %s", err.Error())
+	default:
+		break
+	}
+}
+
+func TestScanForViruses_Virus(t *testing.T) {
+	tmpdir := t.TempDir()
+	socket, err := net.Listen("unix", tmpdir+"/test.sock")
+	if err != nil {
+		t.Fatalf("Could not create a Unix socket: %s", err.Error())
+	}
+	defer socket.Close()
+
+	origScan := ai.scan
+	origAddress := ai.ui.address
+	defer func() {
+		ai.scan = origScan
+		ai.ui.address = origAddress
+	}()
+
+	data := []byte("I am bad data... VIRUS123")
+
+	errc := make(chan error, 1)
+	go func() {
+		conn, err := socket.Accept()
+		if err != nil {
+			t.Errorf("Socket failed to accept a connection: %s", err.Error())
+
+			return
+		}
+
+		handleConnection(conn, string(data), errc)
+	}()
+
+	testCh := make(chan bool)
+	ai.scan = testCh
+	ai.ui.address = tmpdir + "/test.sock"
+
+	done := make(chan bool)
+	go func() {
+		scanForViruses(data, "test.txt")
+		done <- true
+	}()
+
+	select {
+	case v := <-testCh:
+		if !v {
+			t.Errorf("Scanning channel returned false")
+		}
+	case <-done:
+		t.Errorf("Scanning channel returned nothing")
+	}
+
+	select {
+	case err := <-errc:
+		t.Errorf("Scanning failed: %s", err.Error())
+	default:
+		break
+	}
+}
+
+func TestScanForViruses_Closed(t *testing.T) {
+	tmpdir := t.TempDir()
+	socket, err := net.Listen("unix", tmpdir+"/test.sock")
+	if err != nil {
+		t.Fatalf("Could not create a Unix socket: %s", err.Error())
+	}
+	socket.Close()
+
+	origScan := ai.scan
+	origAddress := ai.ui.address
+	origErrorf := logs.Errorf
+	defer func() {
+		ai.scan = origScan
+		ai.ui.address = origAddress
+		logs.Errorf = origErrorf
+	}()
+
+	errc := make(chan error, 1)
+	logs.Errorf = func(format string, args ...any) {
+		errc <- fmt.Errorf(format, args...)
+	}
+
+	testCh := make(chan bool)
+	ai.scan = testCh
+	ai.ui.address = tmpdir + "/test.sock"
+
+	done := make(chan bool)
+	go func() {
+		data := []byte("I am bad data... VIRUS123")
+		scanForViruses(data, "test.txt")
+		done <- true
+	}()
+
+	select {
+	case v := <-testCh:
+		if v {
+			t.Errorf("Scanning channel returned true")
+		}
+	case <-done:
+		t.Errorf("Scanning channel returned nothing")
+	}
+
+	errStr := "failed to connect to clamav socket: dial unix " + tmpdir + "/test.sock" + ": connect: no such file or directory"
+	select {
+	case err := <-errc:
+		if err.Error() != errStr {
+			t.Errorf("Function logged incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+		}
+	default:
+		t.Errorf("Scanning logged no error")
+
+		break
+	}
+}
+
+type MockConn struct {
+	errAt    int
+	failRead bool
+}
+
+func (mc *MockConn) Read(b []byte) (n int, err error) {
+	if mc.failRead {
+		return 0, errors.New("mock read failure")
+	}
+	copy(b, []byte("hello"))
+
+	return 5, io.EOF
+}
+func (mc *MockConn) Write(b []byte) (n int, err error) {
+	if mc.errAt == 0 {
+		return 0, errors.New("mock write failure")
+	}
+	mc.errAt--
+
+	return len(b), nil
+}
+func (mc *MockConn) Close() error                       { return nil }
+func (mc *MockConn) LocalAddr() net.Addr                { return &net.UnixAddr{Name: "local", Net: "unix"} }
+func (mc *MockConn) RemoteAddr() net.Addr               { return &net.UnixAddr{Name: "remote", Net: "unix"} }
+func (mc *MockConn) SetDeadline(t time.Time) error      { return nil }
+func (mc *MockConn) SetReadDeadline(t time.Time) error  { return nil }
+func (mc *MockConn) SetWriteDeadline(t time.Time) error { return nil }
+
+func TestScanForViruses_Interrupt(t *testing.T) {
+	var tests = []struct {
+		testname, errStr string
+		errAt            int
+	}{
+		{"FAIL_1", "Failed to send command to ClamAV: mock write failure", 0},
+		{"FAIL_2", "Failed to send size to ClamAV: mock write failure", 1},
+		{"FAIL_3", "Failed to send file data to ClamAV: mock write failure", 2},
+		{"FAIL_4", "Failed to end streaming to ClamAV: mock write failure", 3},
+	}
+
+	origScan := ai.scan
+	origAddress := ai.ui.address
+	origErrorf := logs.Errorf
+	origDial := ai.ui.dial
+	defer func() {
+		ai.scan = origScan
+		ai.ui.address = origAddress
+		logs.Errorf = origErrorf
+		ai.ui.dial = origDial
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			errc := make(chan error, 2)
+			logs.Errorf = func(format string, args ...any) {
+				errc <- fmt.Errorf(format, args...)
+			}
+			ai.ui.dial = func() (net.Conn, error) {
+				return &MockConn{errAt: tt.errAt}, nil
+			}
+
+			testCh := make(chan bool)
+			ai.scan = testCh
+			ai.ui.address = "test.sock"
+
+			done := make(chan bool)
+			go func() {
+				data := []byte("I am good data")
+				scanForViruses(data, "test.txt")
+				done <- true
+			}()
+
+			select {
+			case v := <-testCh:
+				if v {
+					t.Errorf("Scanning channel returned true")
+				}
+			case <-done:
+				t.Errorf("Scanning channel returned nothing")
+			}
+
+			select {
+			case err := <-errc:
+				if err.Error() != tt.errStr {
+					t.Errorf("Function logged incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+				}
+			default:
+				t.Errorf("Scanning logged no error")
+
+				break
+			}
+		})
+	}
+}
+
+func TestScanForViruses_ReadError(t *testing.T) {
+	origScan := ai.scan
+	origAddress := ai.ui.address
+	origErrorf := logs.Errorf
+	origDial := ai.ui.dial
+	defer func() {
+		ai.scan = origScan
+		ai.ui.address = origAddress
+		logs.Errorf = origErrorf
+		ai.ui.dial = origDial
+	}()
+
+	errc := make(chan error, 1)
+	logs.Errorf = func(format string, args ...any) {
+		errc <- fmt.Errorf(format, args...)
+	}
+	ai.ui.dial = func() (net.Conn, error) {
+		return &MockConn{errAt: -1, failRead: true}, nil
+	}
+
+	testCh := make(chan bool)
+	ai.scan = testCh
+	ai.ui.address = "test.sock"
+
+	done := make(chan bool)
+	go func() {
+		data := []byte("I am good data")
+		scanForViruses(data, "test.txt")
+		done <- true
+	}()
+
+	select {
+	case v := <-testCh:
+		if v {
+			t.Errorf("Scanning channel returned true")
+		}
+	case <-done:
+		t.Errorf("Scanning channel returned nothing")
+	}
+
+	errStr := "Failed to read ClamAV response: mock read failure"
+	select {
+	case err := <-errc:
+		if err.Error() != errStr {
+			t.Errorf("Function logged incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+		}
+	default:
+		t.Errorf("Scanning logged no error")
+
+		break
+	}
+}
+
+func TestScanForViruses_BadResponse(t *testing.T) {
+	origScan := ai.scan
+	origAddress := ai.ui.address
+	origErrorf := logs.Errorf
+	origDial := ai.ui.dial
+	defer func() {
+		ai.scan = origScan
+		ai.ui.address = origAddress
+		logs.Errorf = origErrorf
+		ai.ui.dial = origDial
+	}()
+
+	errc := make(chan error, 1)
+	logs.Errorf = func(format string, args ...any) {
+		errc <- fmt.Errorf(format, args...)
+	}
+	ai.ui.dial = func() (net.Conn, error) {
+		return &MockConn{errAt: -1, failRead: false}, nil
+	}
+
+	testCh := make(chan bool)
+	ai.scan = testCh
+	ai.ui.address = "test.sock"
+
+	done := make(chan bool)
+	go func() {
+		data := []byte("I am good data")
+		scanForViruses(data, "test.txt")
+		done <- true
+	}()
+
+	select {
+	case v := <-testCh:
+		if v {
+			t.Errorf("Scanning channel returned true")
+		}
+	case <-done:
+		t.Errorf("Scanning channel returned nothing")
+	}
+
+	errStr := "ClamAV did not return a valid response for test.txt: hello"
+	select {
+	case err := <-errc:
+		if err.Error() != errStr {
+			t.Errorf("Function logged incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+		}
+	default:
+		t.Errorf("Scanning logged no error")
+
+		break
 	}
 }

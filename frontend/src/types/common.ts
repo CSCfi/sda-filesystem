@@ -14,3 +14,5 @@ export type ValidationResult = {
   alphaNumHyphen: ValidationType;
   ownable: ValidationType;
 };
+
+export type TabType = "Log in" | "Access" | "Export" | "Logs";

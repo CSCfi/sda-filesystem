@@ -12,9 +12,11 @@ import {
 import {
   CDataTableHeader,
   CDataTableData,
-  CPaginationOptions
+  CPaginationOptions,
 } from "@cscfi/csc-ui/dist/types";
+import { CAlertType } from "@cscfi/csc-ui";
 import { EventsEmit, EventsOn } from "../../wailsjs/runtime";
+import { TabType } from "../types/common";
 
 const projectHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name" },
@@ -42,6 +44,7 @@ const projectKey = ref(0);
 const updating = ref(false);
 const mountpoint = ref("");
 const loading = ref(false);
+const virusFound = ref(false);
 
 const allContainers = ref(0);
 const loadedContainers = ref(0);
@@ -92,6 +95,8 @@ EventsOn("fuseReady", () => {pageIdx.value = 4; updating.value = false;});
 
 EventsOn("refresh", () => refresh());
 
+EventsOn("virusFound", () => {virusFound.value = true;});
+
 function changeMountPoint() {
   ChangeMountPoint().then((dir: string) => {
     mountpoint.value = dir;
@@ -112,6 +117,7 @@ function refresh() {
       );
       updating.value = false;
     } else {
+      virusFound.value = false;
       allContainers.value = 0;
       loadedContainers.value = 0;
 
@@ -165,6 +171,30 @@ function refresh() {
           </c-button>
         </c-row>
       </div>
+      <c-alert v-if="virusFound" :type="CAlertType.Warning">
+        <div slot="title">
+          Potential threat detected
+        </div>
+
+        <span>
+          Check
+          <c-link underline @click="EventsEmit('changeTab', 'Logs' as TabType);">Logs</c-link>
+          for details.
+          You can preview the suspicious file now, but before proceeding:
+        </span>
+        <ul>
+          <li>
+            <strong>If you imported the files:</strong> Scan the suspicious files
+            on your laptop with an antivirus software. If the result is positive,
+            re-upload a clean version via SD Connect.
+          </li>
+          <li>
+            <strong>If the files are from a public register or Findata authority:</strong>
+            contact the source with the logs
+          </li>
+        </ul>
+        No automatic actions will be taken.
+      </c-alert>
       <p class="smaller-text">
         {{ pageIdx == 2 ?
           "Please wait, this might take a few minutes." :
@@ -186,5 +216,10 @@ function refresh() {
 <style scoped>
 c-text-field {
   width: 500px;
+}
+
+c-alert {
+  margin-top: 20px;
+  display: block;
 }
 </style>
