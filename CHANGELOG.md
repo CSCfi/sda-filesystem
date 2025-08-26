@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- renamed `findata-creds` container to `admin-creds`
 - (users) export table will list objects without the `.c4gh` extension
 - (users) the export file dialog allows the selection of multiple files
 - Makefile defaults to bash shell
@@ -17,12 +18,19 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- after the removal of internal URLs, the test Vault was used in situations where the local Vault was supposed to be used
 - export table showing `no data` after the last item in a page was removed (#45)
 - data races in tests
 - the destination to where the binaries are copied under `desktop/`
 
 ### Added
 
+- (admins) env `CLAMAV_SOCKET` which is required for Findata projects
+- developing with Findata projects requires command `socat` to redirect Unix socket connections to `clamav` TCP socket
+- a Unix socket is created under `$HOME/.clamav` when developing with Findata projects
+- `clamav` container under profile `findata` that can be contacted via a TCP socket at port 3310
+- in GUI, the user is shown an alert if a virus has been found (#37)
+- send file chunks to `clamd` when reading them in a Findata project (#37)
 - (users) a warning log if client certificates have expired
 - (users) CLI can export multiple files and folders with one call
 - (users) support for uploading folders (#10,#30)
