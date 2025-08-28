@@ -30,6 +30,7 @@ services:
     environment:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
       IS_FINDATA: "${IS_FINDATA}"
+      USER_EMAIL: "${USER_EMAIL}"
     profiles:
       - keystone
     depends_on:
@@ -97,7 +98,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.8.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.8.1"
     container_name: krakend
     env_file:
       - path: .env

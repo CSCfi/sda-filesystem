@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,6 +127,9 @@ func (a *App) InitializeAPI() (bool, error) {
 
 	if airlock.ExportPossible() {
 		wailsruntime.EventsEmit(a.ctx, "exportPossible")
+	}
+	if api.GetProjectType() != "default" {
+		wailsruntime.EventsEmit(a.ctx, "findataProject", api.GetUserEmail())
 	}
 
 	return access, nil
@@ -297,7 +301,16 @@ func (a *App) WalkDirs(selection, currentObjects []string, prefix string) (airlo
 	return set, err
 }
 
-func (a *App) ExportFiles(set airlock.UploadSet, exists bool) error {
+func (a *App) ValidateEmail(email string) string {
+	e, err := mail.ParseAddress(email)
+	if err != nil {
+		return ""
+	}
+
+	return e.Address
+}
+
+func (a *App) ExportFiles(set airlock.UploadSet, exists bool, metadata map[string]string) error {
 	var err error
 	time.Sleep(1000 * time.Millisecond) // So that progressbar animation is detectable
 	if !exists {
@@ -306,7 +319,7 @@ func (a *App) ExportFiles(set airlock.UploadSet, exists bool) error {
 	}
 
 	if err == nil {
-		err = airlock.Upload(set)
+		err = airlock.Upload(set, metadata)
 	}
 
 	if err != nil {

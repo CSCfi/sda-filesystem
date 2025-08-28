@@ -84,6 +84,7 @@ project = environ.get("CSC_PROJECT", "service")
 is_findata = environ.get("IS_FINDATA", "")
 username = environ.get("CSC_USERNAME", "swift")
 password = environ.get("CSC_PASSWORD", "veryfast")
+email = environ.get("USER_EMAIL", "")
 
 desktop_token = get_desktop_token()
 pouta_token = ""
@@ -151,6 +152,7 @@ async def userinfo(req: web.Request) -> web.Response:
         "sdConnectProjects": project,
         "projectPI": project,
         "pouta_access_token": pouta_token,
+        "email": email,
     }
     if auth == "Bearer " + sds_access_token:
         user_info["access_token"] = desktop_token

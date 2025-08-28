@@ -4,25 +4,83 @@ import (
 	"os"
 	"reflect"
 	"sda-filesystem/internal/airlock"
+	"sda-filesystem/internal/api"
 	"strings"
 	"testing"
 )
 
 func TestExportSetup(t *testing.T) {
 	var tests = []struct {
-		testname, args, prefix string
-		selection              []string
-		override               bool
+		testname, args, prefix, projectType, email string
+		selection                                  []string
+		override                                   bool
+		metadata                                   map[string]string
 	}{
-		{"OK_1", "-override test-bucket test-file", "test-bucket", []string{"test-file"}, true},
-		{"OK_2", "test-bucket test-file --override", "test-bucket", []string{"test-file"}, true},
-		{"OK_3", "test-bucket-2 test-file test-dir", "test-bucket-2", []string{"test-file", "test-dir"}, false},
-		{"OK_3", "test-bucket-2 test-file-2 --override=false", "test-bucket-2", []string{"test-file-2"}, false},
+		{
+			"OK_1",
+			"-override test-bucket test-file",
+			"test-bucket", "default", "",
+			[]string{"test-file"},
+			true, make(map[string]string),
+		},
+		{
+			"OK_2",
+			"test-bucket test-file --override",
+			"test-bucket", "default", "",
+			[]string{"test-file"},
+			true, make(map[string]string),
+		},
+		{
+			"OK_3",
+			"test-bucket-2 test-file test-dir",
+			"test-bucket-2", "default", "",
+			[]string{"test-file", "test-dir"},
+			false, make(map[string]string),
+		},
+		{
+			"OK_3",
+			"test-bucket-2 test-file-2 --override=false",
+			"test-bucket-2", "default", "",
+			[]string{"test-file-2"},
+			false, make(map[string]string),
+		},
+		{
+			"OK_4",
+			"--email= test-bucket-2 test-file test-file-2",
+			"test-bucket-2", "default", "",
+			[]string{"test-file", "test-file-2"},
+			false, make(map[string]string),
+		},
+		{
+			"OK_5",
+			"-email=matti.meikalainen@gmail.com --journal-number=123 test-bucket-3 test-file-3 --override",
+			"test-bucket-3", "findata", "",
+			[]string{"test-file-3"},
+			true, map[string]string{"author_email": "matti.meikalainen@gmail.com", "journal_number": "123"},
+		},
+		{
+			"OK_6",
+			"--email= -journal-number 123 test-bucket-3 test-file --email matti.meikalainen@gmail.com",
+			"test-bucket-3", "findata", "maija.meikalainen@gmail.com",
+			[]string{"test-file"},
+			false, map[string]string{"author_email": "matti.meikalainen@gmail.com", "journal_number": "123"},
+		},
+		{
+			"OK_7",
+			"test-bucket-4 test-file test-file-2 test-file-3 --journal-number=123",
+			"test-bucket-4", "findata", "maija.meikalainen@gmail.com",
+			[]string{"test-file", "test-file-2", "test-file-3"},
+			false, map[string]string{"author_email": "maija.meikalainen@gmail.com", "journal_number": "123"},
+		},
 	}
 
 	origExportPossible := airlock.ExportPossible
+	origProjectType := api.GetProjectType
+	origGetUserEmail := api.GetUserEmail
 	defer func() {
 		airlock.ExportPossible = origExportPossible
+		api.GetProjectType = origProjectType
+		api.GetUserEmail = origGetUserEmail
 	}()
 
 	airlock.ExportPossible = func() bool {
@@ -31,8 +89,18 @@ func TestExportSetup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			exportPrefix, selection = "", []string{}
-			override = false
+			t.Cleanup(func() {
+				exportPrefix, selection = "", []string{}
+				override = false
+				metadata = make(map[string]string)
+			})
+
+			api.GetProjectType = func() string {
+				return tt.projectType
+			}
+			api.GetUserEmail = func() string {
+				return tt.email
+			}
 
 			// Ignore prints to stdout
 			null, _ := os.Open(os.DevNull)
@@ -55,6 +123,8 @@ func TestExportSetup(t *testing.T) {
 				t.Errorf("Received incorrect selection. Expected=%v, received=%v", tt.selection, selection)
 			case tt.override != override:
 				t.Errorf("Received incorrect override value. Expected=%t, received=%t", tt.override, override)
+			case !reflect.DeepEqual(tt.metadata, metadata):
+				t.Errorf("Received incorrect metadata\nExpected=%v\nReceived=%v", tt.metadata, metadata)
 			}
 		})
 	}
@@ -62,24 +132,56 @@ func TestExportSetup(t *testing.T) {
 
 func TestExportSetup_Error(t *testing.T) {
 	var tests = []struct {
-		testname, args, errStr string
-		code                   int
-		export                 bool
+		testname, args, errStr, projectType string
+		code                                int
+		export                              bool
 	}{
-		{"FAIL_BAD_ARG_1", "-overrid test-bucket test-file", "", 2, true},
-		{"FAIL_BAD_ARG_2", "test-bucket --override", "", 2, true},
-		{"FAIL_EXPORT", "test-bucket test-file test-folder", "you are not allowed to export files", 0, false},
+		{
+			"FAIL_BAD_ARG_1",
+			"-overrid test-bucket test-file", "", "default",
+			2, true,
+		},
+		{
+			"FAIL_BAD_ARG_2",
+			"test-bucket --override", "", "default",
+			2, true,
+		},
+		{
+			"FAIL_BAD_ARG_3",
+			"test-bucket test-file", "invalid email argument \"\": mail: no address", "findata",
+			2, true,
+		},
+		{
+			"FAIL_BAD_ARG_4",
+			"test-bucket test-file -email=matti.meikalainen@csc.fi --email", "invalid email argument \"\": mail: no address", "findata",
+			2, true,
+		},
+		{
+			"FAIL_BAD_ARG_5",
+			"test-bucket test-file -email=matti.meikalainen@csc.fi", "missing journal number argument", "findata",
+			2, true,
+		},
+		{
+			"FAIL_EXPORT",
+			"test-bucket test-file test-folder", "you are not allowed to export files", "default",
+			0, false,
+		},
 	}
 
 	origExportPossible := airlock.ExportPossible
+	origProjectType := api.GetProjectType
 	defer func() {
 		airlock.ExportPossible = origExportPossible
+		api.GetProjectType = origProjectType
 	}()
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			airlock.ExportPossible = func() bool {
 				return tt.export
+			}
+			api.GetProjectType = func() string {
+				return tt.projectType
 			}
 
 			// Ignore prints to stdout

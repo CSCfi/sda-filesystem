@@ -8,7 +8,7 @@ export function CheckBucketExistence(arg1:string):Promise<boolean>;
 
 export function CheckObjectExistences(arg1:airlock.UploadSet):Promise<Array<boolean>>;
 
-export function ExportFiles(arg1:airlock.UploadSet,arg2:boolean):Promise<void>;
+export function ExportFiles(arg1:airlock.UploadSet,arg2:boolean,arg3:Record<string, string>):Promise<void>;
 
 export function FilesOpen():Promise<boolean>;
 
@@ -29,5 +29,7 @@ export function Quit():Promise<void>;
 export function RefreshFuse():Promise<void>;
 
 export function SelectFiles():Promise<Array<string>>;
+
+export function ValidateEmail(arg1:string):Promise<string>;
 
 export function WalkDirs(arg1:Array<string>,arg2:Array<string>,arg3:string):Promise<airlock.UploadSet>;
