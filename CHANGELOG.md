@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- Use SD Connect bucket as bucket during Findata upload. It will be overridden in KrakenD with Findata bucket
 - renamed `findata-creds` container to `admin-creds`
 - (users) export table will list objects without the `.c4gh` extension
 - (users) the export file dialog allows the selection of multiple files
@@ -18,6 +19,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- increased nginx timeout so that `terminal-proxy` container does not interfere with development
 - after the removal of internal URLs, the test Vault was used in situations where the local Vault was supposed to be used
 - export table showing `no data` after the last item in a page was removed (#45)
 - data races in tests
@@ -25,6 +27,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- (users) Email and journal number are mandatory metadata when exporting from Findata VMs
+- save user email from `/profile` response
 - (admins) env `CLAMAV_SOCKET` which is required for Findata projects
 - developing with Findata projects requires command `socat` to redirect Unix socket connections to `clamav` TCP socket
 - a Unix socket is created under `$HOME/.clamav` when developing with Findata projects
