@@ -52,7 +52,7 @@ var GetHeaders = func(
 ) (BatchHeaders, error) {
 	headers, err := getProjectHeaders(rep, "", MetadataSlice(buckets))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get headers: %w", rep, err)
+		return nil, fmt.Errorf("failed to get headers for %s: %w", rep, err)
 	}
 	for project := range sharedBuckets {
 		logs.Debugf("Fetching headers for shared project %s", project)
@@ -106,7 +106,7 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 
 	// Whitelist public key with which the headers will be reencrypted
 	if err := whitelistKey(query); err != nil {
-		return nil, fmt.Errorf("failed to whitelist public key for %s: %w", rep, err)
+		return nil, fmt.Errorf("failed to whitelist public key: %w", err)
 	}
 	defer func() {
 		if err := deleteWhitelistedKey(query); err != nil {

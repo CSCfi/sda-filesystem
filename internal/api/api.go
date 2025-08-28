@@ -437,7 +437,7 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 		return &RequestError{response.StatusCode, string(respBody)}
 	}
 
-	// Parse response
+	// Parse json response
 	if ret != nil {
 		if err := json.NewDecoder(response.Body).Decode(&ret); err != nil {
 			return fmt.Errorf("unable to decode response: %w", err)

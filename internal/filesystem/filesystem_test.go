@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 	"slices"
-	"sort"
 	"testing"
 	"time"
 	"unsafe"
@@ -19,12 +18,12 @@ import (
 const rep1 = api.SDConnect
 const rep2 = api.SDApply
 
-const fsSize = 35
+const fsSize = 38
 
 var testFuse = `{
     "name": "",
     "nameSafe": "",
-    "size": 608,
+    "size": 650,
 	"modified": "2025-07-31T23:00:05Z",
     "children": [
 		{
@@ -155,13 +154,13 @@ var testFuse = `{
         {
             "name": "` + rep1 + `",
             "nameSafe": "` + rep1 + `",
-            "size": 416,
+            "size": 458,
 			"modified": "2020-12-30T10:00:00Z",
             "children": [
 				{
 					"name": "project",
 					"nameSafe": "project",
-					"size": 416,
+					"size": 458,
 					"modified": "2020-12-30T10:00:00Z",
 					"children": [
 						{
@@ -206,17 +205,17 @@ var testFuse = `{
 											"children": null
 										},
 										{
-											"name": "file_3",
+											"name": "file@3",
 											"nameSafe": "file_3",
 											"size": 10,
-											"modified": "2010-01-24T18:34:05Z",
+											"modified": "2020-12-30T10:00:00Z",
 											"children": null
 										},
 										{
-											"name": "file_4",
-											"nameSafe": "file_4",
+											"name": "file_3",
+											"nameSafe": "file_3(d8b8f5)",
 											"size": 10,
-											"modified": "2020-12-30T10:00:00Z",
+											"modified": "2010-01-24T18:34:05Z",
 											"children": null
 										}
 									]
@@ -254,19 +253,41 @@ var testFuse = `{
 							]
 						},
 						{
-							"name": "bucket/2",
-							"nameSafe": "bucket_2(b0a409)",
+							"name": "bucket_3",
+							"nameSafe": "bucket_3",
 							"size": 151,
 							"modified": "2000-02-22T05:33:05Z",
 							"children": [
 								{
-									"name": "test",
-									"nameSafe": "test",
+									"name": "testi",
+									"nameSafe": "testi",
 									"size": 151,
 									"modified": "2000-02-22T05:33:05Z",
 									"children": null
 								}
 							]
+						},
+						{
+							"name": "shared-bucket",
+							"nameSafe": "shared-bucket",
+							"size": 42,
+							"modified": "1999-09-12T06:30:00Z",
+							"children": [
+								{
+									"name": "shared-file.txt",
+									"nameSafe": "shared-file.txt",
+									"size": 42,
+									"modified": "1999-09-12T06:30:00Z",
+									"children": null
+								}
+							]
+						},
+						{
+							"name": "shared-bucket-2",
+							"nameSafe": "shared-bucket-2",
+							"size": 0,
+							"modified": "1970-01-01T00:00:00Z",
+							"children": null
 						}
 					]
 				}
@@ -435,16 +456,22 @@ func TestInitializeFilesystem(t *testing.T) {
 	api.GetProjectName = func() string {
 		return "project"
 	}
-	api.GetBuckets = func(rep api.Repo) ([]api.Metadata, error) {
+	api.GetBuckets = func(rep api.Repo) ([]api.Metadata, map[string]api.SharedBucketsMeta, int, error) {
 		switch rep {
 		case rep1:
 			return []api.Metadata{
-				{Name: "bucket_1_segments"},
-				{Name: "bucket_1"},
-				{Name: "bucket_2_segments"},
-				{Name: "bucket/2"},
-				{Name: "bucket_2"},
-			}, nil
+					{Name: "bucket_1_segments"},
+					{Name: "bucket_1"},
+					{Name: "bucket_2_segments"},
+					{Name: "bucket_2"},
+					{Name: "bucket_3"},
+					{Name: "shared-bucket"},
+					{Name: "shared-bucket-2"},
+				},
+				map[string]api.SharedBucketsMeta{
+					"sharing-project-1": {"shared-bucket"},
+					"sharing-project-2": {"shared-bucket-2"},
+				}, 5, nil
 		case rep2:
 			return []api.Metadata{
 				{Name: "https://example.com"},
@@ -452,12 +479,12 @@ func TestInitializeFilesystem(t *testing.T) {
 				{Name: "bad-bucket_segments"},
 				{Name: "old-bucket"},
 				{Name: "old-bucket_segments"},
-			}, nil
+			}, nil, 5, nil
 		case "Substandard-Repo":
-			return nil, nil
+			return nil, nil, 0, nil
 		}
 
-		return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
+		return nil, nil, 0, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
 	}
 	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		switch rep {
@@ -471,7 +498,7 @@ func TestInitializeFilesystem(t *testing.T) {
 				time5, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 
 				return []api.Metadata{
-					{Size: 10, Name: "kansio/file_4", LastModified: &time1},
+					{Size: 10, Name: "kansio/file@3", LastModified: &time1},
 					{Size: 10, Name: "kansio/file_3", LastModified: &time2},
 					{Size: 45, Name: "kansio/file_2", LastModified: &time3},
 					{Size: 23, Name: "kansio/file_1", LastModified: &time4},
@@ -485,11 +512,17 @@ func TestInitializeFilesystem(t *testing.T) {
 					{Size: 62, Name: "?folder/test", LastModified: &time1},
 					{Size: 3, Name: "?folder/file_1", LastModified: &time2},
 				}, nil
-			case "bucket/2":
+			case "bucket_3":
 				time1, _ := time.Parse(time.RFC3339, "2000-02-22T05:33:05Z")
 
 				return []api.Metadata{
-					{Size: 151, Name: "test", LastModified: &time1},
+					{Size: 151, Name: "testi", LastModified: &time1},
+				}, nil
+			case "shared-bucket":
+				time1, _ := time.Parse(time.RFC3339, "1999-09-12T06:30:00Z")
+
+				return []api.Metadata{
+					{Size: 42, Name: "shared-file.txt", LastModified: &time1},
 				}, nil
 			default:
 				return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
@@ -556,17 +589,23 @@ func TestInitializeFilesystem(t *testing.T) {
 	}
 	api.GetHeaders = func(rep api.Repo,
 		buckets []api.Metadata,
+		sharedBuckets map[string]api.SharedBucketsMeta,
 	) (api.BatchHeaders, error) {
 		switch rep {
 		case rep1:
-			expectedBuckets := []string{"bucket/2", "bucket_1", "bucket_2"}
-			bucketsCopy := slices.Clone(buckets)
-			sort.Slice(bucketsCopy, func(i, j int) bool { return buckets[i].Name < buckets[j].Name })
-			result := slices.CompareFunc(bucketsCopy, expectedBuckets, func(b1 api.Metadata, b2 string) int {
+			expectedBuckets := []string{"bucket_1_segments", "bucket_1", "bucket_2_segments", "bucket_2", "bucket_3"}
+			result := slices.CompareFunc(buckets, expectedBuckets, func(b1 api.Metadata, b2 string) int {
 				return cmp.Compare(b1.Name, b2)
 			})
 			if result != 0 {
-				t.Errorf("api.GetHeaders() received invalid buckets\nExpected=%v\nReceived=%v", expectedBuckets, bucketsCopy)
+				t.Errorf("api.GetHeaders() received invalid buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+			}
+			expectedSharedBuckets := map[string]api.SharedBucketsMeta{
+				"sharing-project-1": {"shared-bucket"},
+				"sharing-project-2": {"shared-bucket-2"},
+			}
+			if !reflect.DeepEqual(sharedBuckets, expectedSharedBuckets) {
+				t.Errorf("api.GetHeaders() received invalid shared buckets\nExpected=%v\nReceived=%v", expectedSharedBuckets, sharedBuckets)
 			}
 
 			batch := make(api.BatchHeaders)
@@ -598,7 +637,7 @@ func TestInitializeFilesystem(t *testing.T) {
 
 			return batch, nil
 		case "Substandard-Repo":
-			return nil, fmt.Errorf("api.GetHeaders() received invalid repository %sv", rep)
+			return nil, fmt.Errorf("api.GetHeaders() received invalid repository %s", rep)
 		}
 
 		return nil, nil
@@ -616,7 +655,7 @@ func TestInitializeFilesystem(t *testing.T) {
 	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
-	expectedHeaders := map[_Ctype_ino_t]string{28: "vlfvyugyvli", 29: "hbfyucdtkyv", 33: "bftcdvtuftu"}
+	expectedHeaders := map[_Ctype_ino_t]string{30: "vlfvyugyvli", 32: "hbfyucdtkyv", 35: "bftcdvtuftu"}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Fatalf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}

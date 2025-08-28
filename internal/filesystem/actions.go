@@ -212,7 +212,7 @@ func ClearPath(path string) error {
 	// Need to know if bucket is shared or not. This will determine how vault is called
 	ownerProject, err := api.SharedBucketProject(bucket)
 	if err != nil {
-		return fmt.Errorf("Could not determine if bucket %s is shared: %w", bucket, err)
+		return fmt.Errorf("could not determine if bucket %s is shared: %w", bucket, err)
 	}
 	if ownerProject != "" {
 		logs.Debugf("Bucket %s in %s is shared by project %s", bucket, rep, ownerProject)

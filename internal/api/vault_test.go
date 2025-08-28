@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"io"
+	"maps"
 	"reflect"
 	"testing"
 )
@@ -19,58 +20,98 @@ func TestGetHeaders(t *testing.T) {
 		ai.vi.keyName = origKeyName
 	}()
 
-	batch := make(BatchHeaders)
-	batch["bucket_1"] = make(map[string]VaultHeaderVersions)
+	expectedData := make(BatchHeaders)
+	expectedData["bucket_1"] = make(map[string]VaultHeaderVersions)
+	expectedData["shared-bucket"] = make(map[string]VaultHeaderVersions)
 
-	batch["bucket_1"]["kansio/file_1"] = VaultHeaderVersions{
+	expectedData["bucket_1"]["kansio/file_1"] = VaultHeaderVersions{
 		Headers: map[string]VaultHeader{
 			"1": {Header: "yvdyviditybf"},
 		},
 		LatestVersion: 1,
 	}
-	batch["bucket_1"]["kansio/file_2"] = VaultHeaderVersions{
+	expectedData["bucket_1"]["kansio/file_2"] = VaultHeaderVersions{
 		Headers: map[string]VaultHeader{
 			"3": {Header: "hbfyucdtkyv"},
 			"4": {Header: "hubftiuvfti"},
 		},
 		LatestVersion: 4,
 	}
+	expectedData["shared-bucket"]["dir/obj.c4gh"] = VaultHeaderVersions{
+		Headers: map[string]VaultHeader{
+			"1": {Header: "gyutvrtivru"},
+		},
+		LatestVersion: 1,
+	}
 
-	expectedBody := `{
-		"batch": "eyJoZWxsbyI6WyIqKiJdLCJodWxsbyI6WyIqKiJdfQ==",
+	batch := make(map[string]BatchHeaders)
+	batch["my-project"] = make(BatchHeaders)
+	batch["sharing-project-1"] = make(BatchHeaders)
+	batch["sharing-project-2"] = make(BatchHeaders)
+
+	batch["my-project"]["bucket_1"] = expectedData["bucket_1"]
+	batch["sharing-project-1"]["shared-bucket"] = expectedData["shared-bucket"]
+
+	expectedBody := map[string]string{
+		"my-project": `{
+		"batch": "eyJidWNrZXRfMSI6WyIqKiJdfQ==",
 		"service": "data-gateway",
 		"key": "some-key"
-	}`
+	}`,
+		"sharing-project-1": `{
+		"batch": "eyJzaGFyZWQtYnVja2V0IjpbIioqIl0sInNoYXJlZC1idWNrZXQtMiI6WyIqKiJdfQ==",
+		"service": "data-gateway",
+		"key": "some-key"
+	}`,
+		"sharing-project-2": `{
+		"batch": "eyJhbm90aGVyLXNoYXJlZC1idWNrZXQiOlsiKioiXX0=",
+		"service": "data-gateway",
+		"key": "some-key"
+	}`,
+	}
+
+	warnings := map[string][]string{
+		"my-project":        nil,
+		"sharing-project-1": {"No matches found for bucket invisible-bucket", "Bad bucket warning"},
+	}
+
 	ai.vi.keyName = "some-key"
 	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
-		testname, errStr                    string
-		whitelistErr, deleteErr, requestErr error
+		testname, errStr, errProject string
+		whitelistErr, deleteErr      error
 	}{
 		{
-			"OK", "", nil, nil, nil,
+			"OK", "", "", nil, nil,
 		},
 		{
-			"FAIL_WHITELIST", "failed to whitelist public key: " + errExpected.Error(), errExpected, nil, nil,
+			"FAIL_WHITELIST",
+			"failed to get headers for some repo: failed to whitelist public key: " + errExpected.Error(),
+			"", errExpected, nil,
 		},
 		{
-			"FAIL_DELETE", "", nil, errExpected, nil,
+			"FAIL_DELETE", "", "", nil, errExpected,
 		},
 		{
-			"FAIL_REQUEST", "request failed: " + errExpected.Error(), nil, nil, errExpected,
+			"FAIL_REQUEST",
+			"failed to get headers for some repo: request failed: " + errExpected.Error(),
+			"my-project", nil, nil,
+		},
+		{
+			"FAIL_REQUEST_SHARED", "", "sharing-project-1", nil, nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
 			whitelisted := false
-			whitelistKey = func() error {
+			whitelistKey = func(query map[string]string) error {
 				whitelisted = true
 
 				return tt.whitelistErr
 			}
-			deleteWhitelistedKey = func() error {
+			deleteWhitelistedKey = func(query map[string]string) error {
 				if !whitelisted {
 					t.Errorf("deleteWhitelistedKey() was called before key was whitelisted")
 				}
@@ -89,26 +130,47 @@ func TestGetHeaders(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("Failed to read body: %w", err)
 				}
+
 				if !whitelisted {
 					t.Errorf("Key is not whitelisted")
 				}
+				owner, ok := query["owner"]
+				if !ok {
+					owner = "my-project"
+				}
+				if tt.errProject == owner {
+					return errExpected
+				}
 
-				if string(body) != expectedBody {
-					return fmt.Errorf("Request has incorrect body\nExpected=%s\nReceived=%s", expectedBody, string(body))
+				if string(body) != expectedBody[owner] {
+					return fmt.Errorf("Request has incorrect body for project %s\nExpected=%s\nReceived=%s", owner, expectedBody[owner], string(body))
 				}
 
 				switch v := ret.(type) {
 				case *vaultResponse:
-					v.Data = batch
-					v.Warnings = []string{"No matches found for bucket invisible-bucket", "Bad bucket warning"}
+					v.Data = make(BatchHeaders)
+					maps.Copy(v.Data, batch[owner])
+					v.Warnings = warnings[owner]
 
-					return tt.requestErr
+					return nil
 				default:
 					return fmt.Errorf("ret has incorrect type %v, expected *vaultResponse", reflect.TypeOf(v))
 				}
 			}
 
-			data, err := GetHeaders("some repo", []Metadata{{Name: "hello"}, {Name: "hullo"}})
+			data, err := GetHeaders(
+				"some repo",
+				[]Metadata{{Name: "bucket_1"}},
+				map[string]SharedBucketsMeta{
+					"sharing-project-1": {"shared-bucket", "shared-bucket-2"},
+					"sharing-project-2": {"another-shared-bucket"},
+				},
+			)
+
+			if tt.testname == "FAIL_REQUEST_SHARED" {
+				delete(expectedData, "shared-bucket")
+			}
+
 			switch {
 			case tt.errStr != "":
 				if err == nil {
@@ -118,8 +180,8 @@ func TestGetHeaders(t *testing.T) {
 				}
 			case err != nil:
 				t.Errorf("Function returned unexpected error: %s", err.Error())
-			case !reflect.DeepEqual(batch, data):
-				t.Errorf("Incorrect response body\nExpected=%v\nReceived=%v", batch, data)
+			case !reflect.DeepEqual(expectedData, data):
+				t.Errorf("Function returned incorrect headers\nExpected=%v\nReceived=%v", expectedData, data)
 			}
 		})
 	}

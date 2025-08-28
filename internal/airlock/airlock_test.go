@@ -1106,8 +1106,8 @@ func TestUploadObject_Error(t *testing.T) {
 		{
 			"FAIL_FINDATA", "uploading file test-file.txt failed", "findata",
 			[]string{
-				"failed to upload " + api.Findata.String() + " object: " + errExpected.Error(),
-				"failed to read file body: failed to upload " + api.Findata.String() + " object: " + errExpected.Error(),
+				"failed to upload Findata object: " + errExpected.Error(),
+				"failed to read file body: failed to upload Findata object: " + errExpected.Error(),
 			},
 			98, true, false,
 			nil, nil, errExpected, nil,

@@ -133,9 +133,10 @@ func (ms *mockCache) Set(key string, data []byte, _ int64, _ time.Duration) bool
 
 func init() {
 	testConfig = apiEndpoints{
-		Profile:     "/profile-endpoint",
-		Password:    "/password-endpoint",
-		AllasHeader: "/allas-header-endpoint/",
+		Profile:       "/profile-endpoint",
+		Password:      "/password-endpoint",
+		AllasHeader:   "/allas-header-endpoint/",
+		SharedBuckets: "/shared-buckets-endpoint",
 	}
 	testConfig.S3.Default = "/s3-default-endpoint/"
 	testConfig.S3.Head = "/s3-head-endpoint/"
@@ -871,7 +872,7 @@ func TestMakeRequest(t *testing.T) {
 		{
 			testname: "FAIL_JSON",
 			method:   "HEAD",
-			errText:  "unable to decode response: unexpected end of JSON input",
+			errText:  "unable to decode response: EOF",
 			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				_, _ = rw.Write([]byte(""))
 			},
@@ -996,12 +997,12 @@ func TestMakeRequest_PutRequestNil_And_ReadAll_Error(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Add("Content-Length", "10")
-		rw.WriteHeader(http.StatusCreated)
+		rw.WriteHeader(http.StatusNotFound)
 	}))
 	ai.hi.client = srv.Client()
 	ai.proxy = srv.URL
 
-	errStr := "failed to read response: unexpected EOF"
+	errStr := "failed to read error response: unexpected EOF"
 	err := makeRequest("GET", "/", nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Function did not return error")
