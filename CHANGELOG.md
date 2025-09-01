@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) updated `README.md` with up-to-date information regarding GUI and CLI installation in linux (#42)
 - Use SD Connect bucket as bucket during Findata upload. It will be overridden in KrakenD with Findata bucket
 - renamed `findata-creds` container to `admin-creds`
 - (users) export table will list objects without the `.c4gh` extension
@@ -41,6 +42,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Removed
 
+- (users) old deployment documentation files `DEPLOYMENT.md` and `docs/linux-setup.md` (#42)
 - project name from the Findata object name when exporting to CESSNA
 
 ## [2025.7.3] - 2025-07-24
