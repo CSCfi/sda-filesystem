@@ -248,7 +248,42 @@ pnpm run lint --fix
 
 <details><summary>Click to expand</summary>
 
-See [Linux setup](docs/linux-setup.md) for setting up the GUI for production. Currently all the binaries are added to the VM by the [customer-vm repository](https://gitlab.ci.csc.fi/sds-dev/sd-desktop/customer-vm/-/blob/main/config/linux/setup-sd-software.sh).
+Creating a desktop application in Ubuntu:
+
+1. Download [the desktop icon](build/appicon.png) and place it somewhere
+
+```bash
+mkdir -p /etc/data-gateway
+mv appicon.png /etc/data-gateway
+```
+
+2. Build or download a release of the GUI application and place it somewhere
+
+```bash
+make all
+mv build/bin/data-gateway /etc/data-gateway
+make down
+```
+
+3. Create configuration for the desktop application, point paths to where you stored the icon and the binary
+
+```bash
+cat > "${HOME}/Desktop/datagateway.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Terminal=false
+Exec=/etc/data-gateway/data-gateway
+Name=Data Gateway
+Comment=Data Gateway and Airlock desktop UI
+Icon=/etc/data-gateway/appicon.png
+Comment[en_US.utf8]=CSC SDA-Filesystem/Data Gateway
+Name[en_US]=Data Gateway
+EOF
+chmod +x "${HOME}/Desktop/datagateway.desktop"
+gio set "${HOME}/Desktop/datagateway.desktop" "metadata::trusted" "true"
+```
+
+Currently all the binaries are added to the VM by the [customer-vm repository](https://gitlab.ci.csc.fi/sds-dev/sd-desktop/customer-vm/-/blob/main/config/linux/setup-sd-software.sh).
 
 </details>
 
