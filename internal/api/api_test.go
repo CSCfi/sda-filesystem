@@ -322,6 +322,14 @@ func TestSetup(t *testing.T) {
 }
 
 func TestSetup_Port(t *testing.T) {
+	var tests = []struct {
+		testname, expectedProxy string
+		setOverride             bool
+	}{
+		{"OK_1", "http://localhost:8081", false},
+		{"OK_2", "override_url", true},
+	}
+
 	origGetEnv := GetEnv
 	origMakeRequest := makeRequest
 	origNewRistretto := cache.NewRistrettoCache
@@ -343,6 +351,7 @@ func TestSetup_Port(t *testing.T) {
 	}()
 
 	ai.hi.endpoints = apiEndpoints{}
+	os.Unsetenv("OVERRIDE_PROXY_URL")
 
 	GetEnv = func(name string, verifyURL bool) (string, error) {
 		switch name {
@@ -352,27 +361,10 @@ func TestSetup_Port(t *testing.T) {
 			return "test_token", nil
 		case "CONFIG_ENDPOINT":
 			return "config_url", nil
+		case "OVERRIDE_PROXY_URL":
+			return "override_url", nil
 		default:
 			return "", fmt.Errorf("unknown env %s", name)
-		}
-	}
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
-		if ai.proxy != "" {
-			t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
-		}
-		expectedPath := "http://localhost:8081/static/configuration.json"
-		if path != expectedPath {
-			return fmt.Errorf("Incorrect path \nExpected=%s\nReceived=%s", expectedPath, path)
-		}
-
-		switch v := ret.(type) {
-		case *configResponse:
-			v.Timeouts.S3 = 13
-			v.Endpoints = testConfig
-
-			return nil
-		default:
-			return fmt.Errorf("ret has incorrect type %v, expected *configResponse", reflect.TypeOf(v))
 		}
 	}
 	newCache := &cache.Ristretto{Cacheable: &mockCache{keys: make(map[string][]byte)}}
@@ -391,45 +383,75 @@ func TestSetup_Port(t *testing.T) {
 		return nil
 	}
 
-	Port = "8081"
-	err := Setup(mockFiles)
-	if err != nil {
-		t.Fatalf("Function returned error: %s", err.Error())
-	}
-	if ai.proxy != "http://localhost:8081" {
-		t.Errorf("Proxy has incorrect value\nExpected=http://localhost:8081\nReceived=%s", ai.proxy)
-	}
-	if ai.token != "test_token" {
-		t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
-	}
-	if ai.hi.s3Timeout != 18 {
-		t.Errorf("S3 timeout has incorrect value\nExpected=18\nReceived=%v", ai.hi.s3Timeout)
-	}
-	if !reflect.DeepEqual(ai.hi.endpoints, testConfig) {
-		t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.s3Timeout)
-	}
-	if downloadCache != newCache {
-		t.Errorf("downloadCache does not point to new cache")
-	}
-	publicKey := keys.DerivePublicKey(ai.vi.privateKey)
-	publicKey64 := base64.StdEncoding.EncodeToString(publicKey[:])
-	if publicKey64 != ai.vi.publicKey {
-		t.Errorf("Public key has incorrect value\nExpected=%v\nReceived=%v", publicKey, ai.vi.publicKey)
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+				if ai.proxy != "" {
+					t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
+				}
+				expectedPath := tt.expectedProxy + "/static/configuration.json"
+				if path != expectedPath {
+					t.Errorf("makeRequest() received incorrect path\nExpected=%s\nReceived=%s", expectedPath, path)
+				}
+
+				switch v := ret.(type) {
+				case *configResponse:
+					v.Timeouts.S3 = 13
+					v.Endpoints = testConfig
+
+					return nil
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *configResponse", reflect.TypeOf(v))
+				}
+			}
+
+			if tt.setOverride {
+				os.Setenv("OVERRIDE_PROXY_URL", "")
+				t.Cleanup(func() { os.Unsetenv("OVERRIDE_PROXY_URL") })
+			}
+
+			Port = "8081"
+			err := Setup(mockFiles)
+			if err != nil {
+				t.Fatalf("Function returned error: %s", err.Error())
+			}
+			if ai.proxy != tt.expectedProxy {
+				t.Errorf("Proxy has incorrect value\nExpected=%s\nReceived=%s", tt.expectedProxy, ai.proxy)
+			}
+			if ai.token != "test_token" {
+				t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
+			}
+			if ai.hi.s3Timeout != 18 {
+				t.Errorf("S3 timeout has incorrect value\nExpected=18\nReceived=%v", ai.hi.s3Timeout)
+			}
+			if !reflect.DeepEqual(ai.hi.endpoints, testConfig) {
+				t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.s3Timeout)
+			}
+			if downloadCache != newCache {
+				t.Errorf("downloadCache does not point to new cache")
+			}
+			publicKey := keys.DerivePublicKey(ai.vi.privateKey)
+			publicKey64 := base64.StdEncoding.EncodeToString(publicKey[:])
+			if publicKey64 != ai.vi.publicKey {
+				t.Errorf("Public key has incorrect value\nExpected=%v\nReceived=%v", publicKey, ai.vi.publicKey)
+			}
+		})
 	}
 }
 
 func TestSetup_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errText                                               string
-		tokenErr, configErr, reqErr, proxyErr, cacheErr, certErr, s3Err error
+		testname, errText                                                            string
+		tokenErr, configErr, reqErr, proxyErr, cacheErr, certErr, s3Err, overrideErr error
 	}{
-		{"FAIL_1", "required environment variables missing", errExpected, nil, nil, nil, nil, nil, nil},
-		{"FAIL_2", "required environment variables missing", nil, errExpected, nil, nil, nil, nil, nil},
-		{"FAIL_3", "failed to get static configuration.json file", nil, nil, errExpected, nil, nil, nil, nil},
-		{"FAIL_4", "required environment variables missing", nil, nil, nil, errExpected, nil, nil, nil},
-		{"FAIL_5", "failed to create cache", nil, nil, nil, nil, errExpected, nil, nil},
-		{"FAIL_6", "failed to load certficates", nil, nil, nil, nil, nil, errExpected, nil},
-		{"FAIL_7", "failed to initialise S3 client", nil, nil, nil, nil, nil, nil, errExpected},
+		{"FAIL_1", "required environment variables missing", errExpected, nil, nil, nil, nil, nil, nil, nil},
+		{"FAIL_2", "required environment variables missing", nil, errExpected, nil, nil, nil, nil, nil, nil},
+		{"FAIL_3", "failed to get static configuration.json file", nil, nil, errExpected, nil, nil, nil, nil, nil},
+		{"FAIL_4", "required environment variables missing", nil, nil, nil, errExpected, nil, nil, nil, nil},
+		{"FAIL_5", "failed to create cache", nil, nil, nil, nil, errExpected, nil, nil, nil},
+		{"FAIL_6", "failed to load certficates", nil, nil, nil, nil, nil, errExpected, nil, nil},
+		{"FAIL_7", "failed to initialise S3 client", nil, nil, nil, nil, nil, nil, errExpected, nil},
+		{"FAIL_8", "invalid environment variable", nil, nil, nil, nil, nil, nil, nil, errExpected},
 	}
 
 	origGetEnv := GetEnv
@@ -459,6 +481,8 @@ func TestSetup_Error(t *testing.T) {
 					return "", tt.tokenErr
 				case "CONFIG_ENDPOINT":
 					return "", tt.configErr
+				case "OVERRIDE_PROXY_URL":
+					return "", tt.overrideErr
 				default:
 					return "", fmt.Errorf("unknown env %s", name)
 				}
@@ -476,9 +500,17 @@ func TestSetup_Error(t *testing.T) {
 				return tt.s3Err
 			}
 
+			if tt.testname == "FAIL_8" {
+				Port = "8080"
+				os.Setenv("OVERRIDE_PROXY_URL", "")
+				t.Cleanup(func() { os.Unsetenv("OVERRIDE_PROXY_URL") })
+			}
+
 			err := Setup(MockReader{})
 			errText := tt.errText + ": " + errExpected.Error()
-			if err.Error() != errText {
+			if err == nil {
+				t.Error("Function should have returned error")
+			} else if err.Error() != errText {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
 			}
 		})

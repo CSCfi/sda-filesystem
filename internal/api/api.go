@@ -204,17 +204,26 @@ func Setup(files FileReader) error {
 
 	var config string
 	if Port != "" {
-		proxyURL, _ := url.ParseRequestURI(proxy)
-		proxyHost := proxyURL.Hostname()
-		proxyURL.Host = fmt.Sprintf("%s:%s", proxyHost, Port)
-		proxy = proxyURL.String()
+		// OVERRIDE_PROXY_URL is for the DEV and QA namespaces where the port number can vary
+		// This way the fixed port can be modified when testing older Ubuntu VMs
+		if _, ok := os.LookupEnv("OVERRIDE_PROXY_URL"); ok {
+			proxy, err = GetEnv("OVERRIDE_PROXY_URL", true)
+			if err != nil {
+				return fmt.Errorf("invalid environment variable: %w", err)
+			}
+		} else {
+			proxyURL, _ := url.ParseRequestURI(proxy)
+			proxyHost := proxyURL.Hostname()
+			proxyURL.Host = fmt.Sprintf("%s:%s", proxyHost, Port)
+			proxy = proxyURL.String()
+		}
 
 		config = proxy + "/static/configuration.json"
 	} else if config, err = GetEnv("CONFIG_ENDPOINT", true); err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
 
-	ai.proxy = "" // So that GUI refresh works during development
+	ai.proxy = "" // So that GUI reload works during development
 	// This needs to be called first before any other http requests
 	if err = getAPIEndpoints(config); err != nil {
 		return fmt.Errorf("failed to get static configuration.json file: %w", err)
