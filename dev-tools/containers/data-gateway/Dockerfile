@@ -1,4 +1,4 @@
-FROM golang:1.24.5 AS builder
+FROM golang:1.25.1 AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
