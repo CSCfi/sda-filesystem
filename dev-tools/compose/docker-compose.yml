@@ -38,7 +38,7 @@ services:
         condition: service_healthy
 
   admin-creds:
-    image: docker.io/docker:28.4
+    image: docker.io/docker:28.5
     container_name: admin-creds
     entrypoint: sh /admin_credentials.sh
     volumes:
@@ -53,7 +53,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: docker.io/hashicorp/vault:1.20.3
+    image: docker.io/hashicorp/vault:1.20.4
     container_name: vault
     env_file:
       - .env.keystone
@@ -84,7 +84,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: docker.io/hashicorp/vault:1.20.3
+    image: docker.io/hashicorp/vault:1.20.4
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
