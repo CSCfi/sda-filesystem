@@ -739,7 +739,7 @@ func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, fmt.Errorf("something happened")
 	}
-	api.DownloadData = func(nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		expectedNodes := []string{"", rep1.ForPath(), "project", "bucket_3", "testi"}
 		if !reflect.DeepEqual(expectedNodes, nodes) {
 			t.Errorf("api.DownloadData() received incorrect nodes.\nExpected=%v\nReceived=%v", expectedNodes, nodes)
@@ -790,7 +790,7 @@ func TestCheckHeaderExistence_UnknownEncryption(t *testing.T) {
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, fmt.Errorf("something happened")
 	}
-	api.DownloadData = func(nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		expectedNodes := []string{"", rep1.ForPath(), "project", "bucket_3", "testi"}
 		if !reflect.DeepEqual(expectedNodes, nodes) {
 			t.Errorf("api.DownloadData() received incorrect nodes.\nExpected=%v\nReceived=%v", expectedNodes, nodes)
@@ -844,7 +844,7 @@ func TestCheckHeaderExistence_DownloadError(t *testing.T) {
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, errExpected
 	}
-	api.DownloadData = func(nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		return nil, errExpected
 	}
 

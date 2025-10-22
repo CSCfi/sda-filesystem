@@ -1228,8 +1228,7 @@ func TestDownloadData(t *testing.T) {
 				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
 			}
 
-			nodes := []string{"", SDConnect.ForPath(), "project", tt.bucket}
-			nodes = append(nodes, strings.Split(tt.object, "/")...)
+			nodes := append([]string{tt.bucket}, strings.Split(tt.object, "/")...)
 			var header *string = nil
 			if tt.header != nil {
 				header = &tt.header[0]
@@ -1251,7 +1250,7 @@ func TestDownloadData(t *testing.T) {
 				}
 			}
 
-			data, err := DownloadData(nodes, "", header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
+			data, err := DownloadData(SDConnect, nodes, "", header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1369,14 +1368,14 @@ func TestDownloadData_Error(t *testing.T) {
 				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
 			}
 
-			nodes := []string{"", SDConnect.ForPath(), "project", "bucket", "obj.txt.c4gh"}
+			nodes := []string{"bucket", "obj.txt.c4gh"}
 			var header *string = nil
 			if tt.header != nil {
 				header = &tt.header[0]
 			}
 
 			storage.keys = make(map[string][]byte)
-			_, err := DownloadData(nodes, "path", header, 33554000, 33564437, 0, int64(decryptedSize))
+			_, err := DownloadData(SDConnect, nodes, "path", header, 33554000, 33564437, 0, int64(decryptedSize))
 			if err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
