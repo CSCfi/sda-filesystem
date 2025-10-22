@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"sda-filesystem/internal/logs"
@@ -55,7 +56,7 @@ var GetHeaders = func(
 		return nil, fmt.Errorf("failed to get headers for %s: %w", rep, err)
 	}
 	for project := range sharedBuckets {
-		logs.Debugf("Fetching headers for shared project %s", project)
+		logs.Debugf("Fetching headers for %s", project)
 		sharedHeaders, err := getProjectHeaders(rep, project, sharedBuckets[project])
 		if err != nil {
 			logs.Errorf("Failed to get headers for %s: %w", project, err)
@@ -77,7 +78,7 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 
 	logInsert := ""
 	if project != "" {
-		logInsert = " shared project " + project
+		logInsert = " shared project (" + project + ")"
 	}
 
 	if len(batch) == 0 {
@@ -86,7 +87,13 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 		return BatchHeaders{}, nil
 	}
 
-	batchJSON, err := json.Marshal(batch)
+	var err error
+	var batchJSON []byte
+	if rep == SDConnect {
+		batchJSON, err = json.Marshal(batch)
+	} else {
+		batchJSON, err = json.Marshal(slices.Collect(maps.Keys(batch)))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal batch json: %w", err)
 	}
@@ -99,9 +106,9 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 	}`
 	body = fmt.Sprintf(body, batchString, vaultService, ai.vi.keyName)
 
-	var query map[string]string
+	query := make(map[string]string)
 	if project != "" {
-		query = map[string]string{"owner": project}
+		query["owner"] = project
 	}
 
 	// Whitelist public key with which the headers will be reencrypted

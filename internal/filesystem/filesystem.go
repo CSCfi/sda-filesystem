@@ -24,6 +24,7 @@ import "C"
 import (
 	"crypto/sha256"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -154,7 +155,7 @@ func InitialiseFilesystem() {
 		parentPath := rep.ForPath()
 
 		// Get buckets for repository
-		buckets, sharedBuckets, ownedBucketsNum, err := api.GetBuckets(rep)
+		buckets, otherBucketSources, ownedBucketsNum, err := api.GetBuckets(rep)
 		if err != nil {
 			logs.Error(err)
 
@@ -162,7 +163,7 @@ func InitialiseFilesystem() {
 		}
 		// Fetching headers
 		// This needs to be done before the buckets slice is sorted
-		headers, err := api.GetHeaders(rep, buckets[:ownedBucketsNum], sharedBuckets)
+		headers, err := api.GetHeaders(rep, buckets[:ownedBucketsNum], otherBucketSources)
 		if err != nil {
 			logs.Errorf("Failed to retrieve file headers for %s: %s", rep, err.Error())
 
@@ -170,10 +171,10 @@ func InitialiseFilesystem() {
 		}
 		logs.Infof("Retrieved file headers for %s", rep)
 
-		buckets, segmentBuckets := separateSegmentBuckets(buckets)
-		numJobs += len(buckets)
-
+		var segmentBuckets []api.Metadata
 		if rep == api.SDConnect {
+			buckets, segmentBuckets = separateSegmentBuckets(buckets)
+
 			project := api.GetProjectName()
 			projectPath := parentPath + "/" + project
 			logs.Debugf("Creating directory /%s", filepath.FromSlash(projectPath))
@@ -188,15 +189,24 @@ func InitialiseFilesystem() {
 			}
 		}
 
+		numJobs += len(buckets)
 		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
 		batchHeaders[parentPath] = headers
 
 		// Create bucket directories
 		for i := range buckets {
+			origBucketName := buckets[i].Name
+			if rep != api.SDConnect {
+				if u, err := url.ParseRequestURI(buckets[i].Name); err == nil {
+					buckets[i].Name = strings.TrimLeft(strings.TrimPrefix(buckets[i].Name, u.Scheme), ":/")
+				}
+			}
+
 			bucketPath := parentPath + "/" + buckets[i].Name
 			logs.Debugf("Creating directory /%s", filepath.FromSlash(bucketPath))
 			bucketSafe := makeNode(parentChildren, buckets[i], true, parentPath)
 
+			parentChildren[bucketSafe].meta.Name = origBucketName
 			bucketNodes[parentPath][bucketSafe] = parentChildren[bucketSafe]
 
 			if rep != api.SDConnect && fi.guiFun != nil {
@@ -289,7 +299,6 @@ func numberOfNodes(node *goNode) (numNodes int, numObjects int) {
 
 func goNodeToC(node *goNode, name string) C.node_t {
 	cNode := C.node_t{}
-	cNode.orig_name = C.CString(node.meta.Name)
 	cNode.name = C.CString(name)
 	cNode.stat.st_size = C.off_t(node.meta.Size)
 	cNode.chld_count = 0
@@ -297,6 +306,12 @@ func goNodeToC(node *goNode, name string) C.node_t {
 	cNode.last_modified.tv_sec = 0
 	cNode.last_modified.tv_nsec = 0
 	cNode.offset = -1
+
+	if node.meta.ID != "" {
+		cNode.orig_name = C.CString(node.meta.Name + "&id=" + node.meta.ID)
+	} else {
+		cNode.orig_name = C.CString(node.meta.Name)
+	}
 
 	if node.meta.LastModified != nil {
 		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
@@ -463,7 +478,7 @@ func createLevel(prnt *goNode, meta []metadata, prntPath string) {
 
 // makeNode adds a node into the Go tree structure. Returns node's name in filesystem.
 func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSafe string) string {
-	name := removeInvalidChars(meta.Name) // Redundant for buckets and projects
+	name := removeInvalidChars(meta.Name) // Redundant for SD Connect buckets and projects
 	if !isDir {
 		name = strings.TrimSuffix(name, ".c4gh")
 	}

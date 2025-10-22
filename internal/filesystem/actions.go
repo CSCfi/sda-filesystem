@@ -309,7 +309,9 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	header, ok := fi.headers[node.stat.st_ino]
 	if !ok {
 		pathNames := getNodePathNames(node)
-		if len(pathNames) > 1 && pathNames[1] != api.SDConnect.ForPath() {
+		rep := api.Repo(pathNames[1])
+
+		if len(pathNames) > 1 && rep != api.SDConnect {
 			logs.Errorf("Object %s has no header", path)
 
 			return
@@ -328,7 +330,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 			logs.Warningf("Failed to retrieve possible header for %s: %w", path, err)
 			logs.Infof("Testing if file %s is encrypted with unknown key", path)
 
-			buffer, err := api.DownloadData(pathNames, path, nil,
+			buffer, err := api.DownloadData(rep, pathNames[3:], path, nil,
 				0, 2*CipherBlockSize, 0, int64(node.stat.st_size))
 			if err != nil {
 				logs.Errorf("Could not test if file is encrypted: %v", err)
@@ -383,7 +385,9 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 	pathNames := getNodePathNames(node)
 	path := C.GoString(cpath)
 
-	if len(pathNames) < 5 { // Needs to be modified once SD Apply is added
+	rep := api.Repo(pathNames[1])
+	if (rep == api.SDApply && len(pathNames) < 4) ||
+		(rep == api.SDConnect && len(pathNames) < 5) {
 		logs.Errorf("Path %s is too short for an object", path)
 
 		return -1
@@ -401,7 +405,13 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		return 0
 	}
 
-	data, err := api.DownloadData(pathNames, path, &header,
+	if rep == api.SDConnect {
+		pathNames = pathNames[3:]
+	} else {
+		pathNames = pathNames[2:]
+	}
+
+	data, err := api.DownloadData(rep, pathNames, path, &header,
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)

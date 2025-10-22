@@ -11,6 +11,7 @@ import (
 	"maps"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
+	"github.com/google/uuid"
 	"github.com/neicnordic/crypt4gh/streaming"
 )
 
@@ -40,6 +42,7 @@ const CipherBlockSize = BlockSize + MacSize
 // Metadata standardises the metadata received for both buckets and objects
 type Metadata struct {
 	Name         string
+	ID           string
 	Size         int64
 	LastModified *time.Time
 }
@@ -124,6 +127,16 @@ var objectToQuery = middleware.SerializeMiddlewareFunc("objectToQuery", func(
 	if key != "" {
 		req := in.Request.(*smithyhttp.Request)
 		q := req.URL.Query()
+
+		parsed, _ := url.ParseQuery(key)
+		if idQuery, ok := parsed["id"]; ok {
+			id := idQuery[len(idQuery)-1]
+			if uuid.Validate(id) == nil {
+				q.Add("id", id)
+				key = strings.TrimSuffix(key, "&id="+id)
+			}
+		}
+
 		q.Add("object", key)
 		req.URL.RawQuery = q.Encode()
 	}
@@ -158,7 +171,7 @@ var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 	q := req.URL.Query()
 	object := q.Get("object")
 	if object != "" {
-		req.URL.Path = strings.TrimSuffix(req.URL.Path, object)
+		req.URL.Path, _, _ = strings.Cut(req.URL.Path, object)
 	}
 
 	// Override Authorization header set by aws
@@ -313,15 +326,21 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 
 	logs.Infof("Retrieved buckets for %s", rep)
 
+	// Only SD Connect has shared buckets but this map will also contain SD Apply datasets
+	sharedMap := make(map[string]SharedBucketsMeta)
+
 	numBuckets := len(buckets)
-	meta := make([]Metadata, numBuckets)
-	for i := range meta {
-		// Size and modification time of bucket will be calculated later based on the objects it contains
-		meta[i] = Metadata{*buckets[i].Name, 0, nil}
+	meta := make([]Metadata, 0, numBuckets)
+	for i := range numBuckets {
+		if rep == SDApply {
+			target := *buckets[i].BucketRegion
+			sharedMap[target] = append(sharedMap[target], *buckets[i].Name)
+		} else {
+			// Size and modification time of bucket will be calculated later based on the objects it contains
+			meta = append(meta, Metadata{*buckets[i].Name, "", 0, nil})
+		}
 	}
 
-	// Only SD Connect has shared buckets
-	var sharedMap map[string]SharedBucketsMeta
 	if rep == SDConnect {
 		var err error
 		sharedMap, err = GetSharedBuckets()
@@ -332,6 +351,8 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 
 			logs.Infof("Retrieved shared buckets for %s", rep)
 		}
+	} else {
+		numBuckets = 0 // All datasets are in sharedBuckets
 	}
 
 	if numBuckets+len(sharedMap) == 0 {
@@ -342,7 +363,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 	meta = slices.Grow(meta, len(sharedBuckets))
 
 	for i := range sharedBuckets {
-		meta = append(meta, Metadata{sharedBuckets[i], 0, nil})
+		meta = append(meta, Metadata{sharedBuckets[i], "", 0, nil})
 	}
 
 	return meta, sharedMap, numBuckets, nil
@@ -352,6 +373,9 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
 var GetObjects = func(rep Repo, bucket, path string, prefix ...string) ([]Metadata, error) {
+	if rep == SDApply {
+		bucket = base64.RawURLEncoding.EncodeToString([]byte(bucket))
+	}
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 	}
@@ -376,7 +400,7 @@ var GetSegmentedObjects = func(rep Repo, bucket string) ([]Metadata, error) {
 
 	meta, err := getObjects(params, rep, bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list objects for container %s in %s: %w", bucket, rep, err)
+		return nil, fmt.Errorf("failed to list objects for bucket %s in %s: %w", bucket, rep, err)
 	}
 
 	logs.Debugf("Retrieved objects from bucket %s in %s", bucket, rep)
@@ -413,7 +437,13 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 
 	meta := make([]Metadata, len(objects))
 	for i := range meta {
-		meta[i] = Metadata{*objects[i].Key, *objects[i].Size, objects[i].LastModified}
+		meta[i] = Metadata{*objects[i].Key, "", *objects[i].Size, objects[i].LastModified}
+
+		if rep == SDApply && objects[i].Owner != nil {
+			if err := uuid.Validate(*objects[i].Owner.ID); err == nil {
+				meta[i].ID = *objects[i].Owner.ID
+			}
+		}
 	}
 
 	return meta, nil
@@ -422,7 +452,7 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 // DownloadData requests data between range [startDecrypted, endDecrypted).
 // As we want to split the data into chunks at consistent locations,
 // the requested byte interval may encompass one or two data chunks.
-var DownloadData = func(nodes []string, path string, header *string,
+var DownloadData = func(rep Repo, nodes []string, path string, header *string,
 	startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	endDecrypted = min(endDecrypted, fileSize)
@@ -431,14 +461,14 @@ var DownloadData = func(nodes []string, path string, header *string,
 	chunkEnd := (endDecrypted - 1) / chunkSize
 
 	maxEnd := min((chunkStart+1)*chunkSize, endDecrypted)
-	data, err := getDataChunk(nodes, path, header,
+	data, err := getDataChunk(rep, nodes, path, header,
 		chunkStart, startDecrypted, maxEnd, oldOffset, fileSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get data chunk: %w", err)
 	}
 
 	if chunkStart != chunkEnd {
-		moreData, err := getDataChunk(nodes, path, header,
+		moreData, err := getDataChunk(rep, nodes, path, header,
 			chunkEnd, chunkEnd*chunkSize, endDecrypted, oldOffset, fileSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get second data chunk: %w", err)
@@ -458,7 +488,7 @@ func CalculateEncryptedSize(decryptedSize int64) int64 {
 }
 
 func getDataChunk(
-	nodes []string, path string, header *string,
+	rep Repo, nodes []string, path string, header *string,
 	chunk, startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	// start coordinate of chunk
@@ -498,9 +528,12 @@ func getDataChunk(
 	}
 	endEncrypted = min(endEncrypted, encryptedBodySize)
 
-	rep := Repo(nodes[1])
-	bucket := nodes[3]
-	object := strings.Join(nodes[4:], "/")
+	bucket := nodes[0]
+	object := strings.Join(nodes[1:], "/")
+
+	if rep == SDApply {
+		bucket = base64.RawURLEncoding.EncodeToString([]byte(bucket))
+	}
 
 	ctx := getContext(rep, false)
 

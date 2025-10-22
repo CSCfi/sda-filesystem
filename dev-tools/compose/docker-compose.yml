@@ -37,13 +37,13 @@ services:
       keystone-swift:
         condition: service_healthy
 
-  admin-creds:
+  static-creds:
     image: docker.io/docker:29.0
-    container_name: admin-creds
-    entrypoint: sh /admin_credentials.sh
+    container_name: static-creds
+    entrypoint: sh /static_credentials.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ../scripts/admin_credentials.sh:/admin_credentials.sh
+      - ../scripts/static_credentials.sh:/static_credentials.sh
       - .:/app/env
     profiles:
       - keystone
@@ -98,14 +98,14 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.9.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.11.2"
     container_name: krakend
     env_file:
       - path: .env
       - path: .env.krakend
-      - path: .env.admin
+      - path: .env.static
         required: false
-    environment:
+    environment: # These are envs that either have a different name or have a different value if keystone is also running
       API_KEY: "${KRAKEND_API_KEY}"
       KRAKEND_ADDR: "${VALIDATOR_ADDR}"
       AAI_BASE_URL: "${AAI_BASE_URL}"
@@ -120,6 +120,17 @@ services:
       VAULT_ADDR: "${VAULT_ADDR}"
       VAULT_SECRET: "${VAULT_SECRET}"
       VAULT_ROLE: "${VAULT_ROLE}"
+      ARTIFACTORY_SERVER: "https://${ARTIFACTORY_SERVER}"
+      DB_STRING_SHARING: "${DB_STRING_SHARING}"
+      STATIC_BUCKETS: ${STATIC_BUCKETS}
+      STATIC_PROJECTS: ${STATIC_PROJECTS}
+      VISA_ISSUERS: ${VISA_ISSUERS}
+      SDAPPLY_ISSUERS: ${SDAPPLY_ISSUERS}
+      BIGPICTURE_ISSUERS: ${BIGPICTURE_ISSUERS}
+      EC2_CREDENTIALS: ${EC2_CREDENTIALS}
+      DB_STRINGS_SDA: ${DB_STRINGS_SDA}
+      DB_STRING_SDA_FEGA: ${DB_STRING_SDA_FEGA}
+      DB_STRING_SDA_BP: ${DB_STRING_SDA_BP}
     healthcheck:
       test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
       interval: 10s
@@ -142,7 +153,7 @@ services:
       - .env.krakend
     environment:
       DB_PROJECTS: "${CSC_PROJECT}:${EPOUTA_IP_ADDRESS}"
-      SBDB_CONNECTION_STRING: "${SBDB_CONNECTION_STRING}"
+      DB_DATASETS_FEGA: "${DB_DATASETS_FEGA}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_USER} -U ${POSTGRES_USER}"]
       interval: 5s
@@ -156,7 +167,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2025.8.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2025.10.0"
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
@@ -172,14 +183,14 @@ services:
     env_file:
       - .env
       - .env.keystone
+    environment:
+      USER_EMAIL: "${USER_EMAIL}"
     profiles:
       - keystone
     depends_on:
       vault-setup:
         condition: service_completed_successfully
       mockauth:
-        condition: service_started
-      krakend:
         condition: service_started
       terminal-proxy:
         condition: service_started

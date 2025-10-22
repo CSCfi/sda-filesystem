@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -23,10 +22,10 @@ func init() {
 }
 
 func importSetup(args []string) (int, error) {
-	// var sdapplyOnly bool
+	var sdapplyOnly bool
 	set := flag.NewFlagSet("import", flag.ContinueOnError)
 	set.StringVar(&mount, "mount", "", "Path to Data Gateway mount point")
-	// set.BoolVar(&sdapplyOnly, "sdapply", false, "Connect only to SD Apply")
+	set.BoolVar(&sdapplyOnly, "sdapply", false, "Connect only to SD Apply")
 
 	if err := set.Parse(args); err != nil {
 		return 2, nil
@@ -44,12 +43,9 @@ func importSetup(args []string) (int, error) {
 
 	mount = filepath.Clean(mount)
 
-	// if !sdapplyOnly {
-	if !api.SDConnectEnabled() {
-		// logs.Warningf("You do not have SD Connect enabled")
-		return 0, fmt.Errorf("you do not have %s enabled", api.SDConnect)
+	if !sdapplyOnly && !api.SDConnectEnabled() {
+		logs.Warningf("You do not have SD Connect enabled")
 	}
-	// }
 
 	return 0, nil
 }

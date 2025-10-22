@@ -68,7 +68,7 @@ all: down ## Run 'make local gui'
 requirements: ## Install dependencies and create .env file with vault secrets
 	cp dev-tools/.env.example dev-tools/compose/.env
 	@$(MAKE) get_env
-	set -a; source dev-tools/compose/.env; docker login $${ARTIFACTORY_SERVER}
+	@export $$(grep ^ARTIFACTORY dev-tools/compose/.env | xargs); docker login $${ARTIFACTORY_SERVER}
 	pnpm install --prefix frontend
 	pnpm --prefix frontend run build
 	mkdir -p $(SOCKET_DIR)
@@ -80,7 +80,7 @@ remote: down ## Only set up mock terminal-proxy and connect to test cluster Krak
 local: down ## Run all components locally
 	$(call docker_cmd,krakend keystone,build)
 	$(call docker_cmd,keystone-creds,up -d)
-	@$(MAKE) _wait_for_container CONTAINER_NAME=admin-creds
+	@$(MAKE) _wait_for_container CONTAINER_NAME=static-creds
 	$(call docker_cmd,krakend keystone,up -d)
 	@$(call docker_up_aftermath)
 
@@ -123,7 +123,7 @@ clean: down ## Stop running containers, delete volumes, and remove vault secrets
 
 down: ## Stop running containers and delete volumes
 	@$(call docker_cmd,$(PROFILES),down --volumes)
-	@rm -f dev-tools/compose/.env.admin
+	@rm -f dev-tools/compose/.env.static
 	@rm -f $(SOCKET_PATH)
 
 get_env: clean ## Get latest secrets from vault, replacing old secrets
@@ -132,24 +132,25 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	@export VAULT_TOKEN=$$(vault login -method=oidc -token-only) && cd dev-tools/compose/; \
 	$(call write_secret,KRAKEND_API_KEY,krakend/terminal-proxy,apikey) \
 	$(call write_secret,C4GH_KEY,krakend/allas-encryption-key,key) \
-	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
 	$(call write_secret,VAULT_ROLE,krakend/vault,role) \
 	$(call write_secret,VAULT_SECRET,krakend/vault,secret) \
-	$(call write_secret,FINDATA_ACCESS,krakend/findata,access) \
-	$(call write_secret,FINDATA_SECRET,krakend/findata,secret) \
 	$(call write_secret,FINDATA_S3_HOST,krakend/findata,host) \
-	$(call write_secret,FINDATA_S3_REGION,krakend/findata,region) \
-	$(call write_secret,FINDATA_BUCKET,krakend/findata,bucket) \
 	$(call write_secret,ARTIFACTORY_SERVER,internal-urls,artifactory-docker) \
 	$(call write_secret,ARTIFACTORY_URL,internal-urls,artifactory) \
+	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
 	$(call write_secret,AAI_BASE_URL,internal-urls,test-aai) \
 	$(call write_secret,S3_HOST,internal-urls,test-allas) \
 	$(call write_secret,KRAKEND_ADDR,internal-urls,test-krakend-backend) \
 	$(call write_secret,VALIDATOR_ADDR,internal-urls,test-krakend-backend) \
 	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta) \
 	$(call write_secret,CLAMAV_MIRROR,internal-urls,test-clamav) \
-	$(call write_secret,SBDB_CONNECTION_STRING,krakend/sd-connect-shares-db,SBDB_CONNECTION_STRING)
-	@set -a; source dev-tools/compose/.env; printf "BACKEND_HOST=$${KRAKEND_ADDR#*://}\n" >> dev-tools/compose/.env
+	$(call write_secret,DB_STRING_SHARING,krakend/db,sharing) \
+	$(call write_secret,DB_STRING_SDA_FEGA,krakend/db,sda) \
+	$(call write_secret,SDAPPLY_ISSUERS,krakend/rems,sdapply_issuers) \
+	$(call write_secret,FINDATA_CREDENTIALS,krakend/static-credentials,findata) \
+	$(call write_secret,SDAPPLY_CREDENTIALS,krakend/static-credentials,sdapply) \
+	$(call write_secret,BIGPICTURE_CREDENTIALS,krakend/static-credentials,bigpicture)
+	@export $$(grep ^KRAKEND_ADDR= dev-tools/compose/.env | xargs); printf "BACKEND_HOST=$${KRAKEND_ADDR#*://}\n" >> dev-tools/compose/.env
 	@printf "### VAULT SECRETS END ###\n" >> dev-tools/compose/.env
 	@echo "Secrets written successfully"
 
@@ -157,7 +158,7 @@ run_profiles: down ## Run componets with possible profile arguments: findata fus
 	@if echo "$(RUN_ARGS)" | grep -q keystone; then \
 		$(call docker_cmd,keystone-creds,up -d); \
 	fi
-	@$(MAKE) _wait_for_container CONTAINER_NAME=admin-creds
+	@$(MAKE) _wait_for_container CONTAINER_NAME=static-creds
 	@if echo "$(RUN_ARGS)" | grep -q findata; then \
 		$(MAKE) _run_findata_profiles RUN_ARGS="$(RUN_ARGS)"; \
 	else \

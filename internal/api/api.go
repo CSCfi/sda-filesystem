@@ -39,7 +39,7 @@ var ai = apiInfo{
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
 	},
-	repositories: []Repo{}, // SD Apply will be added here once it works with S3
+	repositories: []Repo{SDApply},
 }
 var downloadCache *cache.Ristretto
 
@@ -132,7 +132,7 @@ func (re *RequestError) Error() (err string) {
 		if unmarshalErr != nil {
 			err = fmt.Sprintf("%d %s", re.StatusCode, re.errStr)
 		} else {
-			err = fmt.Sprintf("%d %s", krakendErr.Status, krakendErr.Message)
+			err = fmt.Sprintf("%d: %s", krakendErr.Status, krakendErr.Message)
 		}
 	} else {
 		err = fmt.Sprintf("%d %s", re.StatusCode, http.StatusText(re.StatusCode))
@@ -149,7 +149,7 @@ func (e *CredentialsError) Error() string {
 }
 
 // Repo is used as a type to make it easier to remember in which
-// format the repositories should be in in various situations
+// format the repositories should be in various situations
 type Repo string
 
 const SDApply Repo = "SD-Apply"
@@ -448,7 +448,7 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 
 	// Parse json response
 	if ret != nil {
-		if err := json.NewDecoder(response.Body).Decode(&ret); err != nil {
+		if err := json.NewDecoder(response.Body).Decode(ret); err != nil {
 			return fmt.Errorf("unable to decode response: %w", err)
 		}
 	}
