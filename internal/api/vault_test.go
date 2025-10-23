@@ -121,14 +121,14 @@ func TestGetHeaders(t *testing.T) {
 			}
 			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				if method != "GET" {
-					return fmt.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
+					t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
 				if path != "/headers-endpoint" {
-					return fmt.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
+					t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
 				}
 				body, err := io.ReadAll(reqBody)
 				if err != nil {
-					return fmt.Errorf("Failed to read body: %w", err)
+					return fmt.Errorf("failed to read body: %w", err)
 				}
 
 				if !whitelisted {
@@ -143,7 +143,7 @@ func TestGetHeaders(t *testing.T) {
 				}
 
 				if string(body) != expectedBody[owner] {
-					return fmt.Errorf("Request has incorrect body for project %s\nExpected=%s\nReceived=%s", owner, expectedBody[owner], string(body))
+					t.Errorf("Request has incorrect body for project %s\nExpected=%s\nReceived=%s", owner, expectedBody[owner], string(body))
 				}
 
 				switch v := ret.(type) {
@@ -159,7 +159,7 @@ func TestGetHeaders(t *testing.T) {
 			}
 
 			data, err := GetHeaders(
-				"some repo",
+				SDConnect,
 				[]Metadata{{Name: "bucket_1"}},
 				map[string]SharedBucketsMeta{
 					"sharing-project-1": {"shared-bucket", "shared-bucket-2"},

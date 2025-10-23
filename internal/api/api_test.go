@@ -1063,16 +1063,16 @@ func TestDeleteFileFromCache(t *testing.T) {
 	defer func() { downloadCache = origCache }()
 
 	keys := map[string][]byte{
-		"path/to/object_0":         {4, 8, 9},
-		"path/to/object_33554432":  {74, 80, 0},
-		"path/to/object_67108864":  {3, 88, 6},
-		"path/to/object_100663296": {42, 23, 56},
+		SDConnect.ForPath() + "/path/to/object_0":         {4, 8, 9},
+		SDConnect.ForPath() + "/path/to/object_33554432":  {74, 80, 0},
+		SDConnect.ForPath() + "/path/to/object_67108864":  {3, 88, 6},
+		SDConnect.ForPath() + "/path/to/object_100663296": {42, 23, 56},
 	}
 
 	storage := &mockCache{keys: keys}
 	downloadCache = &cache.Ristretto{Cacheable: storage}
 
-	DeleteFileFromCache(nodes, size)
+	DeleteFileFromCache(SDConnect, nodes, size)
 
 	if len(storage.keys) > 0 {
 		missedKeys := make([]string, 0, len(storage.keys))

@@ -132,7 +132,7 @@ func (re *RequestError) Error() (err string) {
 		if unmarshalErr != nil {
 			err = fmt.Sprintf("%d %s", re.StatusCode, re.errStr)
 		} else {
-			err = fmt.Sprintf("%d: %s", krakendErr.Status, krakendErr.Message)
+			err = fmt.Sprintf("%d %s", krakendErr.Status, krakendErr.Message)
 		}
 	} else {
 		err = fmt.Sprintf("%d %s", re.StatusCode, http.StatusText(re.StatusCode))
@@ -472,8 +472,8 @@ var SharedBucketProject = func(bucket string) (string, error) {
 	return resp.Owner, makeRequest("GET", ai.hi.endpoints.SharedBuckets+"/"+bucket, nil, nil, nil, &resp)
 }
 
-func toCacheKey(nodes []string, chunkIdx int64) string {
-	return strings.Join(nodes, "/") + "_" + strconv.FormatInt(chunkIdx, 10)
+func toCacheKey(rep Repo, nodes []string, chunkIdx int64) string {
+	return rep.ForPath() + "/" + strings.Join(nodes, "/") + "_" + strconv.FormatInt(chunkIdx, 10)
 }
 
 // ClearCache empties the entire ristretto cache
@@ -482,10 +482,10 @@ var ClearCache = func() {
 }
 
 // DeleteFileFromCache clears all entries from a given file/object from cache
-var DeleteFileFromCache = func(nodes []string, size int64) {
+var DeleteFileFromCache = func(rep Repo, nodes []string, size int64) {
 	i := int64(0)
 	for i < size {
-		key := toCacheKey(nodes, i)
+		key := toCacheKey(rep, nodes, i)
 		downloadCache.Del(key)
 		i += chunkSize
 	}

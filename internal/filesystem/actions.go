@@ -240,7 +240,6 @@ func ClearPath(path string) error {
 		}
 	}
 
-	bucketPath := strings.Join(pathNames[:4], "/")
 	objMap := make(map[string]metadata, len(objects))
 	for i := range objects {
 		header := ""
@@ -248,11 +247,11 @@ func ClearPath(path string) error {
 		if ok {
 			header = versions.Headers[strconv.Itoa(versions.LatestVersion)].Header
 		}
-		objMap[bucketPath+"/"+objects[i].Name] = metadata{objects[i], header, segmentSizes[objects[i].Name]}
+		objMap[bucket+"/"+objects[i].Name] = metadata{objects[i], header, segmentSizes[objects[i].Name]}
 	}
 
 	oldSize := node.stat.st_size
-	clearNode(node, pathNames, objMap)
+	clearNode(node, pathNames[3:], objMap)
 	updateParentSizes(node, oldSize)
 	updateParentTimestamps(node)
 
@@ -263,7 +262,7 @@ func ClearPath(path string) error {
 
 func clearNode(node *C.node_t, pathNodes []string, meta map[string]metadata) (C.off_t, C.time_t) {
 	if node.children == nil {
-		api.DeleteFileFromCache(pathNodes, int64(node.stat.st_size))
+		api.DeleteFileFromCache(api.SDConnect, pathNodes, int64(node.stat.st_size))
 		path := strings.Join(pathNodes, "/")
 		obj, ok := meta[path]
 		if ok {
@@ -405,6 +404,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		return 0
 	}
 
+	// Better for api to not to have to know how filesystem is constructed
 	if rep == api.SDConnect {
 		pathNames = pathNames[3:]
 	} else {

@@ -32,7 +32,7 @@ func TestSearchNode(t *testing.T) {
 			"OK_2", rep1.ForPath() + "/project/bucket_1///dir_////another_file", &nodeSlice[28],
 		},
 		{
-			"OK_3", "/" + rep2.ForPath() + "/https___example.com/tiedosto", &nodeSlice[8],
+			"OK_3", "/" + rep2.ForPath() + "/my-example.com/tiedosto", &nodeSlice[8],
 		},
 		{
 			"NOT_FOUND_1", "Rep4/bucket_2/folder/file_3", nil,
@@ -77,7 +77,7 @@ func TestGetNodePathNames(t *testing.T) {
 			"OK_2", &nodeSlice[28], []string{"", rep1.ForPath(), "project", "bucket_1", "dir+", "another_file"},
 		},
 		{
-			"OK_3", &nodeSlice[8], []string{"", rep2.ForPath(), "https://example.com", "tiedosto"},
+			"OK_3", &nodeSlice[8], []string{"", rep2.ForPath(), "https://my-example.com", "tiedosto"},
 		},
 	}
 
@@ -121,9 +121,9 @@ func TestClearPath(t *testing.T) {
 	path := rep1.ForPath() + "/project/bucket_1/kansio"
 
 	traverse := map[string]bool{
-		"/" + rep1.ForPath() + "/project/bucket_1/kansio/file_1": true,
-		"/" + rep1.ForPath() + "/project/bucket_1/kansio/file_2": true,
-		"/" + rep1.ForPath() + "/project/bucket_1/kansio/file_3": true,
+		rep1.ForPath() + "/bucket_1/kansio/file_1": true,
+		rep1.ForPath() + "/bucket_1/kansio/file_2": true,
+		rep1.ForPath() + "/bucket_1/kansio/file_3": true,
 	}
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
@@ -142,8 +142,8 @@ func TestClearPath(t *testing.T) {
 	}()
 
 	fi.headers = map[_Ctype_ino_t]string{30: "vlfvyugyvli", 32: "hbfyucdtkyv", 33: "bftcdvtuftu"}
-	api.DeleteFileFromCache = func(nodes []string, size int64) {
-		delete(traverse, strings.Join(nodes, "/"))
+	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
+		delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
 	}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	time2, _ := time.Parse(time.RFC3339, "2017-01-24T08:30:45Z")
@@ -259,7 +259,7 @@ func TestClearPath_Shared(t *testing.T) {
 	}()
 
 	fi.headers = map[_Ctype_ino_t]string{33: "bftcdvtuftu"}
-	api.DeleteFileFromCache = func(nodes []string, size int64) {}
+	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "shared-bucket" {
@@ -350,9 +350,9 @@ func TestClearPath_Segments(t *testing.T) {
 	path := rep1.ForPath() + "/old-bucket/dir_2" // old-bucket is treated like the project in this case
 
 	traverse := map[string]bool{
-		"/" + rep1.ForPath() + "/old-bucket/dir+2/dir3.2.1/file.c4gh":     true,
-		"/" + rep1.ForPath() + "/old-bucket/dir+2/dir3.2.1/file/h%e%ll+o": true,
-		"/" + rep1.ForPath() + "/old-bucket/dir+2/logs":                   true,
+		rep1.ForPath() + "/dir+2/dir3.2.1/file.c4gh":     true,
+		rep1.ForPath() + "/dir+2/dir3.2.1/file/h%e%ll+o": true,
+		rep1.ForPath() + "/dir+2/logs":                   true,
 	}
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
@@ -371,8 +371,8 @@ func TestClearPath_Segments(t *testing.T) {
 	}()
 
 	fi.headers = map[_Ctype_ino_t]string{16: "vlfvyugyvli", 19: "hbfyucdtkyv"}
-	api.DeleteFileFromCache = func(nodes []string, size int64) {
-		delete(traverse, strings.Join(nodes, "/"))
+	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
+		delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
 	}
 	time1, _ := time.Parse(time.RFC3339, "2011-04-24T03:38:45Z")
 	time2, _ := time.Parse(time.RFC3339, "2023-07-10T23:11:00Z")
@@ -740,7 +740,10 @@ func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
 		return "", 0, fmt.Errorf("something happened")
 	}
 	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
-		expectedNodes := []string{"", rep1.ForPath(), "project", "bucket_3", "testi"}
+		if rep != rep1 {
+			t.Errorf("api.DownloadData() received incorrect repository. Expected=%v, received=%v", rep1, rep)
+		}
+		expectedNodes := []string{"bucket_3", "testi"}
 		if !reflect.DeepEqual(expectedNodes, nodes) {
 			t.Errorf("api.DownloadData() received incorrect nodes.\nExpected=%v\nReceived=%v", expectedNodes, nodes)
 		}
@@ -791,7 +794,10 @@ func TestCheckHeaderExistence_UnknownEncryption(t *testing.T) {
 		return "", 0, fmt.Errorf("something happened")
 	}
 	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
-		expectedNodes := []string{"", rep1.ForPath(), "project", "bucket_3", "testi"}
+		if rep != rep1 {
+			t.Errorf("api.DownloadData() received incorrect repository. Expected=%v, received=%v", rep1, rep)
+		}
+		expectedNodes := []string{"bucket_3", "testi"}
 		if !reflect.DeepEqual(expectedNodes, nodes) {
 			t.Errorf("api.DownloadData() received incorrect nodes.\nExpected=%v\nReceived=%v", expectedNodes, nodes)
 		}

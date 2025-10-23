@@ -171,10 +171,10 @@ func InitialiseFilesystem() {
 		}
 		logs.Infof("Retrieved file headers for %s", rep)
 
-		var segmentBuckets []api.Metadata
-		if rep == api.SDConnect {
-			buckets, segmentBuckets = separateSegmentBuckets(buckets)
+		buckets, segmentBuckets := separateSegmentBuckets(buckets)
+		numJobs += len(buckets)
 
+		if rep == api.SDConnect {
 			project := api.GetProjectName()
 			projectPath := parentPath + "/" + project
 			logs.Debugf("Creating directory /%s", filepath.FromSlash(projectPath))
@@ -189,7 +189,6 @@ func InitialiseFilesystem() {
 			}
 		}
 
-		numJobs += len(buckets)
 		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
 		batchHeaders[parentPath] = headers
 

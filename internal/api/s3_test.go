@@ -353,15 +353,19 @@ func TestGetBuckets(t *testing.T) {
 	var tests = []struct {
 		testname      string
 		repo          Repo
+		bucketsNum    int
 		buckets       []string
 		sharedBuckets map[string]SharedBucketsMeta
 	}{
 		{
-			"OK_1", Repo("My-Repo"),
-			[]string{"bucket256", "bucket42"}, nil,
+			"OK_1", SDApply, 0,
+			[]string{"bucket256", "bucket42"},
+			map[string]SharedBucketsMeta{
+				"us-east-1": {"bucket42", "bucket256"},
+			},
 		},
 		{
-			"OK_2", SDConnect,
+			"OK_2", SDConnect, 2,
 			[]string{"bucket0583", "bucket256", "bucket42", "bucket789", "bucket87"},
 			map[string]SharedBucketsMeta{
 				"sharing-project-1": {"bucket87"},
@@ -433,8 +437,8 @@ func TestGetBuckets(t *testing.T) {
 				if !reflect.DeepEqual(sharedBuckets, tt.sharedBuckets) {
 					t.Errorf("Function returned incorrect shared buckets\nExpected=%v\nReceived=%v", tt.sharedBuckets, sharedBuckets)
 				}
-				if ownedBucketsNum != 2 {
-					t.Errorf("Function returned incorrect number of owned buckets\nExpected=2\nReceived=%v", ownedBucketsNum)
+				if ownedBucketsNum != tt.bucketsNum {
+					t.Errorf("Function returned incorrect number of owned buckets\nExpected=%v\nReceived=%v", tt.bucketsNum, ownedBucketsNum)
 				}
 			}
 		})
@@ -456,7 +460,7 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/my-repo" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -526,7 +530,7 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if buckets, _, _, err := GetBuckets("My-Repo"); err != nil {
+	} else if buckets, _, _, err := GetBuckets(SDApply); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(buckets, expectedBuckets) {
 		t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
@@ -622,7 +626,7 @@ func TestGetObjects(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/bucket234" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/YnVja2V0MjM0" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -814,7 +818,7 @@ func TestGetObjects_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply/some-bucket" {
+				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-connect/some-bucket" {
 					w.WriteHeader(tt.code)
 
 					return
@@ -828,7 +832,7 @@ func TestGetObjects_Error(t *testing.T) {
 
 			if err := initialiseS3Client(); err != nil {
 				t.Errorf("Failed to initialize S3 client: %v", err.Error())
-			} else if _, err := GetObjects(SDApply, "some-bucket", "SD-Apply/some-bucket"); err == nil {
+			} else if _, err := GetObjects(SDConnect, "some-bucket", "SD-Apply/some-bucket"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -851,7 +855,7 @@ func TestGetSegmentedObjects(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/bucket234" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/YnVja2V0MjM0" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -999,7 +1003,7 @@ func TestGetSegmentedObjects_MultiplePages(t *testing.T) {
 	}
 }
 
-func TestGetSefmentedObjects_Error(t *testing.T) {
+func TestGetSegmentedObjects_Error(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
 	origS3Client := ai.hi.s3Client
@@ -1018,12 +1022,12 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for container some-bucket in SD Apply: bad request: bucket name \"some-bucket\" may not be S3 compatible",
+			"failed to list objects for bucket some-bucket in SD Apply: bad request: bucket name \"some-bucket\" may not be S3 compatible",
 			http.StatusBadRequest,
 		},
 		{
 			"FAIL_2",
-			"failed to list objects for container some-bucket in SD Apply: api error Unauthorized: Unauthorized",
+			"failed to list objects for bucket some-bucket in SD Apply: api error Unauthorized: Unauthorized",
 			http.StatusUnauthorized,
 		},
 	}
@@ -1034,7 +1038,7 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply/some-bucket" {
+				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply/c29tZS1idWNrZXQ" {
 					w.WriteHeader(tt.code)
 
 					return
@@ -1212,7 +1216,7 @@ func TestDownloadData(t *testing.T) {
 				}
 
 				for i := range tt.alreadyCachedIdxs {
-					key := fmt.Sprintf("/SD-Connect/project/%s/%s_%d", tt.bucket, tt.object, tt.alreadyCachedIdxs[i])
+					key := fmt.Sprintf("SD-Connect/%s/%s_%d", tt.bucket, tt.object, tt.alreadyCachedIdxs[i])
 
 					if byteStart/chunkSize == i {
 						t.Errorf("Should not have called server since key %s should have been in cache", key)
@@ -1243,7 +1247,7 @@ func TestDownloadData(t *testing.T) {
 
 			storage.keys = make(map[string][]byte)
 			for _, idx := range tt.alreadyCachedIdxs {
-				key := strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
+				key := SDConnect.ForPath() + "/" + strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
 				ok := downloadCache.Set(key, source[idx:min(idx+chunkSize, int64(len(source)))], 0, time.Minute)
 				if !ok {
 					t.Fatalf("Failed to add key %s to cache", key)
@@ -1259,7 +1263,7 @@ func TestDownloadData(t *testing.T) {
 				t.Fatalf("Function returned incorrect data\nExpected=%v\nReceived=%v", string(expectedData), string(data))
 			}
 			for _, idx := range tt.cachedIdxs {
-				key := strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
+				key := SDConnect.ForPath() + "/" + strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
 				cachedData, ok := downloadCache.Get(key)
 				if !ok {
 					t.Fatalf("Data for key %s was not present in cache", key)

@@ -81,7 +81,8 @@ func (s SharedBucketsMeta) GetNames() iter.Seq[string] {
 }
 
 type resolverV2 struct{}
-type EndpointKey struct{} // custom key for checking context value when resolving endpoint
+type EndpointKey struct{}   // custom key for checking context value when resolving endpoint
+type RepositoryKey struct{} // custom key for checking which respository the call is for
 
 // ResolveEndpoint adds a prefix to the s3 endpoint based on the value in context.
 // This enables us to to use the same s3 client to call both SD Connect and SD Apply endpoints.
@@ -99,6 +100,27 @@ func (*resolverV2) ResolveEndpoint(ctx context.Context, params s3.EndpointParame
 
 	return smithyendpoints.Endpoint{}, errors.New("endpoint context not valid")
 }
+
+// encodeBucket base64 encodes the bucket for all SD Apply requests
+var encodeBucket = middleware.InitializeMiddlewareFunc("objectToQuery", func(
+	ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler,
+) (
+	out middleware.InitializeOutput, metadata middleware.Metadata, err error,
+) {
+	var bucket *string
+	switch v := in.Parameters.(type) {
+	case *s3.GetObjectInput:
+		bucket = v.Bucket
+	case *s3.ListObjectsV2Input:
+		bucket = v.Bucket
+	}
+
+	if r := ctx.Value(RepositoryKey{}); bucket != nil && r != nil && r.(Repo) == SDApply {
+		*bucket = base64.RawURLEncoding.EncodeToString([]byte(*bucket))
+	}
+
+	return next.HandleInitialize(ctx, in)
+})
 
 // objectToQuery adds object name as a query parameter in certain requests
 var objectToQuery = middleware.SerializeMiddlewareFunc("objectToQuery", func(
@@ -206,6 +228,9 @@ var initialiseS3Client = func() error {
 	}
 
 	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
+		return stack.Initialize.Add(encodeBucket, middleware.After)
+	})
+	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
 		return stack.Serialize.Add(objectToQuery, middleware.After)
 	})
 	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
@@ -237,6 +262,8 @@ func getContext(rep Repo, head bool, parent ...context.Context) context.Context 
 	if len(parent) > 0 {
 		ctx = parent[0]
 	}
+
+	ctx = context.WithValue(ctx, RepositoryKey{}, rep)
 
 	return context.WithValue(ctx, EndpointKey{}, endpoint+rep.ForURL())
 }
@@ -373,9 +400,6 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
 var GetObjects = func(rep Repo, bucket, path string, prefix ...string) ([]Metadata, error) {
-	if rep == SDApply {
-		bucket = base64.RawURLEncoding.EncodeToString([]byte(bucket))
-	}
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 	}
@@ -500,7 +524,7 @@ func getDataChunk(
 	ofst := startDecrypted - chByteStart
 	endofst := endDecrypted - chByteStart
 
-	cacheKey := toCacheKey(nodes, chByteStart)
+	cacheKey := toCacheKey(rep, nodes, chByteStart)
 	chunkData, found := downloadCache.Get(cacheKey)
 
 	if found {
@@ -530,10 +554,6 @@ func getDataChunk(
 
 	bucket := nodes[0]
 	object := strings.Join(nodes[1:], "/")
-
-	if rep == SDApply {
-		bucket = base64.RawURLEncoding.EncodeToString([]byte(bucket))
-	}
 
 	ctx := getContext(rep, false)
 
