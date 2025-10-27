@@ -1,4 +1,4 @@
-FROM clamav/clamav:1.4
+FROM clamav/clamav:1.5
 ARG PROXY_URL
 
 RUN sed -i '/^DatabaseMirror /s/^/#/' /etc/clamav/freshclam.conf
