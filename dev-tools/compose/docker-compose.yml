@@ -31,6 +31,8 @@ services:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
       IS_FINDATA: "${IS_FINDATA}"
       USER_EMAIL: "${USER_EMAIL}"
+    volumes:
+      - ../config:/config
     profiles:
       - keystone
     depends_on:
@@ -103,8 +105,6 @@ services:
     env_file:
       - path: .env
       - path: .env.krakend
-      - path: .env.static
-        required: false
     environment: # These are envs that either have a different name or have a different value if keystone is also running
       API_KEY: "${KRAKEND_API_KEY}"
       KRAKEND_ADDR: "${VALIDATOR_ADDR}"
@@ -117,20 +117,28 @@ services:
       FINDATA_S3_HOST: "${FINDATA_S3_HOST}"
       FINDATA_S3_REGION: "${FINDATA_S3_REGION}"
       FINDATA_BUCKET: "${FINDATA_BUCKET}"
+      FINDATA_ACCESS: "${FINDATA_ACCESS}"
+      FINDATA_SECRET: "${FINDATA_SECRET}"
       VAULT_ADDR: "${VAULT_ADDR}"
       VAULT_SECRET: "${VAULT_SECRET}"
       VAULT_ROLE: "${VAULT_ROLE}"
       ARTIFACTORY_SERVER: "https://${ARTIFACTORY_SERVER}"
       DB_STRING_SHARING: "${DB_STRING_SHARING}"
-      STATIC_BUCKETS: ${STATIC_BUCKETS}
-      STATIC_PROJECTS: ${STATIC_PROJECTS}
-      VISA_ISSUERS: ${VISA_ISSUERS}
-      SDAPPLY_ISSUERS: ${SDAPPLY_ISSUERS}
-      BIGPICTURE_ISSUERS: ${BIGPICTURE_ISSUERS}
-      EC2_CREDENTIALS: ${EC2_CREDENTIALS}
-      DB_STRINGS_SDA: ${DB_STRINGS_SDA}
+      SDAPPLY_PROJECT: ${SDAPPLY_PROJECT}
+      BIGPICTURE_PROJECT: ${BIGPICTURE_PROJECT}
+      FEGA_BUCKET: ${FEGA_BUCKET}
+      BIGPICTURE_BUCKET: ${BIGPICTURE_BUCKET}
+      SDAPPLY_ISSUER_NAME: ${SDAPPLY_ISSUER_NAME}
+      SDAPPLY_ISSUER_JKU: ${SDAPPLY_ISSUER_JKU}
+      BIGPICTURE_ISSUER_NAME: ${BIGPICTURE_ISSUER_NAME}
+      BIGPICTURE_ISSUER_JKU: ${BIGPICTURE_ISSUER_JKU}
+      SDAPPLY_ACCESS: "${SDAPPLY_ACCESS}"
+      SDAPPLY_SECRET: "${SDAPPLY_SECRET}"
+      BIGPICTURE_ACCESS: "${BIGPICTURE_ACCESS}"
+      BIGPICTURE_SECRET: "${BIGPICTURE_SECRET}"
       DB_STRING_SDA_FEGA: ${DB_STRING_SDA_FEGA}
       DB_STRING_SDA_BP: ${DB_STRING_SDA_BP}
+      SDAPPLY_CONFIG_BASE: "${SDAPPLY_CONFIG_BASE}"
     healthcheck:
       test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
       interval: 10s
@@ -139,6 +147,7 @@ services:
       start_period: 10s
     volumes:
       - ../static:/static
+      - ../config:/config
     profiles:
       - krakend
     depends_on:

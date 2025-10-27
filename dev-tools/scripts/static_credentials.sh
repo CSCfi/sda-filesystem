@@ -14,7 +14,8 @@ access=$(echo "${credentials}" | grep access | awk '{print $4}')
 secret=$(echo "${credentials}" | grep secret | awk '{print $4}')
 
 cat <<EOF > $env_file
-FINDATA_CREDENTIALS={"access": "${access}", "secret": "${secret}"}
+FINDATA_ACCESS=${access}
+FINDATA_SECRET=${secret}
 EOF
 
 ## Create sdapply-project for SD Apply and FEGA
@@ -34,7 +35,8 @@ access=$(echo "${credentials}" | grep access | awk '{print $4}')
 secret=$(echo "${credentials}" | grep secret | awk '{print $4}')
 
 cat <<EOF >> $env_file
-SDAPPLY_CREDENTIALS={"access": "${access}", "secret": "${secret}"}
+SDAPPLY_ACCESS=${access}
+SDAPPLY_SECRET=${secret}
 EOF
 
 ## Create bp-project for Big Picture
@@ -54,6 +56,7 @@ access=$(echo "${credentials}" | grep access | awk '{print $4}')
 secret=$(echo "${credentials}" | grep secret | awk '{print $4}')
 
 cat <<EOF >> $env_file
-BIGPICTURE_CREDENTIALS={"access": "${access}", "secret": "${secret}"}
+BIGPICTURE_ACCESS=${access}
+BIGPICTURE_SECRET=${secret}
 
 EOF

@@ -77,24 +77,27 @@ async def get_pouta_token() -> str:
 
 
 def parse_visa_issuers() -> dict[str, Tuple]:
-    visa_issuers = json.loads(environ.get("VISA_ISSUERS"))
+    issuer_envs = {k: v for k, v in environ.items() if k.endswith('_ISSUER_NAME')}
     jwks: dict[str, Tuple] = {}
 
-    for key in visa_issuers:
-        issuerEnv = environ.get(visa_issuers[key])
-        if not issuerEnv:
-            continue
-        issuerArray = json.loads(issuerEnv)
+    for name_key, issuer_name in issuer_envs.items():
+        prefix = name_key[:-len('_ISSUER_NAME')]
+        jku_key = f"{prefix}_ISSUER_JKU"
+        issuer_jku = environ.get(jku_key)
 
-        for iss in issuerArray:
-            target = iss["issuer"].strip("/").split("/")[-1]
-            target_token = generate_token()
-            jwks[target] = {
-                "issuer": iss["issuer"],
-                "jku": iss["jku"],
-                "token": target_token
-            }
-            LOG.info(f"Added visa with parameters {jwks[target]}")
+        LOG.info(f"Prefix: {prefix}")
+        LOG.info(f"  ISSUER_NAME: {issuer_name}")
+        LOG.info(f"  ISSUER_JKU:  {issuer_jku}")
+        LOG.info("")
+
+        service = issuer_name.strip("/").split("/")[-1]
+        service_token = generate_token()
+        jwks[service] = {
+            "issuer": issuer_name,
+            "jku": issuer_jku,
+            "token": service_token
+        }
+        LOG.info(f"Added visa with parameters {jwks[service]}")
 
     return jwks
 
@@ -190,12 +193,12 @@ async def userinfo(req: web.Request) -> web.Response:
 
 async def jwk_response_visas(req: web.Request) -> web.Response:
     """Mock JSON Web Key server for visa validation."""
-    target = req.match_info["target"]
+    service = req.match_info["service"]
 
-    if target not in visa_jwks:
-        return web.Response(status=404, text="invalid target")
+    if service not in visa_jwks:
+        return web.Response(status=404, text="invalid service")
 
-    data = {"keys": [visa_jwks[target]["token"][0]]}
+    data = {"keys": [visa_jwks[service]["token"][0]]}
 
     LOG.info(data)
 
@@ -204,7 +207,7 @@ async def jwk_response_visas(req: web.Request) -> web.Response:
 
 async def post_visa_dataset(req: web.Request) -> web.Response:
     """Endpoint for adding a new dataset visa to passport"""
-    target = req.match_info["target"]
+    service = req.match_info["service"]
     dataset = req.match_info["dataset"]
 
     iat = int(time())
@@ -212,21 +215,21 @@ async def post_visa_dataset(req: web.Request) -> web.Response:
     exp = iat + ttl
     header = {
         "alg": "RS256",
-        "jku": visa_jwks[target]["jku"],
+        "jku": visa_jwks[service]["jku"],
         "typ": "JWT"
     }
     payload = {
         "sub": email,
-        "iss": visa_jwks[target]["issuer"],
+        "iss": visa_jwks[service]["issuer"],
         "exp": exp,
         "iat": iat,
         "ga4gh_visa_v1": {
             "type": "ControlledAccessGrants",
             "value": dataset,
-            "source": visa_jwks[target]["issuer"]
+            "source": visa_jwks[service]["issuer"]
         }
     }
-    visa = jwt.encode(header, payload, visa_jwks[target]["token"][1]).decode("utf-8")
+    visa = jwt.encode(header, payload, visa_jwks[service]["token"][1]).decode("utf-8")
     passport.append(visa)
 
     return web.Response(status=200)
@@ -240,8 +243,8 @@ async def init() -> web.Application:
     app.router.add_get("/idp/profile/oidc/keyset", jwk_response)
     app.router.add_get("/idp/profile/oidc/userinfo", userinfo)
 
-    app.router.add_get("/api/jwk/{target}", jwk_response_visas)
-    app.router.add_post("/api/jwk/{target}/{dataset}", post_visa_dataset)
+    app.router.add_get("/api/jwk/{service}", jwk_response_visas)
+    app.router.add_post("/api/jwk/{service}/{dataset}", post_visa_dataset)
 
     pouta_token = await get_pouta_token()
 
