@@ -8,13 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.24"]
         nodejs-version: ["24"]
     steps:
-      - name: Set up Go ${{ matrix.go-version }}
+      - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go-version }}
+           go-version-file: 'go.mod'
         id: go
 
       - name: Check out code into the Go module directory
