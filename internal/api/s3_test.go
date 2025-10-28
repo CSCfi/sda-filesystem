@@ -701,7 +701,7 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-connect/bucket23" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/YnVja2V0MjM" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -716,11 +716,17 @@ func TestGetObjects_MultiplePages(t *testing.T) {
       <Key>object456</Key>
       <LastModified>2009-10-12T17:50:30.000Z</LastModified>
       <Size>63965</Size>
+      <Owner>
+	     <ID>id456457467</ID>
+      </Owner>
    </Contents>
    <Contents>
       <Key>object0890</Key>
       <LastModified>2024-06-23T10:55:00.000Z</LastModified>
       <Size>67</Size>
+      <Owner>
+	     <ID>8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49</ID>
+      </Owner>
    </Contents>
    <Name>bucket234</Name>
    <KeyCount>2</KeyCount>
@@ -770,13 +776,13 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 		{Name: "object7485", Size: 0, LastModified: &time1},
 		{Name: "object1111", Size: 5280009, LastModified: &time2},
 		{Name: "object456", Size: 63965, LastModified: &time3},
-		{Name: "object0890", Size: 67, LastModified: &time4},
+		{Name: "object0890", Size: 67, LastModified: &time4, ID: "8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49"},
 	}
 	t.Cleanup(func() { srv.Close() })
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if objects, err := GetObjects(SDConnect, "bucket23", ""); err != nil {
+	} else if objects, err := GetObjects(SDApply, "bucket23", ""); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
 		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
@@ -1264,6 +1270,128 @@ func TestDownloadData(t *testing.T) {
 			}
 			for _, idx := range tt.cachedIdxs {
 				key := SDConnect.ForPath() + "/" + strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
+				cachedData, ok := downloadCache.Get(key)
+				if !ok {
+					t.Fatalf("Data for key %s was not present in cache", key)
+				}
+				expectedData := source[idx:min(idx+chunkSize, int64(len(source)))]
+				if !reflect.DeepEqual(expectedData, cachedData) {
+					t.Fatalf("Cache did not contain correct data at key %s", key)
+				}
+				downloadCache.Del(key)
+			}
+			if len(storage.keys) > 0 {
+				t.Fatalf("Data with keys %v were stored in cache even though they shoudn't've been", slices.Collect(maps.Keys(storage.keys)))
+			}
+		})
+	}
+}
+
+func TestDownloadData_SDApply(t *testing.T) {
+	origClient := ai.hi.client
+	origProxy := ai.proxy
+	origS3Client := ai.hi.s3Client
+	origPrivateKey := ai.vi.privateKey
+	origCache := downloadCache
+	defer func() {
+		ai.hi.client = origClient
+		ai.proxy = origProxy
+		ai.hi.s3Client = origS3Client
+		ai.vi.privateKey = origPrivateKey
+		downloadCache = origCache
+	}()
+
+	storage := &mockCache{}
+	downloadCache = &cache.Ristretto{Cacheable: storage}
+
+	decryptedSize := 80*1024*1024 + 10
+	encryptedSize := decryptedSize + 35992
+	content := test.GenerateRandomText(decryptedSize) // 3 chunks
+
+	headerBytes, encryptedContent, privateKey := test.EncryptData(t, content)
+	if len(headerBytes)+len(encryptedContent) != encryptedSize {
+		t.Fatalf("Failed to split data correctly. Split data has header size %d and body size %d. They should sum up to %d", len(headerBytes), len(encryptedContent), encryptedSize)
+	}
+	header64 := base64.StdEncoding.EncodeToString(headerBytes)
+
+	ai.vi.privateKey = privateKey
+	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.hi.endpoints = testConfig
+
+	var tests = []struct {
+		testname, objectWithID, objectName, id string
+		byteStart, byteEnd                     int64
+		cachedIdxs                             []int64
+	}{
+		{
+			"OK_1", "new-object.txt.c4gh&id=8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49",
+			"new-object.txt.c4gh", "8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49",
+			345, 1000, []int64{0},
+		},
+		{
+			"OK_2", "subfolder/another-object.txt.c4gh",
+			"subfolder/another-object.txt.c4gh", "",
+			33554000, 33564437, []int64{0, 33554432},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.ReadAll(r.Body)
+				r.Body.Close()
+
+				if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/bmV3X2J1Y2tldA/" {
+					t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusBadRequest)
+
+					return
+				}
+				object := r.URL.Query().Get("object")
+				if object != tt.objectName {
+					t.Errorf("Query parameter 'object' has incorrect value\nExpected=%s\nReceived=%s", tt.objectName, object)
+					w.WriteHeader(http.StatusBadRequest)
+
+					return
+				}
+				id := r.URL.Query().Get("id")
+				if tt.id != "" && tt.id != id {
+					t.Errorf("Query parameter 'id' has incorrect value\nExpected=%s\nReceived=%s", tt.id, id)
+					w.WriteHeader(http.StatusBadRequest)
+
+					return
+				}
+
+				var byteStart, byteEnd int
+				byteRange := r.Header["Range"]
+				_, err := fmt.Sscanf(byteRange[0], "bytes=%d-%d", &byteStart, &byteEnd)
+				if err != nil {
+					t.Errorf("Header Range (value: %v) was in the incorrect format: %s", byteRange, err.Error())
+				}
+
+				_, _ = w.Write(encryptedContent[byteStart : byteEnd+1])
+			}))
+			ai.proxy = srv.URL
+			t.Cleanup(func() { srv.Close() })
+
+			if err := initialiseS3Client(); err != nil {
+				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
+			}
+
+			source := content
+			nodes := append([]string{"new_bucket"}, strings.Split(tt.objectWithID, "/")...)
+			storage.keys = make(map[string][]byte)
+
+			data, err := DownloadData(SDApply, nodes, "", &header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
+			if err != nil {
+				t.Fatalf("Request to mock server failed: %v", err)
+			}
+			expectedData := source[tt.byteStart:tt.byteEnd]
+			if !reflect.DeepEqual(expectedData, data) {
+				t.Fatalf("Function returned incorrect data\nExpected=%v\nReceived=%v", string(expectedData), string(data))
+			}
+			for _, idx := range tt.cachedIdxs {
+				key := SDApply.ForPath() + "/" + strings.Join(nodes, "/") + "_" + fmt.Sprintf("%d", idx)
 				cachedData, ok := downloadCache.Get(key)
 				if !ok {
 					t.Fatalf("Data for key %s was not present in cache", key)

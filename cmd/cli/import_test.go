@@ -85,10 +85,6 @@ func TestImportSetup_Error(t *testing.T) {
 			true, 0, errExpected, nil,
 		},
 		{
-			"FAIL_CONNECT_ENABLED", "-mount=", "you do not have SD Connect enabled",
-			false, 0, nil, nil,
-		},
-		{
 			"FAIL_BAD_ARG", "-money=euro", "",
 			true, 2, nil, nil,
 		},

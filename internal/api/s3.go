@@ -11,9 +11,9 @@ import (
 	"maps"
 	"math"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"sda-filesystem/internal/logs"
@@ -102,7 +102,7 @@ func (*resolverV2) ResolveEndpoint(ctx context.Context, params s3.EndpointParame
 }
 
 // encodeBucket base64 encodes the bucket for all SD Apply requests
-var encodeBucket = middleware.InitializeMiddlewareFunc("objectToQuery", func(
+var encodeBucket = middleware.InitializeMiddlewareFunc("encodeBucket", func(
 	ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler,
 ) (
 	out middleware.InitializeOutput, metadata middleware.Metadata, err error,
@@ -115,8 +115,11 @@ var encodeBucket = middleware.InitializeMiddlewareFunc("objectToQuery", func(
 		bucket = v.Bucket
 	}
 
-	if r := ctx.Value(RepositoryKey{}); bucket != nil && r != nil && r.(Repo) == SDApply {
-		*bucket = base64.RawURLEncoding.EncodeToString([]byte(*bucket))
+	if r := ctx.Value(RepositoryKey{}); bucket != nil && r != nil {
+		// If an S3 operation contains multiple requests, the bucket should not be encoded multiple times
+		r.(*sync.Once).Do(func() {
+			*bucket = base64.RawURLEncoding.EncodeToString([]byte(*bucket))
+		})
 	}
 
 	return next.HandleInitialize(ctx, in)
@@ -150,12 +153,15 @@ var objectToQuery = middleware.SerializeMiddlewareFunc("objectToQuery", func(
 		req := in.Request.(*smithyhttp.Request)
 		q := req.URL.Query()
 
-		parsed, _ := url.ParseQuery(key)
-		if idQuery, ok := parsed["id"]; ok {
-			id := idQuery[len(idQuery)-1]
-			if uuid.Validate(id) == nil {
-				q.Add("id", id)
-				key = strings.TrimSuffix(key, "&id="+id)
+		// Filesystem saved the file ID in the object's actual name in the format `<object>&id=<id>`.
+		if r := ctx.Value(RepositoryKey{}); r != nil { // <- SD Apply
+			parts := strings.Split(key, "&id=")
+			if len(parts) > 1 {
+				id := parts[len(parts)-1] // ID is at the end (unlikely that there actually would ever be another `&id=` in the object name, but you never know)
+				if uuid.Validate(id) == nil {
+					q.Add("id", id)
+					key = strings.TrimSuffix(key, "&id="+id)
+				}
 			}
 		}
 
@@ -262,8 +268,10 @@ func getContext(rep Repo, head bool, parent ...context.Context) context.Context 
 	if len(parent) > 0 {
 		ctx = parent[0]
 	}
-
-	ctx = context.WithValue(ctx, RepositoryKey{}, rep)
+	if rep == SDApply {
+		var once sync.Once
+		ctx = context.WithValue(ctx, RepositoryKey{}, &once)
+	}
 
 	return context.WithValue(ctx, EndpointKey{}, endpoint+rep.ForURL())
 }
@@ -360,8 +368,8 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 	meta := make([]Metadata, 0, numBuckets)
 	for i := range numBuckets {
 		if rep == SDApply {
-			target := *buckets[i].BucketRegion
-			sharedMap[target] = append(sharedMap[target], *buckets[i].Name)
+			service := *buckets[i].BucketRegion
+			sharedMap[service] = append(sharedMap[service], *buckets[i].Name)
 		} else {
 			// Size and modification time of bucket will be calculated later based on the objects it contains
 			meta = append(meta, Metadata{*buckets[i].Name, "", 0, nil})
@@ -464,6 +472,8 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 		meta[i] = Metadata{*objects[i].Key, "", *objects[i].Size, objects[i].LastModified}
 
 		if rep == SDApply && objects[i].Owner != nil {
+			// The file ID from the database is sent as the Owner ID.
+			// This ID needs to be included in the request when reading a file.
 			if err := uuid.Validate(*objects[i].Owner.ID); err == nil {
 				meta[i].ID = *objects[i].Owner.ID
 			}

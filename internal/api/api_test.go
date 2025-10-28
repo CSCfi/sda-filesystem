@@ -1063,10 +1063,10 @@ func TestDeleteFileFromCache(t *testing.T) {
 	defer func() { downloadCache = origCache }()
 
 	keys := map[string][]byte{
-		SDConnect.ForPath() + "/path/to/object_0":         {4, 8, 9},
-		SDConnect.ForPath() + "/path/to/object_33554432":  {74, 80, 0},
-		SDConnect.ForPath() + "/path/to/object_67108864":  {3, 88, 6},
-		SDConnect.ForPath() + "/path/to/object_100663296": {42, 23, 56},
+		"SD-Connect/path/to/object_0":         {4, 8, 9},
+		"SD-Connect/path/to/object_33554432":  {74, 80, 0},
+		"SD-Connect/path/to/object_67108864":  {3, 88, 6},
+		"SD-Connect/path/to/object_100663296": {42, 23, 56},
 	}
 
 	storage := &mockCache{keys: keys}

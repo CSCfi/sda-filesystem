@@ -241,7 +241,7 @@ func TestClearPath(t *testing.T) {
 
 func TestClearPath_Shared(t *testing.T) {
 	fi.nodes = getTestFuse(t)
-	path := rep1.ForPath() + "/project/shared-bucket"
+	path := rep1.ForPath() + "/project/shared_bucket"
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
 	origObjects := api.GetObjects
@@ -262,7 +262,7 @@ func TestClearPath_Shared(t *testing.T) {
 	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
-		if rep != rep1 || bucket != "shared-bucket" {
+		if rep != rep1 || bucket != "shared_bucket" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
 		if len(prefix) > 0 && len(prefix[0]) > 0 {
@@ -281,16 +281,16 @@ func TestClearPath_Shared(t *testing.T) {
 			t.Errorf("api.GetHeaders() received content in the buckets slice: %v", buckets)
 		}
 		expectedSharedBuckets := map[string]api.SharedBucketsMeta{
-			"sharing-project-1": {"shared-bucket"},
+			"sharing-project-1": {"shared_bucket"},
 		}
 		if !reflect.DeepEqual(expectedSharedBuckets, sharedBuckets) {
 			t.Errorf("api.GetHeaders() received invalid shared buckets\nExpected=%v\nReceived=%v", expectedSharedBuckets, sharedBuckets)
 		}
 
 		batch := make(api.BatchHeaders)
-		batch["shared-bucket"] = make(map[string]api.VaultHeaderVersions)
+		batch["shared_bucket"] = make(map[string]api.VaultHeaderVersions)
 
-		batch["shared-bucket"]["shared-file.txt"] = api.VaultHeaderVersions{
+		batch["shared_bucket"]["shared-file.txt"] = api.VaultHeaderVersions{
 			Headers: map[string]api.VaultHeader{
 				"1": {Header: "gycorubgiul"},
 				"2": {Header: "hgvdrxtivfy"},
