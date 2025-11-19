@@ -38,7 +38,7 @@ services:
         condition: service_healthy
 
   admin-creds:
-    image: docker.io/docker:28.5
+    image: docker.io/docker:29.0
     container_name: admin-creds
     entrypoint: sh /admin_credentials.sh
     volumes:
