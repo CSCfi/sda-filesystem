@@ -9,6 +9,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- use Go version from `go.mod` in Github Actions
+- cache key no longer includes the project for SD Connect objects
+- trim file extension `.c4gh` from object names when sending them to Findata
 - repositories have custom type `api.Repo`
 - (users) updated `README.md` with up-to-date information regarding GUI and CLI installation in linux (#42)
 - Use SD Connect bucket as bucket during Findata upload. It will be overridden in KrakenD with Findata bucket
@@ -29,6 +32,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- (users) SD Apply support
+- when listing SD Apply objects, save their file IDs and send them in the `id` query parameter when requesting file content
+- Base64 encode SD Apply bucket names for S3 requests
+- if an SD Apply bucket is an URL, remove the scheme before showing it to the user
+- SD Apply data is also generated when testing locally
 - (admins) the option for env `OVERRIDE_PROXY_URL` with which the fixed port in Ubuntu 22 binaries can be overridden
 - (users) support for shared buckets
 - (users) Email and journal number are mandatory metadata when exporting from Findata VMs
