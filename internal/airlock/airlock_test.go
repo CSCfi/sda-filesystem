@@ -825,6 +825,9 @@ func TestUpload(t *testing.T) {
 					if bucket != "test-bucket" {
 						t.Errorf("api.UploadObject() received incorrect %s bucket. Expected=test-bucket, received=%s", api.SDConnect, bucket)
 					}
+					if rep == api.Findata {
+						object += ".c4gh"
+					}
 					if !slices.Contains(tt.objects, object) {
 						t.Errorf("api.UploadObject() received incorrect object %s, expected to be one of %q", object, tt.objects)
 					}

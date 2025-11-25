@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import getpass
 import json
 import os
 import pathlib
@@ -20,7 +19,8 @@ from nacl.public import PrivateKey
 
 
 keystone_base_url = os.environ.get("KEYSTONE_BASE_URL", "http://127.0.0.1:5001")
-proxy_base_url = os.environ.get("PROXY_URL", "http://127.0.0.1:80/")
+vault_base_url = os.environ.get("VAULT_ADDR", "http://127.0.0.1:8200")
+aai_base_url = os.environ.get("AAI_BASE_URL")
 
 fixed_key = b64decode(os.environ.get("FIXED_PUBLIC_KEY"))
 
@@ -106,25 +106,34 @@ def get_keystone_token(
     return swift_url, token
 
 
-def get_aai_token() -> str:
-    """Get a JWT token from aai to be used when making requests to krakend"""
-    sds_access_token = os.environ.get("SDS_ACCESS_TOKEN")
-    auth_response = requests.get(
-        f"{proxy_base_url}/profile",
-        headers={"Authorization": f"Bearer {sds_access_token}"},
+def get_vault_token() -> str:
+    """Get Vault access token for uploading headers of encrypted files"""
+    auth_data = {
+        "role_id": os.environ.get("VAULT_ROLE"),
+		"secret_id": os.environ.get("VAULT_SECRET"),
+    }
+    auth = requests.post(
+        f"{vault_base_url}/v1/auth/approle/login",
+        json=auth_data,
+        allow_redirects=True,
         timeout=5.0,
     )
-    if auth_response.status_code >= 400:
-        print("Failed to get aai token: " + auth_response.text)
-        return ""
 
-    return auth_response.json()["access_token"]
+    if auth.status_code >= 400:
+        raise RuntimeError(
+            f"Failed to get vault token: {auth.status_code} {auth.text}"
+        )
+
+    result = auth.json()
+
+    return result["auth"]["client_token"]
 
 
-def get_public_key(aai_token: str) -> bytes:
+def get_public_key(vault_token: str, project: str) -> bytes:
+    """Get project public key from Vault"""
     key_response = requests.get(
-        f"{proxy_base_url}/desktop/project-key",
-        headers={"Authorization": f"Bearer {aai_token}"},
+        f"{vault_base_url}/v1/c4ghtransit/keys/{project}",
+        headers={"X-Vault-Token": f"{vault_token}"},
         timeout=5.0,
     )
     if key_response.status_code >= 400:
@@ -132,12 +141,14 @@ def get_public_key(aai_token: str) -> bytes:
             f"Failed to get the project pub key: {key_response.status_code} {key_response.text}"
         )
 
-    key_json = key_response.json()
+    resp_json = key_response.json()
+    latest_version = resp_json["data"]["latest_version"]
+    keys = resp_json["data"]["keys"]
 
-    return b64decode(key_json["public_key_c4gh_64"])
+    return b64decode(keys[str(latest_version)]["public_key_c4gh_64"])
 
 
-def create_from_lorem(n_containers: int, n_objects: int) -> list:
+def create_from_lorem(n_containers: int, n_objects: int, force_split: bool) -> list:
     data = []
     container_names = set()
     while len(container_names) < n_containers:
@@ -148,15 +159,20 @@ def create_from_lorem(n_containers: int, n_objects: int) -> list:
         objects = []
         object_names = set()
         while len(object_names) < n_objects:
-            obj_name = lorem.get_sentence(comma=(0, 0), word_range=(1, 3)) + "txt.c4gh"
+            obj_name = lorem.get_sentence(comma=(0, 0), word_range=(1, 3))
             obj_name = obj_name.replace(" ", "/")
             object_names.add(obj_name)
         for obj_name in object_names:
+            split = True if force_split else random.choice([True, False])
+            if not split:
+                obj_name += "old."
+            obj_name += "txt.c4gh"
+
             objects.append(
                 {
                     "name": obj_name,
                     "content": lorem.get_paragraph(),
-                    "split_header": random.choice([True, False])
+                    "split_header": split
                 }
             )
         data.append(
@@ -192,28 +208,32 @@ def encrypt_data(object_file: BytesIO, secret_key: bytes, public_key: bytes, spl
 def run(
     swift_url: str,
     swift_token: str,
-    aai_token: str,
+    vault_token: str,
     project_pubkey: bytes,
-    json_path=None,
-    n_containers=5,
-    n_objects=3,
-    timeout=60,
+    project: str,
+    n_containers: int,
+    n_objects: int,
+    timeout: int,
+    force_split_header: bool,
 ):
-    data: list
-    if json_path:
-        with open(json_path, "r") as fp:
-            data = json.load(fp)
-        print(f"Populating data from {json_path}")
-        n_containers = len(data)
-        n_objects = len(data[0]["objects"])
-    else:
-        data = create_from_lorem(n_containers, n_objects)
-
+    data = create_from_lorem(n_containers, n_objects, force_split_header)
     seckey = bytes(PrivateKey.generate())
 
     for cont in data:
-        # create container
         container_name = cont["name"]
+
+        if project != "service":
+            # add dataset visa
+            with requests.post(
+                f'{aai_base_url}/api/jwk/sdapply/{container_name}',
+                timeout=timeout,
+            ) as response:
+                if response.status_code >= 400:
+                    print("Failed to send dataset to mockauth: " + response.text)
+
+            container_name = project[0:2] + "-" + container_name
+
+        # create container
         with requests.put(
             f'{swift_url}/{container_name}',
             headers={"X-Auth-Token": swift_token},
@@ -231,22 +251,22 @@ def run(
 
             b64_encoded_header, encrypted_data = encrypt_data(object_file, seckey, project_pubkey, file["split_header"])
             if b64_encoded_header != "":
+                # send header to vault
                 with requests.post(
-                    f'{proxy_base_url}/desktop/file-headers/{container_name}',
-                    headers={"Authorization": f"Bearer {aai_token}"},
+                    f'{vault_base_url}/v1/c4ghtransit/files/{project}/{container_name}/{file["name"]}',
+                    headers={"X-Vault-Token": f"{vault_token}"},
                     json={"header": b64_encoded_header},
-                    params={"object": file["name"]},
                     timeout=timeout,
                 ) as response:
                     if response.status_code >= 400:
                         print("Failed to send header to vault: " + response.text)
 
-            print(f"header: {b64_encoded_header != ""}")
             url = (
                 swift_url
                 + f'/{container_name}/'
                 + "/".join(quote(part, safe="") for part in file["name"].split("/"))
             )
+            # create object
             upload_data_response = requests.put(
                 url,
                 headers={"X-Auth-Token": swift_token, "Content-Type": "text/plain"},
@@ -265,7 +285,9 @@ def run(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate containers and objects in swift object storage, and wait for metadata to be updated.",
-        epilog="By default, runs with a Swift TempAuth account. use '--keystone' to authenticate agains keystone.",
+    )
+    parser.add_argument(
+        "--project", default="service", help="Keystone project. Defaults to (service)"
     )
     parser.add_argument(
         "--containers", type=int, default=10, help="Number of containers to create"
@@ -276,6 +298,11 @@ if __name__ == "__main__":
         default=15,
         help="Number of objects per container to create",
     )
+    parser.add_argument(
+        "--headerless",
+        action="store_true",
+        help="Force all headers of encrypted objects to be stored separately"
+    )
 
     parser.add_argument(
         "--timeout",
@@ -284,41 +311,33 @@ if __name__ == "__main__":
         help="Maximum time to wait before data is generated and metadata is updated, for each run",
     )
 
-    parser.add_argument(
-        "--from-json",
-        type=pathlib.Path,
-        default=None,
-        help="Generate data from a pre-existing json structure",
-    )
-
     args = parser.parse_args()
     total_start = time.perf_counter()
 
     username = os.environ.get("CSC_USERNAME", "swift")
     password = os.environ.get("CSC_PASSWORD", "veryfast")
-    project = os.environ.get("CSC_PROJECT", "service")
 
     wait_for_port(keystone_base_url, timeout=args.timeout)
     swift_base_url, keystone_token = get_keystone_token(
-        username, password, project
+        username, password, args.project
     )
 
-    aai_jwt_token = get_aai_token()
-
-    wait_for_port(proxy_base_url, timeout=args.timeout)
-    public_key = get_public_key(aai_jwt_token)
+    wait_for_port(vault_base_url, timeout=args.timeout)
+    vault_token = get_vault_token()
+    public_key = get_public_key(vault_token, args.project)
 
     print("Uploading...")
 
     run(
         swift_base_url,
         keystone_token,
-        aai_jwt_token,
+        vault_token,
         public_key,
-        args.from_json,
+        args.project,
         args.containers,
         args.objects,
         args.timeout,
+        args.headerless,
     )
 
     total_end = time.perf_counter() - total_start

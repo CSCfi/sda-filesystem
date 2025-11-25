@@ -87,7 +87,7 @@ func TestGetHeaders(t *testing.T) {
 		},
 		{
 			"FAIL_WHITELIST",
-			"failed to get headers for some repo: failed to whitelist public key: " + errExpected.Error(),
+			"failed to get headers for SD Connect: failed to whitelist public key: " + errExpected.Error(),
 			"", errExpected, nil,
 		},
 		{
@@ -95,7 +95,7 @@ func TestGetHeaders(t *testing.T) {
 		},
 		{
 			"FAIL_REQUEST",
-			"failed to get headers for some repo: request failed: " + errExpected.Error(),
+			"failed to get headers for SD Connect: request failed: " + errExpected.Error(),
 			"my-project", nil, nil,
 		},
 		{
@@ -121,14 +121,14 @@ func TestGetHeaders(t *testing.T) {
 			}
 			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				if method != "GET" {
-					return fmt.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
+					t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
 				if path != "/headers-endpoint" {
-					return fmt.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
+					t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
 				}
 				body, err := io.ReadAll(reqBody)
 				if err != nil {
-					return fmt.Errorf("Failed to read body: %w", err)
+					return fmt.Errorf("failed to read body: %w", err)
 				}
 
 				if !whitelisted {
@@ -143,7 +143,7 @@ func TestGetHeaders(t *testing.T) {
 				}
 
 				if string(body) != expectedBody[owner] {
-					return fmt.Errorf("Request has incorrect body for project %s\nExpected=%s\nReceived=%s", owner, expectedBody[owner], string(body))
+					t.Errorf("Request has incorrect body for project %s\nExpected=%s\nReceived=%s", owner, expectedBody[owner], string(body))
 				}
 
 				switch v := ret.(type) {
@@ -159,11 +159,12 @@ func TestGetHeaders(t *testing.T) {
 			}
 
 			data, err := GetHeaders(
-				"some repo",
-				[]Metadata{{Name: "bucket_1"}},
+				SDConnect,
+				[]Metadata{{Name: "bucket_1"}, {Name: "bucket_1_segments"}},
 				map[string]SharedBucketsMeta{
 					"sharing-project-1": {"shared-bucket", "shared-bucket-2"},
 					"sharing-project-2": {"another-shared-bucket"},
+					"sharing-project-3": {},
 				},
 			)
 
@@ -184,6 +185,141 @@ func TestGetHeaders(t *testing.T) {
 				t.Errorf("Function returned incorrect headers\nExpected=%v\nReceived=%v", expectedData, data)
 			}
 		})
+	}
+}
+
+func TestGetHeaders_SDApply(t *testing.T) {
+	origWhitelistKey := whitelistKey
+	origDeleteWhitelistedKey := deleteWhitelistedKey
+	origMakeRequest := makeRequest
+	origKeyName := ai.vi.keyName
+	defer func() {
+		whitelistKey = origWhitelistKey
+		deleteWhitelistedKey = origDeleteWhitelistedKey
+		makeRequest = origMakeRequest
+		ai.vi.keyName = origKeyName
+	}()
+
+	expectedData := make(BatchHeaders)
+	expectedData["dataset-1"] = make(map[string]VaultHeaderVersions)
+	expectedData["another-dataset"] = make(map[string]VaultHeaderVersions)
+
+	expectedData["dataset-1"]["kansio/file_1"] = VaultHeaderVersions{
+		Headers: map[string]VaultHeader{
+			"1": {Header: "yvdyviditybf"},
+		},
+		LatestVersion: 1,
+	}
+	expectedData["dataset-1"]["kansio/file_2"] = VaultHeaderVersions{
+		Headers: map[string]VaultHeader{
+			"3": {Header: "hbfyucdtkyv"},
+			"4": {Header: "hubftiuvfti"},
+		},
+		LatestVersion: 4,
+	}
+	expectedData["another-dataset"]["dir/obj.c4gh"] = VaultHeaderVersions{
+		Headers: map[string]VaultHeader{
+			"1": {Header: "gyutvrtivru"},
+		},
+		LatestVersion: 1,
+	}
+
+	batch := make(map[string]BatchHeaders)
+	batch["fega"] = make(BatchHeaders)
+	batch["bp"] = make(BatchHeaders)
+
+	batch["fega"]["dataset-1"] = expectedData["dataset-1"]
+	batch["bp"]["another-dataset"] = expectedData["another-dataset"]
+
+	expectedBody := map[string][]string{
+		"fega": {`{
+		"batch": "WyJkYXRhc2V0LTEiLCJkYXRhc2V0LTIiXQ==",
+		"service": "data-gateway",
+		"key": "some-key"
+	}`, `{
+		"batch": "WyJkYXRhc2V0LTIiLCJkYXRhc2V0LTEiXQ==",
+		"service": "data-gateway",
+		"key": "some-key"
+	}`},
+		"bp": {`{
+		"batch": "WyJhbm90aGVyLWRhdGFzZXQiXQ==",
+		"service": "data-gateway",
+		"key": "some-key"
+	}`},
+	}
+
+	ai.vi.keyName = "some-key"
+	ai.hi.endpoints = testConfig
+
+	whitelisted := false
+	whitelistKey = func(query map[string]string) error {
+		whitelisted = true
+
+		return nil
+	}
+	deleteWhitelistedKey = func(query map[string]string) error {
+		if !whitelisted {
+			t.Errorf("d() was cale key was whitelisted")
+		}
+		whitelisted = false
+
+		return nil
+	}
+	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		if method != "GET" {
+			t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
+		}
+		if path != "/headers-endpoint" {
+			t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
+		}
+		body, err := io.ReadAll(reqBody)
+		if err != nil {
+			return fmt.Errorf("failed to read body: %w", err)
+		}
+
+		if !whitelisted {
+			t.Errorf("Key is not whitelisted")
+		}
+		owner, ok := query["owner"]
+		if !ok {
+			return fmt.Errorf("request missing query parameter 'owner'")
+		}
+
+		found := false
+		for _, eb := range expectedBody[owner] {
+			if string(body) == eb {
+				found = true
+			} else {
+				t.Logf("Expected=%s", eb)
+			}
+		}
+		if !found {
+			t.Errorf("Request has incorrect body for project %s\nReceived=%s", owner, string(body))
+		}
+
+		switch v := ret.(type) {
+		case *vaultResponse:
+			v.Data = batch[owner]
+
+			return nil
+		default:
+			return fmt.Errorf("ret has incorrect type %v, expected *vaultResponse", reflect.TypeOf(v))
+		}
+	}
+
+	data, err := GetHeaders(
+		SDApply, []Metadata{},
+		map[string]SharedBucketsMeta{
+			"fega": {"dataset-1", "dataset-2"},
+			"bp":   {"another-dataset"},
+		},
+	)
+
+	switch {
+	case err != nil:
+		t.Errorf("Function returned unexpected error: %s", err.Error())
+	case !reflect.DeepEqual(expectedData, data):
+		t.Errorf("Function returned incorrect headers\nExpected=%v\nReceived=%v", expectedData, data)
 	}
 }
 

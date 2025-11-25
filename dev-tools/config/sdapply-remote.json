@@ -1,0 +1,24 @@
+{
+  "sd": {
+    "access": "${SDAPPLY_ACCESS}",
+    "secret": "${SDAPPLY_SECRET}",
+    "project": "${SDAPPLY_PROJECT}"
+  },
+  "fega": {
+    "access": "${SDAPPLY_ACCESS}",
+    "secret": "${SDAPPLY_SECRET}",
+    "project": "${SDAPPLY_PROJECT}",
+    "bucket": "${FEGA_BUCKET}",
+    "db_string": "${DB_STRING_SDA_FEGA}"
+  },
+  "issuers": [
+    {
+      "issuer": "${SDAPPLY_ISSUER_NAME}",
+      "jku": "${SDAPPLY_ISSUER_JKU}",
+      "services": {
+        "sd": "",
+        "fega": "^EGA*"
+      }
+    }
+  ]
+}

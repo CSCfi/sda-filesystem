@@ -39,7 +39,7 @@ var ai = apiInfo{
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
 	},
-	repositories: []Repo{}, // SD Apply will be added here once it works with S3
+	repositories: []Repo{SDApply},
 }
 var downloadCache *cache.Ristretto
 
@@ -149,7 +149,7 @@ func (e *CredentialsError) Error() string {
 }
 
 // Repo is used as a type to make it easier to remember in which
-// format the repositories should be in in various situations
+// format the repositories should be in various situations
 type Repo string
 
 const SDApply Repo = "SD-Apply"
@@ -448,7 +448,7 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 
 	// Parse json response
 	if ret != nil {
-		if err := json.NewDecoder(response.Body).Decode(&ret); err != nil {
+		if err := json.NewDecoder(response.Body).Decode(ret); err != nil {
 			return fmt.Errorf("unable to decode response: %w", err)
 		}
 	}
@@ -472,8 +472,8 @@ var SharedBucketProject = func(bucket string) (string, error) {
 	return resp.Owner, makeRequest("GET", ai.hi.endpoints.SharedBuckets+"/"+bucket, nil, nil, nil, &resp)
 }
 
-func toCacheKey(nodes []string, chunkIdx int64) string {
-	return strings.Join(nodes, "/") + "_" + strconv.FormatInt(chunkIdx, 10)
+func toCacheKey(rep Repo, nodes []string, chunkIdx int64) string {
+	return rep.ForPath() + "/" + strings.Join(nodes, "/") + "_" + strconv.FormatInt(chunkIdx, 10)
 }
 
 // ClearCache empties the entire ristretto cache
@@ -482,10 +482,10 @@ var ClearCache = func() {
 }
 
 // DeleteFileFromCache clears all entries from a given file/object from cache
-var DeleteFileFromCache = func(nodes []string, size int64) {
+var DeleteFileFromCache = func(rep Repo, nodes []string, size int64) {
 	i := int64(0)
 	for i < size {
-		key := toCacheKey(nodes, i)
+		key := toCacheKey(rep, nodes, i)
 		downloadCache.Del(key)
 		i += chunkSize
 	}

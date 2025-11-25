@@ -9,16 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ["1.24"]
         nodejs-version: ["24"]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
 
-      - name: Setup go
+      - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go }}
+          go-version-file: 'go.mod'
 
       - name: Install build dependencies
         run: |

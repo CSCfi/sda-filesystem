@@ -344,6 +344,7 @@ func uploadFindata(
 	segmentSize int64,
 	metadata map[string]string,
 ) (err error) {
+	object = strings.TrimSuffix(object, ".c4gh")
 	logs.Infof("Beginning to upload %s object %s/%s", api.Findata, bucket, object)
 	defer func() {
 		pw.CloseWithError(err) // pw.Close() if err is nil
