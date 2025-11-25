@@ -28,10 +28,6 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-const SDApply string = "SD-Apply"
-const SDConnect string = "SD-Connect"
-const Findata string = "Findata"
-
 var Port string // Defined at build time if binary is for older Ubuntu
 
 var ai = apiInfo{
@@ -43,7 +39,7 @@ var ai = apiInfo{
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
 	},
-	repositories: []string{}, // SD Apply will be added here once it works with S3
+	repositories: []Repo{}, // SD Apply will be added here once it works with S3
 }
 var downloadCache *cache.Ristretto
 
@@ -63,7 +59,7 @@ type apiInfo struct {
 	proxy        string
 	token        string
 	password     string // base64 encoded
-	repositories []string
+	repositories []Repo
 	scan         chan<- bool
 	userProfile  profile
 	hi           httpInfo
@@ -105,10 +101,11 @@ type configResponse struct {
 }
 
 type apiEndpoints struct {
-	Profile     string `json:"profile"`
-	Password    string `json:"valid_password"`
-	AllasHeader string `json:"allas_header"`
-	S3          struct {
+	Profile       string `json:"profile"`
+	Password      string `json:"valid_password"`
+	AllasHeader   string `json:"allas_header"`
+	SharedBuckets string `json:"shared_buckets"`
+	S3            struct {
 		Default string `json:"default"`
 		Head    string `json:"head"`
 	} `json:"s3"`
@@ -151,6 +148,26 @@ func (e *CredentialsError) Error() string {
 	return "Incorrect password"
 }
 
+// Repo is used as a type to make it easier to remember in which
+// format the repositories should be in in various situations
+type Repo string
+
+const SDApply Repo = "SD-Apply"
+const SDConnect Repo = "SD-Connect"
+const Findata Repo = "Findata"
+
+func (r Repo) String() string {
+	return strings.ReplaceAll(string(r), "-", " ")
+}
+
+func (r Repo) ForURL() string {
+	return strings.ToLower(string(r))
+}
+
+func (r Repo) ForPath() string {
+	return string(r)
+}
+
 // SetRequestTimeout redefines the timeout for an http request
 var SetRequestTimeout = func(timeout int) {
 	ai.hi.requestTimeout = timeout
@@ -187,17 +204,26 @@ func Setup(files FileReader) error {
 
 	var config string
 	if Port != "" {
-		proxyURL, _ := url.ParseRequestURI(proxy)
-		proxyHost := proxyURL.Hostname()
-		proxyURL.Host = fmt.Sprintf("%s:%s", proxyHost, Port)
-		proxy = proxyURL.String()
+		// OVERRIDE_PROXY_URL is for the DEV and QA namespaces where the port number can vary
+		// This way the fixed port can be modified when testing older Ubuntu VMs
+		if _, ok := os.LookupEnv("OVERRIDE_PROXY_URL"); ok {
+			proxy, err = GetEnv("OVERRIDE_PROXY_URL", true)
+			if err != nil {
+				return fmt.Errorf("invalid environment variable: %w", err)
+			}
+		} else {
+			proxyURL, _ := url.ParseRequestURI(proxy)
+			proxyHost := proxyURL.Hostname()
+			proxyURL.Host = fmt.Sprintf("%s:%s", proxyHost, Port)
+			proxy = proxyURL.String()
+		}
 
 		config = proxy + "/static/configuration.json"
 	} else if config, err = GetEnv("CONFIG_ENDPOINT", true); err != nil {
 		return fmt.Errorf("required environment variables missing: %w", err)
 	}
 
-	ai.proxy = "" // So that GUI refresh works during development
+	ai.proxy = "" // So that GUI reload works during development
 	// This needs to be called first before any other http requests
 	if err = getAPIEndpoints(config); err != nil {
 		return fmt.Errorf("failed to get static configuration.json file: %w", err)
@@ -322,18 +348,14 @@ var loadCertificates = func(certFiles FileReader) error {
 	return nil
 }
 
-// ToPrint returns repository name in printable format
-func ToPrint(rep string) string {
-	return strings.ReplaceAll(rep, "-", " ")
-}
-
-// GetAllRepositories returns the list of all possible repositories
-func GetAllRepositories() []string {
-	return []string{SDConnect, SDApply}
+// GetAllRepositories returns the list of all possible repositories the user can access.
+// Findata is not listed because it is only used for export
+func GetAllRepositories() []Repo {
+	return []Repo{SDConnect, SDApply}
 }
 
 // GetRepositories returns the list of repositories the filesystem can access
-var GetRepositories = func() []string {
+var GetRepositories = func() []Repo {
 	return ai.repositories
 }
 
@@ -414,18 +436,19 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 	}
 	defer response.Body.Close()
 
-	// Read response body (size unknown)
-	respBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
 	if response.StatusCode >= 400 {
+		// Read response body (size unknown)
+		respBody, err := io.ReadAll(response.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read error response: %w", err)
+		}
+
 		return &RequestError{response.StatusCode, string(respBody)}
 	}
 
-	// Parse response
+	// Parse json response
 	if ret != nil {
-		if err := json.Unmarshal(respBody, ret); err != nil {
+		if err := json.NewDecoder(response.Body).Decode(&ret); err != nil {
 			return fmt.Errorf("unable to decode response: %w", err)
 		}
 	}
@@ -433,6 +456,20 @@ var makeRequest = func(method, path string, query, headers map[string]string, re
 	logs.Debugf("Request %s returned a response", escapedURL)
 
 	return nil
+}
+
+var GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
+	resp := make(map[string]SharedBucketsMeta)
+
+	return resp, makeRequest("GET", ai.hi.endpoints.SharedBuckets, nil, nil, nil, &resp)
+}
+
+var SharedBucketProject = func(bucket string) (string, error) {
+	resp := struct {
+		Owner string `json:"owner"`
+	}{}
+
+	return resp.Owner, makeRequest("GET", ai.hi.endpoints.SharedBuckets+"/"+bucket, nil, nil, nil, &resp)
 }
 
 func toCacheKey(nodes []string, chunkIdx int64) string {

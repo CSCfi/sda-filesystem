@@ -4,8 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"sda-filesystem/internal/logs"
+	"maps"
 	"strings"
+
+	"sda-filesystem/internal/logs"
 
 	"github.com/neicnordic/crypt4gh/keys"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -42,17 +44,49 @@ type VaultHeader struct {
 type BatchHeaders map[string]map[string]VaultHeaderVersions
 type Headers map[string]map[string]string
 
-// GetHeaders gets all the file headers from header storage for bucket
-var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
-	if err := whitelistKey(rep); err != nil {
-		return nil, fmt.Errorf("failed to whitelist public key: %w", err)
+// GetHeaders gets all the file headers for the buckets, including headers for shared buckets.
+var GetHeaders = func(
+	rep Repo,
+	buckets []Metadata,
+	sharedBuckets map[string]SharedBucketsMeta,
+) (BatchHeaders, error) {
+	headers, err := getProjectHeaders(rep, "", MetadataSlice(buckets))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get headers for %s: %w", rep, err)
+	}
+	for project := range sharedBuckets {
+		logs.Debugf("Fetching headers for shared project %s", project)
+		sharedHeaders, err := getProjectHeaders(rep, project, sharedBuckets[project])
+		if err != nil {
+			logs.Errorf("Failed to get headers for %s: %w", project, err)
+
+			continue
+		}
+
+		maps.Copy(headers, sharedHeaders)
 	}
 
-	batchMap := map[string][]string{}
-	for i := range buckets {
-		batchMap[buckets[i].Name] = []string{"**"} // Get all headers from bucket
+	return headers, nil
+}
+
+var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHeaders, error) {
+	batch := map[string][]string{}
+	for name := range buckets.GetNames() {
+		batch[name] = []string{"**"} // Get all headers from bucket
 	}
-	batchJSON, err := json.Marshal(batchMap)
+
+	logInsert := ""
+	if project != "" {
+		logInsert = " shared project " + project
+	}
+
+	if len(batch) == 0 {
+		logs.Debugf("No buckets to fetch headers for in %s%s", rep, logInsert)
+
+		return BatchHeaders{}, nil
+	}
+
+	batchJSON, err := json.Marshal(batch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal batch json: %w", err)
 	}
@@ -65,8 +99,23 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 	}`
 	body = fmt.Sprintf(body, batchString, vaultService, ai.vi.keyName)
 
+	var query map[string]string
+	if project != "" {
+		query = map[string]string{"owner": project}
+	}
+
+	// Whitelist public key with which the headers will be reencrypted
+	if err := whitelistKey(query); err != nil {
+		return nil, fmt.Errorf("failed to whitelist public key: %w", err)
+	}
+	defer func() {
+		if err := deleteWhitelistedKey(query); err != nil {
+			logs.Warningf("Could not delete whitelisted key %s for %s%s: %w", ai.vi.keyName, rep, logInsert, err)
+		}
+	}()
+
 	var resp vaultResponse
-	err = makeRequest("GET", ai.hi.endpoints.Vault.Headers, nil, nil, strings.NewReader(body), &resp)
+	err = makeRequest("GET", ai.hi.endpoints.Vault.Headers, query, nil, strings.NewReader(body), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -86,15 +135,10 @@ var GetHeaders = func(rep string, buckets []Metadata) (BatchHeaders, error) {
 		}
 	}
 
-	if err = deleteWhitelistedKey(rep); err != nil {
-		logs.Warningf("Could not delete key %s: %w", ai.vi.keyName, err)
-	}
-
 	return resp.Data, nil
 }
 
-var whitelistKey = func(rep string) error {
-	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
+var whitelistKey = func(query map[string]string) error {
 	body := `{
 		"flavor": "crypt4gh",
 		"pubkey": "%s"
@@ -102,14 +146,13 @@ var whitelistKey = func(rep string) error {
 	body = fmt.Sprintf(body, ai.vi.publicKey)
 	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
 
-	return makeRequest("POST", path, nil, nil, strings.NewReader(body), nil)
+	return makeRequest("POST", path, query, nil, strings.NewReader(body), nil)
 }
 
-var deleteWhitelistedKey = func(rep string) error {
-	_ = rep // Once SD Apply uses S3 and can be integrated here, this variable will become useful
+var deleteWhitelistedKey = func(query map[string]string) error {
 	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
 
-	return makeRequest("DELETE", path, nil, nil, nil, nil)
+	return makeRequest("DELETE", path, query, nil, nil, nil)
 }
 
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.
@@ -135,7 +178,7 @@ var PostHeader = func(header []byte, bucket, object string) error {
 	}`
 	body = fmt.Sprintf(body, base64.StdEncoding.EncodeToString(header))
 	query := map[string]string{"object": object}
-	path := fmt.Sprintf("%s/%s", ai.hi.endpoints.Vault.Headers, bucket)
+	path := ai.hi.endpoints.Vault.Headers + "/" + bucket
 
 	return makeRequest("POST", path, query, nil, strings.NewReader(body), nil)
 }

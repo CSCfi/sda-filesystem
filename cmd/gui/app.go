@@ -28,14 +28,13 @@ type App struct {
 	ph          *ProjectHandler
 	lh          *LogHandler
 	mountpoint  string
-	loginRepo   string
 	paniced     bool
 	preventQuit bool
 }
 
 // NewApp creates a new App application struct
 func NewApp(ph *ProjectHandler, lh *LogHandler) *App {
-	return &App{ph: ph, lh: lh, loginRepo: api.SDConnect}
+	return &App{ph: ph, lh: lh}
 }
 
 // startup is called when the app starts. The context is saved
@@ -100,7 +99,7 @@ func (a *App) InitializeAPI() (bool, error) {
 		reps := make(map[string]bool)
 		enabled := api.GetRepositories()
 		for _, r := range api.GetAllRepositories() {
-			reps[r] = !slices.Contains(enabled, r)
+			reps[r.ForPath()] = !slices.Contains(enabled, r)
 		}
 		wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 	}()
@@ -184,7 +183,7 @@ func (a *App) InitFuse() {
 			<-wait // Wait for fuse to be ready
 
 			var cmd = make(chan []string)
-			go mountpoint.WaitForUpdateSignal(cmd)
+			go filesystem.WaitForUpdateSignal(cmd)
 			go func() {
 				for {
 					<-cmd
@@ -192,7 +191,7 @@ func (a *App) InitFuse() {
 				}
 			}()
 			go func() {
-				buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
+				buckets := filesystem.GetNodeChildren(api.SDConnect.ForPath() + "/" + api.GetProjectName())
 				if len(buckets) > 0 {
 					wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 				}
@@ -222,8 +221,6 @@ func (a *App) OpenFuse() {
 		cmd = exec.Command("open", userPath)
 	case "linux":
 		cmd = exec.Command("xdg-open", userPath)
-	case "windows":
-		cmd = exec.Command("cmd", "/C", "start", userPath)
 	default:
 		logs.Errorf("Unrecognized OS")
 
@@ -245,7 +242,7 @@ func (a *App) RefreshFuse() {
 	a.ph.DeleteProjects()
 	filesystem.RefreshFilesystem()
 
-	buckets := filesystem.GetNodeChildren(api.SDConnect + "/" + api.GetProjectName())
+	buckets := filesystem.GetNodeChildren(api.SDConnect.ForPath() + "/" + api.GetProjectName())
 	if len(buckets) > 0 {
 		wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 	}

@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"net/mail"
 	"os"
+	"slices"
+
 	"sda-filesystem/internal/airlock"
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
-	"slices"
 )
 
 var exportPrefix string

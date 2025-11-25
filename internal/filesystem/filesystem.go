@@ -51,7 +51,7 @@ type fuseInfo struct {
 	headers map[C.ino_t]string
 	nodes   *C.nodes_t
 	ready   chan<- any
-	guiFun  func(string, string, int)
+	guiFun  func(api.Repo, string, int)
 	mu      sync.RWMutex
 }
 
@@ -94,7 +94,7 @@ var checkPanic = func() {
 }
 
 // MountFilesystem mounts filesystem to directory 'mount'
-func MountFilesystem(mount string, fun func(string, string, int), ready chan<- any) int {
+func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<- any) int {
 	logs.Infof("Mounting Data Gateway at %s", mount)
 	fi.mount = mount
 	fi.ready = ready
@@ -144,32 +144,41 @@ func InitialiseFilesystem() {
 	repositories := api.GetRepositories()
 
 	for _, rep := range repositories {
-		logs.Info("Beginning filling in ", api.ToPrint(rep))
+		logs.Infof("Beginning filling in %s", rep)
 
 		// Create folder for repository
-		meta := api.Metadata{Name: rep, Size: 0, LastModified: nil}
+		meta := api.Metadata{Name: rep.ForPath(), Size: 0, LastModified: nil}
 		makeNode(root.children, meta, true, "")
 
+		parentChildren := root.children[rep.ForPath()].children
+		parentPath := rep.ForPath()
+
 		// Get buckets for repository
-		buckets, err := api.GetBuckets(rep)
+		buckets, sharedBuckets, ownedBucketsNum, err := api.GetBuckets(rep)
 		if err != nil {
 			logs.Error(err)
 
 			continue
 		}
+		// Fetching headers
+		// This needs to be done before the buckets slice is sorted
+		headers, err := api.GetHeaders(rep, buckets[:ownedBucketsNum], sharedBuckets)
+		if err != nil {
+			logs.Errorf("Failed to retrieve file headers for %s: %s", rep, err.Error())
+
+			continue
+		}
+		logs.Infof("Retrieved file headers for %s", rep)
+
 		buckets, segmentBuckets := separateSegmentBuckets(buckets)
-
 		numJobs += len(buckets)
-
-		parentChildren := root.children[rep].children
-		parentPath := rep
 
 		if rep == api.SDConnect {
 			project := api.GetProjectName()
-			projectPath := rep + "/" + project
+			projectPath := parentPath + "/" + project
 			logs.Debugf("Creating directory /%s", filepath.FromSlash(projectPath))
 			meta := api.Metadata{Name: project, Size: 0, LastModified: nil}
-			makeNode(parentChildren, meta, true, api.SDConnect)
+			makeNode(parentChildren, meta, true, parentPath)
 
 			parentPath = projectPath
 			parentChildren = parentChildren[project].children
@@ -179,17 +188,8 @@ func InitialiseFilesystem() {
 			}
 		}
 
-		// Fetching headers
-		headers, err := api.GetHeaders(rep, buckets)
-		if err != nil {
-			logs.Errorf("Failed to retrieve file headers for %s: %s", api.ToPrint(rep), err.Error())
-
-			continue
-		}
-		logs.Infof("Retrieved file headers for %s", api.ToPrint(rep))
-		batchHeaders[parentPath] = headers
-
 		bucketNodes[parentPath] = make(map[string]*goNode, len(buckets))
+		batchHeaders[parentPath] = headers
 
 		// Create bucket directories
 		for i := range buckets {
@@ -369,7 +369,7 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 		segmented := j.segmented
 
 		nodesSafe := strings.Split(path, "/")
-		repository := nodesSafe[1]
+		repository := api.Repo(nodesSafe[1])
 
 		logs.Debugf("Fetching data for %s", filepath.FromSlash(path))
 		objects, err := api.GetObjects(repository, node.meta.Name, path)
@@ -412,8 +412,8 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 
 // getObjectSizesFromSegments is used for getting the object sizes for buckets that
 // have a matching segments bucket.
-var getObjectSizesFromSegments = func(rep, bucket string) (map[string]int64, error) {
-	logs.Debugf("Fetching possible object sizes for bucket %s from matching segments bucket", rep+"/"+bucket)
+var getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
+	logs.Debugf("Fetching possible object sizes for bucket %s from matching segments bucket", bucket)
 	objects, err := api.GetSegmentedObjects(rep, bucket+segmentsSuffix)
 	if err != nil {
 		return map[string]int64{}, fmt.Errorf("cannot fetch object sizes for bucket %s in %s: %w", bucket, rep, err)

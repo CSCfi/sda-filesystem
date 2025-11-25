@@ -16,10 +16,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"sda-filesystem/internal/api"
@@ -29,6 +31,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/neicnordic/crypt4gh/model/headers"
 )
+
+// Crypt4GH constants
+const BlockSize int64 = 65536
+const MacSize int64 = 28
+const CipherBlockSize = BlockSize + MacSize
 
 // freeNodes calls C function free_nodes()
 // This is a separate Go function so it can be used in tests
@@ -40,6 +47,15 @@ func freeNodes(n *C.nodes_t) {
 // This is a separate Go function so it can be used in tests
 func toGoStr(str *C.char) string {
 	return C.GoString(str)
+}
+
+func WaitForUpdateSignal(ch chan<- []string) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGUSR2)
+	for {
+		<-s
+		ch <- []string{"update"}
+	}
 }
 
 func searchNode(path string) *C.node_t {
@@ -123,8 +139,7 @@ func RefreshFilesystem() {
 
 //export IsValidOpen
 func IsValidOpen(pid C.int) bool {
-	switch runtime.GOOS {
-	case "darwin":
+	if runtime.GOOS == "darwin" {
 		for _, process := range []string{"Finder", "QuickLook"} {
 			grep := exec.Command("pgrep", "-f", process)
 			if res, err := grep.Output(); err == nil {
@@ -138,17 +153,6 @@ func IsValidOpen(pid C.int) bool {
 						return false
 					}
 				}
-			}
-		}
-	case "windows":
-		filter := fmt.Sprintf("PID eq %d", pid)
-		task := exec.Command("tasklist", "/FI", filter, "/fo", "table", "/nh")
-		if res, err := task.Output(); err == nil {
-			parts := strings.Fields(string(res))
-			if parts[0] == "explorer.exe" {
-				logs.Debug("Explorer trying to preview files")
-
-				return false
 			}
 		}
 	}
@@ -172,16 +176,6 @@ func FilesOpen() bool {
 		}
 
 		return len(output) > 0
-	case "windows":
-		volume, _ := os.Readlink(fi.mount)
-		output, err := exec.Command("handle.exe", "-a", "-nobanner", volume).Output()
-		if err != nil {
-			logs.Errorf("Update halted, could not determine if files are open: %w", err)
-
-			return true
-		}
-
-		return strings.Contains(string(output), volume)
 	}
 
 	return false
@@ -199,26 +193,41 @@ func ClearPath(path string) error {
 	}
 
 	pathNames := getNodePathNames(node)
-	if pathNames[1] != api.SDConnect {
-		return fmt.Errorf("clearing cache only enabled for SD Connect")
+	if pathNames[1] != api.SDConnect.ForPath() {
+		return fmt.Errorf("clearing cache only enabled for %s", api.SDConnect)
 	}
 	if len(pathNames) < 4 {
 		return fmt.Errorf("path needs to include at least a bucket")
 	}
 
-	rep := pathNames[1]
+	rep := api.SDConnect
 	bucket := pathNames[3]
 	prefix := strings.Join(pathNames[4:], "/")
 	if node.children != nil && prefix != "" {
 		prefix += "/"
 	}
-	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:3], "/"), prefix)
+
+	projectBuckets := []api.Metadata{{Name: bucket}}
+	sharedBuckets := make(map[string]api.SharedBucketsMeta)
+	// Need to know if bucket is shared or not. This will determine how vault is called
+	ownerProject, err := api.SharedBucketProject(bucket)
 	if err != nil {
-		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
+		return fmt.Errorf("could not determine if bucket %s is shared: %w", bucket, err)
 	}
-	batchHeaders, err := api.GetHeaders(rep, []api.Metadata{{Name: bucket}})
+	if ownerProject != "" {
+		logs.Debugf("Bucket %s in %s is shared by project %s", bucket, rep, ownerProject)
+		projectBuckets = nil
+		sharedBuckets[ownerProject] = api.SharedBucketsMeta{bucket}
+	}
+	batchHeaders, err := api.GetHeaders(rep, projectBuckets, sharedBuckets)
 	if err != nil {
 		return fmt.Errorf("failed to get headers for bucket %s: %w", bucket, err)
+	}
+
+	// Get the objects that fulfill the user's request
+	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), prefix)
+	if err != nil {
+		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
 	}
 	// Need to check if objects are segmented
 	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)
@@ -300,7 +309,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	header, ok := fi.headers[node.stat.st_ino]
 	if !ok {
 		pathNames := getNodePathNames(node)
-		if len(pathNames) > 1 && pathNames[1] != api.SDConnect {
+		if len(pathNames) > 1 && pathNames[1] != api.SDConnect.ForPath() {
 			logs.Errorf("Object %s has no header", path)
 
 			return
@@ -320,7 +329,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 			logs.Infof("Testing if file %s is encrypted with unknown key", path)
 
 			buffer, err := api.DownloadData(pathNames, path, nil,
-				0, 2*api.CipherBlockSize, 0, int64(node.stat.st_size))
+				0, 2*CipherBlockSize, 0, int64(node.stat.st_size))
 			if err != nil {
 				logs.Errorf("Could not test if file is encrypted: %v", err)
 
@@ -358,9 +367,9 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 
 // calculateDecryptedSize calculates the decrypted size of an headerless encrypted file
 var calculateDecryptedSize = func(bodySize C.off_t) C.off_t {
-	blocks := C.off_t(math.Ceil(float64(bodySize) / float64(api.CipherBlockSize)))
+	nBlocks := C.off_t(math.Ceil(float64(bodySize) / float64(CipherBlockSize)))
 
-	return bodySize - C.off_t(api.MacSize)*blocks
+	return bodySize - nBlocks*C.off_t(MacSize)
 }
 
 // DownloadData uses s3 to download data to fill `cbuffer`. It returns the amount of bytes that were

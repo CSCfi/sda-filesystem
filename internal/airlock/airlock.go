@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,6 +34,11 @@ var ai = airlockInfo{}
 
 type airlockInfo struct {
 	publicKey [chacha20poly1305.KeySize]byte
+}
+
+type walkPacket struct {
+	file   string
+	object string
 }
 
 type UploadSet struct {
@@ -76,13 +80,13 @@ func WalkDirs(selection, currentObjects []string, prefix string) (UploadSet, err
 	g, ctx := errgroup.WithContext(context.Background())
 	files := make([]string, 0, len(selection))
 	objects := make([]string, 0, len(selection))
-	filesChan := make(chan [2]string)
+	filesChan := make(chan walkPacket)
 	wait := make(chan any)
 
 	go func() {
-		for f := range filesChan {
-			files = append(files, f[0])
-			objects = append(objects, f[1])
+		for pkt := range filesChan {
+			files = append(files, pkt.file)
+			objects = append(objects, pkt.object)
 		}
 
 		wait <- nil
@@ -115,7 +119,7 @@ func WalkDirs(selection, currentObjects []string, prefix string) (UploadSet, err
 				}
 
 				select {
-				case filesChan <- [2]string{path, obj}:
+				case filesChan <- walkPacket{file: path, object: obj}:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -173,7 +177,8 @@ func ValidateBucket(bucket string) (bool, error) {
 // quit or overwrite the objects with the new files. Function assumes bucket exists.
 func CheckObjectExistences(set *UploadSet, rd io.Reader) error {
 	// these objects should already be sorted
-	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, api.SDConnect+"/"+api.GetProjectName()+"/"+set.Bucket)
+	path := api.SDConnect.ForPath() + "/" + api.GetProjectName() + "/" + set.Bucket
+	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, path)
 	if err != nil {
 		return fmt.Errorf("could not determine if export will overwrite data: %w", err)
 	}
@@ -313,7 +318,7 @@ var UploadObject = func(ctx context.Context, filename, object, bucket string, me
 // uploadAllas exports an encrypted file by uploading its header to Vault and
 // its body to SD Connect. pr is assumed to contain an encrypted file.
 var uploadAllas = func(ctx context.Context, pr io.Reader, bucket, object string, segmentSize int64) error {
-	logs.Infof("Beginning to upload %s object %s to bucket %s", api.ToPrint(api.SDConnect), object, bucket)
+	logs.Infof("Beginning to upload %s object %s to bucket %s", api.SDConnect, object, bucket)
 	header, err := c4ghHeaders.ReadHeader(pr)
 	if err != nil {
 		return fmt.Errorf("failed to extract header from encrypted file: %w", err)
@@ -387,13 +392,6 @@ var encrypt = func(file io.Reader, pw *io.PipeWriter, errc chan error) {
 	errc <- nil
 }
 
-var encryptedSize = func(decryptedSize int64) int64 {
-	nBlocks := math.Ceil(float64(decryptedSize) / float64(api.BlockSize))
-	bodySize := decryptedSize + int64(nBlocks)*api.MacSize
-
-	return headerSize + bodySize
-}
-
 var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -402,5 +400,5 @@ var getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 
 	fileInfo, _ := file.Stat()
 
-	return file, encryptedSize(fileInfo.Size()), nil
+	return file, api.CalculateEncryptedSize(fileInfo.Size()) + headerSize, nil
 }

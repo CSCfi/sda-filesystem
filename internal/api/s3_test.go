@@ -13,13 +13,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"sda-filesystem/internal/cache"
-	"sda-filesystem/test"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"sda-filesystem/internal/cache"
+	"sda-filesystem/test"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -335,23 +336,61 @@ func TestGetBuckets(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
 	origS3Client := ai.hi.s3Client
+	origUserProfile := ai.userProfile
+	origGetSharedBuckets := GetSharedBuckets
 	defer func() {
 		ai.hi.client = origClient
 		ai.proxy = origProxy
 		ai.hi.s3Client = origS3Client
+		ai.userProfile = origUserProfile
+		GetSharedBuckets = origGetSharedBuckets
 	}()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.ReadAll(r.Body)
-		r.Body.Close()
+	ai.hi.endpoints = testConfig
+	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
+	ai.userProfile.ProjectName = "my-project"
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/my-repo" {
-			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusBadRequest)
+	var tests = []struct {
+		testname      string
+		repo          Repo
+		buckets       []string
+		sharedBuckets map[string]SharedBucketsMeta
+	}{
+		{
+			"OK_1", Repo("My-Repo"),
+			[]string{"bucket256", "bucket42"}, nil,
+		},
+		{
+			"OK_2", SDConnect,
+			[]string{"bucket0583", "bucket256", "bucket42", "bucket789", "bucket87"},
+			map[string]SharedBucketsMeta{
+				"sharing-project-1": {"bucket87"},
+				"sharing-project-2": {"bucket0583", "bucket789"},
+			},
+		},
+	}
 
-			return
-		}
-		xmlData := `<?xml version="1.0" encoding="UTF-8"?>
+	GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
+		return map[string]SharedBucketsMeta{
+			"my-project":        {"bucket42"},
+			"sharing-project-1": {"bucket87"},
+			"sharing-project-2": {"bucket0583", "bucket789"},
+		}, nil
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.ReadAll(r.Body)
+				r.Body.Close()
+
+				if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/"+tt.repo.ForURL() {
+					t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusBadRequest)
+
+					return
+				}
+				xmlData := `<?xml version="1.0" encoding="UTF-8"?>
 <ListAllMyBucketsResult>
    <Buckets>
       <Bucket>
@@ -371,25 +410,34 @@ func TestGetBuckets(t *testing.T) {
    </Owner>
 </ListAllMyBucketsResult>`
 
-		w.Header().Set("Content-Type", "application/xml")
-		_, _ = w.Write([]byte(xmlData))
-	}))
+				w.Header().Set("Content-Type", "application/xml")
+				_, _ = w.Write([]byte(xmlData))
+			}))
+			ai.proxy = srv.URL
+			t.Cleanup(func() { srv.Close() })
 
-	ai.hi.endpoints = testConfig
-	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
-	ai.proxy = srv.URL
-	expectedBuckets := []Metadata{
-		{Name: "bucket42", Size: 0, LastModified: nil},
-		{Name: "bucket256", Size: 0, LastModified: nil},
-	}
-	t.Cleanup(func() { srv.Close() })
-
-	if err := initialiseS3Client(); err != nil {
-		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if buckets, err := GetBuckets("My-Repo"); err != nil {
-		t.Errorf("Request to mock server failed: %v", err)
-	} else if !reflect.DeepEqual(buckets, expectedBuckets) {
-		t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+			if err := initialiseS3Client(); err != nil {
+				t.Errorf("Failed to initialize S3 client: %v", err.Error())
+			} else if buckets, sharedBuckets, ownedBucketsNum, err := GetBuckets(tt.repo); err != nil {
+				t.Errorf("Request for %s buckets failed: %v", tt.repo, err)
+			} else {
+				slices.SortFunc(buckets, func(a, b Metadata) int {
+					return strings.Compare(a.Name, b.Name)
+				})
+				result := slices.CompareFunc(buckets, tt.buckets, func(a Metadata, b string) int {
+					return strings.Compare(a.Name, b)
+				})
+				if result != 0 {
+					t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", tt.buckets, buckets)
+				}
+				if !reflect.DeepEqual(sharedBuckets, tt.sharedBuckets) {
+					t.Errorf("Function returned incorrect shared buckets\nExpected=%v\nReceived=%v", tt.sharedBuckets, sharedBuckets)
+				}
+				if ownedBucketsNum != 2 {
+					t.Errorf("Function returned incorrect number of owned buckets\nExpected=2\nReceived=%v", ownedBucketsNum)
+				}
+			}
+		})
 	}
 }
 
@@ -478,7 +526,7 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if buckets, err := GetBuckets("My-Repo"); err != nil {
+	} else if buckets, _, _, err := GetBuckets("My-Repo"); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(buckets, expectedBuckets) {
 		t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
@@ -489,10 +537,12 @@ func TestGetBuckets_Error(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
 	origS3Client := ai.hi.s3Client
+	origGetSharedBuckets := GetSharedBuckets
 	defer func() {
 		ai.hi.client = origClient
 		ai.proxy = origProxy
 		ai.hi.s3Client = origS3Client
+		GetSharedBuckets = origGetSharedBuckets
 	}()
 
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
@@ -500,17 +550,29 @@ func TestGetBuckets_Error(t *testing.T) {
 
 	var tests = []struct {
 		testname, errStr string
+		repo             Repo
 		code             int
+		sharedErr        error
 	}{
 		{
 			"FAIL_1",
-			"no buckets found for SD Apply",
-			http.StatusOK,
+			"no buckets found for SD Apply", SDApply,
+			http.StatusOK, errExpected,
 		},
 		{
 			"FAIL_2",
-			"failed to list buckets for SD Apply: api error Forbidden: Forbidden",
-			http.StatusForbidden,
+			"no buckets found for SD Connect", SDConnect,
+			http.StatusOK, nil,
+		},
+		{
+			"FAIL_3",
+			"failed to list buckets for SD Apply: api error Forbidden: Forbidden", SDApply,
+			http.StatusForbidden, nil,
+		},
+		{
+			"FAIL_4",
+			"no buckets found for SD Connect", SDConnect,
+			http.StatusOK, errExpected,
 		},
 	}
 
@@ -520,7 +582,7 @@ func TestGetBuckets_Error(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply" {
+				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/"+tt.repo.ForURL() {
 					w.WriteHeader(tt.code)
 
 					return
@@ -529,12 +591,15 @@ func TestGetBuckets_Error(t *testing.T) {
 				t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 				w.WriteHeader(http.StatusBadRequest)
 			}))
+			GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
+				return nil, tt.sharedErr
+			}
 			ai.proxy = srv.URL
 			t.Cleanup(func() { srv.Close() })
 
 			if err := initialiseS3Client(); err != nil {
 				t.Errorf("Failed to initialize S3 client: %v", err.Error())
-			} else if _, err := GetBuckets(SDApply); err == nil {
+			} else if _, _, _, err := GetBuckets(tt.repo); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -992,6 +1057,23 @@ func TestGetSefmentedObjects_Error(t *testing.T) {
 	}
 }
 
+func TestCalculateEncryptedSize(t *testing.T) {
+	size := CalculateEncryptedSize(484)
+	if size != 512 {
+		t.Errorf("Function failed to calculate headerless encrypted size for decrypted size 484. Expected=512, received=%d", size)
+	}
+
+	size = CalculateEncryptedSize(58993401)
+	if size != 59018629 {
+		t.Errorf("Function failed to calculate headerless encrypted size for decrypted size 58993401. Expected=58993401, received=%d", size)
+	}
+
+	size = CalculateEncryptedSize(393220)
+	if size != 393416 {
+		t.Errorf("Function failed to calculate headerless encrypted size for decrypted size 393220. Expected=393416, received=%d", size)
+	}
+}
+
 func TestDownloadData(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
@@ -1146,7 +1228,7 @@ func TestDownloadData(t *testing.T) {
 				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
 			}
 
-			nodes := []string{"", SDConnect, "project", tt.bucket}
+			nodes := []string{"", SDConnect.ForPath(), "project", tt.bucket}
 			nodes = append(nodes, strings.Split(tt.object, "/")...)
 			var header *string = nil
 			if tt.header != nil {
@@ -1287,7 +1369,7 @@ func TestDownloadData_Error(t *testing.T) {
 				t.Fatalf("Failed to initialize S3 client: %v", err.Error())
 			}
 
-			nodes := []string{"", SDConnect, "project", "bucket", "obj.txt.c4gh"}
+			nodes := []string{"", SDConnect.ForPath(), "project", "bucket", "obj.txt.c4gh"}
 			var header *string = nil
 			if tt.header != nil {
 				header = &tt.header[0]

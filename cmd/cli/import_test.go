@@ -2,12 +2,13 @@ package main
 
 import (
 	"reflect"
-	"sda-filesystem/internal/api"
-	"sda-filesystem/internal/logs"
-	"sda-filesystem/internal/mountpoint"
 	"strings"
 	"testing"
 	"time"
+
+	"sda-filesystem/internal/api"
+	"sda-filesystem/internal/logs"
+	"sda-filesystem/internal/mountpoint"
 
 	"github.com/sirupsen/logrus"
 )

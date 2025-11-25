@@ -12,7 +12,6 @@ require (
 	github.com/aws/smithy-go v1.23.2
 	github.com/dgraph-io/ristretto/v2 v2.3.0
 	github.com/google/uuid v1.6.0
-	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/neicnordic/crypt4gh v1.14.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/wailsapp/wails/v2 v2.11.0

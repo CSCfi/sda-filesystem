@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -60,11 +59,7 @@ func (lh *LogHandler) SaveLogs(logsToSave []Log) {
 	defer f.Close()
 
 	writer := bufio.NewWriter(f)
-
 	newline := "\n"
-	if runtime.GOOS == "windows" {
-		newline = "\r\n"
-	}
 
 	for i := range logsToSave {
 		lg := logsToSave[i]

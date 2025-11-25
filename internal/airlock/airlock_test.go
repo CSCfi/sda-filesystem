@@ -268,7 +268,7 @@ func TestValidateBucket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.BucketExists = func(rep, bucket string) (bool, error) {
+			api.BucketExists = func(rep api.Repo, bucket string) (bool, error) {
 				if rep != api.SDConnect {
 					t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}
@@ -279,7 +279,7 @@ func TestValidateBucket(t *testing.T) {
 				return !tt.createBucket, nil
 			}
 			createBucketCalled := false
-			api.CreateBucket = func(rep, bucket string) error {
+			api.CreateBucket = func(rep api.Repo, bucket string) error {
 				if rep != api.SDConnect {
 					t.Errorf("api.CreateBucket() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}
@@ -354,10 +354,10 @@ func TestValidateBucket_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.BucketExists = func(rep, bucket string) (bool, error) {
+			api.BucketExists = func(rep api.Repo, bucket string) (bool, error) {
 				return !tt.createBucket, tt.existsErr
 			}
-			api.CreateBucket = func(rep, bucket string) error {
+			api.CreateBucket = func(rep api.Repo, bucket string) error {
 				return tt.createErr
 			}
 
@@ -492,7 +492,7 @@ func TestCheckObjectExistences_UserInput(t *testing.T) {
 		api.GetObjects = origGetObjects
 	}()
 
-	api.BucketExists = func(rep, bucket string) (bool, error) {
+	api.BucketExists = func(rep api.Repo, bucket string) (bool, error) {
 		if rep != api.SDConnect {
 			t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 		}
@@ -505,7 +505,7 @@ func TestCheckObjectExistences_UserInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 				if rep != api.SDConnect {
 					t.Errorf("api.GetObjects() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}
@@ -599,7 +599,7 @@ func TestCheckObjectExistences_NilReader(t *testing.T) {
 		api.GetObjects = origGetObjects
 	}()
 
-	api.BucketExists = func(rep, bucket string) (bool, error) {
+	api.BucketExists = func(rep api.Repo, bucket string) (bool, error) {
 		if rep != api.SDConnect {
 			t.Errorf("api.BucketExists() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 		}
@@ -612,7 +612,7 @@ func TestCheckObjectExistences_NilReader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 				if rep != api.SDConnect {
 					t.Errorf("api.GetObjects() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}
@@ -654,7 +654,7 @@ func TestCheckObjectExistence_Error(t *testing.T) {
 		api.GetObjects = origGetObjects
 	}()
 
-	api.GetObjects = func(rep, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		return nil, errExpected
 	}
 
@@ -768,7 +768,14 @@ func TestUpload(t *testing.T) {
 			}
 			//nolint:nestif
 			if tt.projectType == "default" {
-				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
+				api.UploadObject = func(
+					ctx context.Context,
+					body io.Reader,
+					rep api.Repo,
+					bucket, object string,
+					segmentSize int64,
+					metadata map[string]string,
+				) error {
 					if rep != api.SDConnect {
 						t.Errorf("api.UploadObject() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 					}
@@ -804,7 +811,14 @@ func TestUpload(t *testing.T) {
 					return nil
 				}
 			} else {
-				api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
+				api.UploadObject = func(
+					ctx context.Context,
+					body io.Reader,
+					rep api.Repo,
+					bucket, object string,
+					segmentSize int64,
+					metadata map[string]string,
+				) error {
 					if rep != api.SDConnect && rep != api.Findata {
 						t.Fatalf("api.UploadObject() received incorrect repository %s", rep)
 					}
@@ -856,7 +870,7 @@ func TestUpload(t *testing.T) {
 					return nil
 				}
 			}
-			api.DeleteObject = func(rep, bucket, object string) error {
+			api.DeleteObject = func(rep api.Repo, bucket, object string) error {
 				t.Error("Should not call api.DeleteObject()")
 
 				return nil
@@ -941,7 +955,7 @@ func TestUpload_Error(t *testing.T) {
 
 				return tt.uploadErr
 			}
-			api.DeleteObject = func(rep, bucket, object string) error {
+			api.DeleteObject = func(rep api.Repo, bucket, object string) error {
 				return nil
 			}
 
@@ -1092,8 +1106,8 @@ func TestUploadObject_Error(t *testing.T) {
 		{
 			"FAIL_FINDATA", "uploading file test-file.txt failed", "findata",
 			[]string{
-				"failed to upload " + api.Findata + " object: " + errExpected.Error(),
-				"failed to read file body: failed to upload " + api.Findata + " object: " + errExpected.Error(),
+				"failed to upload Findata object: " + errExpected.Error(),
+				"failed to read file body: failed to upload Findata object: " + errExpected.Error(),
 			},
 			98, true, false,
 			nil, nil, errExpected, nil,
@@ -1173,7 +1187,14 @@ func TestUploadObject_Error(t *testing.T) {
 			api.PostHeader = func(header []byte, bucket, object string) error {
 				return tt.headerErr
 			}
-			api.UploadObject = func(ctx context.Context, body io.Reader, rep, bucket, object string, segmentSize int64, metadata map[string]string) error {
+			api.UploadObject = func(
+				ctx context.Context,
+				body io.Reader,
+				rep api.Repo,
+				bucket, object string,
+				segmentSize int64,
+				metadata map[string]string,
+			) error {
 				_, err := io.ReadAll(body)
 				if err != nil {
 					return fmt.Errorf("failed to read file body: %s", err.Error())
@@ -1183,7 +1204,7 @@ func TestUploadObject_Error(t *testing.T) {
 			}
 
 			deleted := false
-			api.DeleteObject = func(rep, bucket, object string) error {
+			api.DeleteObject = func(rep api.Repo, bucket, object string) error {
 				if rep != api.SDConnect {
 					t.Errorf("api.DeleteObject() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}

@@ -52,6 +52,10 @@ ifneq (,$(findstring keystone,$(RUN_ARGS)))
     unexport VAULT_ADDR
 endif
 
+ifneq (,$(findstring local,$(MAKECMDGOALS)))
+    unexport VAULT_ADDR
+endif
+
 # Default target
 # Print list of available targets. Only rows in the format `target: ## description` are printed
 help:

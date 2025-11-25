@@ -6,6 +6,7 @@
         "profile": "/profile",
         "valid_password": "/credentials/check",
         "allas_header": "/allasheader/",
+        "shared_buckets": "/shared-buckets",
         "s3": {
             "default": "/s3/",
             "head": "/s3-head/"

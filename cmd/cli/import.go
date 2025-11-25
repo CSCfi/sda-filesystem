@@ -8,11 +8,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
+
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/filesystem"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-	"strings"
 )
 
 var mount string
@@ -46,7 +47,7 @@ func importSetup(args []string) (int, error) {
 	// if !sdapplyOnly {
 	if !api.SDConnectEnabled() {
 		// logs.Warningf("You do not have SD Connect enabled")
-		return 0, fmt.Errorf("you do not have %s enabled", api.ToPrint(api.SDConnect))
+		return 0, fmt.Errorf("you do not have %s enabled", api.SDConnect)
 	}
 	// }
 
@@ -100,7 +101,7 @@ func importHandler() (int, error) {
 	var cmd = make(chan []string)
 	go func() {
 		<-wait // Wait for fuse to be ready
-		go mountpoint.WaitForUpdateSignal(cmd)
+		go filesystem.WaitForUpdateSignal(cmd)
 		go userInput(os.Stdin, cmd)
 		go applyCommand(cmd)
 	}()
