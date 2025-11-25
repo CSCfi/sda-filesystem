@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- repositories have custom type `api.Repo`
 - (users) updated `README.md` with up-to-date information regarding GUI and CLI installation in linux (#42)
 - Use SD Connect bucket as bucket during Findata upload. It will be overridden in KrakenD with Findata bucket
 - renamed `findata-creds` container to `admin-creds`
@@ -28,6 +29,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- (admins) the option for env `OVERRIDE_PROXY_URL` with which the fixed port in Ubuntu 22 binaries can be overridden
+- (users) support for shared buckets
 - (users) Email and journal number are mandatory metadata when exporting from Findata VMs
 - save user email from `/profile` response
 - (admins) env `CLAMAV_SOCKET` which is required for Findata projects
@@ -42,6 +45,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Removed
 
+- Windows-related code
 - (users) old deployment documentation files `DEPLOYMENT.md` and `docs/linux-setup.md` (#42)
 - project name from the Findata object name when exporting to CESSNA
 
