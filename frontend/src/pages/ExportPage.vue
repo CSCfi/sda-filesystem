@@ -41,9 +41,9 @@ const exportAutocomplete = ref<HTMLCAutocompleteElement | null>(null);
 const exportTable = ref<HTMLCDataTableElement | null>(null);
 
 const validationHelperData = ref<ValidationHelperType[]>([
-  { check: "lowerCaseOrNum", message: "Bucket name should start with a lowercase letter or a number.", type: "info"},
+  { check: "lowerCaseOrNum", message: "Bucket name should start and end with a lowercase letter or a number.", type: "info"},
   { check: "inputLength", message: "Bucket name should be between 3 and 63 characters long.", type: "info"},
-  { check: "alphaNumHyphen", message: "Use Latin letters (a-z), numbers (0-9) and a hyphen (-).", type: "info"},
+  { check: "alphaNumHyphen", message: "Use only Latin letters (a-z), numbers (0-9), and hyphens (-).", type: "info"},
   { check: "alphaNumHyphen", message: "Uppercase letters, underscore (_) and accent letters with diacritics or special marks (áäöé) are not allowed.", type: "info"},
   { check: "ownable", message: "Bucket names must be unique across all existing folders in all projects in SD Connect and Allas.", type: "info"}
 ]);
@@ -227,8 +227,13 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
     };
   }
 
+  function isLowerCaseOrNum(char: string) {
+    return /[\p{L}0-9]/u.test(char) && char === char.toLowerCase();
+  }
+
   let result: ValidationResult = {
-    lowerCaseOrNum: !!(input[0].match(/[\p{L}0-9]/u) && input[0] === input[0].toLowerCase()),
+    lowerCaseOrNum: isLowerCaseOrNum(input[0]) &&
+      isLowerCaseOrNum(input[input.length - 1]),
     inputLength: input.length >= 3 && input.length <= 63,
     alphaNumHyphen: !!input.match(/^[a-z0-9-]+$/g),
     ownable: undefined,

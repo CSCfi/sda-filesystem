@@ -154,8 +154,8 @@ func ValidateBucket(bucket string) (bool, error) {
 	if !isLowerAlphaNumericHyphen(bucket) {
 		return false, fmt.Errorf("bucket name should only contain Latin letters (a-z), numbers (0-9) and hyphens (-)")
 	}
-	if bucket[0] == '-' {
-		return false, fmt.Errorf("bucket name should start with a lowercase letter or a number")
+	if bucket[0] == '-' || bucket[len(bucket)-1] == '-' {
+		return false, fmt.Errorf("bucket name should start and end with a lowercase letter or a number")
 	}
 
 	exists, err := api.BucketExists(api.SDConnect, bucket)

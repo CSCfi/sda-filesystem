@@ -332,15 +332,20 @@ func TestValidateBucket_Error(t *testing.T) {
 		},
 		{
 			"FAIL_4", "-bucket",
-			"bucket name should start with a lowercase letter or a number",
+			"bucket name should start and end with a lowercase letter or a number",
 			false, nil, nil,
 		},
 		{
-			"FAIL_5", "test-bucket",
-			errExpected.Error(), false, errExpected, nil,
+			"FAIL_5", "bucket-",
+			"bucket name should start and end with a lowercase letter or a number",
+			false, nil, nil,
 		},
 		{
 			"FAIL_6", "test-bucket",
+			errExpected.Error(), false, errExpected, nil,
+		},
+		{
+			"FAIL_7", "test-bucket",
 			errExpected.Error(), true, nil, errExpected,
 		},
 	}
