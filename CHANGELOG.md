@@ -7,6 +7,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2025.11.4] - 2025-11-26
+
 ### Changed
 
 - use Go version from `go.mod` in Github Actions
@@ -391,7 +393,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.3...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.11.4...HEAD
+[2025.11.4]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.3...2025.11.4
 [2025.7.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.2...2025.7.3
 [2025.7.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.1...2025.7.2
 [2025.7.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.0...2025.7.1
