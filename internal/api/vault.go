@@ -138,7 +138,7 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 	if len(warnings) > 0 {
 		logs.Warningf("The request for file headers was not entirely successful.")
 		for i := range warnings {
-			logs.Warningf(warnings[i])
+			logs.Warningf("%s", warnings[i])
 		}
 	}
 
