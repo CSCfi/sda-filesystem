@@ -181,10 +181,10 @@ release:
 update-versions-dryrun:
   extends: .update-versions-dryrun
   variables:
-    UPDATE_VERSION_FILES_LIST: "cmd/gui/wails.json;docs/linux-setup.md;frontend/package.json"
+    UPDATE_VERSION_FILES_LIST: "cmd/gui/wails.json;frontend/package.json"
 
 # This job updates the versions
 update-versions:
   extends: .update-versions
   variables:
-    UPDATE_VERSION_FILES_LIST: "cmd/gui/wails.json;docs/linux-setup.md;frontend/package.json"
+    UPDATE_VERSION_FILES_LIST: "cmd/gui/wails.json;frontend/package.json"
