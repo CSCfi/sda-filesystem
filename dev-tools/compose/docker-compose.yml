@@ -100,7 +100,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.11.5"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.2.0"
     container_name: krakend
     env_file:
       - path: .env
@@ -124,6 +124,7 @@ services:
       VAULT_ROLE: "${VAULT_ROLE}"
       ARTIFACTORY_SERVER: "https://${ARTIFACTORY_SERVER}"
       DB_STRING_SHARING: "${DB_STRING_SHARING}"
+      DB_PWD_SHARING: "${DB_PWD_SHARING}"
       SDAPPLY_PROJECT: ${SDAPPLY_PROJECT}
       BIGPICTURE_PROJECT: ${BIGPICTURE_PROJECT}
       FEGA_BUCKET: ${FEGA_BUCKET}
@@ -138,6 +139,8 @@ services:
       BIGPICTURE_SECRET: "${BIGPICTURE_SECRET}"
       DB_STRING_SDA_FEGA: ${DB_STRING_SDA_FEGA}
       DB_STRING_SDA_BP: ${DB_STRING_SDA_BP}
+      DB_PWD_SDA_FEGA: ${DB_PWD_SDA_FEGA}
+      DB_PWD_SDA_BP: ${DB_PWD_SDA_BP}
       SDAPPLY_CONFIG_BASE: "${SDAPPLY_CONFIG_BASE}"
     healthcheck:
       test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
@@ -180,6 +183,13 @@ services:
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
+    profiles:
+      - krakend
+  krakend-redis:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/redis/Dockerfile
+    container_name: krakend-redis
     profiles:
       - krakend
 
