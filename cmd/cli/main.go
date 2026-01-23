@@ -18,7 +18,6 @@ import (
 )
 
 var logLevel string
-var requestTimeout int
 
 var handlers = map[string]handlerFuncs{}
 
@@ -125,7 +124,6 @@ func init() {
 	}
 
 	flag.StringVar(&logLevel, "loglevel", "info", "Logging level. Possible values: {trace,debug,info,warning,error}")
-	flag.IntVar(&requestTimeout, "http_timeout", 20, "Number of seconds to wait before timing out an HTTP request")
 }
 
 func main() {
@@ -138,7 +136,6 @@ func main() {
 	}
 	subcommand := flag.Args()[0]
 
-	api.SetRequestTimeout(requestTimeout)
 	logs.SetLevel(logLevel)
 
 	if err := api.Setup(certs.Files); err != nil {

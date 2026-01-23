@@ -119,12 +119,12 @@ func TestGetHeaders(t *testing.T) {
 
 				return tt.deleteErr
 			}
-			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				if method != "GET" {
 					t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
-				if path != "/headers-endpoint" {
-					t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
+				if ep.path != "/headers-endpoint" {
+					t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", ep.path)
 				}
 				body, err := io.ReadAll(reqBody)
 				if err != nil {
@@ -265,12 +265,12 @@ func TestGetHeaders_SDApply(t *testing.T) {
 
 		return nil
 	}
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		if method != "GET" {
 			t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 		}
-		if path != "/headers-endpoint" {
-			t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", path)
+		if ep.path != "/headers-endpoint" {
+			t.Errorf("Request has incorrect path\nExpected=/headers-endpoint\nReceived=%v", ep.path)
 		}
 		body, err := io.ReadAll(reqBody)
 		if err != nil {
@@ -345,17 +345,17 @@ func TestPublicKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, body io.Reader, ret any) error {
 				if method != "GET" {
 					return fmt.Errorf("request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
 				switch v := ret.(type) {
 				case *keyResponse:
-					switch path {
+					switch ep.path {
 					case "/project-key-endpoint":
 						v.Key64 = fmt.Sprintf("-----BEGIN CRYPT4GH PUBLIC KEY-----\n%s\n-----END CRYPT4GH PUBLIC KEY-----", tt.key64)
 					default:
-						return fmt.Errorf("request has incorrect path %v", path)
+						return fmt.Errorf("request has incorrect path %v", ep.path)
 					}
 
 					return nil
@@ -378,7 +378,7 @@ func TestGetPublicKey_InvalidKey(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
-	makeRequest = func(method, path string, query, headers map[string]string, body io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, body io.Reader, ret any) error {
 		switch v := ret.(type) {
 		case *keyResponse:
 			v.Key64 = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nSGVsbG8sIHdvcmxkIQ==\n-----END CRYPT4GH PUBLIC KEY-----"

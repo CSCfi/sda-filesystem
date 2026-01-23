@@ -32,9 +32,8 @@ var Port string // Defined at build time if binary is for older Ubuntu
 
 var ai = apiInfo{
 	hi: httpInfo{
-		requestTimeout: 60,
-		httpRetry:      3,
-		client:         &http.Client{Transport: http.DefaultTransport},
+		httpRetry: 3,
+		client:    &http.Client{Transport: http.DefaultTransport},
 	},
 	vi: vaultInfo{
 		keyName: uuid.NewString(),
@@ -69,12 +68,10 @@ type apiInfo struct {
 
 // httpInfo contains variables used during HTTP requests
 type httpInfo struct {
-	requestTimeout int
-	s3Timeout      int
-	httpRetry      int
-	endpoints      apiEndpoints
-	client         *http.Client
-	s3Client       *s3.Client
+	httpRetry int
+	endpoints apiEndpoints
+	client    *http.Client
+	s3Client  *s3.Client
 }
 
 type unixInfo struct {
@@ -93,14 +90,15 @@ type profile struct {
 	S3Access     bool   `json:"s3Access"`
 }
 
-type configResponse struct {
-	Timeouts struct {
-		S3 int `json:"s3"`
-	} `json:"timeouts"`
-	Endpoints apiEndpoints `json:"endpoints"`
+type configTimeouts struct {
+	Default int `json:"default"`
+	S3      int `json:"s3"`
+	Vault   struct {
+		Headers int `json:"headers"`
+	}
 }
 
-type apiEndpoints struct {
+type configEndpoints struct {
 	Profile       string `json:"profile"`
 	Password      string `json:"valid_password"`
 	AllasHeader   string `json:"allas_header"`
@@ -114,6 +112,32 @@ type apiEndpoints struct {
 		Headers   string `json:"headers"`
 		Whitelist string `json:"whitelist"`
 	} `json:"vault"`
+}
+
+type configResponse struct {
+	Timeouts  configTimeouts  `json:"timeouts"`
+	Endpoints configEndpoints `json:"endpoints"`
+}
+
+type endpoint struct {
+	path    string
+	timeout int
+}
+
+type apiEndpoints struct {
+	Profile       endpoint
+	Password      endpoint
+	AllasHeader   endpoint
+	SharedBuckets endpoint
+	S3            struct {
+		Default endpoint
+		Head    endpoint
+	}
+	Vault struct {
+		Key       endpoint
+		Headers   endpoint
+		Whitelist endpoint
+	}
 }
 
 // RequestError is used to obtain the status code from a HTTP request
@@ -168,11 +192,6 @@ func (r Repo) ForPath() string {
 	return string(r)
 }
 
-// SetRequestTimeout redefines the timeout for an http request
-var SetRequestTimeout = func(timeout int) {
-	ai.hi.requestTimeout = timeout
-}
-
 // GetEnv looks up environment variable given in `name`
 var GetEnv = func(name string, verifyURL bool) (string, error) {
 	env, ok := os.LookupEnv(name)
@@ -206,6 +225,7 @@ func Setup(files FileReader) error {
 	if Port != "" {
 		// OVERRIDE_PROXY_URL is for the DEV and QA namespaces where the port number can vary
 		// This way the fixed port can be modified when testing older Ubuntu VMs
+		// (This feature may not actually be needed now)
 		if _, ok := os.LookupEnv("OVERRIDE_PROXY_URL"); ok {
 			proxy, err = GetEnv("OVERRIDE_PROXY_URL", true)
 			if err != nil {
@@ -256,14 +276,33 @@ func Setup(files FileReader) error {
 func getAPIEndpoints(url string) error {
 	// Since ai.proxy is still empty, giving the url as path works here
 	var resp configResponse
-	if err := makeRequest("GET", url, nil, nil, nil, &resp); err != nil {
+	if err := makeRequest("GET", endpoint{url, 20}, nil, nil, nil, &resp); err != nil {
 		return err
 	}
 
-	ai.hi.s3Timeout = resp.Timeouts.S3 + 5
-	ai.hi.endpoints = resp.Endpoints
+	ai.hi.endpoints = convertConfig(resp)
 
 	return nil
+}
+
+func toEndpoint(path string, timeout int) endpoint {
+	return endpoint{path: path, timeout: timeout + 5}
+}
+
+func convertConfig(cfg configResponse) (ep apiEndpoints) {
+	ep.Profile = toEndpoint(cfg.Endpoints.Profile, cfg.Timeouts.Default)
+	ep.Password = toEndpoint(cfg.Endpoints.Password, cfg.Timeouts.Default)
+	ep.AllasHeader = toEndpoint(cfg.Endpoints.AllasHeader, cfg.Timeouts.Default)
+	ep.SharedBuckets = toEndpoint(cfg.Endpoints.SharedBuckets, cfg.Timeouts.Default)
+
+	ep.S3.Default = toEndpoint(cfg.Endpoints.S3.Default, cfg.Timeouts.S3)
+	ep.S3.Head = toEndpoint(cfg.Endpoints.S3.Head, cfg.Timeouts.S3)
+
+	ep.Vault.Key = toEndpoint(cfg.Endpoints.Vault.Key, cfg.Timeouts.Default)
+	ep.Vault.Headers = toEndpoint(cfg.Endpoints.Vault.Headers, cfg.Timeouts.Vault.Headers)
+	ep.Vault.Whitelist = toEndpoint(cfg.Endpoints.Vault.Whitelist, cfg.Timeouts.Default)
+
+	return
 }
 
 func GetProfile(scanChannel ...chan<- bool) (bool, error) {
@@ -384,17 +423,17 @@ var IsProjectManager = func() bool {
 }
 
 // makeRequest sends HTTP request to KrakenD and parses the response
-var makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+var makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 	var response *http.Response
 
 	// Build HTTP request
-	request, err := http.NewRequest(method, ai.proxy+path, reqBody)
+	request, err := http.NewRequest(method, ai.proxy+ep.path, reqBody)
 	if err != nil {
 		return fmt.Errorf("creating request failed: %w", err)
 	}
 
 	// Adjust request timeout
-	timeout := time.Duration(ai.hi.requestTimeout) * time.Second
+	timeout := time.Duration(ep.timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	request = request.WithContext(ctx)
 	defer cancel()
@@ -468,8 +507,10 @@ var SharedBucketProject = func(bucket string) (string, error) {
 	resp := struct {
 		Owner string `json:"owner"`
 	}{}
+	ep := ai.hi.endpoints.SharedBuckets
+	ep.path += "/" + bucket
 
-	return resp.Owner, makeRequest("GET", ai.hi.endpoints.SharedBuckets+"/"+bucket, nil, nil, nil, &resp)
+	return resp.Owner, makeRequest("GET", ep, nil, nil, nil, &resp)
 }
 
 func toCacheKey(rep Repo, nodes []string, chunkIdx int64) string {

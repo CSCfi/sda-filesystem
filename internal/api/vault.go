@@ -151,21 +151,25 @@ var whitelistKey = func(query map[string]string) error {
 		"pubkey": "%s"
 	}`
 	body = fmt.Sprintf(body, ai.vi.publicKey)
-	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
+	ep := ai.hi.endpoints.Vault.Whitelist
+	ep.path += vaultService + "/" + ai.vi.keyName
 
-	return makeRequest("POST", path, query, nil, strings.NewReader(body), nil)
+	return makeRequest("POST", ep, query, nil, strings.NewReader(body), nil)
 }
 
 var deleteWhitelistedKey = func(query map[string]string) error {
-	path := ai.hi.endpoints.Vault.Whitelist + vaultService + "/" + ai.vi.keyName
+	ep := ai.hi.endpoints.Vault.Whitelist
+	ep.path += vaultService + "/" + ai.vi.keyName
 
-	return makeRequest("DELETE", path, query, nil, nil, nil)
+	return makeRequest("DELETE", ep, query, nil, nil, nil)
 }
 
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.
 // It returns the file's header re-encrypted with filesystem's own public key.
 var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-	path := ai.hi.endpoints.AllasHeader + bucket
+	ep := ai.hi.endpoints.AllasHeader
+	ep.path += bucket
+
 	query := map[string]string{"object": object}
 	headers := map[string]string{"Public-Key": ai.vi.publicKey}
 
@@ -173,7 +177,7 @@ var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		Header string `json:"header"`
 		Offset int64  `json:"offset"`
 	}{}
-	err := makeRequest("GET", path, query, headers, nil, &resp)
+	err := makeRequest("GET", ep, query, headers, nil, &resp)
 
 	return resp.Header, resp.Offset, err
 }
@@ -185,9 +189,11 @@ var PostHeader = func(header []byte, bucket, object string) error {
 	}`
 	body = fmt.Sprintf(body, base64.StdEncoding.EncodeToString(header))
 	query := map[string]string{"object": object}
-	path := ai.hi.endpoints.Vault.Headers + "/" + bucket
 
-	return makeRequest("POST", path, query, nil, strings.NewReader(body), nil)
+	ep := ai.hi.endpoints.Vault.Headers
+	ep.path += "/" + bucket
+
+	return makeRequest("POST", ep, query, nil, strings.NewReader(body), nil)
 }
 
 var GetPublicKey = func() ([32]byte, error) {

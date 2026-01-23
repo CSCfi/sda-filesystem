@@ -133,17 +133,17 @@ func (ms *mockCache) Set(key string, data []byte, _ int64, _ time.Duration) bool
 
 func init() {
 	testConfig = apiEndpoints{
-		Profile:       "/profile-endpoint",
-		Password:      "/password-endpoint",
-		AllasHeader:   "/allas-header-endpoint/",
-		SharedBuckets: "/shared-buckets-endpoint",
+		Profile:       endpoint{"/profile-endpoint", 15},
+		Password:      endpoint{"/password-endpoint", 15},
+		AllasHeader:   endpoint{"/allas-header-endpoint/", 15},
+		SharedBuckets: endpoint{"/shared-buckets-endpoint", 15},
 	}
-	testConfig.S3.Default = "/s3-default-endpoint/"
-	testConfig.S3.Head = "/s3-head-endpoint/"
+	testConfig.S3.Default = endpoint{"/s3-default-endpoint/", 23}
+	testConfig.S3.Head = endpoint{"/s3-head-endpoint/", 23}
 
-	testConfig.Vault.Key = "/project-key-endpoint"
-	testConfig.Vault.Headers = "/headers-endpoint"
-	testConfig.Vault.Whitelist = "/whitelist-endpoint/"
+	testConfig.Vault.Key = endpoint{"/project-key-endpoint", 15}
+	testConfig.Vault.Headers = endpoint{"/headers-endpoint", 35}
+	testConfig.Vault.Whitelist = endpoint{"/whitelist-endpoint/", 15}
 }
 
 func TestMain(m *testing.M) {
@@ -171,17 +171,6 @@ func TestRequestError(t *testing.T) {
 				t.Errorf("RequestError has incorrect format\nExpected=%s\nReceived=%s", errCompare, re.Error())
 			}
 		})
-	}
-}
-
-func TestRequestTimeout(t *testing.T) {
-	timeouts := []int{34, 6, 1200, 84}
-
-	for i := range timeouts {
-		SetRequestTimeout(timeouts[i])
-		if ai.hi.requestTimeout != timeouts[i] {
-			t.Errorf("Incorrect request timeout. Expected=%d, received=%d", timeouts[i], ai.hi.requestTimeout)
-		}
 	}
 }
 
@@ -235,7 +224,6 @@ func TestSetup(t *testing.T) {
 	origInitialiseS3Client := initialiseS3Client
 	origProxy := ai.proxy
 	origToken := ai.token
-	origS3Timeout := ai.hi.s3Timeout
 	defer func() {
 		GetEnv = origGetEnv
 		makeRequest = origMakeRequest
@@ -244,10 +232,33 @@ func TestSetup(t *testing.T) {
 		initialiseS3Client = origInitialiseS3Client
 		ai.proxy = origProxy
 		ai.token = origToken
-		ai.hi.s3Timeout = origS3Timeout
 	}()
 
 	ai.hi.endpoints = apiEndpoints{}
+	expectedTimeouts := configTimeouts{
+		Default: 10, S3: 18, Vault: struct {
+			Headers int `json:"headers"`
+		}{
+			Headers: 30,
+		},
+	}
+	expectedEndpoints := configEndpoints{
+		Profile: "/profile-endpoint", Password: "/password-endpoint",
+		AllasHeader: "/allas-header-endpoint/", SharedBuckets: "/shared-buckets-endpoint",
+		S3: struct {
+			Default string `json:"default"`
+			Head    string `json:"head"`
+		}{
+			Default: "/s3-default-endpoint/", Head: "/s3-head-endpoint/",
+		},
+		Vault: struct {
+			Key       string `json:"project_key"`
+			Headers   string `json:"headers"`
+			Whitelist string `json:"whitelist"`
+		}{
+			Key: "/project-key-endpoint", Headers: "/headers-endpoint", Whitelist: "/whitelist-endpoint/",
+		},
+	}
 
 	GetEnv = func(name string, verifyURL bool) (string, error) {
 		switch name {
@@ -261,18 +272,18 @@ func TestSetup(t *testing.T) {
 			return "", fmt.Errorf("unknown env %s", name)
 		}
 	}
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		if ai.proxy != "" {
 			t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
 		}
-		if path != "config_url" {
-			return fmt.Errorf("Incorrect path \nExpected=config_url\nReceived=%s", path)
+		if ep.path != "config_url" {
+			return fmt.Errorf("Incorrect path \nExpected=config_url\nReceived=%s", ep.path)
 		}
 
 		switch v := ret.(type) {
 		case *configResponse:
-			v.Timeouts.S3 = 13
-			v.Endpoints = testConfig
+			v.Timeouts = expectedTimeouts
+			v.Endpoints = expectedEndpoints
 
 			return nil
 		default:
@@ -305,11 +316,8 @@ func TestSetup(t *testing.T) {
 	if ai.token != "test_token" {
 		t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
 	}
-	if ai.hi.s3Timeout != 18 {
-		t.Errorf("S3 timeout has incorrect value\nExpected=18\nReceived=%v", ai.hi.s3Timeout)
-	}
 	if !reflect.DeepEqual(ai.hi.endpoints, testConfig) {
-		t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.s3Timeout)
+		t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.endpoints)
 	}
 	if downloadCache != newCache {
 		t.Errorf("downloadCache does not point to new cache")
@@ -337,7 +345,7 @@ func TestSetup_Port(t *testing.T) {
 	origInitialiseS3Client := initialiseS3Client
 	origProxy := ai.proxy
 	origToken := ai.token
-	origS3Timeout := ai.hi.s3Timeout
+	origEndpoints := ai.hi.endpoints
 	defer func() {
 		GetEnv = origGetEnv
 		makeRequest = origMakeRequest
@@ -346,12 +354,36 @@ func TestSetup_Port(t *testing.T) {
 		initialiseS3Client = origInitialiseS3Client
 		ai.proxy = origProxy
 		ai.token = origToken
-		ai.hi.s3Timeout = origS3Timeout
+		ai.hi.endpoints = origEndpoints
 		Port = ""
 	}()
 
 	ai.hi.endpoints = apiEndpoints{}
 	os.Unsetenv("OVERRIDE_PROXY_URL")
+	expectedTimeouts := configTimeouts{
+		Default: 10, S3: 18, Vault: struct {
+			Headers int `json:"headers"`
+		}{
+			Headers: 30,
+		},
+	}
+	expectedEndpoints := configEndpoints{
+		Profile: "/profile-endpoint", Password: "/password-endpoint",
+		AllasHeader: "/allas-header-endpoint/", SharedBuckets: "/shared-buckets-endpoint",
+		S3: struct {
+			Default string `json:"default"`
+			Head    string `json:"head"`
+		}{
+			Default: "/s3-default-endpoint/", Head: "/s3-head-endpoint/",
+		},
+		Vault: struct {
+			Key       string `json:"project_key"`
+			Headers   string `json:"headers"`
+			Whitelist string `json:"whitelist"`
+		}{
+			Key: "/project-key-endpoint", Headers: "/headers-endpoint", Whitelist: "/whitelist-endpoint/",
+		},
+	}
 
 	GetEnv = func(name string, verifyURL bool) (string, error) {
 		switch name {
@@ -385,19 +417,19 @@ func TestSetup_Port(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				if ai.proxy != "" {
 					t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
 				}
 				expectedPath := tt.expectedProxy + "/static/configuration.json"
-				if path != expectedPath {
-					t.Errorf("makeRequest() received incorrect path\nExpected=%s\nReceived=%s", expectedPath, path)
+				if ep.path != expectedPath {
+					t.Errorf("makeRequest() received incorrect path\nExpected=%s\nReceived=%s", expectedPath, ep.path)
 				}
 
 				switch v := ret.(type) {
 				case *configResponse:
-					v.Timeouts.S3 = 13
-					v.Endpoints = testConfig
+					v.Timeouts = expectedTimeouts
+					v.Endpoints = expectedEndpoints
 
 					return nil
 				default:
@@ -421,11 +453,8 @@ func TestSetup_Port(t *testing.T) {
 			if ai.token != "test_token" {
 				t.Errorf("Token has incorrect value\nExpected=test_token\nReceived=%s", ai.token)
 			}
-			if ai.hi.s3Timeout != 18 {
-				t.Errorf("S3 timeout has incorrect value\nExpected=18\nReceived=%v", ai.hi.s3Timeout)
-			}
 			if !reflect.DeepEqual(ai.hi.endpoints, testConfig) {
-				t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.s3Timeout)
+				t.Errorf("Config json has incorrect value\nExpected=%v\nReceived=%v", testConfig, ai.hi.endpoints)
 			}
 			if downloadCache != newCache {
 				t.Errorf("downloadCache does not point to new cache")
@@ -487,7 +516,7 @@ func TestSetup_Error(t *testing.T) {
 					return "", fmt.Errorf("unknown env %s", name)
 				}
 			}
-			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				return tt.reqErr
 			}
 			cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
@@ -530,9 +559,9 @@ func TestGetProfile(t *testing.T) {
 	ai.hi.endpoints = testConfig
 
 	accessOnce := true
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
-		if path != "/profile-endpoint" {
-			return fmt.Errorf("Incorrect path\nExpected=/profile-endpoint\nReceived=%s", path)
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		if ep.path != "/profile-endpoint" {
+			return fmt.Errorf("Incorrect path\nExpected=/profile-endpoint\nReceived=%s", ep.path)
 		}
 
 		switch v := ret.(type) {
@@ -613,7 +642,7 @@ func TestGetProfile_Error(t *testing.T) {
 		GetEnv = origGetEnv
 	}()
 
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		return errExpected
 	}
 	GetEnv = func(name string, verifyURL bool) (string, error) {
@@ -639,7 +668,7 @@ func TestGetProfile_Clamav(t *testing.T) {
 	}()
 
 	projectType := "findata"
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		switch v := ret.(type) {
 		case *profile:
 			v.ProjectType = projectType
@@ -678,9 +707,9 @@ func TestAuthenticate(t *testing.T) {
 	password := "passw0rd"
 	ai.hi.endpoints = testConfig
 
-	makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
-		if path != "/password-endpoint" {
-			return fmt.Errorf("Incorrect path\nExpected=/password-endpoint\nReceived=%s", path)
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		if ep.path != "/password-endpoint" {
+			return fmt.Errorf("Incorrect path\nExpected=/password-endpoint\nReceived=%s", ep.path)
 		}
 		if ai.password != "cGFzc3cwcmQ=" {
 			return fmt.Errorf("Incorrect password\nExpected=cGFzc3cwcmQ=\nReceived=%s", ai.password)
@@ -712,7 +741,7 @@ func TestAuthenticate_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method, path string, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				return tt.requestErr
 			}
 
@@ -990,17 +1019,18 @@ func TestMakeRequest(t *testing.T) {
 
 			var err error
 			var ret any
+			ep := endpoint{srv.URL, 10}
 			switch tt.expectedBody.(type) {
 			case VaultHeader:
 				var objects VaultHeader
-				err = makeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
+				err = makeRequest(tt.method, ep, tt.query, tt.headers, tt.givenBody, &objects)
 				ret = objects
 			case profile:
 				var objects profile
-				err = makeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, &objects)
+				err = makeRequest(tt.method, ep, tt.query, tt.headers, tt.givenBody, &objects)
 				ret = objects
 			default:
-				err = makeRequest(tt.method, srv.URL, tt.query, tt.headers, tt.givenBody, ret)
+				err = makeRequest(tt.method, ep, tt.query, tt.headers, tt.givenBody, ret)
 			}
 
 			switch {
@@ -1035,7 +1065,7 @@ func TestMakeRequest_PutRequestNil_And_ReadAll_Error(t *testing.T) {
 	ai.proxy = srv.URL
 
 	errStr := "failed to read error response: unexpected EOF"
-	err := makeRequest("GET", "/", nil, nil, nil, nil)
+	err := makeRequest("GET", endpoint{"/", 5}, nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Function did not return error")
 	} else if err.Error() != errStr {
@@ -1048,7 +1078,7 @@ func TestMakeRequest_NewRequest_Error(t *testing.T) {
 	buf[0] = 0x7f
 	errText := fmt.Sprintf("creating request failed: parse %q: net/url: invalid control character in URL", string(buf))
 
-	if err := makeRequest("GET", string(buf), nil, nil, nil, nil); err == nil {
+	if err := makeRequest("GET", endpoint{string(buf), 5}, nil, nil, nil, nil); err == nil {
 		t.Error("Function did not return error with invalid URL")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
