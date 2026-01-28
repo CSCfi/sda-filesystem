@@ -152,8 +152,9 @@ func (re *RequestError) Error() (err string) {
 			Message string `json:"message"`
 			Status  int    `json:"status"`
 		}{}
-		unmarshalErr := json.Unmarshal([]byte(re.errStr), &krakendErr)
-		if unmarshalErr != nil {
+		decoder := json.NewDecoder(strings.NewReader(re.errStr))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&krakendErr) != nil {
 			err = fmt.Sprintf("%d %s", re.StatusCode, re.errStr)
 		} else {
 			err = fmt.Sprintf("%d %s", krakendErr.Status, krakendErr.Message)
