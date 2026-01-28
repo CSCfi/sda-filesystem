@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"sda-filesystem/internal/logs"
@@ -16,22 +17,24 @@ import (
 
 const vaultService = "data-gateway"
 
+var whitelistedProjects = make([]string, 0)
+
 type vaultInfo struct {
 	privateKey [chacha20poly1305.KeySize]byte
 	publicKey  string // base64 encoded
 	keyName    string
 }
 
-type vaultResponse struct {
-	Data     BatchHeaders `json:"data"`
-	Warnings []string     `json:"warnings"`
+type vaultBatchResponse struct {
+	Data     BatchHeaderVersions `json:"data"`
+	Warnings []string            `json:"warnings"`
 }
 
 type keyResponse struct {
 	Key64 string `json:"public_key_c4gh"`
 }
 
-type VaultHeaderVersions struct {
+type VaultHeaders struct {
 	Headers       map[string]VaultHeader `json:"headers"`
 	LatestVersion int                    `json:"latest_version"`
 }
@@ -42,22 +45,22 @@ type VaultHeader struct {
 	KeyVersion int    `json:"keyversion"`
 }
 
-type BatchHeaders map[string]map[string]VaultHeaderVersions
-type Headers map[string]map[string]string
+type BatchHeaderVersions map[string]map[string]int
 
 // GetHeaders gets all the file headers for the buckets, including headers for shared buckets.
-var GetHeaders = func(
+var GetHeaderVersions = func(
 	rep Repo,
 	buckets []Metadata,
 	sharedBuckets map[string]SharedBucketsMeta,
-) (BatchHeaders, error) {
-	headers, err := getProjectHeaders(rep, "", MetadataSlice(buckets))
+) (BatchHeaderVersions, error) {
+	headers, err := getProjectHeaderVersions(rep, "", MetadataSlice(buckets))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get headers for %s: %w", rep, err)
 	}
+
 	for project := range sharedBuckets {
 		logs.Debugf("Fetching headers for %s", project)
-		sharedHeaders, err := getProjectHeaders(rep, project, sharedBuckets[project])
+		sharedHeaders, err := getProjectHeaderVersions(rep, project, sharedBuckets[project])
 		if err != nil {
 			logs.Errorf("Failed to get headers for %s: %w", project, err)
 
@@ -70,7 +73,7 @@ var GetHeaders = func(
 	return headers, nil
 }
 
-var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHeaders, error) {
+var getProjectHeaderVersions = func(rep Repo, project string, buckets Named) (BatchHeaderVersions, error) {
 	batch := map[string][]string{}
 	for name := range buckets.GetNames() {
 		batch[name] = []string{"**"} // Get all headers from bucket
@@ -84,7 +87,7 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 	if len(batch) == 0 {
 		logs.Debugf("No buckets to fetch headers for in %s%s", rep, logInsert)
 
-		return BatchHeaders{}, nil
+		return BatchHeaderVersions{}, nil
 	}
 
 	var err error
@@ -99,29 +102,15 @@ var getProjectHeaders = func(rep Repo, project string, buckets Named) (BatchHead
 	}
 	batchString := base64.StdEncoding.EncodeToString(batchJSON)
 
-	body := `{
-		"batch": "%s",
-		"service": "%s",
-		"key": "%s"
-	}`
-	body = fmt.Sprintf(body, batchString, vaultService, ai.vi.keyName)
+	body := `{"batch": "%s", "versions": true}`
+	body = fmt.Sprintf(body, batchString)
 
-	query := make(map[string]string)
+	query := map[string]string{}
 	if project != "" {
 		query["owner"] = project
 	}
 
-	// Whitelist public key with which the headers will be reencrypted
-	if err := whitelistKey(query); err != nil {
-		return nil, fmt.Errorf("failed to whitelist public key: %w", err)
-	}
-	defer func() {
-		if err := deleteWhitelistedKey(query); err != nil {
-			logs.Warningf("Could not delete whitelisted key %s for %s%s: %w", ai.vi.keyName, rep, logInsert, err)
-		}
-	}()
-
-	var resp vaultResponse
+	var resp vaultBatchResponse
 	err = makeRequest("GET", ai.hi.endpoints.Vault.Headers, query, nil, strings.NewReader(body), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -157,11 +146,64 @@ var whitelistKey = func(query map[string]string) error {
 	return makeRequest("POST", ep, query, nil, strings.NewReader(body), nil)
 }
 
-var deleteWhitelistedKey = func(query map[string]string) error {
+var DeleteWhitelistedKeys = func() {
 	ep := ai.hi.endpoints.Vault.Whitelist
 	ep.path += vaultService + "/" + ai.vi.keyName
 
-	return makeRequest("DELETE", ep, query, nil, nil, nil)
+	logs.Debug("Deleting whitelisted keys...")
+
+	for _, pr := range whitelistedProjects {
+		logInsert := ""
+		query := make(map[string]string)
+		if pr != "" {
+			logInsert = " for " + pr
+			query["owner"] = pr
+		}
+
+		if err := makeRequest("DELETE", ep, query, nil, nil, nil); err != nil {
+			logs.Warningf("Could not delete whitelisted key%s: %w", logInsert, err)
+		} else {
+			logs.Debugf("Deleted whitelisted key%s", logInsert)
+		}
+	}
+
+	whitelistedProjects = make([]string, 0)
+}
+
+var GetFileHeader = func(rep Repo, bucket, object, owner string, version int, path string) (string, error) {
+	ep := ai.hi.endpoints.Vault.Headers
+	ep.path += "/" + bucket
+
+	logInsert := ""
+	query := map[string]string{
+		"object":  object,
+		"service": vaultService,
+		"key":     ai.vi.keyName,
+	}
+	if owner != "" {
+		logInsert = " shared project (" + owner + ")"
+		query["owner"] = owner
+	}
+
+	if !slices.Contains(whitelistedProjects, owner) {
+		logs.Debugf("Whitelisting key for %s%s", rep, logInsert)
+
+		// Whitelist public key with which the headers will be reencrypted
+		if err := whitelistKey(query); err != nil {
+			return "", fmt.Errorf("failed to whitelist public key for %s%s: %w", rep, logInsert, err)
+		}
+
+		whitelistedProjects = append(whitelistedProjects, owner)
+	}
+
+	var resp VaultHeaders
+	err := makeRequest("GET", ep, query, nil, nil, &resp)
+
+	if resp.LatestVersion > version {
+		logs.Warningf("File %s has a header version that is higher than expected which suggests the file has been modified after the creation of Data Gateway. You may need to refresh Data Gateway to be able to download the file", path)
+	}
+
+	return resp.Headers[strconv.Itoa(version)].Header, err
 }
 
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.

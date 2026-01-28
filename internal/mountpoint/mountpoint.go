@@ -85,7 +85,6 @@ var Unmount = func(mount string) error {
 	if err != nil {
 		return fmt.Errorf("unmounting filesystem failed: %w", err)
 	}
-	logs.Debug("Filesystem unmounted")
 
 	return nil
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"maps"
 	"math"
 	"net/http"
 	"slices"
@@ -42,6 +41,7 @@ const CipherBlockSize = BlockSize + MacSize
 // Metadata standardises the metadata received for both buckets and objects
 type Metadata struct {
 	Name         string
+	Owner        string
 	ID           string
 	Size         int64
 	LastModified *time.Time
@@ -372,7 +372,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 			sharedMap[service] = append(sharedMap[service], *buckets[i].Name)
 		} else {
 			// Size and modification time of bucket will be calculated later based on the objects it contains
-			meta = append(meta, Metadata{*buckets[i].Name, "", 0, nil})
+			meta = append(meta, Metadata{*buckets[i].Name, "", "", 0, nil})
 		}
 	}
 
@@ -394,11 +394,12 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 		return nil, nil, 0, fmt.Errorf("no buckets found for %s", rep)
 	}
 
-	sharedBuckets := slices.Concat(slices.Collect(maps.Values(sharedMap))...)
-	meta = slices.Grow(meta, len(sharedBuckets))
+	for owner := range sharedMap {
+		meta = slices.Grow(meta, len(sharedMap[owner]))
 
-	for i := range sharedBuckets {
-		meta = append(meta, Metadata{sharedBuckets[i], "", 0, nil})
+		for _, sharedBucket := range sharedMap[owner] {
+			meta = append(meta, Metadata{sharedBucket, owner, "", 0, nil})
+		}
 	}
 
 	return meta, sharedMap, numBuckets, nil
@@ -469,7 +470,7 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 
 	meta := make([]Metadata, len(objects))
 	for i := range meta {
-		meta[i] = Metadata{*objects[i].Key, "", *objects[i].Size, objects[i].LastModified}
+		meta[i] = Metadata{*objects[i].Key, "", "", *objects[i].Size, objects[i].LastModified}
 
 		if rep == SDApply && objects[i].Owner != nil {
 			// The file ID from the database is sent as the Owner ID.
