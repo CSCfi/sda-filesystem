@@ -446,7 +446,7 @@ func TestInitializeFilesystem(t *testing.T) {
 	origGetBuckets := api.GetBuckets
 	origGetObjects := api.GetObjects
 	origGetSegmentedObjects := api.GetSegmentedObjects
-	origGetHeaders := api.GetHeaders
+	origGetHeaderVersions := api.GetHeaderVersions
 	origHeaders := fi.headers
 	defer func() {
 		api.GetRepositories = origGetRepositories
@@ -454,7 +454,7 @@ func TestInitializeFilesystem(t *testing.T) {
 		api.GetBuckets = origGetBuckets
 		api.GetObjects = origGetObjects
 		api.GetSegmentedObjects = origGetSegmentedObjects
-		api.GetHeaders = origGetHeaders
+		api.GetHeaderVersions = origGetHeaderVersions
 		fi.headers = origHeaders
 	}()
 
@@ -601,10 +601,10 @@ func TestInitializeFilesystem(t *testing.T) {
 
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
-	api.GetHeaders = func(rep api.Repo,
+	api.GetHeaderVersions = func(rep api.Repo,
 		buckets []api.Metadata,
 		sharedBuckets map[string]api.SharedBucketsMeta,
-	) (api.BatchHeaders, error) {
+	) (api.BatchHeaderVersions, error) {
 		switch rep {
 		case rep1:
 			expectedBuckets := []string{"bucket_1_segments", "bucket_1", "bucket_2_segments", "bucket_2", "bucket_3"}
@@ -622,32 +622,13 @@ func TestInitializeFilesystem(t *testing.T) {
 				t.Errorf("api.GetHeaders() received invalid shared buckets\nExpected=%v\nReceived=%v", expectedSharedBuckets, sharedBuckets)
 			}
 
-			batch := make(api.BatchHeaders)
-			batch["bucket_1"] = make(map[string]api.VaultHeaderVersions)
-			batch["bucket_2"] = make(map[string]api.VaultHeaderVersions)
+			batch := make(api.BatchHeaderVersions)
+			batch["bucket_1"] = make(map[string]int)
+			batch["bucket_2"] = make(map[string]int)
 
-			batch["bucket_1"]["kansio/file_2"] = api.VaultHeaderVersions{
-				Headers: map[string]api.VaultHeader{
-					"1": {Header: "fyvltvylbui"},
-					"2": {Header: "vlfvyugyvli"},
-				},
-				LatestVersion: 2,
-			}
-			batch["bucket_1"]["kansio/file_3"] = api.VaultHeaderVersions{
-				Headers: map[string]api.VaultHeader{
-					"3": {Header: "hbfyucdtkyv"},
-				},
-				LatestVersion: 3,
-			}
-			batch["bucket_2"]["?folder/test"] = api.VaultHeaderVersions{
-				Headers: map[string]api.VaultHeader{
-					"2": {Header: "vhvfkutcflu"},
-					"3": {Header: "fyblfyvigyi"},
-					"4": {Header: "fdctkvfulbf"},
-					"5": {Header: "bftcdvtuftu"},
-				},
-				LatestVersion: 5,
-			}
+			batch["bucket_1"]["kansio/file_2"] = 2
+			batch["bucket_1"]["kansio/file_3"] = 3
+			batch["bucket_2"]["?folder/test"] = 5
 
 			return batch, nil
 		case "Substandard-Repo":
@@ -669,7 +650,7 @@ func TestInitializeFilesystem(t *testing.T) {
 	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
-	expectedHeaders := map[_Ctype_ino_t]string{30: "vlfvyugyvli", 32: "hbfyucdtkyv", 35: "bftcdvtuftu"}
+	expectedHeaders := map[_Ctype_ino_t]header{30: {version: 2}, 32: {version: 3}, 35: {version: 5}}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Fatalf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}

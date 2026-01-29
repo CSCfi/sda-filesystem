@@ -5,69 +5,38 @@ import (
 	"io"
 	"maps"
 	"reflect"
+	"slices"
 	"testing"
 )
 
-func TestGetHeaders(t *testing.T) {
-	origWhitelistKey := whitelistKey
-	origDeleteWhitelistedKey := deleteWhitelistedKey
+func TestGetHeaderVersions(t *testing.T) {
 	origMakeRequest := makeRequest
 	origKeyName := ai.vi.keyName
 	defer func() {
-		whitelistKey = origWhitelistKey
-		deleteWhitelistedKey = origDeleteWhitelistedKey
 		makeRequest = origMakeRequest
 		ai.vi.keyName = origKeyName
 	}()
 
-	expectedData := make(BatchHeaders)
-	expectedData["bucket_1"] = make(map[string]VaultHeaderVersions)
-	expectedData["shared-bucket"] = make(map[string]VaultHeaderVersions)
+	expectedData := make(BatchHeaderVersions)
+	expectedData["bucket_1"] = make(map[string]int)
+	expectedData["shared-bucket"] = make(map[string]int)
 
-	expectedData["bucket_1"]["kansio/file_1"] = VaultHeaderVersions{
-		Headers: map[string]VaultHeader{
-			"1": {Header: "yvdyviditybf"},
-		},
-		LatestVersion: 1,
-	}
-	expectedData["bucket_1"]["kansio/file_2"] = VaultHeaderVersions{
-		Headers: map[string]VaultHeader{
-			"3": {Header: "hbfyucdtkyv"},
-			"4": {Header: "hubftiuvfti"},
-		},
-		LatestVersion: 4,
-	}
-	expectedData["shared-bucket"]["dir/obj.c4gh"] = VaultHeaderVersions{
-		Headers: map[string]VaultHeader{
-			"1": {Header: "gyutvrtivru"},
-		},
-		LatestVersion: 1,
-	}
+	expectedData["bucket_1"]["kansio/file_1"] = 1
+	expectedData["bucket_1"]["kansio/file_2"] = 4
+	expectedData["shared-bucket"]["dir/obj.c4gh"] = 1
 
-	batch := make(map[string]BatchHeaders)
-	batch["my-project"] = make(BatchHeaders)
-	batch["sharing-project-1"] = make(BatchHeaders)
-	batch["sharing-project-2"] = make(BatchHeaders)
+	batch := make(map[string]BatchHeaderVersions)
+	batch["my-project"] = make(BatchHeaderVersions)
+	batch["sharing-project-1"] = make(BatchHeaderVersions)
+	batch["sharing-project-2"] = make(BatchHeaderVersions)
 
 	batch["my-project"]["bucket_1"] = expectedData["bucket_1"]
 	batch["sharing-project-1"]["shared-bucket"] = expectedData["shared-bucket"]
 
 	expectedBody := map[string]string{
-		"my-project": `{
-		"batch": "eyJidWNrZXRfMSI6WyIqKiJdfQ==",
-		"service": "data-gateway",
-		"key": "some-key"
-	}`,
-		"sharing-project-1": `{
-		"batch": "eyJzaGFyZWQtYnVja2V0IjpbIioqIl0sInNoYXJlZC1idWNrZXQtMiI6WyIqKiJdfQ==",
-		"service": "data-gateway",
-		"key": "some-key"
-	}`,
-		"sharing-project-2": `{
-		"batch": "eyJhbm90aGVyLXNoYXJlZC1idWNrZXQiOlsiKioiXX0=",
-		"service": "data-gateway",
-		"key": "some-key"
-	}`,
+		"my-project":        `{"batch": "eyJidWNrZXRfMSI6WyIqKiJdfQ==", "versions": true}`,
+		"sharing-project-1": `{"batch": "eyJzaGFyZWQtYnVja2V0IjpbIioqIl0sInNoYXJlZC1idWNrZXQtMiI6WyIqKiJdfQ==", "versions": true}`,
+		"sharing-project-2": `{"batch": "eyJhbm90aGVyLXNoYXJlZC1idWNrZXQiOlsiKioiXX0=", "versions": true}`,
 	}
 
 	warnings := map[string][]string{
@@ -80,45 +49,22 @@ func TestGetHeaders(t *testing.T) {
 
 	var tests = []struct {
 		testname, errStr, errProject string
-		whitelistErr, deleteErr      error
 	}{
 		{
-			"OK", "", "", nil, nil,
-		},
-		{
-			"FAIL_WHITELIST",
-			"failed to get headers for SD Connect: failed to whitelist public key: " + errExpected.Error(),
-			"", errExpected, nil,
-		},
-		{
-			"FAIL_DELETE", "", "", nil, errExpected,
+			"OK", "", "",
 		},
 		{
 			"FAIL_REQUEST",
-			"failed to get headers for SD Connect: request failed: " + errExpected.Error(),
-			"my-project", nil, nil,
+			"failed to get header versions for SD Connect: request failed: " + errExpected.Error(),
+			"my-project",
 		},
 		{
-			"FAIL_REQUEST_SHARED", "", "sharing-project-1", nil, nil,
+			"FAIL_REQUEST_SHARED", "", "sharing-project-1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			whitelisted := false
-			whitelistKey = func(query map[string]string) error {
-				whitelisted = true
-
-				return tt.whitelistErr
-			}
-			deleteWhitelistedKey = func(query map[string]string) error {
-				if !whitelisted {
-					t.Errorf("deleteWhitelistedKey() was called before key was whitelisted")
-				}
-				whitelisted = false
-
-				return tt.deleteErr
-			}
 			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 				if method != "GET" {
 					t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
@@ -131,9 +77,6 @@ func TestGetHeaders(t *testing.T) {
 					return fmt.Errorf("failed to read body: %w", err)
 				}
 
-				if !whitelisted {
-					t.Errorf("Key is not whitelisted")
-				}
 				owner, ok := query["owner"]
 				if !ok {
 					owner = "my-project"
@@ -147,8 +90,8 @@ func TestGetHeaders(t *testing.T) {
 				}
 
 				switch v := ret.(type) {
-				case *vaultResponse:
-					v.Data = make(BatchHeaders)
+				case *vaultBatchResponse:
+					v.Data = make(BatchHeaderVersions)
 					maps.Copy(v.Data, batch[owner])
 					v.Warnings = warnings[owner]
 
@@ -158,7 +101,7 @@ func TestGetHeaders(t *testing.T) {
 				}
 			}
 
-			data, err := GetHeaders(
+			data, err := GetHeaderVersions(
 				SDConnect,
 				[]Metadata{{Name: "bucket_1"}, {Name: "bucket_1_segments"}},
 				map[string]SharedBucketsMeta{
@@ -182,89 +125,43 @@ func TestGetHeaders(t *testing.T) {
 			case err != nil:
 				t.Errorf("Function returned unexpected error: %s", err.Error())
 			case !reflect.DeepEqual(expectedData, data):
-				t.Errorf("Function returned incorrect headers\nExpected=%v\nReceived=%v", expectedData, data)
+				t.Errorf("Function returned incorrect header versions\nExpected=%v\nReceived=%v", expectedData, data)
 			}
 		})
 	}
 }
 
-func TestGetHeaders_SDApply(t *testing.T) {
-	origWhitelistKey := whitelistKey
-	origDeleteWhitelistedKey := deleteWhitelistedKey
+func TestGetHeaderVersions_SDApply(t *testing.T) {
 	origMakeRequest := makeRequest
 	origKeyName := ai.vi.keyName
 	defer func() {
-		whitelistKey = origWhitelistKey
-		deleteWhitelistedKey = origDeleteWhitelistedKey
 		makeRequest = origMakeRequest
 		ai.vi.keyName = origKeyName
 	}()
 
-	expectedData := make(BatchHeaders)
-	expectedData["dataset-1"] = make(map[string]VaultHeaderVersions)
-	expectedData["another-dataset"] = make(map[string]VaultHeaderVersions)
+	expectedData := make(BatchHeaderVersions)
+	expectedData["dataset-1"] = make(map[string]int)
+	expectedData["another-dataset"] = make(map[string]int)
 
-	expectedData["dataset-1"]["kansio/file_1"] = VaultHeaderVersions{
-		Headers: map[string]VaultHeader{
-			"1": {Header: "yvdyviditybf"},
-		},
-		LatestVersion: 1,
-	}
-	expectedData["dataset-1"]["kansio/file_2"] = VaultHeaderVersions{
-		Headers: map[string]VaultHeader{
-			"3": {Header: "hbfyucdtkyv"},
-			"4": {Header: "hubftiuvfti"},
-		},
-		LatestVersion: 4,
-	}
-	expectedData["another-dataset"]["dir/obj.c4gh"] = VaultHeaderVersions{
-		Headers: map[string]VaultHeader{
-			"1": {Header: "gyutvrtivru"},
-		},
-		LatestVersion: 1,
-	}
+	expectedData["dataset-1"]["kansio/file_1"] = 1
+	expectedData["dataset-1"]["kansio/file_2"] = 4
+	expectedData["another-dataset"]["dir/obj.c4gh"] = 1
 
-	batch := make(map[string]BatchHeaders)
-	batch["fega"] = make(BatchHeaders)
-	batch["bp"] = make(BatchHeaders)
+	batch := make(map[string]BatchHeaderVersions)
+	batch["fega"] = make(BatchHeaderVersions)
+	batch["bp"] = make(BatchHeaderVersions)
 
 	batch["fega"]["dataset-1"] = expectedData["dataset-1"]
 	batch["bp"]["another-dataset"] = expectedData["another-dataset"]
 
 	expectedBody := map[string][]string{
-		"fega": {`{
-		"batch": "WyJkYXRhc2V0LTEiLCJkYXRhc2V0LTIiXQ==",
-		"service": "data-gateway",
-		"key": "some-key"
-	}`, `{
-		"batch": "WyJkYXRhc2V0LTIiLCJkYXRhc2V0LTEiXQ==",
-		"service": "data-gateway",
-		"key": "some-key"
-	}`},
-		"bp": {`{
-		"batch": "WyJhbm90aGVyLWRhdGFzZXQiXQ==",
-		"service": "data-gateway",
-		"key": "some-key"
-	}`},
+		"fega": {`{"batch": "WyJkYXRhc2V0LTEiLCJkYXRhc2V0LTIiXQ==", "versions": true}`, `{"batch": "WyJkYXRhc2V0LTIiLCJkYXRhc2V0LTEiXQ==", "versions": true}`},
+		"bp":   {`{"batch": "WyJhbm90aGVyLWRhdGFzZXQiXQ==", "versions": true}`},
 	}
 
 	ai.vi.keyName = "some-key"
 	ai.hi.endpoints = testConfig
 
-	whitelisted := false
-	whitelistKey = func(query map[string]string) error {
-		whitelisted = true
-
-		return nil
-	}
-	deleteWhitelistedKey = func(query map[string]string) error {
-		if !whitelisted {
-			t.Errorf("d() was cale key was whitelisted")
-		}
-		whitelisted = false
-
-		return nil
-	}
 	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
 		if method != "GET" {
 			t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
@@ -277,9 +174,6 @@ func TestGetHeaders_SDApply(t *testing.T) {
 			return fmt.Errorf("failed to read body: %w", err)
 		}
 
-		if !whitelisted {
-			t.Errorf("Key is not whitelisted")
-		}
 		owner, ok := query["owner"]
 		if !ok {
 			return fmt.Errorf("request missing query parameter 'owner'")
@@ -298,7 +192,7 @@ func TestGetHeaders_SDApply(t *testing.T) {
 		}
 
 		switch v := ret.(type) {
-		case *vaultResponse:
+		case *vaultBatchResponse:
 			v.Data = batch[owner]
 
 			return nil
@@ -307,7 +201,7 @@ func TestGetHeaders_SDApply(t *testing.T) {
 		}
 	}
 
-	data, err := GetHeaders(
+	data, err := GetHeaderVersions(
 		SDApply, []Metadata{},
 		map[string]SharedBucketsMeta{
 			"fega": {"dataset-1", "dataset-2"},
@@ -319,11 +213,187 @@ func TestGetHeaders_SDApply(t *testing.T) {
 	case err != nil:
 		t.Errorf("Function returned unexpected error: %s", err.Error())
 	case !reflect.DeepEqual(expectedData, data):
-		t.Errorf("Function returned incorrect headers\nExpected=%v\nReceived=%v", expectedData, data)
+		t.Errorf("Function returned incorrect header versions\nExpected=%v\nReceived=%v", expectedData, data)
 	}
 }
 
-func TestPublicKey(t *testing.T) {
+func TestGetFileHeader(t *testing.T) {
+	origWhitelistKey := whitelistKey
+	origMakeRequest := makeRequest
+	origKeyName := ai.vi.keyName
+	origWhitelistedProjects := whitelistedProjects
+	defer func() {
+		whitelistKey = origWhitelistKey
+		makeRequest = origMakeRequest
+		ai.vi.keyName = origKeyName
+		whitelistedProjects = origWhitelistedProjects
+	}()
+
+	ai.vi.keyName = "some-key"
+	ai.hi.endpoints = testConfig
+
+	response := VaultHeaders{
+		Headers: map[string]VaultHeader{
+			"1": {
+				Header: "fvutyubgyugbuy",
+			},
+			"2": {
+				Header: "hubitiutituyvu",
+			},
+			"3": {
+				Header: "qutevdfuyvoybgi",
+			},
+		},
+		LatestVersion: 3,
+	}
+
+	var tests = []struct {
+		testname, owner, expectedHeader, errStr string
+		errRequest, errWhitelist                error
+		version                                 int
+		whitelist                               bool
+	}{
+		{
+			"OK_1", "", "fvutyubgyugbuy", "", nil, nil, 1, true,
+		},
+		{
+			"OK_2", "project_1234567", "qutevdfuyvoybgi", "", nil, nil, 3, false,
+		},
+		{
+			"FAIL_REQUEST", "", "", errExpected.Error(), errExpected, nil, 2, false,
+		},
+		{
+			"FAIL_WHITELIST_1", "", "",
+			"failed to whitelist public key for SD Connect: " + errExpected.Error(),
+			nil, errExpected, 1, true,
+		},
+		{
+			"FAIL_WHITELIST_2", "project_20001234", "",
+			"failed to whitelist public key for SD Connect shared project (project_20001234): " + errExpected.Error(),
+			nil, errExpected, 1, true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+				if method != "GET" {
+					t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
+				}
+				if ep.path != "/headers-endpoint/my-bucket" {
+					t.Errorf("Request has incorrect path\nExpected=/headers-endpoint/my-bucket\nReceived=%v", ep.path)
+				}
+
+				owner, ok := query["owner"]
+				if ok && tt.owner == "" {
+					t.Errorf("Request should not have owner, received %v", owner)
+				}
+				if owner != tt.owner {
+					t.Errorf("Request has incorrect owner\nExpected=%v\nReceived=%v", tt.owner, owner)
+				}
+				svc, ok := query["service"]
+				if svc != vaultService {
+					t.Errorf("Request has incorrect service\nExpected=%s\nReceived=%v", vaultService, svc)
+				}
+				key := query["key"]
+				if key != "some-key" {
+					t.Errorf("Request has incorrect key\nExpected=some-key\nReceived=%v", key)
+				}
+				object := query["object"]
+				if object != "my-object" {
+					t.Errorf("Request has incorrect key\nExpected=my-object\nReceived=%v", object)
+				}
+
+				switch v := ret.(type) {
+				case *VaultHeaders:
+					v.Headers = response.Headers
+					v.LatestVersion = response.LatestVersion
+
+					return tt.errRequest
+				default:
+					return fmt.Errorf("ret has incorrect type %v, expected *vaultResponse", reflect.TypeOf(v))
+				}
+			}
+			whitelisted := false
+			whitelistKey = func(query map[string]string) error {
+				whitelisted = true
+
+				return tt.errWhitelist
+			}
+
+			whitelistedProjects = make([]string, 0)
+			if !tt.whitelist {
+				whitelistedProjects = append(whitelistedProjects, tt.owner)
+			}
+
+			header, err := GetFileHeader(SDConnect, "my-bucket", "my-object", tt.owner, tt.version, "")
+
+			switch {
+			case tt.errStr != "":
+				if err == nil {
+					t.Errorf("Function did not return error")
+				} else if err.Error() != tt.errStr {
+					t.Errorf("Function returned incorrect error\nExpected=%q\nReceived=%q", tt.errStr, err.Error())
+				}
+			case err != nil:
+				t.Errorf("Function returned unexpected error: %s", err.Error())
+			case tt.whitelist != whitelisted:
+				t.Errorf("Functions resulsted in unexpected whitelist status\nExpected=%t\nReceived=%t", tt.whitelist, whitelisted)
+			case header != tt.expectedHeader:
+				t.Errorf("Function returned incorrect header\nExpected=%v\nReceived=%v", tt.expectedHeader, header)
+			}
+		})
+	}
+}
+
+func TestDeleteWhitelistedKeys(t *testing.T) {
+	origMakeRequest := makeRequest
+	origKeyName := ai.vi.keyName
+	origWhitelistedProjects := whitelistedProjects
+	defer func() {
+		makeRequest = origMakeRequest
+		ai.vi.keyName = origKeyName
+		whitelistedProjects = origWhitelistedProjects
+	}()
+
+	ai.vi.keyName = "some-key"
+	ai.hi.endpoints = testConfig
+
+	whitelistedProjects = []string{"", "project-1", "project-2", "chicken"}
+	whitelistedProjectsCopy := slices.Clone(whitelistedProjects)
+
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+		if method != "DELETE" {
+			t.Errorf("Request has incorrect method\nExpected=DELETE\nReceived=%v", method)
+		}
+		expectedPath := "/whitelist-endpoint/" + vaultService + "/some-key"
+		if ep.path != expectedPath {
+			t.Errorf("Request has incorrect path\nExpected=%v\nReceived=%v", expectedPath, ep.path)
+		}
+
+		owner, ok := query["owner"]
+		if !ok {
+			owner = ""
+		}
+
+		if !slices.Contains(whitelistedProjects, owner) {
+			t.Errorf("Owner %q is not in the slice of whitelisted projects: %q", owner, whitelistedProjects)
+		}
+		whitelistedProjectsCopy = slices.DeleteFunc(whitelistedProjectsCopy, func(pr string) bool {
+			return pr == owner
+		})
+
+		return nil
+	}
+
+	DeleteWhitelistedKeys()
+
+	if len(whitelistedProjectsCopy) > 0 {
+		t.Errorf("The slice of whitelisted projects is not empty after delete: %q", whitelistedProjectsCopy)
+	}
+}
+
+func TestGetPublicKey(t *testing.T) {
 	var tests = []struct {
 		testname, key64 string
 		publicKey       [32]byte

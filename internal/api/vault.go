@@ -55,14 +55,14 @@ var GetHeaderVersions = func(
 ) (BatchHeaderVersions, error) {
 	headers, err := getProjectHeaderVersions(rep, "", MetadataSlice(buckets))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get headers for %s: %w", rep, err)
+		return nil, fmt.Errorf("failed to get header versions for %s: %w", rep, err)
 	}
 
 	for project := range sharedBuckets {
 		logs.Debugf("Fetching headers for %s", project)
 		sharedHeaders, err := getProjectHeaderVersions(rep, project, sharedBuckets[project])
 		if err != nil {
-			logs.Errorf("Failed to get headers for %s: %w", project, err)
+			logs.Errorf("Failed to get header versions for %s: %w", project, err)
 
 			continue
 		}
@@ -134,42 +134,6 @@ var getProjectHeaderVersions = func(rep Repo, project string, buckets Named) (Ba
 	return resp.Data, nil
 }
 
-var whitelistKey = func(query map[string]string) error {
-	body := `{
-		"flavor": "crypt4gh",
-		"pubkey": "%s"
-	}`
-	body = fmt.Sprintf(body, ai.vi.publicKey)
-	ep := ai.hi.endpoints.Vault.Whitelist
-	ep.path += vaultService + "/" + ai.vi.keyName
-
-	return makeRequest("POST", ep, query, nil, strings.NewReader(body), nil)
-}
-
-var DeleteWhitelistedKeys = func() {
-	ep := ai.hi.endpoints.Vault.Whitelist
-	ep.path += vaultService + "/" + ai.vi.keyName
-
-	logs.Debug("Deleting whitelisted keys...")
-
-	for _, pr := range whitelistedProjects {
-		logInsert := ""
-		query := make(map[string]string)
-		if pr != "" {
-			logInsert = " for " + pr
-			query["owner"] = pr
-		}
-
-		if err := makeRequest("DELETE", ep, query, nil, nil, nil); err != nil {
-			logs.Warningf("Could not delete whitelisted key%s: %w", logInsert, err)
-		} else {
-			logs.Debugf("Deleted whitelisted key%s", logInsert)
-		}
-	}
-
-	whitelistedProjects = make([]string, 0)
-}
-
 var GetFileHeader = func(rep Repo, bucket, object, owner string, version int, path string) (string, error) {
 	ep := ai.hi.endpoints.Vault.Headers
 	ep.path += "/" + bucket
@@ -204,6 +168,42 @@ var GetFileHeader = func(rep Repo, bucket, object, owner string, version int, pa
 	}
 
 	return resp.Headers[strconv.Itoa(version)].Header, err
+}
+
+var whitelistKey = func(query map[string]string) error {
+	body := `{
+		"flavor": "crypt4gh",
+		"pubkey": "%s"
+	}`
+	body = fmt.Sprintf(body, ai.vi.publicKey)
+	ep := ai.hi.endpoints.Vault.Whitelist
+	ep.path += vaultService + "/" + ai.vi.keyName
+
+	return makeRequest("POST", ep, query, nil, strings.NewReader(body), nil)
+}
+
+var DeleteWhitelistedKeys = func() {
+	ep := ai.hi.endpoints.Vault.Whitelist
+	ep.path += vaultService + "/" + ai.vi.keyName
+
+	logs.Debug("Deleting whitelisted keys...")
+
+	for _, pr := range whitelistedProjects {
+		logInsert := ""
+		query := make(map[string]string)
+		if pr != "" {
+			logInsert = " for " + pr
+			query["owner"] = pr
+		}
+
+		if err := makeRequest("DELETE", ep, query, nil, nil, nil); err != nil {
+			logs.Warningf("Could not delete whitelisted key%s: %w", logInsert, err)
+		} else {
+			logs.Debugf("Deleted whitelisted key%s", logInsert)
+		}
+	}
+
+	whitelistedProjects = make([]string, 0)
 }
 
 // GetReencryptedHeader is for SD Connect objects that do not have their header in Vault.

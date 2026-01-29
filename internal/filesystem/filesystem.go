@@ -171,7 +171,7 @@ func InitialiseFilesystem() {
 		// This needs to be done before the buckets slice is sorted
 		headers, err := api.GetHeaderVersions(rep, buckets[:ownedBucketsNum], otherBucketSources)
 		if err != nil {
-			logs.Errorf("Failed to retrieve file headers for %s: %s", rep, err.Error())
+			logs.Errorf("Failed to retrieve file header versions for %s: %s", rep, err.Error())
 
 			continue
 		}

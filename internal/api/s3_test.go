@@ -474,12 +474,12 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 <ListAllMyBucketsResult>
    <Buckets>
       <Bucket>
-         <BucketRegion>us-east-1</BucketRegion>
+         <BucketRegion>fega</BucketRegion>
          <CreationDate>2023-11-10T13:39:02.211Z</CreationDate>
          <Name>bucket2000</Name>
       </Bucket>
 	  <Bucket>
-         <BucketRegion>us-east-1</BucketRegion>
+         <BucketRegion>bp</BucketRegion>
          <CreationDate>2023-10-25T08:38:55.107Z</CreationDate>
          <Name>bucket1234</Name>
       </Bucket>
@@ -495,12 +495,12 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 <ListAllMyBucketsResult>
    <Buckets>
       <Bucket>
-         <BucketRegion>us-east-1</BucketRegion>
+         <BucketRegion>sd</BucketRegion>
          <CreationDate>2023-11-10T13:39:02.211Z</CreationDate>
          <Name>bucket42</Name>
       </Bucket>
 	  <Bucket>
-         <BucketRegion>us-east-1</BucketRegion>
+         <BucketRegion>sd</BucketRegion>
          <CreationDate>2023-10-25T08:38:55.107Z</CreationDate>
          <Name>bucket256</Name>
       </Bucket>
@@ -521,10 +521,10 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	expectedBuckets := []Metadata{
-		{Name: "bucket42", Size: 0, LastModified: nil},
-		{Name: "bucket256", Size: 0, LastModified: nil},
-		{Name: "bucket2000", Size: 0, LastModified: nil},
-		{Name: "bucket1234", Size: 0, LastModified: nil},
+		{Name: "bucket42", Owner: "sd", Size: 0, LastModified: nil},
+		{Name: "bucket256", Owner: "sd", Size: 0, LastModified: nil},
+		{Name: "bucket2000", Owner: "fega", Size: 0, LastModified: nil},
+		{Name: "bucket1234", Owner: "bp", Size: 0, LastModified: nil},
 	}
 	t.Cleanup(func() { srv.Close() })
 
