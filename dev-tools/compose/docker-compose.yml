@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: docker.io/docker:29.1
+    image: docker.io/docker:29.2
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
