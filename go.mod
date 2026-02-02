@@ -2,18 +2,18 @@ module sda-filesystem
 
 go 1.24.0
 
-toolchain go1.25.5
+toolchain go1.25.6
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.20.19
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.95.1
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.21.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
 	github.com/aws/smithy-go v1.24.0
-	github.com/dgraph-io/ristretto/v2 v2.3.0
+	github.com/dgraph-io/ristretto/v2 v2.4.0
 	github.com/google/uuid v1.6.0
-	github.com/neicnordic/crypt4gh v1.14.0
-	github.com/sirupsen/logrus v1.9.3
+	github.com/neicnordic/crypt4gh v1.14.1
+	github.com/sirupsen/logrus v1.9.4
 	github.com/wailsapp/wails/v2 v2.11.0
 	github.com/winfsp/cgofuse v1.6.0
 	golang.org/x/crypto v0.47.0
