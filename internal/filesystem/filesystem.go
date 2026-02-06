@@ -67,6 +67,7 @@ type header struct {
 	version int
 	value   string
 	owner   string
+	fileID  string
 }
 
 // goNode is a representation of a file/directory in Go before it is moved to C
@@ -175,7 +176,7 @@ func InitialiseFilesystem() {
 
 			continue
 		}
-		logs.Infof("Retrieved file headers for %s", rep)
+		logs.Infof("Retrieved file header versions for %s", rep)
 
 		buckets, segmentBuckets := separateSegmentBuckets(buckets)
 		numJobs += len(buckets)
@@ -311,12 +312,7 @@ func goNodeToC(node *goNode, name string) C.node_t {
 	cNode.last_modified.tv_sec = 0
 	cNode.last_modified.tv_nsec = 0
 	cNode.offset = -1
-
-	if node.meta.ID != "" {
-		cNode.orig_name = C.CString(node.meta.Name + "&id=" + node.meta.ID)
-	} else {
-		cNode.orig_name = C.CString(node.meta.Name)
-	}
+	cNode.orig_name = C.CString(node.meta.Name)
 
 	if node.meta.LastModified != nil {
 		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
@@ -366,7 +362,7 @@ func addNodeChildrenToC(nodeSlice []C.node_t, prnt *goNode, prntIdx C.int64_t) (
 		if len(chld.children) > 0 {
 			size, modified = addNodeChildrenToC(nodeSlice, chld, i)
 		} else if chld.headerVersion > 0 {
-			fi.headers[ino] = header{version: chld.headerVersion, owner: chld.meta.Owner}
+			fi.headers[ino] = header{version: chld.headerVersion, owner: chld.meta.Owner, fileID: chld.meta.ID}
 		}
 
 		nodeSlice[prntIdx].stat.st_size += size

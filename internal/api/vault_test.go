@@ -291,7 +291,7 @@ func TestGetFileHeader(t *testing.T) {
 				if owner != tt.owner {
 					t.Errorf("Request has incorrect owner\nExpected=%v\nReceived=%v", tt.owner, owner)
 				}
-				svc, ok := query["service"]
+				svc := query["vault_service"]
 				if svc != vaultService {
 					t.Errorf("Request has incorrect service\nExpected=%s\nReceived=%v", vaultService, svc)
 				}
@@ -302,6 +302,10 @@ func TestGetFileHeader(t *testing.T) {
 				object := query["object"]
 				if object != "my-object" {
 					t.Errorf("Request has incorrect key\nExpected=my-object\nReceived=%v", object)
+				}
+				id := query["id"]
+				if id != "my-id" {
+					t.Errorf("Request has incorrect ID\nExpected=my-id\nReceived=%v", id)
 				}
 
 				switch v := ret.(type) {
@@ -326,7 +330,7 @@ func TestGetFileHeader(t *testing.T) {
 				whitelistedProjects = append(whitelistedProjects, tt.owner)
 			}
 
-			header, err := GetFileHeader(SDConnect, "my-bucket", "my-object", tt.owner, tt.version, "")
+			header, err := GetFileHeader(SDConnect, "my-bucket", "my-object", tt.owner, "my-id", tt.version, "")
 
 			switch {
 			case tt.errStr != "":

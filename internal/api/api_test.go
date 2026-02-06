@@ -237,7 +237,7 @@ func TestSetup(t *testing.T) {
 	ai.hi.endpoints = apiEndpoints{}
 	expectedTimeouts := configTimeouts{
 		Default: 10, S3: 18, Vault: struct {
-			Headers int `json:"headers"`
+			Headers int `json:"batch"`
 		}{
 			Headers: 30,
 		},
@@ -362,7 +362,7 @@ func TestSetup_Port(t *testing.T) {
 	os.Unsetenv("OVERRIDE_PROXY_URL")
 	expectedTimeouts := configTimeouts{
 		Default: 10, S3: 18, Vault: struct {
-			Headers int `json:"headers"`
+			Headers int `json:"batch"`
 		}{
 			Headers: 30,
 		},

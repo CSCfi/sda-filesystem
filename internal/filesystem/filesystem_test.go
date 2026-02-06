@@ -73,7 +73,7 @@ var testFuse = `{
 							"modified": "2020-02-13T12:00:00Z",
 							"children": [
 								{
-									"name": "another_file&id=e72b6f25-62df-4a03-bf07-1f0b35a9684e",
+									"name": "another_file",
 									"nameSafe": "another_file",
 									"size": 10,
 									"modified": "2020-02-13T12:00:00Z",
@@ -482,7 +482,7 @@ func TestInitializeFilesystem(t *testing.T) {
 				}, 5, nil
 		case rep2:
 			return []api.Metadata{
-				{Name: "https://my-example.com"},
+				{Name: "https://my-example.com", Owner: "muumi"},
 				{Name: "bad-bucket"},
 				{Name: "bad-bucket_segments"},
 				{Name: "old-bucket"},
@@ -546,7 +546,9 @@ func TestInitializeFilesystem(t *testing.T) {
 			case "https://my-example.com":
 				time1, _ := time.Parse(time.RFC3339, "2025-07-31T23:00:05Z")
 
-				return []api.Metadata{{Size: 5, Name: "tiedosto", LastModified: &time1}}, nil
+				return []api.Metadata{
+					{Size: 5, Name: "tiedosto", LastModified: &time1, ID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e"},
+				}, nil
 			case "old-bucket":
 				time1, _ := time.Parse(time.RFC3339, "2020-02-13T12:00:00Z")
 
@@ -556,7 +558,7 @@ func TestInitializeFilesystem(t *testing.T) {
 					{Size: 1, Name: "dir5/", LastModified: &time1},
 					{Size: 6, Name: "dir+2/dir3.2.1", LastModified: &time1},
 					{Size: 0, Name: "dir+2/logs", LastModified: &time1},
-					{Size: 0, Name: "dir4/another_file", LastModified: &time1, ID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e"},
+					{Size: 0, Name: "dir4/another_file", LastModified: &time1},
 					{Size: 0, Name: "dir4/another_file.c4gh", LastModified: &time1},
 					{Size: 27, Name: "dir4/another+file.c4gh", LastModified: &time1},
 				}, nil
@@ -631,6 +633,23 @@ func TestInitializeFilesystem(t *testing.T) {
 			batch["bucket_2"]["?folder/test"] = 5
 
 			return batch, nil
+		case rep2:
+			expectedBuckets := []string{"https://my-example.com", "bad-bucket", "bad-bucket_segments", "old-bucket", "old-bucket_segments"}
+			result := slices.CompareFunc(buckets, expectedBuckets, func(b1 api.Metadata, b2 string) int {
+				return cmp.Compare(b1.Name, b2)
+			})
+			if result != 0 {
+				t.Errorf("api.GetHeaders() received invalid buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+			}
+			if len(sharedBuckets) != 0 {
+				t.Errorf("api.GetHeaders() received invalid shared buckets: %v", sharedBuckets)
+			}
+
+			batch := make(api.BatchHeaderVersions)
+			batch["https://my-example.com"] = make(map[string]int)
+			batch["https://my-example.com"]["tiedosto"] = 5
+
+			return batch, nil
 		case "Substandard-Repo":
 			return nil, fmt.Errorf("api.GetHeaders() received invalid repository %s", rep)
 		}
@@ -650,7 +669,10 @@ func TestInitializeFilesystem(t *testing.T) {
 	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
-	expectedHeaders := map[_Ctype_ino_t]header{30: {version: 2}, 32: {version: 3}, 35: {version: 5}}
+	expectedHeaders := map[_Ctype_ino_t]header{
+		8:  {version: 5, fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
+		30: {version: 2}, 32: {version: 3}, 35: {version: 5},
+	}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Fatalf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}

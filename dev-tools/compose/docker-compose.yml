@@ -143,7 +143,7 @@ services:
       DB_PWD_SDA_BP: ${DB_PWD_SDA_BP}
       SDAPPLY_CONFIG_BASE: "${SDAPPLY_CONFIG_BASE}"
     healthcheck:
-      test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
+      test: curl --fail "http://127.0.0.1:8082/__virtual/backend/__health" || exit 1
       interval: 10s
       timeout: 10s
       retries: 3
@@ -189,6 +189,7 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/redis/Dockerfile
+    image: krakend-redis
     container_name: krakend-redis
     profiles:
       - krakend

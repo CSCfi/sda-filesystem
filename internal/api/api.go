@@ -94,7 +94,7 @@ type configTimeouts struct {
 	Default int `json:"default"`
 	S3      int `json:"s3"`
 	Vault   struct {
-		Headers int `json:"headers"`
+		Headers int `json:"batch"`
 	}
 }
 

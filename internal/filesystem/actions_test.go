@@ -595,12 +595,15 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 
 		return "", 0, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		if bucket != "bucket_2" {
 			t.Errorf("api.GetFileHeader() received incorrect bucket. Expected=bucket_1, received=%s", bucket)
 		}
 		if object != "?folder/test" {
 			t.Errorf("api.GetFileHeader() received incorrect object. Expected=?folder/test, received=%s", bucket)
+		}
+		if id != "45646746" {
+			t.Errorf("api.GetFileHeader() received incorrect object. Expected=45646746, received=%s", id)
 		}
 		if version != 3 {
 			t.Errorf("api.GetFileHeader() received incorrect version. Expected=3, received=%v", version)
@@ -612,13 +615,13 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 	node := &nodeSlice[35]
 	node.offset = 0
 	node.stat.st_size = 484
-	fi.headers = map[_Ctype_ino_t]header{35: {version: 3}}
+	fi.headers = map[_Ctype_ino_t]header{35: {version: 3, fileID: "45646746"}}
 
 	CheckHeaderExistence(node, node.name) // second argument is only for logs, so is does not matter here what it is
 	if node.offset != 0 {
 		t.Errorf("Node offset incorrect. Expected=0, received=%d", node.offset)
 	}
-	if !reflect.DeepEqual(fi.headers, map[_Ctype_ino_t]header{35: {version: 3, value: "hello"}}) {
+	if !reflect.DeepEqual(fi.headers, map[_Ctype_ino_t]header{35: {version: 3, fileID: "45646746", value: "hello"}}) {
 		t.Errorf("Headers were modified to %v", fi.headers)
 	}
 
@@ -660,7 +663,7 @@ func TestCheckHeaderExistence_BadPath(t *testing.T) {
 
 		return "", 0, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		t.Errorf("api.GetFileHeader() should not be called")
 
 		return "", nil
@@ -714,7 +717,7 @@ func TestCheckHeaderExistence_Reencrypted(t *testing.T) {
 
 		return "i-am-a-header", 58, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		t.Errorf("api.GetFileHeader() should not be called")
 
 		return "", nil
@@ -766,7 +769,7 @@ func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, fmt.Errorf("something happened")
 	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		if rep != rep1 {
 			t.Errorf("api.DownloadData() received incorrect repository. Expected=%v, received=%v", rep1, rep)
 		}
@@ -782,7 +785,7 @@ func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
 
 		return content[startDecrypted:min(endDecrypted, fileSize)], nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		t.Errorf("api.GetFileHeader() should not be called")
 
 		return "", nil
@@ -827,7 +830,7 @@ func TestCheckHeaderExistence_UnknownEncryption(t *testing.T) {
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, fmt.Errorf("something happened")
 	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		if rep != rep1 {
 			t.Errorf("api.DownloadData() received incorrect repository. Expected=%v, received=%v", rep1, rep)
 		}
@@ -845,7 +848,7 @@ func TestCheckHeaderExistence_UnknownEncryption(t *testing.T) {
 
 		return encryptedContent[startDecrypted:min(endDecrypted, fileSize)], nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		t.Errorf("api.GetFileHeader() should not be called")
 
 		return "", nil
@@ -893,12 +896,12 @@ func TestCheckHeaderExistence_HeaderError(t *testing.T) {
 
 		return "", 0, nil
 	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		t.Errorf("api.DownloadData() should not be called")
 
 		return nil, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		return "", errExpected
 	}
 
@@ -941,10 +944,10 @@ func TestCheckHeaderExistence_DownloadError(t *testing.T) {
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, errExpected
 	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
+	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
 		return nil, errExpected
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		t.Errorf("api.GetFileHeader() should not be called")
 
 		return "", nil
@@ -994,7 +997,7 @@ func TestCheckHeaderExistence_TooSmall(t *testing.T) {
 
 		return "i-am-a-header", 124, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 		t.Errorf("api.GetFileHeader() should not be called")
 
 		return "", nil

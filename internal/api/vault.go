@@ -134,15 +134,16 @@ var getProjectHeaderVersions = func(rep Repo, project string, buckets Named) (Ba
 	return resp.Data, nil
 }
 
-var GetFileHeader = func(rep Repo, bucket, object, owner string, version int, path string) (string, error) {
+var GetFileHeader = func(rep Repo, bucket, object, owner, id string, version int, path string) (string, error) {
 	ep := ai.hi.endpoints.Vault.Headers
 	ep.path += "/" + bucket
 
 	logInsert := ""
 	query := map[string]string{
-		"object":  object,
-		"service": vaultService,
-		"key":     ai.vi.keyName,
+		"object":        object,
+		"vault_service": vaultService,
+		"key":           ai.vi.keyName,
+		"id":            id,
 	}
 	if owner != "" {
 		logInsert = " shared project (" + owner + ")"
@@ -224,7 +225,7 @@ var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 	return resp.Header, resp.Offset, err
 }
 
-// PostHeader sends header of an encrypted object to be stored in Vault.
+// PostHeader sends header of an encrypted object to be stored in Vault (only for SD Connect).
 var PostHeader = func(header []byte, bucket, object string) error {
 	body := `{
 		"header": "%s"

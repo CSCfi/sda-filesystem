@@ -521,10 +521,10 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 	ai.proxy = srv.URL
 	expectedBuckets := []Metadata{
-		{Name: "bucket42", Owner: "sd", Size: 0, LastModified: nil},
-		{Name: "bucket256", Owner: "sd", Size: 0, LastModified: nil},
-		{Name: "bucket2000", Owner: "fega", Size: 0, LastModified: nil},
 		{Name: "bucket1234", Owner: "bp", Size: 0, LastModified: nil},
+		{Name: "bucket2000", Owner: "fega", Size: 0, LastModified: nil},
+		{Name: "bucket256", Owner: "sd", Size: 0, LastModified: nil},
+		{Name: "bucket42", Owner: "sd", Size: 0, LastModified: nil},
 	}
 	t.Cleanup(func() { srv.Close() })
 
@@ -532,8 +532,13 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
 	} else if buckets, _, _, err := GetBuckets(SDApply); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
-	} else if !reflect.DeepEqual(buckets, expectedBuckets) {
-		t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+	} else {
+		slices.SortFunc(buckets, func(a, b Metadata) int {
+			return strings.Compare(a.Name, b.Name)
+		})
+		if !reflect.DeepEqual(buckets, expectedBuckets) {
+			t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
+		}
 	}
 }
 
@@ -1260,7 +1265,7 @@ func TestDownloadData(t *testing.T) {
 				}
 			}
 
-			data, err := DownloadData(SDConnect, nodes, "", header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
+			data, err := DownloadData(SDConnect, nodes, "", "", header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1324,7 +1329,7 @@ func TestDownloadData_SDApply(t *testing.T) {
 		cachedIdxs                             []int64
 	}{
 		{
-			"OK_1", "new-object.txt.c4gh&id=8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49",
+			"OK_1", "new-object.txt.c4gh",
 			"new-object.txt.c4gh", "8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49",
 			345, 1000, []int64{0},
 		},
@@ -1382,7 +1387,7 @@ func TestDownloadData_SDApply(t *testing.T) {
 			nodes := append([]string{"new_bucket"}, strings.Split(tt.objectWithID, "/")...)
 			storage.keys = make(map[string][]byte)
 
-			data, err := DownloadData(SDApply, nodes, "", &header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
+			data, err := DownloadData(SDApply, nodes, "", tt.id, &header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1507,7 +1512,7 @@ func TestDownloadData_Error(t *testing.T) {
 			}
 
 			storage.keys = make(map[string][]byte)
-			_, err := DownloadData(SDConnect, nodes, "path", header, 33554000, 33564437, 0, int64(decryptedSize))
+			_, err := DownloadData(SDConnect, nodes, "path", "", header, 33554000, 33564437, 0, int64(decryptedSize))
 			if err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {

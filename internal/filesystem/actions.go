@@ -10,6 +10,7 @@ import "C"
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -319,13 +320,13 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 		bucket = pathNames[3]
 		object = strings.Join(pathNames[4:], "/")
 	} else {
-		bucket = pathNames[2]
+		bucket = base64.RawURLEncoding.EncodeToString([]byte(pathNames[2]))
 		object = strings.Join(pathNames[3:], "/")
 	}
 
 	hdr, ok := fi.headers[node.stat.st_ino]
 	if ok {
-		hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.version, path)
+		hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.fileID, hdr.version, path)
 		if err != nil {
 			logs.Errorf("Failed to retrieve header from Vault for file %s: %v", path, err)
 
@@ -346,7 +347,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 			logs.Warningf("Failed to retrieve possible header for %s: %w", path, err)
 			logs.Infof("Testing if file %s is encrypted with unknown key", path)
 
-			buffer, err := api.DownloadData(rep, pathNames[3:], path, nil,
+			buffer, err := api.DownloadData(rep, pathNames[3:], path, "", nil,
 				0, 2*CipherBlockSize, 0, int64(node.stat.st_size))
 			if err != nil {
 				logs.Errorf("Could not test if file is encrypted: %v", err)
@@ -427,7 +428,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		pathNames = pathNames[2:]
 	}
 
-	data, err := api.DownloadData(rep, pathNames, path, &header.value,
+	data, err := api.DownloadData(rep, pathNames, path, header.fileID, &header.value,
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)
