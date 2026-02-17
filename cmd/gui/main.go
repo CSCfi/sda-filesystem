@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"sda-filesystem/build"
+	wailsbuild "sda-filesystem/build"
 	"sda-filesystem/frontend"
 
 	"github.com/wailsapp/wails/v2"
@@ -39,7 +39,7 @@ func main() {
 		Width:    800,
 		Height:   575,
 		Linux: &linux.Options{
-			Icon:             build.Icon,
+			Icon:             wailsbuild.Icon,
 			WebviewGpuPolicy: linux.WebviewGpuPolicyNever,
 		},
 		DragAndDrop: &options.DragAndDrop{

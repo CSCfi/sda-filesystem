@@ -1,4 +1,4 @@
-package build
+package wailsbuild
 
 import _ "embed"
 

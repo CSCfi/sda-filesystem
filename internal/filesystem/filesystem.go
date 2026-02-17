@@ -136,6 +136,7 @@ func InitialiseFilesystem() {
 	logs.Info("Initializing in-memory Data Gateway database")
 	defer checkPanic()
 
+	//nolint:nlreturn
 	// First get the metadata from S3 and build a tree in Go to represent the filesystem structure
 	root := newGoNode(api.Metadata{Name: "", Size: 0, LastModified: nil}, true)
 
