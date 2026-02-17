@@ -7,6 +7,28 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.2.0] - 2026-02-17
+
+### Added
+
+- redis container in docker compose for KrakenD cache
+
+### Changed
+
+- pull images in docker compose via Artifactory when possible
+- instead of deleting a whitelisted key immediately after request, have the whitelisted keys be valid until Data Gateway is shut down
+- store possible file ID in the `header` struct instead of the object name so it can be used during header retrieval
+- have all timeouts be defined by `configuration.json` from KrakenD
+- do not get actual headers during setup but instead just the latest file versions. Actual file header if fetched before file is opened (#49)
+
+### Removed
+
+- (users) `requestTimeout` argument from CLI
+
+### Fixed
+
+- parsing error response from KrakenD since `json.Unmarshal` does not return an error if there are fields missing from the response
+
 ## [2025.11.4] - 2025-11-26
 
 ### Changed
@@ -393,7 +415,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.11.4...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.2.0...HEAD
+[2026.2.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.11.4...2026.2.0
 [2025.11.4]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.3...2025.11.4
 [2025.7.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.2...2025.7.3
 [2025.7.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.1...2025.7.2
