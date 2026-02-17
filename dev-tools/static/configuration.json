@@ -1,6 +1,11 @@
 {
     "timeouts": {
-        "s3": 60
+        "default": 10,
+        "s3": 60,
+        "sdsi": 80,
+        "vault": {
+            "batch": 60
+        }
     },
     "endpoints": {
         "profile": "/profile",

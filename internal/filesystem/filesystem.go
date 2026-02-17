@@ -27,7 +27,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -49,7 +48,7 @@ var fi = fuseInfo{}
 // fuseInfo stores variables relevant to the filesystem
 type fuseInfo struct {
 	mount   string
-	headers map[C.ino_t]string
+	headers map[C.ino_t]header
 	nodes   *C.nodes_t
 	ready   chan<- any
 	guiFun  func(api.Repo, string, int)
@@ -59,22 +58,29 @@ type fuseInfo struct {
 // bucketInfo is a packet of information sent through a channel to createObjects()
 type bucketInfo struct {
 	path       string
-	headers    map[string]api.VaultHeaderVersions
+	headers    map[string]int
 	bucketNode *goNode
 	segmented  bool
 }
 
+type header struct {
+	version int
+	value   string
+	owner   string
+	fileID  string
+}
+
 // goNode is a representation of a file/directory in Go before it is moved to C
 type goNode struct {
-	meta     api.Metadata
-	header   string
-	children map[string]*goNode
+	meta          api.Metadata
+	headerVersion int
+	children      map[string]*goNode
 }
 
 type metadata struct {
 	api.Metadata
-	header      string
-	segmentSize int64
+	headerVersion int
+	segmentSize   int64
 }
 
 // SetSignalBridge initializes the signal which informs Wails that program has paniced
@@ -142,7 +148,7 @@ func InitialiseFilesystem() {
 
 	numJobs := 0
 	bucketNodes := make(map[string]map[string]*goNode)
-	batchHeaders := make(map[string]api.BatchHeaders)
+	batchHeaders := make(map[string]api.BatchHeaderVersions)
 	repositories := api.GetRepositories()
 
 	for _, rep := range repositories {
@@ -164,13 +170,13 @@ func InitialiseFilesystem() {
 		}
 		// Fetching headers
 		// This needs to be done before the buckets slice is sorted
-		headers, err := api.GetHeaders(rep, buckets[:ownedBucketsNum], otherBucketSources)
+		headers, err := api.GetHeaderVersions(rep, buckets[:ownedBucketsNum], otherBucketSources)
 		if err != nil {
-			logs.Errorf("Failed to retrieve file headers for %s: %s", rep, err.Error())
+			logs.Errorf("Failed to retrieve file header versions for %s: %s", rep, err.Error())
 
 			continue
 		}
-		logs.Infof("Retrieved file headers for %s", rep)
+		logs.Infof("Retrieved file header versions for %s", rep)
 
 		buckets, segmentBuckets := separateSegmentBuckets(buckets)
 		numJobs += len(buckets)
@@ -249,7 +255,7 @@ func InitialiseFilesystem() {
 
 	// Construct the array of nodes for C
 	num, objs := numberOfNodes(root)
-	fi.headers = make(map[C.ino_t]string, objs)
+	fi.headers = make(map[C.ino_t]header, objs)
 	fi.nodes.nodes = allocateNodeList(num)
 	fi.nodes.count = 1
 	nodeSlice := unsafe.Slice(fi.nodes.nodes, num)
@@ -306,12 +312,7 @@ func goNodeToC(node *goNode, name string) C.node_t {
 	cNode.last_modified.tv_sec = 0
 	cNode.last_modified.tv_nsec = 0
 	cNode.offset = -1
-
-	if node.meta.ID != "" {
-		cNode.orig_name = C.CString(node.meta.Name + "&id=" + node.meta.ID)
-	} else {
-		cNode.orig_name = C.CString(node.meta.Name)
-	}
+	cNode.orig_name = C.CString(node.meta.Name)
 
 	if node.meta.LastModified != nil {
 		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
@@ -360,8 +361,8 @@ func addNodeChildrenToC(nodeSlice []C.node_t, prnt *goNode, prntIdx C.int64_t) (
 
 		if len(chld.children) > 0 {
 			size, modified = addNodeChildrenToC(nodeSlice, chld, i)
-		} else if chld.header != "" {
-			fi.headers[ino] = chld.header
+		} else if chld.headerVersion > 0 {
+			fi.headers[ino] = header{version: chld.headerVersion, owner: chld.meta.Owner, fileID: chld.meta.ID}
 		}
 
 		nodeSlice[prntIdx].stat.st_size += size
@@ -409,12 +410,8 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 				continue
 			}
 
-			header := ""
-			versions, ok := headers[objects[i].Name]
-			if ok {
-				header = versions.Headers[strconv.Itoa(versions.LatestVersion)].Header
-			}
-			meta = append(meta, metadata{objects[i], header, segmentSizes[objects[i].Name]})
+			objects[i].Owner = j.bucketNode.meta.Owner
+			meta = append(meta, metadata{objects[i], headers[objects[i].Name], segmentSizes[objects[i].Name]})
 		}
 
 		createLevel(node, meta, path)
@@ -455,7 +452,7 @@ func createLevel(prnt *goNode, meta []metadata, prntPath string) {
 			logs.Debugf("Creating file %s", filepath.FromSlash(prntPath+"/"+meta[i].Name))
 			objectSafe := makeNode(prnt.children, meta[i].Metadata, false, prntPath)
 
-			prnt.children[objectSafe].header = meta[i].header
+			prnt.children[objectSafe].headerVersion = meta[i].headerVersion
 			if prnt.children[objectSafe].meta.Size == 0 {
 				prnt.children[objectSafe].meta.Size = meta[i].segmentSize
 			}
@@ -527,7 +524,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSa
 }
 
 func newGoNode(meta api.Metadata, isDir bool) *goNode {
-	node := goNode{meta, "", nil}
+	node := goNode{meta, 0, nil}
 	if isDir {
 		node.children = make(map[string]*goNode)
 	}

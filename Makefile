@@ -146,8 +146,12 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,VALIDATOR_ADDR,internal-urls,test-krakend-backend) \
 	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta) \
 	$(call write_secret,CLAMAV_MIRROR,internal-urls,test-clamav) \
-	$(call write_secret,DB_STRING_SHARING,krakend/db,sharing) \
-	$(call write_secret,DB_STRING_SDA_FEGA,krakend/db,sda) \
+	$(call write_secret,DB_STRING_GUACAMOLE,krakend/db,guac_conn) \
+	$(call write_secret,DB_STRING_SHARING,krakend/db,sharing_conn) \
+	$(call write_secret,DB_STRING_SDA_FEGA,krakend/db,sda_conn) \
+	$(call write_secret,DB_PWD_GUACAMOLE,krakend/db,guac_pwd) \
+	$(call write_secret,DB_PWD_SHARING,krakend/db,sharing_pwd) \
+	$(call write_secret,DB_PWD_SDA_FEGA,krakend/db,sda_pwd) \
 	$(call write_secret,SDAPPLY_ACCESS,krakend/sdapply,access) \
 	$(call write_secret,SDAPPLY_SECRET,krakend/sdapply,secret) \
 	$(call write_secret,BIGPICTURE_ACCESS,krakend/bigpicture,access) \

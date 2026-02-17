@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"maps"
 	"math"
 	"net/http"
 	"slices"
@@ -42,6 +41,7 @@ const CipherBlockSize = BlockSize + MacSize
 // Metadata standardises the metadata received for both buckets and objects
 type Metadata struct {
 	Name         string
+	Owner        string
 	ID           string
 	Size         int64
 	LastModified *time.Time
@@ -83,6 +83,7 @@ func (s SharedBucketsMeta) GetNames() iter.Seq[string] {
 type resolverV2 struct{}
 type EndpointKey struct{}   // custom key for checking context value when resolving endpoint
 type RepositoryKey struct{} // custom key for checking which respository the call is for
+type FileIDKey struct{}     // custom key for adding id query parameter to SD Apply requests
 
 // ResolveEndpoint adds a prefix to the s3 endpoint based on the value in context.
 // This enables us to to use the same s3 client to call both SD Connect and SD Apply endpoints.
@@ -151,21 +152,12 @@ var objectToQuery = middleware.SerializeMiddlewareFunc("objectToQuery", func(
 
 	if key != "" {
 		req := in.Request.(*smithyhttp.Request)
+
 		q := req.URL.Query()
-
-		// Filesystem saved the file ID in the object's actual name in the format `<object>&id=<id>`.
-		if r := ctx.Value(RepositoryKey{}); r != nil { // <- SD Apply
-			parts := strings.Split(key, "&id=")
-			if len(parts) > 1 {
-				id := parts[len(parts)-1] // ID is at the end (unlikely that there actually would ever be another `&id=` in the object name, but you never know)
-				if uuid.Validate(id) == nil {
-					q.Add("id", id)
-					key = strings.TrimSuffix(key, "&id="+id)
-				}
-			}
-		}
-
 		q.Add("object", key)
+		if id := ctx.Value(FileIDKey{}); id != nil { // <- SD Apply file ID
+			q.Add("id", id.(string))
+		}
 		req.URL.RawQuery = q.Encode()
 	}
 
@@ -218,7 +210,7 @@ var initialiseS3Client = func() error {
 
 	httpClient := &http.Client{
 		Transport: tr,
-		Timeout:   time.Second * time.Duration(ai.hi.s3Timeout),
+		Timeout:   time.Second * time.Duration(ai.hi.endpoints.S3.Default.timeout),
 	}
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -258,10 +250,10 @@ var initialiseS3Client = func() error {
 	return nil
 }
 
-func getContext(rep Repo, head bool, parent ...context.Context) context.Context {
-	endpoint := ai.hi.endpoints.S3.Default
+func getContext(rep Repo, head bool, id string, parent ...context.Context) context.Context {
+	endpoint := ai.hi.endpoints.S3.Default.path
 	if head {
-		endpoint = ai.hi.endpoints.S3.Head
+		endpoint = ai.hi.endpoints.S3.Head.path
 	}
 
 	ctx := context.Background()
@@ -272,13 +264,16 @@ func getContext(rep Repo, head bool, parent ...context.Context) context.Context 
 		var once sync.Once
 		ctx = context.WithValue(ctx, RepositoryKey{}, &once)
 	}
+	if id != "" {
+		ctx = context.WithValue(ctx, FileIDKey{}, id)
+	}
 
 	return context.WithValue(ctx, EndpointKey{}, endpoint+rep.ForURL())
 }
 
 // BucketExists checks whether or not bucket already exists in S3 storage
 var BucketExists = func(rep Repo, bucket string) (bool, error) {
-	ctx := getContext(rep, true)
+	ctx := getContext(rep, true, "")
 
 	_, err := ai.hi.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucket),
@@ -305,7 +300,7 @@ var BucketExists = func(rep Repo, bucket string) (bool, error) {
 
 // CreateBucket creates bucket and waits for it to be ready for subsequent requests
 var CreateBucket = func(rep Repo, bucket string) error {
-	ctx := getContext(rep, false)
+	ctx := getContext(rep, false, "")
 
 	_, err := ai.hi.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucket),
@@ -319,7 +314,7 @@ var CreateBucket = func(rep Repo, bucket string) error {
 		return fmt.Errorf("could not create bucket %s: %w", bucket, err)
 	}
 
-	ctx = getContext(rep, true)
+	ctx = getContext(rep, true, "")
 	err = s3.NewBucketExistsWaiter(ai.hi.s3Client).Wait(
 		ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, time.Minute)
 	if err != nil {
@@ -342,7 +337,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 		o.Limit = 1000 // Allas does not currently support this and returns all buckets in one request
 	})
 
-	ctx := getContext(rep, false)
+	ctx := getContext(rep, false, "")
 
 	var buckets []types.Bucket
 	for paginator.HasMorePages() {
@@ -372,7 +367,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 			sharedMap[service] = append(sharedMap[service], *buckets[i].Name)
 		} else {
 			// Size and modification time of bucket will be calculated later based on the objects it contains
-			meta = append(meta, Metadata{*buckets[i].Name, "", 0, nil})
+			meta = append(meta, Metadata{*buckets[i].Name, "", "", 0, nil})
 		}
 	}
 
@@ -394,11 +389,12 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 		return nil, nil, 0, fmt.Errorf("no buckets found for %s", rep)
 	}
 
-	sharedBuckets := slices.Concat(slices.Collect(maps.Values(sharedMap))...)
-	meta = slices.Grow(meta, len(sharedBuckets))
+	for owner := range sharedMap {
+		meta = slices.Grow(meta, len(sharedMap[owner]))
 
-	for i := range sharedBuckets {
-		meta = append(meta, Metadata{sharedBuckets[i], "", 0, nil})
+		for _, sharedBucket := range sharedMap[owner] {
+			meta = append(meta, Metadata{sharedBucket, owner, "", 0, nil})
+		}
 	}
 
 	return meta, sharedMap, numBuckets, nil
@@ -445,7 +441,7 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 		o.Limit = 10000
 	})
 
-	ctx := getContext(rep, false)
+	ctx := getContext(rep, false, "")
 
 	var objects []types.Object
 	for paginator.HasMorePages() {
@@ -469,7 +465,7 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 
 	meta := make([]Metadata, len(objects))
 	for i := range meta {
-		meta[i] = Metadata{*objects[i].Key, "", *objects[i].Size, objects[i].LastModified}
+		meta[i] = Metadata{*objects[i].Key, "", "", *objects[i].Size, objects[i].LastModified}
 
 		if rep == SDApply && objects[i].Owner != nil {
 			// The file ID from the database is sent as the Owner ID.
@@ -486,8 +482,8 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 // DownloadData requests data between range [startDecrypted, endDecrypted).
 // As we want to split the data into chunks at consistent locations,
 // the requested byte interval may encompass one or two data chunks.
-var DownloadData = func(rep Repo, nodes []string, path string, header *string,
-	startDecrypted, endDecrypted, oldOffset, fileSize int64,
+var DownloadData = func(rep Repo, nodes []string, path, fileID string,
+	header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	endDecrypted = min(endDecrypted, fileSize)
 
@@ -495,14 +491,14 @@ var DownloadData = func(rep Repo, nodes []string, path string, header *string,
 	chunkEnd := (endDecrypted - 1) / chunkSize
 
 	maxEnd := min((chunkStart+1)*chunkSize, endDecrypted)
-	data, err := getDataChunk(rep, nodes, path, header,
+	data, err := getDataChunk(rep, nodes, path, fileID, header,
 		chunkStart, startDecrypted, maxEnd, oldOffset, fileSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get data chunk: %w", err)
 	}
 
 	if chunkStart != chunkEnd {
-		moreData, err := getDataChunk(rep, nodes, path, header,
+		moreData, err := getDataChunk(rep, nodes, path, fileID, header,
 			chunkEnd, chunkEnd*chunkSize, endDecrypted, oldOffset, fileSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get second data chunk: %w", err)
@@ -522,7 +518,7 @@ func CalculateEncryptedSize(decryptedSize int64) int64 {
 }
 
 func getDataChunk(
-	rep Repo, nodes []string, path string, header *string,
+	rep Repo, nodes []string, path, fileID string, header *string,
 	chunk, startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	// start coordinate of chunk
@@ -565,7 +561,7 @@ func getDataChunk(
 	bucket := nodes[0]
 	object := strings.Join(nodes[1:], "/")
 
-	ctx := getContext(rep, false)
+	ctx := getContext(rep, false, fileID)
 
 	resp, err := ai.hi.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -632,7 +628,7 @@ var UploadObject = func(
 		o.Concurrency = 1
 	})
 
-	ctx = getContext(rep, false, ctx)
+	ctx = getContext(rep, false, "", ctx)
 
 	_, err := uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		ContentType: aws.String("application/octet-stream"),
@@ -668,7 +664,7 @@ var DeleteObject = func(rep Repo, bucket, object string) error {
 		Key:    aws.String(object),
 	}
 
-	ctx := getContext(rep, false)
+	ctx := getContext(rep, false, "")
 
 	_, err := ai.hi.s3Client.DeleteObject(ctx, params)
 	if err != nil {

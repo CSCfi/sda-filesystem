@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: docker.io/docker:29.2
+    image: ${ARTIFACTORY_SERVER}/docker:29.2
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -55,7 +55,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: docker.io/hashicorp/vault:1.21.3
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.2
     container_name: vault
     env_file:
       - .env.keystone
@@ -86,7 +86,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: docker.io/hashicorp/vault:1.21.3
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.2
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
@@ -100,7 +100,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2025.11.5"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.2.0"
     container_name: krakend
     env_file:
       - path: .env
@@ -124,6 +124,7 @@ services:
       VAULT_ROLE: "${VAULT_ROLE}"
       ARTIFACTORY_SERVER: "https://${ARTIFACTORY_SERVER}"
       DB_STRING_SHARING: "${DB_STRING_SHARING}"
+      DB_PWD_SHARING: "${DB_PWD_SHARING}"
       SDAPPLY_PROJECT: ${SDAPPLY_PROJECT}
       BIGPICTURE_PROJECT: ${BIGPICTURE_PROJECT}
       FEGA_BUCKET: ${FEGA_BUCKET}
@@ -138,9 +139,11 @@ services:
       BIGPICTURE_SECRET: "${BIGPICTURE_SECRET}"
       DB_STRING_SDA_FEGA: ${DB_STRING_SDA_FEGA}
       DB_STRING_SDA_BP: ${DB_STRING_SDA_BP}
+      DB_PWD_SDA_FEGA: ${DB_PWD_SDA_FEGA}
+      DB_PWD_SDA_BP: ${DB_PWD_SDA_BP}
       SDAPPLY_CONFIG_BASE: "${SDAPPLY_CONFIG_BASE}"
     healthcheck:
-      test: curl --fail "http://127.0.0.1:8082/__health" || exit 1
+      test: curl --fail "http://127.0.0.1:8082/__virtual/backend/__health" || exit 1
       interval: 10s
       timeout: 10s
       retries: 3
@@ -156,7 +159,7 @@ services:
     ports:
       - 8082:8082
   krakend-db:
-    image: docker.io/postgres:18-alpine
+    image: ${ARTIFACTORY_SERVER}/postgres:18-alpine
     container_name: krakend-db
     env_file:
       - .env.krakend
@@ -180,6 +183,14 @@ services:
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
+    profiles:
+      - krakend
+  krakend-redis:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/redis/Dockerfile
+    image: krakend-redis
+    container_name: krakend-redis
     profiles:
       - krakend
 
@@ -227,7 +238,7 @@ services:
       - 3310:3310
 
   terminal-proxy:
-    image: docker.io/nginx:1.29
+    image: ${ARTIFACTORY_SERVER}/nginx:1.29
     container_name: terminal-proxy
     environment:
       KRAKEND_ADDR: "${KRAKEND_ADDR}"

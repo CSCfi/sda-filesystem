@@ -10,6 +10,7 @@ import "C"
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -111,8 +112,9 @@ func updateParentTimestamps(node *C.node_t) {
 
 // UnmountFilesystem unmounts fuse, which automatically frees memory in C
 func UnmountFilesystem() {
-	fi.mu.RLock()
-	defer fi.mu.RUnlock()
+	fi.mu.Lock()
+	api.DeleteWhitelistedKeys()
+	fi.mu.Unlock()
 
 	err := mountpoint.Unmount(fi.mount)
 	if err != nil {
@@ -219,7 +221,7 @@ func ClearPath(path string) error {
 		projectBuckets = nil
 		sharedBuckets[ownerProject] = api.SharedBucketsMeta{bucket}
 	}
-	batchHeaders, err := api.GetHeaders(rep, projectBuckets, sharedBuckets)
+	batchHeaders, err := api.GetHeaderVersions(rep, projectBuckets, sharedBuckets)
 	if err != nil {
 		return fmt.Errorf("failed to get headers for bucket %s: %w", bucket, err)
 	}
@@ -242,12 +244,11 @@ func ClearPath(path string) error {
 
 	objMap := make(map[string]metadata, len(objects))
 	for i := range objects {
-		header := ""
-		versions, ok := batchHeaders[bucket][objects[i].Name]
-		if ok {
-			header = versions.Headers[strconv.Itoa(versions.LatestVersion)].Header
+		objMap[bucket+"/"+objects[i].Name] = metadata{
+			objects[i],
+			batchHeaders[bucket][objects[i].Name],
+			segmentSizes[objects[i].Name],
 		}
-		objMap[bucket+"/"+objects[i].Name] = metadata{objects[i], header, segmentSizes[objects[i].Name]}
 	}
 
 	oldSize := node.stat.st_size
@@ -268,8 +269,8 @@ func clearNode(node *C.node_t, pathNodes []string, meta map[string]metadata) (C.
 		if ok {
 			node.offset = -1
 			delete(fi.headers, node.stat.st_ino)
-			if obj.header != "" {
-				fi.headers[node.stat.st_ino] = obj.header
+			if obj.headerVersion > 0 {
+				fi.headers[node.stat.st_ino] = header{version: obj.headerVersion, owner: obj.Owner}
 			}
 			if obj.Size == 0 {
 				node.stat.st_size = C.off_t(obj.segmentSize)
@@ -296,8 +297,8 @@ func clearNode(node *C.node_t, pathNodes []string, meta map[string]metadata) (C.
 }
 
 // CheckHeaderExistence tries to confirm the existence of a header for object represented by `node`.
-// If the header is not found in the collection of headers retreived from vault, the header is
-// still attached to the file in object storage.
+// If the header is not found in the collection of headers retrieved from vault, the header is
+// still a part of the file in object storage.
 // The object's size is also updated to from encrypted size to decrypted size.
 //
 //export CheckHeaderExistence
@@ -305,31 +306,48 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	path := C.GoString(cpath)
 	logs.Debugf("Checking existence of header for object %s", path)
 
-	header, ok := fi.headers[node.stat.st_ino]
-	if !ok {
-		pathNames := getNodePathNames(node)
-		rep := api.Repo(pathNames[1])
+	pathNames := getNodePathNames(node)
+	rep := api.Repo(pathNames[1])
+	if (rep == api.SDApply && len(pathNames) < 4) ||
+		(rep == api.SDConnect && len(pathNames) < 5) {
+		logs.Errorf("Path %s is too short for an object", path)
 
-		if len(pathNames) > 1 && rep != api.SDConnect {
+		return
+	}
+
+	var bucket, object string
+	if rep == api.SDConnect {
+		bucket = pathNames[3]
+		object = strings.Join(pathNames[4:], "/")
+	} else {
+		bucket = base64.RawURLEncoding.EncodeToString([]byte(pathNames[2]))
+		object = strings.Join(pathNames[3:], "/")
+	}
+
+	hdr, ok := fi.headers[node.stat.st_ino]
+	if ok {
+		hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.fileID, hdr.version, path)
+		if err != nil {
+			logs.Errorf("Failed to retrieve header from Vault for file %s: %v", path, err)
+
+			return
+		}
+		hdr.value = hdrValue
+		fi.headers[node.stat.st_ino] = hdr
+		logs.Debugf("Header found for object %s", path)
+	} else {
+		if rep != api.SDConnect {
 			logs.Errorf("Object %s has no header", path)
 
 			return
 		}
-		if len(pathNames) < 5 {
-			logs.Errorf("Path %s is too short for an object", path)
 
-			return
-		}
-
-		var err error
-		var offset int64
-		object := strings.Join(pathNames[4:], "/")
-		header, offset, err = api.GetReencryptedHeader(pathNames[3], object)
+		hdrValue, offset, err := api.GetReencryptedHeader(bucket, object)
 		if err != nil {
 			logs.Warningf("Failed to retrieve possible header for %s: %w", path, err)
 			logs.Infof("Testing if file %s is encrypted with unknown key", path)
 
-			buffer, err := api.DownloadData(rep, pathNames[3:], path, nil,
+			buffer, err := api.DownloadData(rep, pathNames[3:], path, "", nil,
 				0, 2*CipherBlockSize, 0, int64(node.stat.st_size))
 			if err != nil {
 				logs.Errorf("Could not test if file is encrypted: %v", err)
@@ -337,7 +355,7 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 				return
 			}
 			if _, err = headers.ReadHeader(bytes.NewReader(buffer)); err == nil {
-				fi.headers[node.stat.st_ino] = ""
+				fi.headers[node.stat.st_ino] = header{}
 				logs.Infof("File %s is encrypted", path)
 			} else {
 				logs.Warningf("File %s is not encrypted", path)
@@ -347,16 +365,15 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 		}
 
 		logs.Debugf("Re-encrypted header found for object %s", path)
-		fi.headers[node.stat.st_ino] = header
+		hdr.value = hdrValue
+		fi.headers[node.stat.st_ino] = hdr
 		node.offset = C.int64_t(offset)
-	} else {
-		logs.Debugf("Header found for object %s", path)
 	}
 
-	if header != "" {
+	if hdr.value != "" {
 		bodySize := node.stat.st_size - node.offset
 		if bodySize < 0 {
-			logs.Errorf("File %s is too small (%d bytes) for its header size (%d bytes)", path, bodySize, len(header))
+			logs.Errorf("File %s is too small (%d bytes) for its header size (%d bytes)", path, bodySize, len(hdr.value))
 
 			return
 		}
@@ -411,7 +428,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		pathNames = pathNames[2:]
 	}
 
-	data, err := api.DownloadData(rep, pathNames, path, &header,
+	data, err := api.DownloadData(rep, pathNames, path, header.fileID, &header.value,
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)
