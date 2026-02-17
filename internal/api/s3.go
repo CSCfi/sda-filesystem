@@ -21,7 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
@@ -627,15 +627,14 @@ var UploadObject = func(
 	segmentSize int64,
 	metadata map[string]string,
 ) error {
-	uploader := manager.NewUploader(ai.hi.s3Client, func(u *manager.Uploader) {
-		u.PartSize = segmentSize
-		u.LeavePartsOnError = false
-		u.Concurrency = 1
+	uploader := transfermanager.New(ai.hi.s3Client, func(o *transfermanager.Options) {
+		o.PartSizeBytes = segmentSize
+		o.Concurrency = 1
 	})
 
 	ctx = getContext(rep, false, ctx)
 
-	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+	_, err := uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		ContentType: aws.String("application/octet-stream"),
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(object),
