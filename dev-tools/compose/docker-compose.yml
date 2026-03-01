@@ -55,7 +55,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.2
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.3
     container_name: vault
     env_file:
       - .env.keystone
@@ -86,7 +86,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.2
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.3
     entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
     env_file:
@@ -100,7 +100,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.2.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.2.1"
     container_name: krakend
     env_file:
       - path: .env
