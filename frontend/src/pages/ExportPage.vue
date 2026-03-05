@@ -160,7 +160,7 @@ watch(() => pageIdx.value, (newPage: number) => {
 
 watch(() => selectedEmail.value, () => {
   validEmail.value = true;
-})
+});
 
 watch(() => bucketQuery.value, (query: string) => {
   if (debounceTimer) {
@@ -278,7 +278,7 @@ function exportFiles() {
     metadata = {
       "journal_number": selectedJournalNumber.value,
       "author_email":   parsedEmail.value,
-    }
+    };
   }
   ExportFiles(selectedSet.value, !uniqueBucket.value, metadata).then(() => {
     pageIdx.value = 4;
