@@ -20,6 +20,11 @@
             "project_key": "/desktop/project-key",
             "headers": "/desktop/file-headers",
             "whitelist": "/desktop/whitelist/"
+        },
+        "binaries": {
+            "list": "/download/binaries",
+            "download": "/download/<binary>",
+            "versions": "/download/<binary>/versions"
         }
     }
 }

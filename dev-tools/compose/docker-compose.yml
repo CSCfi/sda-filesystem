@@ -87,8 +87,8 @@ services:
       - keystone
   vault-setup:
     image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.3
-    entrypoint: /vault/helpers/setup.sh
     container_name: vault-setup
+    entrypoint: /vault/helpers/setup.sh
     env_file:
       - .env.keystone
     volumes:
@@ -100,14 +100,15 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.2.1"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.3.0"
     container_name: krakend
     env_file:
       - path: .env
       - path: .env.krakend
     environment: # These are envs that either have a different name or have a different value if keystone is also running
       API_KEY: "${KRAKEND_API_KEY}"
-      KRAKEND_ADDR: "${VALIDATOR_ADDR}"
+      KRAKEND_ADDR: "${KRAKEND_ADDR}"
+      AAI_AUDIENCE: "${AAI_AUDIENCE}"
       AAI_BASE_URL: "${AAI_BASE_URL}"
       KEYSTONE_BASE_URL: "${KEYSTONE_BASE_URL}"
       S3_HOST: "${S3_HOST}"
@@ -159,7 +160,7 @@ services:
     ports:
       - 8082:8082
   krakend-db:
-    image: ${ARTIFACTORY_SERVER}/postgres:18-alpine
+    image: ${ARTIFACTORY_SERVER}/postgres:18-alpine3.22
     container_name: krakend-db
     env_file:
       - .env.krakend
