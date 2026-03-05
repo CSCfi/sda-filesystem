@@ -143,7 +143,7 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,FINDATA_ACCESS,krakend/findata,access) \
 	$(call write_secret,FINDATA_SECRET,krakend/findata,secret) \
 	$(call write_secret,KRAKEND_ADDR,internal-urls,test-krakend-backend) \
-	$(call write_secret,VALIDATOR_ADDR,internal-urls,test-krakend-backend) \
+	$(call write_secret,AAI_AUDIENCE,internal-urls,test-krakend-backend) \
 	$(call write_secret,KEYSTONE_BASE_URL,internal-urls,test-pouta) \
 	$(call write_secret,CLAMAV_MIRROR,internal-urls,test-clamav) \
 	$(call write_secret,DB_STRING_GUACAMOLE,krakend/db,guac_conn) \
