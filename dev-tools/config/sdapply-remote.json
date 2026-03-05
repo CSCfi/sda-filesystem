@@ -17,7 +17,7 @@
       "jku": "${SDAPPLY_ISSUER_JKU}",
       "services": {
         "sd": "",
-        "fega": "^EGA*"
+        "fega": "^EGA"
       }
     }
   ]
