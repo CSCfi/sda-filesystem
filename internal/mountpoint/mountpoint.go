@@ -83,7 +83,7 @@ var Unmount = func(mount string) error {
 	}
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("unmounting filesystem failed: %w", err)
+		return fmt.Errorf("unmounting filesystem failed, ensure you do not have anything open under %s: %w", mount, err)
 	}
 
 	return nil
