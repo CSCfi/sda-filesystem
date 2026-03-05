@@ -94,9 +94,9 @@ gui: wails_update ## Run GUI version of filesystem on your own computer
 	@export $$($(MAKE) envs); \
 	trap 'exit 0' INT; cd cmd/gui; \
 	if [ $(IS_UBUNTU_24_04) = true ]; then \
-		wails dev -race -tags webkit2_41; \
+		wails dev -tags webkit2_41; \
 	else \
-		wails dev -race; \
+		wails dev; \
 	fi
 
 gui_build: wails_update ## Compile a production-ready GUI binary and save it in build/bin
@@ -106,7 +106,11 @@ gui_prod: ## Build and run a production-ready GUI binary
 	@$(MAKE) gui_build
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$($(MAKE) envs); \
-	./build/bin/data-gateway
+	if [ "${UNAME}" = "Darwin" ]; then \
+		./build/bin/data-gateway.app/Contents/MacOS/data-gateway; \
+	else \
+		./build/bin/data-gateway; \
+	fi
 
 wails_update: ## Update Wails version to match go.mod
 	@wails_cli_version=$$(wails version | head -n 1); \
