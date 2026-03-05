@@ -147,6 +147,10 @@ func (a *App) monitorScans(ch <-chan bool) {
 	}
 }
 
+func (a *App) UpdateRepositorySelection(selected map[string]bool) {
+	api.SetRepositories(selected)
+}
+
 func (a *App) ChangeMountPoint() (string, error) {
 	home, _ := os.UserHomeDir()
 	options := wailsruntime.OpenDialogOptions{DefaultDirectory: home, CanCreateDirectories: true}

@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.2
 	github.com/aws/smithy-go v1.24.2
 	github.com/dgraph-io/ristretto/v2 v2.4.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/neicnordic/crypt4gh v1.14.2
 	github.com/sirupsen/logrus v1.9.4

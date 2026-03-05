@@ -30,6 +30,8 @@ export function RefreshFuse():Promise<void>;
 
 export function SelectFiles():Promise<Array<string>>;
 
+export function UpdateRepositorySelection(arg1:Record<string, boolean>):Promise<void>;
+
 export function ValidateEmail(arg1:string):Promise<string>;
 
 export function WalkDirs(arg1:Array<string>,arg2:Array<string>,arg3:string):Promise<airlock.UploadSet>;
