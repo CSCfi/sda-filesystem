@@ -396,7 +396,7 @@ func GetAllRepositories() []Repo {
 	return []Repo{SDConnect, SDApply}
 }
 
-// SetRepositories defines the list of repositories the user can access based on the user's selection (only used in GUI)
+// SetRepositories defines the list of repositories the user can access based on the user's selection
 var SetRepositories = func(selected map[string]bool) {
 	ai.repositories = make([]Repo, 0)
 	for key := range selected {
