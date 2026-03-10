@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Mock SDS-AAI"""
 
-import json
 import logging
 from os import getenv, environ
 from time import time
 from typing import Tuple
-from ast import literal_eval as make_tuple
 
 from aiohttp import web, ClientSession
 from authlib.jose import RSAKey, jwt
@@ -39,7 +37,7 @@ def get_desktop_token() -> str:
     access_token = {
         "sub": "desktop",
         "iss": mock_auth_url_docker,
-        "aud": environ.get("AAI_RESOURCE"),
+        "aud": environ.get("AAI_AUDIENCE"),
         "auth_time": iat,
         "exp": exp,
         "iat": iat,

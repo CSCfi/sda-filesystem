@@ -23,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -448,13 +449,15 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 		output, err := paginator.NextPage(ctx)
 
 		if err != nil {
+			var ae smithy.APIError
+			if errors.As(err, &ae) {
+				if ae.ErrorCode() == "InvalidBucketName" {
+					return nil, fmt.Errorf("bucket name %q is not S3 compatible", bucket)
+				}
+			}
 			var re *smithyhttp.ResponseError
 			if errors.As(err, &re) {
-				if re.HTTPStatusCode() == 400 {
-					err = fmt.Errorf("bad request: bucket name %q may not be S3 compatible", bucket)
-				} else {
-					err = re.Err
-				}
+				err = re.Err
 			}
 
 			return nil, err

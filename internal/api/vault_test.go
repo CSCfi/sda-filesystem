@@ -319,7 +319,7 @@ func TestGetFileHeader(t *testing.T) {
 				}
 			}
 			whitelisted := false
-			whitelistKey = func(query map[string]string) error {
+			whitelistKey = func(_ string) error {
 				whitelisted = true
 
 				return tt.errWhitelist

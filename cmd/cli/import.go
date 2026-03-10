@@ -47,6 +47,10 @@ func importSetup(args []string) (int, error) {
 		logs.Warningf("You do not have SD Connect enabled")
 	}
 
+	if sdapplyOnly {
+		api.SetRepositories(map[string]bool{api.SDApply.ForPath(): true})
+	}
+
 	return 0, nil
 }
 

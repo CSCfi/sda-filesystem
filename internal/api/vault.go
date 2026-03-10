@@ -154,7 +154,7 @@ var GetFileHeader = func(rep Repo, bucket, object, owner, id string, version int
 		logs.Debugf("Whitelisting key for %s%s", rep, logInsert)
 
 		// Whitelist public key with which the headers will be reencrypted
-		if err := whitelistKey(query); err != nil {
+		if err := whitelistKey(owner); err != nil {
 			return "", fmt.Errorf("failed to whitelist public key for %s%s: %w", rep, logInsert, err)
 		}
 
@@ -171,7 +171,7 @@ var GetFileHeader = func(rep Repo, bucket, object, owner, id string, version int
 	return resp.Headers[strconv.Itoa(version)].Header, err
 }
 
-var whitelistKey = func(query map[string]string) error {
+var whitelistKey = func(owner string) error {
 	body := `{
 		"flavor": "crypt4gh",
 		"pubkey": "%s"
@@ -179,6 +179,11 @@ var whitelistKey = func(query map[string]string) error {
 	body = fmt.Sprintf(body, ai.vi.publicKey)
 	ep := ai.hi.endpoints.Vault.Whitelist
 	ep.path += vaultService + "/" + ai.vi.keyName
+
+	query := make(map[string]string)
+	if owner != "" {
+		query["owner"] = owner
+	}
 
 	return makeRequest("POST", ep, query, nil, strings.NewReader(body), nil)
 }

@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/neicnordic/crypt4gh/keys"
 )
 
@@ -568,11 +570,12 @@ func TestGetProfile(t *testing.T) {
 		case *profile:
 			v.DesktopToken = "test_token"
 			v.S3Access = accessOnce
-			v.SDConnect = true
 			if accessOnce {
 				v.ProjectType = "findata"
+				v.SDConnect = true
 			} else {
 				v.ProjectType = "default"
+				v.SDConnect = false
 			}
 			accessOnce = false
 
@@ -590,7 +593,7 @@ func TestGetProfile(t *testing.T) {
 		}
 	}
 	ai.repositories = []Repo{"mock-repo"}
-	finalRepositories := []Repo{"mock-repo", SDConnect}
+	expectedRepos := []Repo{SDApply, SDConnect}
 	testCh := make(chan bool)
 
 	access, err := GetProfile(testCh)
@@ -601,8 +604,8 @@ func TestGetProfile(t *testing.T) {
 		t.Errorf("User should have access")
 	case ai.token != "test_token":
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
-	case !reflect.DeepEqual(ai.repositories, finalRepositories):
-		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", finalRepositories, ai.repositories)
+	case !reflect.DeepEqual(ai.repositories, expectedRepos):
+		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
 	case ai.scan != testCh:
 		t.Errorf("Incorrect scanning channel\nExpected=%v\nReceived=%v", testCh, ai.scan)
 	case ai.ui.address != "socket_path":
@@ -613,6 +616,8 @@ func TestGetProfile(t *testing.T) {
 		return "", fmt.Errorf("unknown env %s", name)
 	}
 
+	expectedRepos = []Repo{SDApply}
+
 	access, err = GetProfile(testCh)
 	switch {
 	case err != nil:
@@ -621,8 +626,8 @@ func TestGetProfile(t *testing.T) {
 		t.Errorf("User should not have access")
 	case ai.token != "test_token":
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
-	case !reflect.DeepEqual(ai.repositories, finalRepositories):
-		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", finalRepositories, ai.repositories)
+	case !reflect.DeepEqual(ai.repositories, expectedRepos):
+		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
 	}
 
 	select {
@@ -866,6 +871,36 @@ func TestLoadCertificates_InvalidCertificates(t *testing.T) {
 	}
 	if err.Error() != errStr {
 		t.Fatalf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestSetRepositories(t *testing.T) {
+	origRepositories := ai.repositories
+	defer func() { ai.repositories = origRepositories }()
+
+	selected := map[string]bool{"SD-Connect": true, "SD-Apply": true}
+	SetRepositories(selected)
+	slices.Sort(ai.repositories)
+
+	expectedRepos := []Repo{SDApply, SDConnect}
+	if !cmp.Equal(expectedRepos, ai.repositories) {
+		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
+	}
+
+	selected = map[string]bool{"SD-Connect": false, "SD-Apply": true}
+	SetRepositories(selected)
+
+	expectedRepos = []Repo{SDApply}
+	if !cmp.Equal(expectedRepos, ai.repositories) {
+		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
+	}
+
+	selected = map[string]bool{"SD-Connect": true}
+	SetRepositories(selected)
+
+	expectedRepos = []Repo{SDConnect}
+	if !cmp.Equal(expectedRepos, ai.repositories) {
+		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
 	}
 }
 

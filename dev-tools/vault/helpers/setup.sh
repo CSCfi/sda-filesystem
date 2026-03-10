@@ -16,10 +16,6 @@ export VAULT_ADDR="${VAULT_ADDR:-'http://127.0.0.1:8200'}"
 VAULT_ROLE=${VAULT_ROLE:-sdsi}
 VAULT_SECRET=${VAULT_SECRET:-sdsi-secret-token}
 
-until wget -o /dev/null -q --spider "${VAULT_ADDR}/v1/sys/health?standbyok=true"; do
-    sleep 1
-done
-
 vault login token="${VAULT_DEV_ROOT_TOKEN_ID}"
 
 if vault read auth/approle/role/"$VAULT_ROLE" >/dev/null 2>&1; then

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { ref, computed } from "vue";
 import { EventsEmit, EventsOn } from "../../wailsjs/runtime/runtime";
+import { UpdateRepositorySelection } from "../../wailsjs/go/main/App";
 
 import RepositorySelect from "../components/RepositorySelect.vue";
 
@@ -37,7 +38,7 @@ EventsOn("setRepositories", function(reps: {[key: string]: boolean}) {
     <c-button
       class="continue-button"
       :disabled="props.disabled || !validSelection"
-      @click="EventsEmit('selectFinished')"
+      @click="UpdateRepositorySelection(selectedRepos); EventsEmit('selectFinished')"
     >
       Continue
     </c-button>

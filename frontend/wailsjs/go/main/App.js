@@ -58,6 +58,10 @@ export function SelectFiles() {
   return window['go']['main']['App']['SelectFiles']();
 }
 
+export function UpdateRepositorySelection(arg1) {
+  return window['go']['main']['App']['UpdateRepositorySelection'](arg1);
+}
+
 export function ValidateEmail(arg1) {
   return window['go']['main']['App']['ValidateEmail'](arg1);
 }

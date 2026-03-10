@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -316,8 +315,11 @@ func GetProfile(scanChannel ...chan<- bool) (bool, error) {
 		return false, fmt.Errorf("required environment variables missing: %w", err)
 	}
 	ai.token = ai.userProfile.DesktopToken
-	if ai.userProfile.SDConnect && !slices.Contains(ai.repositories, SDConnect) {
-		ai.repositories = append(ai.repositories, SDConnect)
+
+	if ai.userProfile.SDConnect {
+		ai.repositories = []Repo{SDApply, SDConnect}
+	} else {
+		ai.repositories = []Repo{SDApply}
 	}
 
 	// To inform GUI about virus scan results
@@ -392,6 +394,16 @@ var loadCertificates = func(certFiles FileReader) error {
 // Findata is not listed because it is only used for export
 func GetAllRepositories() []Repo {
 	return []Repo{SDConnect, SDApply}
+}
+
+// SetRepositories defines the list of repositories the user can access based on the user's selection
+var SetRepositories = func(selected map[string]bool) {
+	ai.repositories = make([]Repo, 0)
+	for key := range selected {
+		if selected[key] {
+			ai.repositories = append(ai.repositories, Repo(key))
+		}
+	}
 }
 
 // GetRepositories returns the list of repositories the filesystem can access

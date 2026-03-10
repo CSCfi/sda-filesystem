@@ -813,7 +813,7 @@ func TestGetObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for SD-Apply/some-bucket: bad request: bucket name \"some-bucket\" may not be S3 compatible",
+			"failed to list objects for SD-Apply/some-bucket: bucket name \"some-bucket\" is not S3 compatible",
 			http.StatusBadRequest,
 		},
 		{
@@ -831,6 +831,17 @@ func TestGetObjects_Error(t *testing.T) {
 
 				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-connect/some-bucket" {
 					w.WriteHeader(tt.code)
+					if tt.code == http.StatusBadRequest {
+						xmlData := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+	<Code>InvalidBucketName</Code>
+	<Message></Message>
+	<RequestId></RequestId>
+</Error>
+`
+						w.Header().Set("Content-Type", "application/xml")
+						_, _ = w.Write([]byte(xmlData))
+					}
 
 					return
 				}
@@ -1033,7 +1044,7 @@ func TestGetSegmentedObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for bucket some-bucket in SD Apply: bad request: bucket name \"some-bucket\" may not be S3 compatible",
+			"failed to list objects for bucket some-bucket in SD Apply: bucket name \"some-bucket\" is not S3 compatible",
 			http.StatusBadRequest,
 		},
 		{
@@ -1051,6 +1062,17 @@ func TestGetSegmentedObjects_Error(t *testing.T) {
 
 				if r.Method == "GET" && r.URL.Path == "/s3-default-endpoint/sd-apply/c29tZS1idWNrZXQ" {
 					w.WriteHeader(tt.code)
+					if tt.code == http.StatusBadRequest {
+						xmlData := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+	<Code>InvalidBucketName</Code>
+	<Message></Message>
+	<RequestId></RequestId>
+</Error>
+`
+						w.Header().Set("Content-Type", "application/xml")
+						_, _ = w.Write([]byte(xmlData))
+					}
 
 					return
 				}
