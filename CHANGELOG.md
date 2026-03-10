@@ -7,6 +7,21 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (users) checkbox selection in GUI now works (#54)
+- remove `-race` flag from `wails dev` since there is currently a bug in Go that causes a segmentation violation
+
+### Changed
+
+- (users) better error logs for when unmounting fails or when existing bucket has invalid name
+- simplify rules in CI jobs
+- use the Epouta IP address of a new VM during development since the old VM is to be deleted
+
+### Removed
+
+- unnecessary query parameters from whitelist requests
+
 ## [2026.2.0] - 2026-02-17
 
 ### Added
