@@ -286,6 +286,7 @@ func TestSetup(t *testing.T) {
 		case *configResponse:
 			v.Timeouts = expectedTimeouts
 			v.Endpoints = expectedEndpoints
+			v.FindataUpload = false
 
 			return nil
 		default:
@@ -328,6 +329,9 @@ func TestSetup(t *testing.T) {
 	publicKey64 := base64.StdEncoding.EncodeToString(publicKey[:])
 	if publicKey64 != ai.vi.publicKey {
 		t.Errorf("Public key has incorrect value\nExpected=%v\nReceived=%v", publicKey, ai.vi.publicKey)
+	}
+	if ai.findataUpload != false {
+		t.Errorf("Findata upload boolean should not be true")
 	}
 }
 
@@ -432,6 +436,7 @@ func TestSetup_Port(t *testing.T) {
 				case *configResponse:
 					v.Timeouts = expectedTimeouts
 					v.Endpoints = expectedEndpoints
+					v.FindataUpload = true
 
 					return nil
 				default:
@@ -465,6 +470,9 @@ func TestSetup_Port(t *testing.T) {
 			publicKey64 := base64.StdEncoding.EncodeToString(publicKey[:])
 			if publicKey64 != ai.vi.publicKey {
 				t.Errorf("Public key has incorrect value\nExpected=%v\nReceived=%v", publicKey, ai.vi.publicKey)
+			}
+			if ai.findataUpload == false {
+				t.Errorf("Findata upload boolean should not be false")
 			}
 		})
 	}

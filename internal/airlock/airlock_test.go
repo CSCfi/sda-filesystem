@@ -675,33 +675,33 @@ func TestCheckObjectExistence_Error(t *testing.T) {
 
 func TestUpload(t *testing.T) {
 	var tests = []struct {
-		testname, projectType, bucket string
-		files, objects                []string
-		createBucket                  bool
-		fileSize, segmentSize         int64
-		metadata                      map[string]string
+		testname, bucket      string
+		files, objects        []string
+		createBucket, findata bool
+		fileSize, segmentSize int64
+		metadata              map[string]string
 	}{
 		{
-			"OK_1", "default", "test-bucket",
+			"OK_1", "test-bucket",
 			[]string{"test-file.txt"}, []string{"test-file.txt.c4gh"},
-			false, 9463686, 1 << 27, nil,
+			false, false, 9463686, 1 << 27, nil,
 		},
 		{
-			"OK_2", "default", "test-bucket",
+			"OK_2", "test-bucket",
 			[]string{"test-file.txt", "subfolder/test-file.txt"},
 			[]string{"test-file.txt.c4gh", "subfolder/test-file.txt.c4gh"},
-			true, (1 << 40) * 1.5, 1 << 28, nil,
+			true, false, (1 << 40) * 1.5, 1 << 28, nil,
 		},
 		{
-			"OK_3", "findata", "test-bucket",
+			"OK_3", "test-bucket",
 			[]string{"test-file.txt"}, []string{"test-file.txt.c4gh"},
-			false, 9463686, 1 << 27, map[string]string{"journal_number": "journal890"},
+			false, true, 9463686, 1 << 27, map[string]string{"journal_number": "journal890"},
 		},
 		{
-			"OK_4", "findata", "test-bucket",
+			"OK_4", "test-bucket",
 			[]string{"test-file.txt", "subfolder/test-file.txt", "another-file.txt"},
 			[]string{"test-file.txt.c4gh", "subfolder/test-file.txt.c4gh", "another-file.txt.c4gh"},
-			true, (1 << 40) * 1.5, 1 << 28,
+			true, true, (1 << 40) * 1.5, 1 << 28,
 			map[string]string{"journal_number": "journal456", "author_email": "some.address@gmail.com"},
 		},
 	}
@@ -709,7 +709,7 @@ func TestUpload(t *testing.T) {
 	origGetPublicKey := api.GetPublicKey
 	origGetFileDetails := getFileDetails
 	origProjectName := api.GetProjectName
-	origGetProjectType := api.GetProjectType
+	origFindataUpload := api.FindataUpload
 	origPostHeader := api.PostHeader
 	origUploadObject := api.UploadObject
 	origDeleteObject := api.DeleteObject
@@ -718,7 +718,7 @@ func TestUpload(t *testing.T) {
 		api.GetPublicKey = origGetPublicKey
 		getFileDetails = origGetFileDetails
 		api.GetProjectName = origProjectName
-		api.GetProjectType = origGetProjectType
+		api.FindataUpload = origFindataUpload
 		api.PostHeader = origPostHeader
 		api.UploadObject = origUploadObject
 		api.DeleteObject = origDeleteObject
@@ -745,8 +745,8 @@ func TestUpload(t *testing.T) {
 			api.GetPublicKey = func() ([32]byte, error) {
 				return publicKey, nil
 			}
-			api.GetProjectType = func() string {
-				return tt.projectType
+			api.FindataUpload = func() bool {
+				return tt.findata
 			}
 			getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 				idx := slices.Index(tt.files, filename)
@@ -772,7 +772,7 @@ func TestUpload(t *testing.T) {
 				return nil
 			}
 			//nolint:nestif
-			if tt.projectType == "default" {
+			if !tt.findata {
 				api.UploadObject = func(
 					ctx context.Context,
 					body io.Reader,
@@ -898,24 +898,24 @@ func TestUpload(t *testing.T) {
 
 func TestUpload_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errStr, projectType string
-		fileSize                      int64
-		header                        bool
-		keyErr, uploadErr             error
+		testname, errStr  string
+		fileSize          int64
+		header, findata   bool
+		keyErr, uploadErr error
 	}{
 		{
-			"FAIL_KEY", "failed to get project public key: " + errExpected.Error(), "default",
-			500, false, errExpected, nil,
+			"FAIL_KEY", "failed to get project public key: " + errExpected.Error(),
+			500, false, false, errExpected, nil,
 		},
 		{
-			"FAIL_UPLOAD", "upload interrupted due to errors", "default",
-			456, true, nil, errExpected,
+			"FAIL_UPLOAD", "upload interrupted due to errors",
+			456, true, false, nil, errExpected,
 		},
 	}
 
 	origGetPublicKey := api.GetPublicKey
 	origGetFileDetails := getFileDetails
-	origGetProjectType := api.GetProjectType
+	origFindataUpload := api.FindataUpload
 	origUploadAllas := uploadAllas
 	origDeleteObject := api.DeleteObject
 	origPublicKey := ai.publicKey
@@ -924,7 +924,7 @@ func TestUpload_Error(t *testing.T) {
 	defer func() {
 		api.GetPublicKey = origGetPublicKey
 		getFileDetails = origGetFileDetails
-		api.GetProjectType = origGetProjectType
+		api.FindataUpload = origFindataUpload
 		uploadAllas = origUploadAllas
 		api.DeleteObject = origDeleteObject
 		ai.publicKey = origPublicKey
@@ -947,8 +947,8 @@ func TestUpload_Error(t *testing.T) {
 
 				return rc, 100, nil
 			}
-			api.GetProjectType = func() string {
-				return "default"
+			api.FindataUpload = func() bool {
+				return tt.findata
 			}
 			uploadAllas = func(ctx context.Context, pr io.Reader, bucket, object string, segmentSize int64) error {
 				if tt.uploadErr != nil {
@@ -1063,88 +1063,88 @@ func (br *badReader) Close() error {
 
 func TestUploadObject_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errStr, projectType               string
+		testname, errStr                            string
 		loggedErrors                                []string
 		fileSize                                    int64
-		header, badCopy                             bool
+		header, badCopy, findata                    bool
 		detailsErr, headerErr, uploadErr, deleteErr error
 	}{
 		{
-			"FAIL_DETAILS", "failed to get details for file test-file.txt: " + errExpected.Error(), "default",
+			"FAIL_DETAILS", "failed to get details for file test-file.txt: " + errExpected.Error(),
 			[]string{},
-			65986, false, false,
+			65986, false, false, false,
 			errExpected, nil, nil, nil,
 		},
 		{
-			"FAIL_HEADER", "uploading file test-file.txt failed", "default",
+			"FAIL_HEADER", "uploading file test-file.txt failed",
 			[]string{
 				"Streaming file test-file.txt failed: failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
 				"failed to extract header from encrypted file: EOF",
 			},
-			2375680, false, false,
+			2375680, false, false, false,
 			nil, nil, nil, nil,
 		},
 		{
-			"FAIL_SIZE", "file test-file.txt is too large (5497558139316 bytes)", "default",
+			"FAIL_SIZE", "file test-file.txt is too large (5497558139316 bytes)",
 			[]string{},
-			5*(1<<40) + 560, true, false,
+			5*(1<<40) + 560, true, false, false,
 			nil, nil, nil, nil,
 		},
 		{
-			"FAIL_POST_HEADER", "uploading file test-file.txt failed", "default",
+			"FAIL_POST_HEADER", "uploading file test-file.txt failed",
 			[]string{"failed to upload header to vault: " + errExpected.Error()},
-			94567376, true, false,
+			94567376, true, false, false,
 			nil, errExpected, nil, nil,
 		},
 		{
-			"FAIL_UPLOAD", "uploading file test-file.txt failed", "default",
+			"FAIL_UPLOAD", "uploading file test-file.txt failed",
 			[]string{errExpected.Error()},
-			456, true, false,
+			456, true, false, false,
 			nil, nil, errExpected, nil,
 		},
 		{
-			"FAIL_CRYPT", "uploading file test-file.txt failed", "findata",
+			"FAIL_CRYPT", "uploading file test-file.txt failed",
 			[]string{
 				"failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
 				"failed to extract header from encrypted file: failed to create crypt4gh writer: crypto/ecdh: bad X25519 remote ECDH input: low order point",
 			},
-			74869, true, false,
+			74869, true, false, true,
 			nil, nil, nil, nil,
 		},
 		{
-			"FAIL_FINDATA", "uploading file test-file.txt failed", "findata",
+			"FAIL_FINDATA", "uploading file test-file.txt failed",
 			[]string{
 				"failed to upload Findata object: " + errExpected.Error(),
 				"failed to read file body: failed to upload Findata object: " + errExpected.Error(),
 			},
-			98, true, false,
+			98, true, false, true,
 			nil, nil, errExpected, nil,
 		},
 		{
-			"FAIL_COPY_1", "uploading file test-file.txt failed", "default",
+			"FAIL_COPY_1", "uploading file test-file.txt failed",
 			[]string{"Streaming file test-file.txt failed: " + errExpected.Error()},
-			456, true, true,
+			456, true, true, false,
 			nil, nil, nil, nil,
 		},
 		{
-			"FAIL_COPY_2", "uploading file test-file.txt failed", "findata",
+			"FAIL_COPY_2", "uploading file test-file.txt failed",
 			[]string{
 				"failed to upload Findata object: failed to read file body: " + errExpected.Error(),
 				"failed to read file body: failed to upload Findata object: failed to read file body: " + errExpected.Error(),
 			},
-			456, true, true,
+			456, true, true, true,
 			nil, nil, nil, nil,
 		},
 		{
-			"FAIL_DELETE", "uploading file test-file.txt failed", "default",
+			"FAIL_DELETE", "uploading file test-file.txt failed",
 			[]string{"Streaming file test-file.txt failed: " + errExpected.Error()},
-			456, true, true,
+			456, true, true, false,
 			nil, nil, nil, errExpected,
 		},
 	}
 
 	origGetFileDetails := getFileDetails
-	origGetProjectType := api.GetProjectType
+	origFindataUpload := api.FindataUpload
 	origPostHeader := api.PostHeader
 	origUploadObject := api.UploadObject
 	origDeleteObject := api.DeleteObject
@@ -1153,7 +1153,7 @@ func TestUploadObject_Error(t *testing.T) {
 	origErrorf := logs.Errorf
 	defer func() {
 		getFileDetails = origGetFileDetails
-		api.GetProjectType = origGetProjectType
+		api.FindataUpload = origFindataUpload
 		api.PostHeader = origPostHeader
 		api.UploadObject = origUploadObject
 		api.DeleteObject = origDeleteObject
@@ -1173,8 +1173,8 @@ func TestUploadObject_Error(t *testing.T) {
 				ai.publicKey = [32]byte{}
 			}
 
-			api.GetProjectType = func() string {
-				return tt.projectType
+			api.FindataUpload = func() bool {
+				return tt.findata
 			}
 			getFileDetails = func(filename string) (io.ReadCloser, int64, error) {
 				if !tt.header {
@@ -1244,7 +1244,7 @@ func TestUploadObject_Error(t *testing.T) {
 			if slices.Compare(tt.loggedErrors, errs) != 0 {
 				t.Errorf("Function logged incorrect errors\nExpected=%q\nReceived=%q", tt.loggedErrors, errs)
 			}
-			if tt.badCopy && tt.projectType == "default" && !deleted {
+			if tt.badCopy && !tt.findata && !deleted {
 				t.Error("Object was not deleted")
 			}
 		})

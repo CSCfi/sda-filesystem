@@ -127,7 +127,7 @@ func (a *App) InitializeAPI() (bool, error) {
 	if airlock.ExportPossible() {
 		wailsruntime.EventsEmit(a.ctx, "exportPossible")
 	}
-	if api.GetProjectType() != "default" {
+	if api.FindataUpload() {
 		wailsruntime.EventsEmit(a.ctx, "findataProject", api.GetUserEmail())
 	}
 

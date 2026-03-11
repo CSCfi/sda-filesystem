@@ -279,7 +279,7 @@ var UploadObject = func(ctx context.Context, filename, object, bucket string, me
 	errc2 := make(chan error, 2)
 	pr, pw := io.Pipe() // So that 'c4ghWriter' can pass its contents to an io.Reader
 
-	if api.GetProjectType() == "default" {
+	if !api.FindataUpload() {
 		go encrypt(file, pw, errc2)
 	}
 	go func() {
@@ -288,7 +288,7 @@ var UploadObject = func(ctx context.Context, filename, object, bucket string, me
 	}()
 
 	err = nil
-	if api.GetProjectType() != "default" {
+	if api.FindataUpload() {
 		errc2 <- nil
 		if err = uploadFindata(ctx, file, pw, bucket, object, segmentSize, metadata); err != nil {
 			logs.Error(err)
