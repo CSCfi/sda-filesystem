@@ -7,13 +7,18 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.3.0] - 2026-03-12
+
 ### Fixed
 
+- running target `run_profiles` was not including environment variables from `.env.static` when running in `findata` profile
 - (users) checkbox selection in GUI now works (#54)
 - remove `-race` flag from `wails dev` since there is currently a bug in Go that causes a segmentation violation
 
 ### Changed
 
+- make the content of `configuration.json` modifiable during development with environment variables
+- determine the behavior of how Findata objects are uploaded based on the configuration file from KrakenD
 - (users) better error logs for when unmounting fails or when existing bucket has invalid name
 - simplify rules in CI jobs
 - use the Epouta IP address of a new VM during development since the old VM is to be deleted
@@ -430,7 +435,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.2.0...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.0...HEAD
+[2026.3.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.2.0...2026.3.0
 [2026.2.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.11.4...2026.2.0
 [2025.11.4]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.3...2025.11.4
 [2025.7.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.2...2025.7.3
