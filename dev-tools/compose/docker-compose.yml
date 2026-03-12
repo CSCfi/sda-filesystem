@@ -100,11 +100,11 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.3.2"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.3.3"
     container_name: krakend
     env_file:
-      - path: .env
-      - path: .env.krakend
+      - .env
+      - .env.krakend
     environment: # These are envs that either have a different name or have a different value if keystone is also running
       API_KEY: "${KRAKEND_API_KEY}"
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
@@ -150,13 +150,17 @@ services:
       retries: 3
       start_period: 10s
     volumes:
-      - ../static:/static
+      - static-config:/static
       - ../config:/config
     profiles:
       - krakend
     depends_on:
       krakend-db:
         condition: service_healthy
+      krakend-redis:
+        condition: service_started
+      krakend-static:
+        condition: service_completed_successfully
     ports:
       - 8082:8082
   krakend-db:
@@ -192,6 +196,19 @@ services:
       dockerfile: dev-tools/containers/redis/Dockerfile
     image: krakend-redis
     container_name: krakend-redis
+    profiles:
+      - krakend
+  krakend-static:
+    build:
+      context: ../../
+      dockerfile: dev-tools/containers/static/Dockerfile
+    image: krakend-static
+    container_name: krakend-static
+    env_file:
+      - .env
+      - .env.krakend
+    volumes:
+      - static-config:/static
     profiles:
       - krakend
 
@@ -273,3 +290,4 @@ services:
 
 volumes:
   postgres-init:
+  static-config:

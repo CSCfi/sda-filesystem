@@ -111,7 +111,7 @@ func exportSetup(args []string) (int, error) {
 	}
 
 	// Findata projects
-	if api.GetProjectType() != "default" {
+	if api.FindataUpload() {
 		e, err := mail.ParseAddress(email)
 		if err != nil {
 			return 2, fmt.Errorf("invalid email argument %q: %w", email, err)

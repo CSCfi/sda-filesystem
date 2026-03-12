@@ -1,10 +1,11 @@
 {
+    "findata_upload": {{ ternary false true (coll.Has (strings.Split "," .Env.DISABLED_ENDPOINTS) "s3:findata") }},
     "timeouts": {
-        "default": 10,
-        "s3": 60,
-        "sdsi": 80,
+        "default": {{ .Env.DEFAULT_TIMEOUT }},
+        "s3": {{ .Env.S3_TIMEOUT }},
+        "sdsi": {{ .Env.SDSI_TIMEOUT }},
         "vault": {
-            "batch": 60
+          "batch": {{ .Env.VAULT_BATCH_TIMEOUT }}
         }
     },
     "endpoints": {

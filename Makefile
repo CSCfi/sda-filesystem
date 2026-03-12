@@ -171,12 +171,14 @@ run_profiles: down ## Run componets with possible profile arguments: findata fus
 		$(call docker_cmd,keystone-creds,up -d); \
 	fi
 	@$(MAKE) _wait_for_container CONTAINER_NAME=static-creds
-	@if echo "$(RUN_ARGS)" | grep -q findata; then \
-		$(MAKE) _run_findata_profiles RUN_ARGS="$(RUN_ARGS)"; \
-	elif echo "$(RUN_ARGS)" | grep -q keystone; then \
-	    $(call docker_cmd,$(RUN_ARGS),--env-file .env.static up); \
+	@cmd_arg="up"; \
+	if echo "$(RUN_ARGS)" | grep -q keystone; then \
+	    cmd_arg="--env-file .env.static up"; \
+	fi; \
+	if echo "$(RUN_ARGS)" | grep -q findata; then \
+		$(MAKE) _run_findata_profiles RUN_ARGS="$(RUN_ARGS)" CMD_ARG="$$cmd_arg"; \
 	else \
-		$(call docker_cmd,$(RUN_ARGS),up); \
+		$(call docker_cmd,$(RUN_ARGS),$$cmd_arg); \
 	fi
 
 build_profiles: down ## Build and run components with possible profile arguments: findata fuse krakend keystone
@@ -194,7 +196,7 @@ envs:
 _run_findata_profiles:
 	@bash -c 'trap "pkill -P $$$$; exit 0" EXIT;\
 		socat UNIX-LISTEN:$(SOCKET_PATH),fork,reuseaddr TCP:127.0.0.1:3310 & \
-		$(call docker_cmd,$(RUN_ARGS),up)'
+		$(call docker_cmd,$(RUN_ARGS),$(CMD_ARG))'
 
 _wait_for_container:
 	@if [ -z `docker ps -a --format {{.Names}} --filter name=$(CONTAINER_NAME)` ]; then \

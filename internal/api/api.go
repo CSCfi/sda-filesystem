@@ -54,15 +54,16 @@ type FileReader interface {
 
 // apiInfo contains variables required for Data Gateway to work with KrakendD
 type apiInfo struct {
-	proxy        string
-	token        string
-	password     string // base64 encoded
-	repositories []Repo
-	scan         chan<- bool
-	userProfile  profile
-	hi           httpInfo
-	vi           vaultInfo
-	ui           unixInfo
+	proxy         string
+	token         string
+	password      string // base64 encoded
+	repositories  []Repo
+	scan          chan<- bool
+	userProfile   profile
+	findataUpload bool // If findata upload is possible
+	hi            httpInfo
+	vi            vaultInfo
+	ui            unixInfo
 }
 
 // httpInfo contains variables used during HTTP requests
@@ -114,8 +115,9 @@ type configEndpoints struct {
 }
 
 type configResponse struct {
-	Timeouts  configTimeouts  `json:"timeouts"`
-	Endpoints configEndpoints `json:"endpoints"`
+	Timeouts      configTimeouts  `json:"timeouts"`
+	Endpoints     configEndpoints `json:"endpoints"`
+	FindataUpload bool            `json:"findata_upload"`
 }
 
 type endpoint struct {
@@ -281,6 +283,7 @@ func getAPIEndpoints(url string) error {
 	}
 
 	ai.hi.endpoints = convertConfig(resp)
+	ai.findataUpload = resp.FindataUpload
 
 	return nil
 }
@@ -311,7 +314,7 @@ func GetProfile(scanChannel ...chan<- bool) (bool, error) {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
 	}
 	ai.ui.address, err = GetEnv("CLAMAV_SOCKET", false)
-	if ai.userProfile.ProjectType != "default" && err != nil {
+	if ai.userProfile.ProjectType == "findata" && err != nil {
 		return false, fmt.Errorf("required environment variables missing: %w", err)
 	}
 	ai.token = ai.userProfile.DesktopToken
@@ -324,7 +327,7 @@ func GetProfile(scanChannel ...chan<- bool) (bool, error) {
 
 	// To inform GUI about virus scan results
 	if len(scanChannel) > 0 {
-		if ai.userProfile.ProjectType == "default" {
+		if ai.userProfile.ProjectType != "findata" {
 			close(scanChannel[0]) // Do not need in this case
 		} else {
 			ai.scan = scanChannel[0]
@@ -421,6 +424,10 @@ var GetProjectName = func() string {
 
 var GetProjectType = func() string {
 	return ai.userProfile.ProjectType
+}
+
+var FindataUpload = func() bool {
+	return ai.userProfile.ProjectType == "findata" && ai.findataUpload
 }
 
 var GetUserEmail = func() string {
