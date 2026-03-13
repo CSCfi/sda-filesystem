@@ -1,8 +1,4 @@
-#if defined(__linux__)
-#define FUSE_USE_VERSION 316
-#else
-#define FUSE_USE_VERSION 29
-#endif
+#define FUSE_USE_VERSION 318
 
 #ifdef RENOVATE
 int mount_filesystem(const char *mount, int debug) {
@@ -87,44 +83,26 @@ static int s3_opendir(const char *path, struct fuse_file_info *fi) {
 }
 
 static int s3_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-                      off_t offset, struct fuse_file_info *fi) {
+                      off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
     struct fuse_context *fc = fuse_get_context();
     nodes_t *n = (nodes_t *)fc->private_data;
     node_t *node = n->nodes + fi->fh;
 
-#if defined(__linux__)
     filler(buf, ".", &node->stat, 0, 0);
 	filler(buf, "..", NULL, 0, 0);
-#elif defined(__APPLE__)
-    filler(buf, ".", &node->stat, 0);
-	filler(buf, "..", NULL, 0);
-#endif
 
     for (int64_t i = 0; i < node->chld_count; i++) {
         node_t *chld = node->children + i;
         if (S_ISDIR(chld->stat.st_mode) && !chld->chld_count)
             continue;
-
-#if defined(__linux__)
         if (filler(buf, chld->name, &chld->stat, 0, 0))
             break;
-#elif defined(__APPLE__)
-        if (filler(buf, chld->name, &chld->stat, 0))
-            break;
-#endif
     }
 
     return 0;
 }
 
-#if defined(__linux__)
-static int s3_readdir3(const char *path, void *buf, fuse_fill_dir_t filler,
-                       off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
-    return s3_readdir(path, buf, filler, offset, fi);
-}
-#endif
-
-static int s3_getattr(const char *path, struct stat *stbuf) {
+static int s3_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
     struct fuse_context *fc = fuse_get_context();
     nodes_t *n = (nodes_t *)fc->private_data;
     node_t *node = search_node(n, path);
@@ -149,42 +127,27 @@ static int s3_getattr(const char *path, struct stat *stbuf) {
     return 0;
 }
 
-static void *s3_init(struct fuse_conn_info *conn) {
+static void *s3_init(struct fuse_conn_info *conn, struct fuse_config *cfg) {
     nodes_t *n = GetFilesystem();
     n->uid = getuid();
     n->gid = getgid();
 
-    return n;
-}
-
 #if defined(__linux__)
-static int s3_getattr3(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
-    return s3_getattr(path, stbuf);
-}
-
-static void *s3_init3(struct fuse_conn_info *conn, struct fuse_config *cfg) {
     conn->max_read = MAX_READ;
     conn->max_readahead = MAX_READ;
-    (void) cfg;
-
-    return s3_init(conn);
-}
 #endif
+
+    return n;
+}
 
 static const struct fuse_operations operations = {
     .destroy	= s3_destroy,
 	.open		= s3_open,
 	.read		= s3_read,
     .opendir	= s3_opendir,
-#if defined(__linux__)
-    .readdir	= s3_readdir3,
-    .getattr	= s3_getattr3,
-    .init       = s3_init3,
-#elif defined(__APPLE__)
 	.readdir	= s3_readdir,
     .getattr	= s3_getattr,
     .init       = s3_init,
-#endif
 };
 
 int mount_filesystem(const char *mount, int debug) {
