@@ -186,7 +186,7 @@ build_profiles: down ## Build and run components with possible profile arguments
 	@$(MAKE) run_profiles RUN_ARGS="$(RUN_ARGS)"
 
 exec: ## Access data-gateway container
-	@trap 'exit 0' INT; docker exec -it data-gateway /bin/bash
+	@trap 'exit 0' SIGINT; docker exec -it data-gateway /bin/bash
 
 envs:
 	@echo "$$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs) CLAMAV_SOCKET=$(SOCKET_PATH)"
