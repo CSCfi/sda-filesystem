@@ -987,7 +987,7 @@ func TestMakeRequest(t *testing.T) {
 			method:   "POST",
 			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				if req.Method == "POST" && handleCount > 0 {
-					body, err := json.Marshal(profile{Username: "me", ProjectName: "myproject", PI: true, S3Access: false})
+					body, err := json.Marshal(profile{Username: "me", ProjectName: "myproject", PI: true, S3Access: false}) // #nosec G117
 					if err != nil {
 						http.Error(rw, "Error 404", 404)
 					} else {

@@ -238,6 +238,11 @@ var initialiseS3Client = func() error {
 	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
 		return stack.Finalize.Add(customFinalize, middleware.After)
 	})
+	cfg.APIOptions = append(cfg.APIOptions, func(stack *middleware.Stack) error {
+		_, _ = stack.Finalize.Remove("addInputChecksumTrailer")
+
+		return smithyhttp.AddContentChecksumMiddleware(stack)
+	})
 
 	ai.hi.s3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(ai.proxy)
