@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.2
+    image: ${ARTIFACTORY_SERVER}/docker:29.3
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -55,7 +55,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.3
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.4
     container_name: vault
     env_file:
       - .env.keystone
@@ -86,7 +86,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.3
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.4
     container_name: vault-setup
     entrypoint: /vault/helpers/setup.sh
     env_file:
