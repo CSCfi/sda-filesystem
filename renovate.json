@@ -14,9 +14,10 @@
       }
     }
   ],
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": ["dev-tools/containers/data-gateway/Dockerfile"],
+      "customType": "regex",
+      "managerFilePatterns": ["dev-tools/containers/data-gateway/Dockerfile"],
       "matchStrings": [
         "go(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
