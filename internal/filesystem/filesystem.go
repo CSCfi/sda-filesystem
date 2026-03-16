@@ -1,9 +1,8 @@
 package filesystem
 
 /*
-#cgo CFLAGS: -D GO_CGO_BUILD -D_FILE_OFFSET_BITS=64 -g -Wall -Wextra -Wno-unused-parameter
-#cgo linux pkg-config: fuse3
-#cgo darwin pkg-config: fuse
+#cgo CFLAGS: -DGO_CGO_BUILD -D_FILE_OFFSET_BITS=64 -DFUSE_DARWIN_ENABLE_EXTENSIONS=0 -g -Wall -Wextra -Wno-unused-parameter
+#cgo pkg-config: fuse3
 #cgo nocallback search_node
 #cgo nocallback sort_node_children
 #cgo nocallback free_nodes
