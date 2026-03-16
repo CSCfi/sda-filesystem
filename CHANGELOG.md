@@ -7,6 +7,19 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- C flag `FUSE_DARWIN_ENABLE_EXTENSIONS=0`
+
+### Fixed
+
+- when building `data-gateway` container, compile binary in Ubuntu 24.04 as the Go images now use a Debian version that has a incompatible `libfuse` version
+
+### Changed
+
+- update to use libfuse API v3.18
+- use libfuse3 for macOS
+
 ## [2026.3.0] - 2026-03-12
 
 ### Fixed
