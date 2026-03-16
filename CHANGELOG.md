@@ -7,16 +7,20 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.3.1] - 2026-03-16
+
 ### Added
 
 - C flag `FUSE_DARWIN_ENABLE_EXTENSIONS=0`
 
 ### Fixed
 
+- prevent AWS S3 client from introducing trailing checksums in uploaded objects (#59)
 - when building `data-gateway` container, compile binary in Ubuntu 24.04 as the Go images now use a Debian version that has a incompatible `libfuse` version
 
 ### Changed
 
+- update libfuse version to 3.18
 - update to use libfuse API v3.18
 - use libfuse3 for macOS
 
@@ -448,7 +452,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.0...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.1...HEAD
+[2026.3.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.0...2026.3.1
 [2026.3.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.2.0...2026.3.0
 [2026.2.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.11.4...2026.2.0
 [2025.11.4]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.7.3...2025.11.4
