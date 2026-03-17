@@ -152,7 +152,7 @@ static const struct fuse_operations operations = {
 
 int mount_filesystem(const char *mount, int debug) {
     struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
-    char *options = strdup("auto_cache");
+    char *options = strdup("auto_cache,attr_timeout=0");
 
 #if defined(__APPLE__)
     const char *basename = strrchr(mount, '/');

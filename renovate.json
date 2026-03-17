@@ -13,5 +13,17 @@
         "fileFilters": ["frontend/wailsjs/**"]
       }
     }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["dev-tools/containers/data-gateway/Dockerfile"],
+      "matchStrings": [
+        "go(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "go",
+      "versioningTemplate": "golang",
+      "depNameTemplate": "go"
+    }
   ]
 }

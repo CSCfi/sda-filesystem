@@ -83,6 +83,27 @@ test:
   script:
     - CI=true go test -race -tags=fuse3 -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v -e frontend -e test)
 
+build-dev:
+  stage: build
+  image: $BUILDER_IMAGE
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+  tags:
+    - docker-exec
+  variables:
+    SECURE_FILES_DOWNLOAD_PATH: './certs'
+  before_script:
+    - jf config import "${JF_CONFIG}"
+    - go mod tidy && go mod vendor
+  script:
+    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
+    - |
+      go build -ldflags '-w -s' -o data-gateway-cli-amd64-0000.0.0 ./cmd/cli
+      jf s --licenses data-gateway-cli-amd64-0000.0.0 --repo-path ${ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO}
+      jf rt u data-gateway-cli-amd64-0000.0.0 $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-0000.0.0
+
 build-artifacts:
   stage: build
   image: $BUILDER_IMAGE
