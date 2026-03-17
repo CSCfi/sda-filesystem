@@ -7,6 +7,17 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.3.2] - 2026-03-17
+
+### Fixed
+
+- programs like LibreOffice can read files now that fuse has `attr_timeout=0`
+
+### Added
+
+- manual job in merge requests that will upload a CLI binary to Artifactory so that it can be tested in a VM
+- configs to renovate.json so that the `Dockerfile` for the `data-gateway` image gets proper Go updates
+
 ## [2026.3.1] - 2026-03-16
 
 ### Added
@@ -452,7 +463,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.1...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.2...HEAD
+[2026.3.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.1...2026.3.2
 [2026.3.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.0...2026.3.1
 [2026.3.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.2.0...2026.3.0
 [2026.2.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2025.11.4...2026.2.0
