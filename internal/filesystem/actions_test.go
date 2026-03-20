@@ -12,7 +12,6 @@ import (
 	"unsafe"
 
 	"sda-filesystem/internal/api"
-	"sda-filesystem/test"
 )
 
 var errExpected = errors.New("expected error for test")
@@ -128,23 +127,19 @@ func TestClearPath(t *testing.T) {
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
 	origObjects := api.GetObjects
-	origGetHeaderVersions := api.GetHeaderVersions
 	origGetObjectSizesFromSegments := getObjectSizesFromSegments
-	origSharedBucketProject := api.SharedBucketProject
 	origHeaders := fi.headers
 	defer func() {
 		api.DeleteFileFromCache = origDeleteFileFromCache
 		api.GetObjects = origObjects
-		api.GetHeaderVersions = origGetHeaderVersions
 		getObjectSizesFromSegments = origGetObjectSizesFromSegments
-		api.SharedBucketProject = origSharedBucketProject
 		fi.headers = origHeaders
 	}()
 
 	fi.headers = map[_Ctype_ino_t]header{
-		30: {value: "vlfvyugyvli", version: 1},
-		32: {value: "hbfyucdtkyv", version: 3},
-		33: {value: "bftcdvtuftu", version: 2},
+		30: {value: "vlfvyugyvli"},
+		32: {value: "hbfyucdtkyv"},
+		33: {value: "bftcdvtuftu"},
 	}
 	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
 		delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
@@ -165,34 +160,9 @@ func TestClearPath(t *testing.T) {
 
 		return []api.Metadata{
 			{Size: 45, Name: "kansio/file_1", LastModified: &time1},
-			{Size: 6, Name: "kansio/file_2", LastModified: &time2},
+			{Size: 6, Name: "kansio/file_2", Owner: "owner", LastModified: &time2},
 			{Size: 142, Name: "kansio/file_3", LastModified: &time3},
 		}, nil
-	}
-	api.GetHeaderVersions = func(rep api.Repo,
-		buckets []api.Metadata,
-		sharedBuckets map[string]api.SharedBucketsMeta,
-	) (api.BatchHeaderVersions, error) {
-		exists := slices.ContainsFunc(buckets, func(meta api.Metadata) bool {
-			return meta.Name == "bucket_1"
-		})
-		if !exists {
-			t.Errorf("api.GetHeaders() was not instructed to fetch headers for bucket bucket_1")
-		}
-		if len(sharedBuckets) > 0 {
-			t.Errorf("api.GetHeaders() received content in the sharedBuckets map: %v", sharedBuckets)
-		}
-
-		batch := make(api.BatchHeaderVersions)
-		batch["bucket_1"] = make(map[string]int)
-
-		batch["bucket_1"]["kansio/file_1"] = 1
-		batch["bucket_1"]["kansio/file_2"] = 4
-
-		return batch, nil
-	}
-	api.SharedBucketProject = func(bucket string) (string, error) {
-		return "", nil
 	}
 	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
 		return nil, errExpected
@@ -227,9 +197,7 @@ func TestClearPath(t *testing.T) {
 		t.Errorf("Function did not clear files %v", slices.Collect(maps.Keys(traverse)))
 	}
 	expectedHeaders := map[_Ctype_ino_t]header{
-		29: {version: 1},
-		30: {version: 4},
-		33: {value: "bftcdvtuftu", version: 2},
+		29: {}, 30: {owner: "owner"}, 32: {}, 33: {value: "bftcdvtuftu"},
 	}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Errorf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
@@ -242,20 +210,16 @@ func TestClearPath_Shared(t *testing.T) {
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
 	origObjects := api.GetObjects
-	origGetHeaderVersions := api.GetHeaderVersions
 	origGetObjectSizesFromSegments := getObjectSizesFromSegments
-	origSharedBucketProject := api.SharedBucketProject
 	origHeaders := fi.headers
 	defer func() {
 		api.DeleteFileFromCache = origDeleteFileFromCache
 		api.GetObjects = origObjects
-		api.GetHeaderVersions = origGetHeaderVersions
 		getObjectSizesFromSegments = origGetObjectSizesFromSegments
-		api.SharedBucketProject = origSharedBucketProject
 		fi.headers = origHeaders
 	}()
 
-	fi.headers = map[_Ctype_ino_t]header{33: {value: "bftcdvtuftu", version: 1}}
+	fi.headers = map[_Ctype_ino_t]header{33: {value: "bftcdvtuftu"}}
 	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
@@ -267,31 +231,8 @@ func TestClearPath_Shared(t *testing.T) {
 		}
 
 		return []api.Metadata{
-			{Size: 45, Name: "shared-file.txt", LastModified: &time1},
+			{Size: 45, Name: "shared-file.txt", Owner: "sharing-project-1", LastModified: &time1},
 		}, nil
-	}
-	api.GetHeaderVersions = func(rep api.Repo,
-		buckets []api.Metadata,
-		sharedBuckets map[string]api.SharedBucketsMeta,
-	) (api.BatchHeaderVersions, error) {
-		if len(buckets) > 0 {
-			t.Errorf("api.GetHeaders() received content in the buckets slice: %v", buckets)
-		}
-		expectedSharedBuckets := map[string]api.SharedBucketsMeta{
-			"sharing-project-1": {"shared_bucket"},
-		}
-		if !reflect.DeepEqual(expectedSharedBuckets, sharedBuckets) {
-			t.Errorf("api.GetHeaders() received invalid shared buckets\nExpected=%v\nReceived=%v", expectedSharedBuckets, sharedBuckets)
-		}
-
-		batch := make(api.BatchHeaderVersions)
-		batch["shared_bucket"] = make(map[string]int)
-		batch["shared_bucket"]["shared-file.txt"] = 2
-
-		return batch, nil
-	}
-	api.SharedBucketProject = func(bucket string) (string, error) {
-		return "sharing-project-1", nil
 	}
 	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
 		return nil, errExpected
@@ -319,8 +260,8 @@ func TestClearPath_Shared(t *testing.T) {
 		t.Errorf("Clearing path changed filesystem incorrectly: %s", err.Error())
 	}
 	expectedHeaders := map[_Ctype_ino_t]header{
-		33: {value: "bftcdvtuftu", version: 1},
-		37: {version: 2},
+		33: {value: "bftcdvtuftu"},
+		37: {owner: "sharing-project-1"},
 	}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Errorf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
@@ -350,16 +291,12 @@ func TestClearPath_Segments(t *testing.T) {
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
 	origObjects := api.GetObjects
-	origGetHeaderVersions := api.GetHeaderVersions
 	origGetObjectSizesFromSegments := getObjectSizesFromSegments
-	origSharedBucketProject := api.SharedBucketProject
 	origHeaders := fi.headers
 	defer func() {
 		api.DeleteFileFromCache = origDeleteFileFromCache
 		api.GetObjects = origObjects
-		api.GetHeaderVersions = origGetHeaderVersions
 		getObjectSizesFromSegments = origGetObjectSizesFromSegments
-		api.SharedBucketProject = origSharedBucketProject
 		fi.headers = origHeaders
 	}()
 
@@ -389,23 +326,6 @@ func TestClearPath_Segments(t *testing.T) {
 			{Size: 0, Name: "dir3.2.1/file.c4gh", LastModified: &time2},
 			{Size: 0, Name: "dir3.2.1/file/h%e%ll+o", LastModified: &time3},
 		}, nil
-	}
-	api.GetHeaderVersions = func(
-		rep api.Repo,
-		buckets []api.Metadata,
-		sharedBuckets map[string]api.SharedBucketsMeta,
-	) (api.BatchHeaderVersions, error) {
-		exists := slices.ContainsFunc(buckets, func(meta api.Metadata) bool {
-			return meta.Name == "dir+2"
-		})
-		if !exists {
-			t.Errorf("api.GetHeaders() was not instructed to fetch headers for bucket dir+2")
-		}
-
-		return nil, nil
-	}
-	api.SharedBucketProject = func(bucket string) (string, error) {
-		return "", nil
 	}
 	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
 		if rep != rep1 || bucket != "dir+2" {
@@ -460,8 +380,9 @@ func TestClearPath_Segments(t *testing.T) {
 	if len(traverse) > 0 {
 		t.Errorf("Function did not clear files %v", slices.Collect(maps.Keys(traverse)))
 	}
-	if len(fi.headers) > 0 {
-		t.Errorf("Headers slice should be empty. Received=%v", fi.headers)
+	expectedHeaders := map[_Ctype_ino_t]header{16: {}, 18: {}, 19: {}}
+	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
+		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}
 }
 
@@ -517,34 +438,20 @@ func TestClearPath_BadPath(t *testing.T) {
 
 func TestClearPath_Error(t *testing.T) {
 	var tests = []struct {
-		testname, errStr                string
-		objectErr, headerErr, sharedErr error
+		testname, errStr     string
+		objectErr, headerErr error
 	}{
 		{
 			"FAIL_1",
 			"cache not cleared since new file sizes could not be obtained: " + errExpected.Error(),
-			errExpected, nil, nil,
-		},
-		{
-			"FAIL_2",
-			"failed to get headers for bucket bucket_3: " + errExpected.Error(),
-			nil, errExpected, nil,
-		},
-		{
-			"FAIL_3",
-			"could not determine if bucket bucket_3 is shared: " + errExpected.Error(),
-			nil, nil, errExpected,
+			errExpected, nil,
 		},
 	}
 
 	origObjects := api.GetObjects
-	origGetHeaderVersions := api.GetHeaderVersions
-	origSharedBucketProject := api.SharedBucketProject
 	origHeaders := fi.headers
 	defer func() {
 		api.GetObjects = origObjects
-		api.GetHeaderVersions = origGetHeaderVersions
-		api.SharedBucketProject = origSharedBucketProject
 		fi.headers = origHeaders
 	}()
 
@@ -552,12 +459,6 @@ func TestClearPath_Error(t *testing.T) {
 		t.Run(tt.testname, func(t *testing.T) {
 			api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 				return nil, tt.objectErr
-			}
-			api.GetHeaderVersions = func(rep api.Repo, buckets []api.Metadata, sharedBuckets map[string]api.SharedBucketsMeta) (api.BatchHeaderVersions, error) {
-				return nil, tt.headerErr
-			}
-			api.SharedBucketProject = func(bucket string) (string, error) {
-				return "", tt.sharedErr
 			}
 			fi.nodes = getTestFuse(t)
 			origFs := getTestFuse(t)
@@ -595,7 +496,7 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 
 		return "", 0, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
 		if bucket != "bucket_2" {
 			t.Errorf("api.GetFileHeader() received incorrect bucket. Expected=bucket_1, received=%s", bucket)
 		}
@@ -605,9 +506,6 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 		if id != "45646746" {
 			t.Errorf("api.GetFileHeader() received incorrect object. Expected=45646746, received=%s", id)
 		}
-		if version != 3 {
-			t.Errorf("api.GetFileHeader() received incorrect version. Expected=3, received=%v", version)
-		}
 
 		return "hello", nil
 	}
@@ -615,13 +513,13 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 	node := &nodeSlice[35]
 	node.offset = 0
 	node.stat.st_size = 484
-	fi.headers = map[_Ctype_ino_t]header{35: {version: 3, fileID: "45646746"}}
+	fi.headers = map[_Ctype_ino_t]header{35: {fileID: "45646746"}}
 
 	CheckHeaderExistence(node, node.name) // second argument is only for logs, so is does not matter here what it is
 	if node.offset != 0 {
 		t.Errorf("Node offset incorrect. Expected=0, received=%d", node.offset)
 	}
-	if !reflect.DeepEqual(fi.headers, map[_Ctype_ino_t]header{35: {version: 3, fileID: "45646746", value: "hello"}}) {
+	if !reflect.DeepEqual(fi.headers, map[_Ctype_ino_t]header{35: {fileID: "45646746", value: "hello"}}) {
 		t.Errorf("Headers were modified to %v", fi.headers)
 	}
 
@@ -645,7 +543,7 @@ func TestCheckHeaderExistence_BadPath(t *testing.T) {
 		testname string
 		nodeIdx  int
 	}{
-		{"FAIL_1", 8},
+		{"FAIL_1", 6},
 		{"FAIL_2", 20},
 	}
 
@@ -659,12 +557,12 @@ func TestCheckHeaderExistence_BadPath(t *testing.T) {
 	}()
 
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-		t.Errorf("api.GetReencryptedHeader() should not be called")
+		t.Errorf("api.GetReencryptedHeader() should not be called with %s/%s", bucket, object)
 
 		return "", 0, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called")
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
+		t.Errorf("api.GetFileHeader() should not be called with %s %s/%s", rep, bucket, object)
 
 		return "", nil
 	}
@@ -717,9 +615,7 @@ func TestCheckHeaderExistence_Reencrypted(t *testing.T) {
 
 		return "i-am-a-header", 58, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called")
-
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
 		return "", nil
 	}
 
@@ -733,7 +629,7 @@ func TestCheckHeaderExistence_Reencrypted(t *testing.T) {
 	}
 	expectedHeaders := map[_Ctype_ino_t]header{28: {value: "i-am-a-header"}}
 	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
-		t.Errorf("Headers are incorrect\nExpected=%vReceived=%v", expectedHeaders, fi.headers)
+		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}
 
 	origFs := getTestFuse(t)
@@ -757,38 +653,18 @@ func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
 
 	origGetReencryptedHeader := api.GetReencryptedHeader
 	origGetFileHeader := api.GetFileHeader
-	origDownloadData := api.DownloadData
 	origHeaders := fi.headers
 	defer func() {
 		api.GetReencryptedHeader = origGetReencryptedHeader
 		api.GetFileHeader = origGetFileHeader
-		api.DownloadData = origDownloadData
 		fi.headers = origHeaders
 	}()
 
 	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		return "", 0, fmt.Errorf("something happened")
 	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
-		if rep != rep1 {
-			t.Errorf("api.DownloadData() received incorrect repository. Expected=%v, received=%v", rep1, rep)
-		}
-		expectedNodes := []string{"bucket_3", "testi"}
-		if !reflect.DeepEqual(expectedNodes, nodes) {
-			t.Errorf("api.DownloadData() received incorrect nodes.\nExpected=%v\nReceived=%v", expectedNodes, nodes)
-		}
-		if oldOffset != 0 {
-			t.Errorf("api.DownloadData() received incorrect old offset. Expected=0, received=%v", oldOffset)
-		}
-
-		content := test.GenerateRandomText(int(fileSize))
-
-		return content[startDecrypted:min(endDecrypted, fileSize)], nil
-	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called")
-
-		return "", nil
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
+		return "", fmt.Errorf("something happened")
 	}
 
 	node := &nodeSlice[36]
@@ -801,70 +677,6 @@ func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
 	}
 	if len(fi.headers) > 0 {
 		t.Errorf("Headers slice should be empty. Received=%v", fi.headers)
-	}
-
-	origFs := getTestFuse(t)
-	nodeSlice = unsafe.Slice(origFs.nodes, fsSize)
-	nodeSlice[36].offset = 0
-
-	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
-		t.Errorf("Checking for header changed filesystem: %s", err.Error())
-	}
-}
-
-func TestCheckHeaderExistence_UnknownEncryption(t *testing.T) {
-	fi.nodes = getTestFuse(t)
-	nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
-
-	origGetReencryptedHeader := api.GetReencryptedHeader
-	origGetFileHeader := api.GetFileHeader
-	origDownloadData := api.DownloadData
-	origHeaders := fi.headers
-	defer func() {
-		api.GetReencryptedHeader = origGetReencryptedHeader
-		api.GetFileHeader = origGetFileHeader
-		api.DownloadData = origDownloadData
-		fi.headers = origHeaders
-	}()
-
-	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-		return "", 0, fmt.Errorf("something happened")
-	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
-		if rep != rep1 {
-			t.Errorf("api.DownloadData() received incorrect repository. Expected=%v, received=%v", rep1, rep)
-		}
-		expectedNodes := []string{"bucket_3", "testi"}
-		if !reflect.DeepEqual(expectedNodes, nodes) {
-			t.Errorf("api.DownloadData() received incorrect nodes.\nExpected=%v\nReceived=%v", expectedNodes, nodes)
-		}
-		if oldOffset != 0 {
-			t.Errorf("api.DownloadData() received incorrect old offset. Expected=0, received=%v", oldOffset)
-		}
-
-		content := test.GenerateRandomText(int(fileSize))
-		headerBytes, encryptedContent, _ := test.EncryptData(t, content)
-		encryptedContent = append(headerBytes, encryptedContent...)
-
-		return encryptedContent[startDecrypted:min(endDecrypted, fileSize)], nil
-	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called")
-
-		return "", nil
-	}
-
-	node := &nodeSlice[36]
-	node.offset = 0
-	fi.headers = make(map[_Ctype_ino_t]header)
-
-	CheckHeaderExistence(node, node.name) // second argument is only for logs, so is does not matter here what it is
-	if node.offset != 0 {
-		t.Errorf("Node offset incorrect. Expected=0, received=%d", node.offset)
-	}
-	expectedHeaders := map[_Ctype_ino_t]header{36: {}}
-	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
-		t.Errorf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}
 
 	origFs := getTestFuse(t)
@@ -882,12 +694,10 @@ func TestCheckHeaderExistence_HeaderError(t *testing.T) {
 
 	origGetReencryptedHeader := api.GetReencryptedHeader
 	origGetFileHeader := api.GetFileHeader
-	origDownloadData := api.DownloadData
 	origHeaders := fi.headers
 	defer func() {
 		api.GetReencryptedHeader = origGetReencryptedHeader
 		api.GetFileHeader = origGetFileHeader
-		api.DownloadData = origDownloadData
 		fi.headers = origHeaders
 	}()
 
@@ -896,18 +706,13 @@ func TestCheckHeaderExistence_HeaderError(t *testing.T) {
 
 		return "", 0, nil
 	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
-		t.Errorf("api.DownloadData() should not be called")
-
-		return nil, nil
-	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
 		return "", errExpected
 	}
 
 	node := &nodeSlice[34]
 	node.offset = 0
-	fi.headers = map[_Ctype_ino_t]header{34: {version: 1}}
+	fi.headers = map[_Ctype_ino_t]header{34: {owner: "my-project"}}
 
 	CheckHeaderExistence(node, node.name) // second argument is only for logs, so is does not matter here what it is
 	if node.offset != 0 {
@@ -915,54 +720,6 @@ func TestCheckHeaderExistence_HeaderError(t *testing.T) {
 	}
 	if len(fi.headers) > 1 {
 		t.Errorf("Headers slice should only have one value. Received=%v", fi.headers)
-	}
-
-	origFs := getTestFuse(t)
-	nodeSlice = unsafe.Slice(origFs.nodes, fsSize)
-	nodeSlice[34].offset = 0
-
-	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
-		t.Errorf("Checking for header changed filesystem: %s", err.Error())
-	}
-}
-
-func TestCheckHeaderExistence_DownloadError(t *testing.T) {
-	fi.nodes = getTestFuse(t)
-	nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
-
-	origGetReencryptedHeader := api.GetReencryptedHeader
-	origGetFileHeader := api.GetFileHeader
-	origDownloadData := api.DownloadData
-	origHeaders := fi.headers
-	defer func() {
-		api.GetReencryptedHeader = origGetReencryptedHeader
-		api.GetFileHeader = origGetFileHeader
-		api.DownloadData = origDownloadData
-		fi.headers = origHeaders
-	}()
-
-	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-		return "", 0, errExpected
-	}
-	api.DownloadData = func(rep api.Repo, nodes []string, path, fileID string, header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64) ([]byte, error) {
-		return nil, errExpected
-	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called")
-
-		return "", nil
-	}
-
-	node := &nodeSlice[34]
-	node.offset = 0
-	fi.headers = make(map[_Ctype_ino_t]header)
-
-	CheckHeaderExistence(node, node.name) // second argument is only for logs, so is does not matter here what it is
-	if node.offset != 0 {
-		t.Errorf("Node offset incorrect. Expected=0, received=%d", node.offset)
-	}
-	if len(fi.headers) > 0 {
-		t.Errorf("Headers slice should be empty. Received=%v", fi.headers)
 	}
 
 	origFs := getTestFuse(t)
@@ -997,9 +754,7 @@ func TestCheckHeaderExistence_TooSmall(t *testing.T) {
 
 		return "i-am-a-header", 124, nil
 	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string, version int, path string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called")
-
+	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
 		return "", nil
 	}
 
@@ -1011,9 +766,9 @@ func TestCheckHeaderExistence_TooSmall(t *testing.T) {
 	if node.offset != 124 {
 		t.Errorf("Node offset incorrect. Expected=124, received=%d", node.offset)
 	}
-	expectedHeaders := map[_Ctype_ino_t]header{28: {value: "i-am-a-header"}}
+	expectedHeaders := map[_Ctype_ino_t]header{28: {}}
 	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
-		t.Errorf("Headers are incorrect\nExpected=%vReceived=%v", expectedHeaders, fi.headers)
+		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}
 
 	origFs := getTestFuse(t)

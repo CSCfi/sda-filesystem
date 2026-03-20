@@ -1,12 +1,10 @@
 package filesystem
 
 import (
-	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
-	"slices"
 	"testing"
 	"time"
 	"unsafe"
@@ -446,7 +444,6 @@ func TestInitializeFilesystem(t *testing.T) {
 	origGetBuckets := api.GetBuckets
 	origGetObjects := api.GetObjects
 	origGetSegmentedObjects := api.GetSegmentedObjects
-	origGetHeaderVersions := api.GetHeaderVersions
 	origHeaders := fi.headers
 	defer func() {
 		api.GetRepositories = origGetRepositories
@@ -454,7 +451,6 @@ func TestInitializeFilesystem(t *testing.T) {
 		api.GetBuckets = origGetBuckets
 		api.GetObjects = origGetObjects
 		api.GetSegmentedObjects = origGetSegmentedObjects
-		api.GetHeaderVersions = origGetHeaderVersions
 		fi.headers = origHeaders
 	}()
 
@@ -464,22 +460,18 @@ func TestInitializeFilesystem(t *testing.T) {
 	api.GetProjectName = func() string {
 		return "project"
 	}
-	api.GetBuckets = func(rep api.Repo) ([]api.Metadata, map[string]api.SharedBucketsMeta, int, error) {
+	api.GetBuckets = func(rep api.Repo) ([]api.Metadata, error) {
 		switch rep {
 		case rep1:
 			return []api.Metadata{
-					{Name: "bucket_1_segments"},
-					{Name: "bucket_1"},
-					{Name: "bucket_2_segments"},
-					{Name: "bucket_2"},
-					{Name: "bucket_3"},
-					{Name: "shared#bucket"},
-					{Name: "shared_bucket"},
-				},
-				map[string]api.SharedBucketsMeta{
-					"sharing-project-1": {"shared_bucket"},
-					"sharing-project-2": {"shared#bucket"},
-				}, 5, nil
+				{Name: "bucket_1_segments"},
+				{Name: "bucket_1"},
+				{Name: "bucket_2_segments"},
+				{Name: "bucket_2"},
+				{Name: "bucket_3"},
+				{Name: "shared#bucket", Owner: "sharing-project-1"},
+				{Name: "shared_bucket", Owner: "sharing-project-2"},
+			}, nil
 		case rep2:
 			return []api.Metadata{
 				{Name: "https://my-example.com", Owner: "muumi"},
@@ -487,12 +479,12 @@ func TestInitializeFilesystem(t *testing.T) {
 				{Name: "bad-bucket_segments"},
 				{Name: "old-bucket"},
 				{Name: "old-bucket_segments"},
-			}, nil, 5, nil
+			}, nil
 		case "Substandard-Repo":
-			return nil, nil, 0, nil
+			return nil, nil
 		}
 
-		return nil, nil, 0, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
+		return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
 	}
 	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
 		switch rep {
@@ -603,59 +595,6 @@ func TestInitializeFilesystem(t *testing.T) {
 
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
-	api.GetHeaderVersions = func(rep api.Repo,
-		buckets []api.Metadata,
-		sharedBuckets map[string]api.SharedBucketsMeta,
-	) (api.BatchHeaderVersions, error) {
-		switch rep {
-		case rep1:
-			expectedBuckets := []string{"bucket_1_segments", "bucket_1", "bucket_2_segments", "bucket_2", "bucket_3"}
-			result := slices.CompareFunc(buckets, expectedBuckets, func(b1 api.Metadata, b2 string) int {
-				return cmp.Compare(b1.Name, b2)
-			})
-			if result != 0 {
-				t.Errorf("api.GetHeaders() received invalid buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
-			}
-			expectedSharedBuckets := map[string]api.SharedBucketsMeta{
-				"sharing-project-1": {"shared_bucket"},
-				"sharing-project-2": {"shared#bucket"},
-			}
-			if !reflect.DeepEqual(sharedBuckets, expectedSharedBuckets) {
-				t.Errorf("api.GetHeaders() received invalid shared buckets\nExpected=%v\nReceived=%v", expectedSharedBuckets, sharedBuckets)
-			}
-
-			batch := make(api.BatchHeaderVersions)
-			batch["bucket_1"] = make(map[string]int)
-			batch["bucket_2"] = make(map[string]int)
-
-			batch["bucket_1"]["kansio/file_2"] = 2
-			batch["bucket_1"]["kansio/file_3"] = 3
-			batch["bucket_2"]["?folder/test"] = 5
-
-			return batch, nil
-		case rep2:
-			expectedBuckets := []string{"https://my-example.com", "bad-bucket", "bad-bucket_segments", "old-bucket", "old-bucket_segments"}
-			result := slices.CompareFunc(buckets, expectedBuckets, func(b1 api.Metadata, b2 string) int {
-				return cmp.Compare(b1.Name, b2)
-			})
-			if result != 0 {
-				t.Errorf("api.GetHeaders() received invalid buckets\nExpected=%v\nReceived=%v", expectedBuckets, buckets)
-			}
-			if len(sharedBuckets) != 0 {
-				t.Errorf("api.GetHeaders() received invalid shared buckets: %v", sharedBuckets)
-			}
-
-			batch := make(api.BatchHeaderVersions)
-			batch["https://my-example.com"] = make(map[string]int)
-			batch["https://my-example.com"]["tiedosto"] = 5
-
-			return batch, nil
-		case "Substandard-Repo":
-			return nil, fmt.Errorf("api.GetHeaders() received invalid repository %s", rep)
-		}
-
-		return nil, nil
-	}
 
 	fi.nodes = &_Ctype_struct_Nodes{}
 	InitialiseFilesystem()
@@ -670,8 +609,8 @@ func TestInitializeFilesystem(t *testing.T) {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
 	expectedHeaders := map[_Ctype_ino_t]header{
-		8:  {version: 5, fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
-		30: {version: 2}, 32: {version: 3}, 35: {version: 5},
+		8:  {fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
+		37: {owner: "sharing-project-2"}, 38: {owner: "sharing-project-1"},
 	}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Fatalf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
