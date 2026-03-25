@@ -37,4 +37,6 @@ void free_nodes(nodes_t *n) {
         free(n->nodes[i].orig_name);
     }
     free(n->nodes);
+    n->nodes = NULL;
+    n->count = 0;
 }

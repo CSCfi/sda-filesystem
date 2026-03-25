@@ -123,6 +123,7 @@ func TestClearPath(t *testing.T) {
 		rep1.ForPath() + "/bucket_1/kansio/file_1": true,
 		rep1.ForPath() + "/bucket_1/kansio/file_2": true,
 		rep1.ForPath() + "/bucket_1/kansio/file_3": true,
+		rep1.ForPath() + "/bucket_1/kansio/file@3": true,
 	}
 
 	origDeleteFileFromCache := api.DeleteFileFromCache
@@ -142,7 +143,12 @@ func TestClearPath(t *testing.T) {
 		33: {value: "bftcdvtuftu"},
 	}
 	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
-		delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
+		key := rep.ForPath() + "/" + strings.Join(nodes, "/")
+		if _, ok := traverse[key]; ok {
+			delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
+		} else {
+			t.Errorf("api.DeleteFileFromCache() called with extra key %s", key)
+		}
 	}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	time2, _ := time.Parse(time.RFC3339, "2017-01-24T08:30:45Z")
@@ -168,7 +174,7 @@ func TestClearPath(t *testing.T) {
 		return nil, errExpected
 	}
 
-	diff := _Ctype_off_t(115)
+	diff := _Ctype_off_t(105)
 	origFs := getTestFuse(t)
 	nodeSlice := unsafe.Slice(origFs.nodes, fsSize)
 
@@ -181,6 +187,8 @@ func TestClearPath(t *testing.T) {
 	nodeSlice[29].last_modified.tv_sec = _Ctype_time_t(time1.Unix())
 	nodeSlice[30].stat.st_size = 6
 	nodeSlice[30].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
+	nodeSlice[31].stat.st_size = 0
+	nodeSlice[31].offset = -2
 	nodeSlice[32].stat.st_size = 142
 	nodeSlice[32].last_modified.tv_sec = _Ctype_time_t(time3.Unix())
 
@@ -204,7 +212,133 @@ func TestClearPath(t *testing.T) {
 	}
 }
 
-func TestClearPath_Shared(t *testing.T) {
+func TestClearPath_Segments(t *testing.T) {
+	fi.nodes = getTestFuse(t)
+
+	// Switch children of SD Connect and SD Apply
+	nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
+	nodeSlice[2], nodeSlice[3] = nodeSlice[3], nodeSlice[2]
+	nodeSlice[20].parent = &nodeSlice[2]
+	nodeSlice[5].parent = &nodeSlice[3]
+	nodeSlice[6].parent = &nodeSlice[3]
+	nodeSlice[7].parent = &nodeSlice[3]
+	nodeSlice[2].name, nodeSlice[3].name = nodeSlice[3].name, nodeSlice[2].name
+	nodeSlice[2].orig_name, nodeSlice[3].orig_name = nodeSlice[3].orig_name, nodeSlice[2].orig_name
+
+	path := rep1.ForPath() + "/old-bucket/dir_2" // old-bucket is treated like the project in this case
+
+	traverse := map[string]bool{
+		rep1.ForPath() + "/dir+2/dir3.2.1/file.c4gh":     true,
+		rep1.ForPath() + "/dir+2/dir3.2.1/file/h%e%ll+o": true,
+		rep1.ForPath() + "/dir+2/logs":                   true,
+		rep1.ForPath() + "/dir+2/dir3.2.1":               true,
+	}
+
+	origDeleteFileFromCache := api.DeleteFileFromCache
+	origObjects := api.GetObjects
+	origGetObjectSizesFromSegments := getObjectSizesFromSegments
+	origHeaders := fi.headers
+	defer func() {
+		api.DeleteFileFromCache = origDeleteFileFromCache
+		api.GetObjects = origObjects
+		getObjectSizesFromSegments = origGetObjectSizesFromSegments
+		fi.headers = origHeaders
+	}()
+
+	fi.headers = map[_Ctype_ino_t]header{
+		16: {value: "vlfvyugyvli"},
+		19: {value: "hbfyucdtkyv"},
+	}
+	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
+		key := rep.ForPath() + "/" + strings.Join(nodes, "/")
+		if _, ok := traverse[key]; ok {
+			delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
+		} else {
+			t.Errorf("api.DeleteFileFromCache() called with extra key %s", key)
+		}
+	}
+	time1, _ := time.Parse(time.RFC3339, "2011-04-24T03:38:45Z")
+	time2, _ := time.Parse(time.RFC3339, "2023-07-10T23:11:00Z")
+	time3, _ := time.Parse(time.RFC3339, "2021-05-01T10:04:05Z")
+	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+		if rep != rep1 || bucket != "dir+2" {
+			t.Errorf("api.GetObjects() received incorrect repository or bucket")
+		}
+		if len(prefix) == 0 {
+			t.Errorf("api.GetObjects() should have received prefix")
+		}
+		if prefix[0] != "" {
+			t.Errorf("api.GetObjects() received incorrect prefix. Expected=, received=%s", prefix[0])
+		}
+
+		return []api.Metadata{
+			{Size: 42, Name: "logs", LastModified: &time1},
+			{Size: 0, Name: "dir3.2.1/file.c4gh", LastModified: &time2},
+			{Size: 0, Name: "dir3.2.1/file/h%e%ll+o", LastModified: &time3},
+		}, nil
+	}
+	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
+		if rep != rep1 || bucket != "dir+2" {
+			t.Errorf("getObjectSizesFromSegments() received incorrect repository or bucket")
+		}
+
+		return map[string]int64{
+			"dir3.2.1/file.c4gh":     34,
+			"dir3.2.1/file/h%e%ll+o": 17,
+		}, nil
+	}
+
+	diff := _Ctype_off_t(44)
+	origFs := getTestFuse(t)
+
+	// Switch children of SD Connect and SD Apply
+	nodeSlice = unsafe.Slice(origFs.nodes, fsSize)
+	nodeSlice[2], nodeSlice[3] = nodeSlice[3], nodeSlice[2]
+	nodeSlice[20].parent = &nodeSlice[2]
+	nodeSlice[5].parent = &nodeSlice[3]
+	nodeSlice[6].parent = &nodeSlice[3]
+	nodeSlice[7].parent = &nodeSlice[3]
+	nodeSlice[2].name, nodeSlice[3].name = nodeSlice[3].name, nodeSlice[2].name
+	nodeSlice[2].orig_name, nodeSlice[3].orig_name = nodeSlice[3].orig_name, nodeSlice[2].orig_name
+
+	nodeSlice[0].stat.st_size -= diff
+	nodeSlice[3].stat.st_size -= diff
+	nodeSlice[7].stat.st_size -= diff
+	nodeSlice[7].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
+	nodeSlice[10].stat.st_size -= diff
+	nodeSlice[10].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
+	nodeSlice[15].stat.st_size += _Ctype_off_t(21)
+	nodeSlice[15].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
+	nodeSlice[17].stat.st_size += _Ctype_off_t(16)
+	nodeSlice[17].last_modified.tv_sec = _Ctype_time_t(time3.Unix())
+	nodeSlice[14].stat.st_size = 0
+	nodeSlice[14].offset = -2
+	nodeSlice[16].stat.st_size = 42
+	nodeSlice[16].last_modified.tv_sec = _Ctype_time_t(time1.Unix())
+	nodeSlice[18].stat.st_size = 34
+	nodeSlice[18].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
+	nodeSlice[19].stat.st_size = 17
+	nodeSlice[19].last_modified.tv_sec = _Ctype_time_t(time3.Unix())
+
+	if err := ClearPath(path); err != nil {
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
+	}
+	if origFs.count != fi.nodes.count {
+		t.Fatalf("Node count incorrect. Expected=%v, received=%v", origFs.count, fi.nodes.count)
+	}
+	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
+		t.Errorf("Clearing path changed filesystem incorrectly: %s", err.Error())
+	}
+	if len(traverse) > 0 {
+		t.Errorf("Function did not clear files %v", slices.Collect(maps.Keys(traverse)))
+	}
+	expectedHeaders := map[_Ctype_ino_t]header{16: {}, 18: {}, 19: {}}
+	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
+		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
+	}
+}
+
+func TestClearPath_SegmentsError(t *testing.T) {
 	fi.nodes = getTestFuse(t)
 	path := rep1.ForPath() + "/project/shared_bucket"
 
@@ -265,124 +399,6 @@ func TestClearPath_Shared(t *testing.T) {
 	}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Errorf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
-	}
-}
-
-func TestClearPath_Segments(t *testing.T) {
-	fi.nodes = getTestFuse(t)
-
-	// Switch children of SD Connect and SD Apply
-	nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
-	nodeSlice[2], nodeSlice[3] = nodeSlice[3], nodeSlice[2]
-	nodeSlice[20].parent = &nodeSlice[2]
-	nodeSlice[5].parent = &nodeSlice[3]
-	nodeSlice[6].parent = &nodeSlice[3]
-	nodeSlice[7].parent = &nodeSlice[3]
-	nodeSlice[2].name, nodeSlice[3].name = nodeSlice[3].name, nodeSlice[2].name
-	nodeSlice[2].orig_name, nodeSlice[3].orig_name = nodeSlice[3].orig_name, nodeSlice[2].orig_name
-
-	path := rep1.ForPath() + "/old-bucket/dir_2" // old-bucket is treated like the project in this case
-
-	traverse := map[string]bool{
-		rep1.ForPath() + "/dir+2/dir3.2.1/file.c4gh":     true,
-		rep1.ForPath() + "/dir+2/dir3.2.1/file/h%e%ll+o": true,
-		rep1.ForPath() + "/dir+2/logs":                   true,
-	}
-
-	origDeleteFileFromCache := api.DeleteFileFromCache
-	origObjects := api.GetObjects
-	origGetObjectSizesFromSegments := getObjectSizesFromSegments
-	origHeaders := fi.headers
-	defer func() {
-		api.DeleteFileFromCache = origDeleteFileFromCache
-		api.GetObjects = origObjects
-		getObjectSizesFromSegments = origGetObjectSizesFromSegments
-		fi.headers = origHeaders
-	}()
-
-	fi.headers = map[_Ctype_ino_t]header{
-		16: {value: "vlfvyugyvli"},
-		19: {value: "hbfyucdtkyv"},
-	}
-	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
-		delete(traverse, rep.ForPath()+"/"+strings.Join(nodes, "/"))
-	}
-	time1, _ := time.Parse(time.RFC3339, "2011-04-24T03:38:45Z")
-	time2, _ := time.Parse(time.RFC3339, "2023-07-10T23:11:00Z")
-	time3, _ := time.Parse(time.RFC3339, "2021-05-01T10:04:05Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
-		if rep != rep1 || bucket != "dir+2" {
-			t.Errorf("api.GetObjects() received incorrect repository or bucket")
-		}
-		if len(prefix) == 0 {
-			t.Errorf("api.GetObjects() should have received prefix")
-		}
-		if prefix[0] != "" {
-			t.Errorf("api.GetObjects() received incorrect prefix. Expected=, received=%s", prefix[0])
-		}
-
-		return []api.Metadata{
-			{Size: 42, Name: "logs", LastModified: &time1},
-			{Size: 0, Name: "dir3.2.1/file.c4gh", LastModified: &time2},
-			{Size: 0, Name: "dir3.2.1/file/h%e%ll+o", LastModified: &time3},
-		}, nil
-	}
-	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
-		if rep != rep1 || bucket != "dir+2" {
-			t.Errorf("getObjectSizesFromSegments() received incorrect repository or bucket")
-		}
-
-		return map[string]int64{
-			"dir3.2.1/file.c4gh":     34,
-			"dir3.2.1/file/h%e%ll+o": 17,
-		}, nil
-	}
-
-	diff := _Ctype_off_t(38)
-	origFs := getTestFuse(t)
-
-	// Switch children of SD Connect and SD Apply
-	nodeSlice = unsafe.Slice(origFs.nodes, fsSize)
-	nodeSlice[2], nodeSlice[3] = nodeSlice[3], nodeSlice[2]
-	nodeSlice[20].parent = &nodeSlice[2]
-	nodeSlice[5].parent = &nodeSlice[3]
-	nodeSlice[6].parent = &nodeSlice[3]
-	nodeSlice[7].parent = &nodeSlice[3]
-	nodeSlice[2].name, nodeSlice[3].name = nodeSlice[3].name, nodeSlice[2].name
-	nodeSlice[2].orig_name, nodeSlice[3].orig_name = nodeSlice[3].orig_name, nodeSlice[2].orig_name
-
-	nodeSlice[0].stat.st_size -= diff
-	nodeSlice[3].stat.st_size -= diff
-	nodeSlice[7].stat.st_size -= diff
-	nodeSlice[7].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
-	nodeSlice[10].stat.st_size -= diff
-	nodeSlice[10].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
-	nodeSlice[15].stat.st_size += _Ctype_off_t(21)
-	nodeSlice[15].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
-	nodeSlice[17].stat.st_size += _Ctype_off_t(16)
-	nodeSlice[17].last_modified.tv_sec = _Ctype_time_t(time3.Unix())
-	nodeSlice[16].stat.st_size = 42
-	nodeSlice[16].last_modified.tv_sec = _Ctype_time_t(time1.Unix())
-	nodeSlice[18].stat.st_size = 34
-	nodeSlice[18].last_modified.tv_sec = _Ctype_time_t(time2.Unix())
-	nodeSlice[19].stat.st_size = 17
-	nodeSlice[19].last_modified.tv_sec = _Ctype_time_t(time3.Unix())
-
-	if err := ClearPath(path); err != nil {
-		t.Fatalf("Function returned unexpected error: %s", err.Error())
-	}
-	if origFs.count != fi.nodes.count {
-		t.Fatalf("Node count incorrect. Expected=%v, received=%v", origFs.count, fi.nodes.count)
-	}
-	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
-		t.Errorf("Clearing path changed filesystem incorrectly: %s", err.Error())
-	}
-	if len(traverse) > 0 {
-		t.Errorf("Function did not clear files %v", slices.Collect(maps.Keys(traverse)))
-	}
-	expectedHeaders := map[_Ctype_ino_t]header{16: {}, 18: {}, 19: {}}
-	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
-		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
 	}
 }
 
@@ -766,9 +782,8 @@ func TestCheckHeaderExistence_TooSmall(t *testing.T) {
 	if node.offset != 124 {
 		t.Errorf("Node offset incorrect. Expected=124, received=%d", node.offset)
 	}
-	expectedHeaders := map[_Ctype_ino_t]header{28: {}}
-	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
-		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
+	if len(fi.headers) > 0 {
+		t.Errorf("Unexpected values in headers: %v", fi.headers)
 	}
 
 	origFs := getTestFuse(t)

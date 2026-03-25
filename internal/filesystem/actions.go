@@ -253,6 +253,7 @@ func clearNode(node *C.node_t, pathNodes []string, meta map[string]api.Metadata)
 			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
 		} else {
 			delete(fi.headers, node.stat.st_ino)
+			node.stat.st_size = 0
 			node.offset = -2
 		}
 	} else {
