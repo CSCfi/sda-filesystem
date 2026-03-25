@@ -29,6 +29,7 @@ import (
 	"sda-filesystem/internal/mountpoint"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 // Crypt4GH constants
@@ -214,9 +215,10 @@ func ClearPath(path string) error {
 	}
 	// Need to check if objects are segmented
 	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)
-	var noBucket *types.NoSuchBucket
 	if err != nil {
-		if errors.As(err, &noBucket) {
+		var noBucket *types.NoSuchBucket
+		var ae smithy.APIError
+		if errors.As(err, &noBucket) || (errors.As(err, &ae) && ae.ErrorCode() == "InvalidBucketName") {
 			logs.Debugf("Bucket %s does not have matching segments bucket", bucket)
 		} else {
 			logs.Warningf("File sizes may not be correct: %s", err.Error())
@@ -323,11 +325,6 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 		hdrValue, offset, err := api.GetReencryptedHeader(bucket, object)
 		if err != nil {
 			logs.Errorf("Failed to retrieve header from Allas for object %s: %w", path, err)
-
-			return
-		}
-		if hdrValue == "" {
-			logs.Errorf("No header found for object %s", path)
 
 			return
 		}

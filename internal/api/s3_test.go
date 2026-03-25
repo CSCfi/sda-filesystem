@@ -1036,7 +1036,7 @@ func TestGetSegmentedObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for bucket some-bucket in SD Apply: bucket name \"some-bucket\" is not S3 compatible",
+			"failed to list objects for bucket some-bucket in SD Apply: api error InvalidBucketName: UnknownError",
 			http.StatusBadRequest,
 		},
 		{

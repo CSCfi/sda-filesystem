@@ -383,6 +383,13 @@ var GetObjects = func(rep Repo, bucket, path string, prefix ...string) ([]Metada
 
 	meta, err := getObjects(params, rep, bucket)
 	if err != nil {
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			if ae.ErrorCode() == "InvalidBucketName" {
+				err = fmt.Errorf("bucket name %q is not S3 compatible", bucket)
+			}
+		}
+
 		return nil, fmt.Errorf("failed to list objects for %s: %w", path, err)
 	}
 
@@ -416,12 +423,6 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 		output, err := paginator.NextPage(ctx)
 
 		if err != nil {
-			var ae smithy.APIError
-			if errors.As(err, &ae) {
-				if ae.ErrorCode() == "InvalidBucketName" {
-					return nil, fmt.Errorf("bucket name %q is not S3 compatible", bucket)
-				}
-			}
 			var re *smithyhttp.ResponseError
 			if errors.As(err, &re) {
 				err = re.Err
