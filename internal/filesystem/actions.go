@@ -209,7 +209,7 @@ func ClearPath(path string) error {
 	}
 
 	// Get the objects that fulfill the user's request
-	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), prefix)
+	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), "", prefix)
 	if err != nil {
 		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
 	}
@@ -393,7 +393,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		pathNames = pathNames[2:]
 	}
 
-	data, err := api.DownloadData(rep, pathNames, path, header.fileID, header.value,
+	data, err := api.DownloadData(rep, pathNames, path, header.owner, header.fileID, header.value,
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)

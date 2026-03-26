@@ -53,6 +53,9 @@ func TestGetFileHeader(t *testing.T) {
 			"FAIL_REQUEST", "", "", errExpected.Error(), errExpected, nil, false,
 		},
 		{
+			"FAIL_NOT_FOUND", "", "", "", &RequestError{StatusCode: 404}, nil, false,
+		},
+		{
 			"FAIL_WHITELIST_1", "", "",
 			"failed to whitelist public key for SD Connect: " + errExpected.Error(),
 			nil, errExpected, true,

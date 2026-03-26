@@ -87,12 +87,12 @@ local: down ## Run all components locally
 cli: ## Run CLI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$($(MAKE) envs); \
-	trap 'exit 0' INT; go run ./cmd/cli -loglevel=$(LOG) import
+	trap 'exit 0' SIGINT; go run ./cmd/cli -loglevel=$(LOG) import
 
 gui: wails_update ## Run GUI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$($(MAKE) envs); \
-	trap 'exit 0' INT; cd cmd/gui; \
+	trap 'exit 0' SIGINT; cd cmd/gui; \
 	if [ $(IS_UBUNTU_24_04) = true ]; then \
 		wails dev -tags webkit2_41; \
 	else \
