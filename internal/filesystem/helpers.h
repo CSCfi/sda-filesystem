@@ -17,6 +17,9 @@ typedef struct Node {
 	int64_t chld_count;
 	struct stat stat;
 	struct timespec last_modified;
+	// Offset is initialized as -1 indicating the header has not yet been fetched.
+	// Value -2 indicates the object was removed from storage and should not be shown in the filesystem.
+	// A non-negative value represents an actual offset in the object.
 	int64_t offset;
 } node_t;
 

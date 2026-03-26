@@ -42,11 +42,14 @@ static int s3_open(const char *path, struct fuse_file_info *fi) {
 	if (S_ISDIR(node->stat.st_mode)) {
 		return -EISDIR;
     }
+
     fi->fh = node->stat.st_ino; // This will be reflected in read()
 
     if (node->offset == -1) {
         node->offset = 0;
         CheckHeaderExistence(node, path);
+    } else if (node->offset == -2) {
+        return -ENOENT;
     }
 
 	return 0;
@@ -93,7 +96,7 @@ static int s3_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     for (int64_t i = 0; i < node->chld_count; i++) {
         node_t *chld = node->children + i;
-        if (S_ISDIR(chld->stat.st_mode) && !chld->chld_count)
+        if ((S_ISDIR(chld->stat.st_mode) && !chld->chld_count) || chld->offset == -2)
             continue;
         if (filler(buf, chld->name, &chld->stat, 0, 0))
             break;

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"iter"
 	"math"
 	"net/http"
 	"slices"
@@ -46,39 +45,6 @@ type Metadata struct {
 	ID           string
 	Size         int64
 	LastModified *time.Time
-}
-
-// Named is an interface used during Vault header requests so that both slices
-// of Metadata structs and strings can be used to traverse a list of buckets
-type Named interface {
-	GetNames() iter.Seq[string]
-}
-
-type MetadataSlice []Metadata
-
-func (m MetadataSlice) GetNames() iter.Seq[string] {
-	return func(yield func(string) bool) {
-		for _, v := range m {
-			if strings.HasSuffix(v.Name, "_segments") {
-				continue
-			}
-			if !yield(v.Name) {
-				return
-			}
-		}
-	}
-}
-
-type SharedBucketsMeta []string
-
-func (s SharedBucketsMeta) GetNames() iter.Seq[string] {
-	return func(yield func(string) bool) {
-		for _, v := range s {
-			if !yield(v) {
-				return
-			}
-		}
-	}
 }
 
 type resolverV2 struct{}
@@ -337,11 +303,9 @@ var CreateBucket = func(rep Repo, bucket string) error {
 
 // GetBuckets returns metadata for all the buckets in a certain repository
 // For SD Connect the function also returns the buckets shared with the project.
-var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, error) {
+var GetBuckets = func(rep Repo) ([]Metadata, error) {
 	params := &s3.ListBucketsInput{}
-	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params, func(o *s3.ListBucketsPaginatorOptions) {
-		o.Limit = 1000 // Allas does not currently support this and returns all buckets in one request
-	})
+	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params)
 
 	ctx := getContext(rep, false, "")
 
@@ -354,7 +318,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 				err = re.Err
 			}
 
-			return nil, nil, 0, fmt.Errorf("failed to list buckets for %s: %w", rep, err)
+			return nil, fmt.Errorf("failed to list buckets for %s: %w", rep, err)
 		}
 
 		buckets = append(buckets, output.Buckets...)
@@ -363,7 +327,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 	logs.Infof("Retrieved buckets for %s", rep)
 
 	// Only SD Connect has shared buckets but this map will also contain SD Apply datasets
-	sharedMap := make(map[string]SharedBucketsMeta)
+	sharedMap := make(map[string][]string)
 
 	numBuckets := len(buckets)
 	meta := make([]Metadata, 0, numBuckets)
@@ -392,7 +356,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 	}
 
 	if numBuckets+len(sharedMap) == 0 {
-		return nil, nil, 0, fmt.Errorf("no buckets found for %s", rep)
+		return nil, fmt.Errorf("no buckets found for %s", rep)
 	}
 
 	for owner := range sharedMap {
@@ -403,7 +367,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, map[string]SharedBucketsMeta, int, 
 		}
 	}
 
-	return meta, sharedMap, numBuckets, nil
+	return meta, nil
 }
 
 // GetObjects returns metadata for all the objects in a particular bucket.
@@ -443,9 +407,7 @@ var GetSegmentedObjects = func(rep Repo, bucket string) ([]Metadata, error) {
 }
 
 func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metadata, error) {
-	paginator := s3.NewListObjectsV2Paginator(ai.hi.s3Client, params, func(o *s3.ListObjectsV2PaginatorOptions) {
-		o.Limit = 10000
-	})
+	paginator := s3.NewListObjectsV2Paginator(ai.hi.s3Client, params)
 
 	ctx := getContext(rep, false, "")
 
@@ -490,8 +452,8 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 // DownloadData requests data between range [startDecrypted, endDecrypted).
 // As we want to split the data into chunks at consistent locations,
 // the requested byte interval may encompass one or two data chunks.
-var DownloadData = func(rep Repo, nodes []string, path, fileID string,
-	header *string, startDecrypted, endDecrypted, oldOffset, fileSize int64,
+var DownloadData = func(rep Repo, nodes []string, path, fileID, header string,
+	startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	endDecrypted = min(endDecrypted, fileSize)
 
@@ -526,7 +488,7 @@ func CalculateEncryptedSize(decryptedSize int64) int64 {
 }
 
 func getDataChunk(
-	rep Repo, nodes []string, path, fileID string, header *string,
+	rep Repo, nodes []string, path, fileID, header string,
 	chunk, startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	// start coordinate of chunk
@@ -547,24 +509,11 @@ func getDataChunk(
 		return chunkData[ofst:endofst], nil
 	}
 
-	var startEncrypted, endEncrypted, encryptedBodySize int64
-	if header == nil || *header == "" {
-		// We end up here when we cannot decrypt the object. Either when trying to fetch the header
-		// in filesystem.CheckHeaderExistence() or when object has been encrypted with an unknown key.
-		// In these situations there is no point to map the range of bytes to an encrypted range
-		// because we read the response body as is.
-		startEncrypted = chByteStart
-		endEncrypted = chByteEnd
-		encryptedBodySize = fileSize
-	} else {
-		// Convert chunk coordinates to work with encrypted object in storage
-		// Chunks are a multiple of BlockSize, so no need to worry about floats
-		startEncrypted = chByteStart/BlockSize*CipherBlockSize + oldOffset
-		endEncrypted = (chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize + oldOffset
-
-		encryptedBodySize = CalculateEncryptedSize(fileSize) + oldOffset
-	}
-	endEncrypted = min(endEncrypted, encryptedBodySize)
+	// Convert chunk coordinates to work with encrypted object in storage
+	// Chunks are a multiple of BlockSize, so no need to worry about floats
+	encryptedBodySize := CalculateEncryptedSize(fileSize) + oldOffset
+	startEncrypted := chByteStart/BlockSize*CipherBlockSize + oldOffset
+	endEncrypted := min((chByteEnd+BlockSize-1)/BlockSize*CipherBlockSize+oldOffset, encryptedBodySize)
 
 	bucket := nodes[0]
 	object := strings.Join(nodes[1:], "/")
@@ -586,35 +535,30 @@ func getDataChunk(
 	}
 	defer resp.Body.Close()
 
-	chByteEnd = min(chByteEnd, fileSize)
-	buffer := make([]byte, chByteEnd-chByteStart)
-	crypt4GHReader := resp.Body.(io.Reader)
-
-	if header != nil && *header != "" { // Encrypted file we can decrypt
-		var headerBytes []byte
-		headerBytes, err = base64.StdEncoding.DecodeString(*header)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode header: %w", err)
-		}
-		objectReader := io.MultiReader(bytes.NewReader(headerBytes), resp.Body)
-		crypt4GHReader, err = streaming.NewCrypt4GHReader(objectReader, ai.vi.privateKey, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to construct reader: %w", err)
-		}
+	// Create a io.Reader that decrypts the file with the provided header
+	headerBytes, err := base64.StdEncoding.DecodeString(header)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode header: %w", err)
+	}
+	objectReader := io.MultiReader(bytes.NewReader(headerBytes), resp.Body)
+	crypt4GHReader, err := streaming.NewCrypt4GHReader(objectReader, ai.vi.privateKey, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct reader: %w", err)
 	}
 
+	chByteEnd = min(chByteEnd, fileSize)
+	buffer := make([]byte, chByteEnd-chByteStart)
+
+	// Read file through the decrypting io.Reader
 	if _, err = io.ReadFull(crypt4GHReader, buffer); err != nil {
 		return nil, fmt.Errorf("failed to read file chunk [%d, %d): %w", chByteStart, chByteEnd, err)
 	}
 
-	// Do not cache data when retrieving object header
-	if header != nil {
-		downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
-		logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
+	downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
+	logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
 
-		if GetProjectType() == "findata" {
-			go scanForViruses(buffer, path)
-		}
+	if GetProjectType() == "findata" {
+		go scanForViruses(buffer, path)
 	}
 
 	return buffer[ofst:endofst], nil

@@ -517,20 +517,10 @@ var makeRequest = func(method string, ep endpoint, query, headers map[string]str
 	return nil
 }
 
-var GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
-	resp := make(map[string]SharedBucketsMeta)
+var GetSharedBuckets = func() (map[string][]string, error) {
+	resp := make(map[string][]string)
 
 	return resp, makeRequest("GET", ai.hi.endpoints.SharedBuckets, nil, nil, nil, &resp)
-}
-
-var SharedBucketProject = func(bucket string) (string, error) {
-	resp := struct {
-		Owner string `json:"owner"`
-	}{}
-	ep := ai.hi.endpoints.SharedBuckets
-	ep.path += "/" + bucket
-
-	return resp.Owner, makeRequest("GET", ep, nil, nil, nil, &resp)
 }
 
 func toCacheKey(rep Repo, nodes []string, chunkIdx int64) string {

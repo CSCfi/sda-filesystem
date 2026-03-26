@@ -351,31 +351,32 @@ func TestGetBuckets(t *testing.T) {
 	ai.userProfile.ProjectName = "my-project"
 
 	var tests = []struct {
-		testname      string
-		repo          Repo
-		bucketsNum    int
-		buckets       []string
-		sharedBuckets map[string]SharedBucketsMeta
+		testname   string
+		repo       Repo
+		bucketsNum int
+		buckets    []Metadata
 	}{
 		{
 			"OK_1", SDApply, 0,
-			[]string{"bucket256", "bucket42"},
-			map[string]SharedBucketsMeta{
-				"us-east-1": {"bucket42", "bucket256"},
+			[]Metadata{
+				{Name: "bucket256", Owner: "us-east-1", Size: 0, LastModified: nil},
+				{Name: "bucket42", Owner: "us-east-1", Size: 0, LastModified: nil},
 			},
 		},
 		{
 			"OK_2", SDConnect, 2,
-			[]string{"bucket0583", "bucket256", "bucket42", "bucket789", "bucket87"},
-			map[string]SharedBucketsMeta{
-				"sharing-project-1": {"bucket87"},
-				"sharing-project-2": {"bucket0583", "bucket789"},
+			[]Metadata{
+				{Name: "bucket0583", Owner: "sharing-project-2", Size: 0, LastModified: nil},
+				{Name: "bucket256", Owner: "", Size: 0, LastModified: nil},
+				{Name: "bucket42", Owner: "", Size: 0, LastModified: nil},
+				{Name: "bucket789", Owner: "sharing-project-2", Size: 0, LastModified: nil},
+				{Name: "bucket87", Owner: "sharing-project-1", Size: 0, LastModified: nil},
 			},
 		},
 	}
 
-	GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
-		return map[string]SharedBucketsMeta{
+	GetSharedBuckets = func() (map[string][]string, error) {
+		return map[string][]string{
 			"my-project":        {"bucket42"},
 			"sharing-project-1": {"bucket87"},
 			"sharing-project-2": {"bucket0583", "bucket789"},
@@ -422,23 +423,14 @@ func TestGetBuckets(t *testing.T) {
 
 			if err := initialiseS3Client(); err != nil {
 				t.Errorf("Failed to initialize S3 client: %v", err.Error())
-			} else if buckets, sharedBuckets, ownedBucketsNum, err := GetBuckets(tt.repo); err != nil {
+			} else if buckets, err := GetBuckets(tt.repo); err != nil {
 				t.Errorf("Request for %s buckets failed: %v", tt.repo, err)
 			} else {
 				slices.SortFunc(buckets, func(a, b Metadata) int {
 					return strings.Compare(a.Name, b.Name)
 				})
-				result := slices.CompareFunc(buckets, tt.buckets, func(a Metadata, b string) int {
-					return strings.Compare(a.Name, b)
-				})
-				if result != 0 {
+				if !reflect.DeepEqual(buckets, tt.buckets) {
 					t.Errorf("Function returned incorrect buckets\nExpected=%v\nReceived=%v", tt.buckets, buckets)
-				}
-				if !reflect.DeepEqual(sharedBuckets, tt.sharedBuckets) {
-					t.Errorf("Function returned incorrect shared buckets\nExpected=%v\nReceived=%v", tt.sharedBuckets, sharedBuckets)
-				}
-				if ownedBucketsNum != tt.bucketsNum {
-					t.Errorf("Function returned incorrect number of owned buckets\nExpected=%v\nReceived=%v", tt.bucketsNum, ownedBucketsNum)
 				}
 			}
 		})
@@ -530,7 +522,7 @@ func TestGetBuckets_MultiplePages(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if buckets, _, _, err := GetBuckets(SDApply); err != nil {
+	} else if buckets, err := GetBuckets(SDApply); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else {
 		slices.SortFunc(buckets, func(a, b Metadata) int {
@@ -600,7 +592,7 @@ func TestGetBuckets_Error(t *testing.T) {
 				t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 				w.WriteHeader(http.StatusBadRequest)
 			}))
-			GetSharedBuckets = func() (map[string]SharedBucketsMeta, error) {
+			GetSharedBuckets = func() (map[string][]string, error) {
 				return nil, tt.sharedErr
 			}
 			ai.proxy = srv.URL
@@ -608,7 +600,7 @@ func TestGetBuckets_Error(t *testing.T) {
 
 			if err := initialiseS3Client(); err != nil {
 				t.Errorf("Failed to initialize S3 client: %v", err.Error())
-			} else if _, _, _, err := GetBuckets(tt.repo); err == nil {
+			} else if _, err := GetBuckets(tt.repo); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -1143,81 +1135,69 @@ func TestDownloadData(t *testing.T) {
 	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
-		testname, bucket, object      string
-		header                        []string
-		byteStart, byteEnd, offset    int64
-		alreadyCachedIdxs, cachedIdxs []int64
-		decryptable                   bool
+		testname, bucket, object, header string
+		byteStart, byteEnd, offset       int64
+		alreadyCachedIdxs, cachedIdxs    []int64
 	}{
 		{
-			"OK_NIL_HEADER", "new-bucket", "new-object.txt.c4gh",
-			nil, 345, 1000, 0,
-			nil, nil, false,
-		},
-		{
 			"OK_DECRYPTED", "another-bucket", "subfolder/another-object.txt.c4gh",
-			[]string{header64}, 345, 1000, 0,
-			nil, []int64{0}, true,
+			header64, 345, 1000, 0,
+			nil, []int64{0},
 		},
 		{
 			"OK_ENTIRE_CHUNK", "myBucket", "subfolder/another-dir/hello.txt.c4gh",
-			[]string{header64}, 33554432, 67108864, 0,
-			nil, []int64{33554432}, true,
+			header64, 33554432, 67108864, 0,
+			nil, []int64{33554432},
 		},
 		{
 			"OK_TWO_CHUNKS_1", "bucket24601", "file.txt.c4gh",
-			[]string{header64}, 33554000, 33564437, 0,
-			nil, []int64{0, 33554432}, true,
+			header64, 33554000, 33564437, 0,
+			nil, []int64{0, 33554432},
 		},
 		{
 			"OK_TWO_CHUNKS_2", "bucket24601", "file.txt.c4gh",
-			[]string{header64}, 67100860, 67109862, 0,
-			nil, []int64{33554432, 67108864}, true,
+			header64, 67100860, 67109862, 0,
+			nil, []int64{33554432, 67108864},
 		},
 		{
 			"OK_FILE_START", "bucket42", "what-are-you-looking-at.c4gh",
-			[]string{header64}, 0, 2341, 0,
-			nil, []int64{0}, true,
+			header64, 0, 2341, 0,
+			nil, []int64{0},
 		},
 		{
 			"OK_FILE_END", "buketti", "banana.pdf.c4gh",
-			[]string{header64}, 83885978, 83886090, 0,
-			nil, []int64{67108864}, true,
-		},
-		{
-			"OK_CANNOT_DECRYPT", "buketti", "omena.docx.c4gh",
-			[]string{""}, 6486076, 6487002, 0,
-			nil, []int64{0}, false,
+			header64, 83885978, 83886090, 0,
+			nil, []int64{67108864},
 		},
 		{
 			"OK_CACHED_1", "cached-bucket", "file.txt",
-			[]string{""}, 74106760, 74107964, 0,
-			[]int64{67108864}, []int64{67108864}, false,
+			header64, 74106760, 74107964, 0,
+			[]int64{67108864}, []int64{67108864},
 		},
 		{
 			"OK_CACHED_2", "cached-bucket", "tiedosto.c4gh",
-			[]string{header64}, 33550099, 33556008, 0,
-			[]int64{0, 33554432}, []int64{0, 33554432}, true,
+			header64, 33550099, 33556008, 0,
+			[]int64{0, 33554432}, []int64{0, 33554432},
 		},
 		{
 			"OK_PARTLY_CACHED", "cached-bucket", "tiedosto-2.c4gh",
-			[]string{header64}, 33550099, 33556008, 0,
-			[]int64{0}, []int64{0, 33554432}, true,
+			header64, 33550099, 33556008, 0,
+			[]int64{0}, []int64{0, 33554432},
 		},
 		{
 			"OK_OFFSET_1", "old-bucket", "myobject.c4gh",
-			[]string{header64}, 0, 426, 28357,
-			nil, []int64{0}, true,
+			header64, 0, 426, 28357,
+			nil, []int64{0},
 		},
 		{
 			"OK_OFFSET_2", "old-bucket-2", "myobject-2.c4gh",
-			[]string{header64}, 53108864, 53109961, 157,
-			nil, []int64{33554432}, true,
+			header64, 53108864, 53109961, 157,
+			nil, []int64{33554432},
 		},
 		{
 			"OK_OFFSET_3", "old-bucket-3", "myobject-3.c4gh",
-			[]string{header64}, 83885978, 83886090, 473,
-			nil, []int64{67108864}, true,
+			header64, 83885978, 83886090, 473,
+			nil, []int64{67108864},
 		},
 	}
 
@@ -1266,16 +1246,9 @@ func TestDownloadData(t *testing.T) {
 			}
 
 			nodes := append([]string{tt.bucket}, strings.Split(tt.object, "/")...)
-			var header *string = nil
-			if tt.header != nil {
-				header = &tt.header[0]
-			}
 			// add mock offset to encrypted data
 			encryptedContent = append([]byte(strings.Repeat("A", int(tt.offset))), encryptedContent...)
 			source := content
-			if !tt.decryptable {
-				source = encryptedContent
-			}
 			t.Cleanup(func() { encryptedContent = encryptedContent[tt.offset:] })
 
 			storage.keys = make(map[string][]byte)
@@ -1287,7 +1260,7 @@ func TestDownloadData(t *testing.T) {
 				}
 			}
 
-			data, err := DownloadData(SDConnect, nodes, "", "", header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
+			data, err := DownloadData(SDConnect, nodes, "", "", tt.header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1409,7 +1382,7 @@ func TestDownloadData_SDApply(t *testing.T) {
 			nodes := append([]string{"new_bucket"}, strings.Split(tt.objectWithID, "/")...)
 			storage.keys = make(map[string][]byte)
 
-			data, err := DownloadData(SDApply, nodes, "", tt.id, &header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
+			data, err := DownloadData(SDApply, nodes, "", tt.id, header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1467,34 +1440,33 @@ func TestDownloadData_Error(t *testing.T) {
 	ai.hi.client = &http.Client{Transport: http.DefaultTransport}
 
 	var tests = []struct {
-		testname, errStr   string
-		header             []string
-		errorByte, maxByte int
+		testname, errStr, header string
+		errorByte, maxByte       int
 	}{
 		{
 			"FAIL_SERVER_1",
 			"failed to get data chunk: failed to retrieve object from Allas for path: api error InternalServerError: Internal Server Error",
-			nil, 0, 60000000,
+			"", 0, 60000000,
 		},
 		{
 			"FAIL_SERVER_2",
 			"failed to get second data chunk: failed to retrieve object from Allas for path: api error InternalServerError: Internal Server Error",
-			[]string{header64}, 33568768, 60000000,
+			header64, 33568768, 60000000,
 		},
 		{
 			"FAIL_INVALID_HEADER",
 			"failed to get data chunk: failed to construct reader: not a Crypt4GH file",
-			[]string{"SS1hbS1hLWhlYWRlcg=="}, -1, 60000000,
+			"SS1hbS1hLWhlYWRlcg==", -1, 60000000,
 		},
 		{
 			"FAIL_HEADER_DECODE",
 			"failed to get data chunk: failed to decode header: illegal base64 data at input byte 0",
-			[]string{"H"}, -1, 60000000,
+			"H", -1, 60000000,
 		},
 		{
 			"FAIL_READ",
 			"failed to get second data chunk: failed to read file chunk [33554432, 67108864): data segment can't be decrypted with any of header keys",
-			[]string{header64}, -1, 40000000,
+			header64, -1, 40000000,
 		},
 	}
 
@@ -1528,13 +1500,8 @@ func TestDownloadData_Error(t *testing.T) {
 			}
 
 			nodes := []string{"bucket", "obj.txt.c4gh"}
-			var header *string = nil
-			if tt.header != nil {
-				header = &tt.header[0]
-			}
-
 			storage.keys = make(map[string][]byte)
-			_, err := DownloadData(SDConnect, nodes, "path", "", header, 33554000, 33564437, 0, int64(decryptedSize))
+			_, err := DownloadData(SDConnect, nodes, "path", "", tt.header, 33554000, 33564437, 0, int64(decryptedSize))
 			if err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {

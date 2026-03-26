@@ -2,9 +2,8 @@ package api
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,11 +24,6 @@ type vaultInfo struct {
 	keyName    string
 }
 
-type vaultBatchResponse struct {
-	Data     BatchHeaderVersions `json:"data"`
-	Warnings []string            `json:"warnings"`
-}
-
 type keyResponse struct {
 	Key64 string `json:"public_key_c4gh"`
 }
@@ -45,96 +39,7 @@ type VaultHeader struct {
 	KeyVersion int    `json:"keyversion"`
 }
 
-type BatchHeaderVersions map[string]map[string]int
-
-// GetHeaders gets all the file headers for the buckets, including headers for shared buckets.
-var GetHeaderVersions = func(
-	rep Repo,
-	buckets []Metadata,
-	sharedBuckets map[string]SharedBucketsMeta,
-) (BatchHeaderVersions, error) {
-	headers, err := getProjectHeaderVersions(rep, "", MetadataSlice(buckets))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get header versions for %s: %w", rep, err)
-	}
-
-	for project := range sharedBuckets {
-		logs.Debugf("Fetching headers for %s", project)
-		sharedHeaders, err := getProjectHeaderVersions(rep, project, sharedBuckets[project])
-		if err != nil {
-			logs.Errorf("Failed to get header versions for %s: %w", project, err)
-
-			continue
-		}
-
-		maps.Copy(headers, sharedHeaders)
-	}
-
-	return headers, nil
-}
-
-var getProjectHeaderVersions = func(rep Repo, project string, buckets Named) (BatchHeaderVersions, error) {
-	batch := map[string][]string{}
-	for name := range buckets.GetNames() {
-		batch[name] = []string{"**"} // Get all headers from bucket
-	}
-
-	logInsert := ""
-	if project != "" {
-		logInsert = " shared project (" + project + ")"
-	}
-
-	if len(batch) == 0 {
-		logs.Debugf("No buckets to fetch headers for in %s%s", rep, logInsert)
-
-		return BatchHeaderVersions{}, nil
-	}
-
-	var err error
-	var batchJSON []byte
-	if rep == SDConnect {
-		batchJSON, err = json.Marshal(batch)
-	} else {
-		batchJSON, err = json.Marshal(slices.Collect(maps.Keys(batch)))
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal batch json: %w", err)
-	}
-	batchString := base64.StdEncoding.EncodeToString(batchJSON)
-
-	body := `{"batch": "%s", "versions": true}`
-	body = fmt.Sprintf(body, batchString)
-
-	query := map[string]string{}
-	if project != "" {
-		query["owner"] = project
-	}
-
-	var resp vaultBatchResponse
-	err = makeRequest("GET", ai.hi.endpoints.Vault.Headers, query, nil, strings.NewReader(body), &resp)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-
-	warnings := []string{}
-	for i := range resp.Warnings {
-		if strings.HasPrefix(resp.Warnings[i], "No matches found for") {
-			logs.Debug(resp.Warnings[i])
-		} else {
-			warnings = append(warnings, resp.Warnings[i])
-		}
-	}
-	if len(warnings) > 0 {
-		logs.Warningf("The request for file headers was not entirely successful.")
-		for i := range warnings {
-			logs.Warningf("%s", warnings[i])
-		}
-	}
-
-	return resp.Data, nil
-}
-
-var GetFileHeader = func(rep Repo, bucket, object, owner, id string, version int, path string) (string, error) {
+var GetFileHeader = func(rep Repo, bucket, object, owner, id string) (string, error) {
 	ep := ai.hi.endpoints.Vault.Headers
 	ep.path += "/" + bucket
 
@@ -162,13 +67,16 @@ var GetFileHeader = func(rep Repo, bucket, object, owner, id string, version int
 	}
 
 	var resp VaultHeaders
-	err := makeRequest("GET", ep, query, nil, nil, &resp)
+	if err := makeRequest("GET", ep, query, nil, nil, &resp); err != nil {
+		var re *RequestError
+		if errors.As(err, &re) && re.StatusCode == 404 {
+			return "", nil
+		}
 
-	if resp.LatestVersion > version {
-		logs.Warningf("File %s has a header version that is higher than expected which suggests the file has been modified after the creation of Data Gateway. You may need to refresh Data Gateway to be able to download the file", path)
+		return "", err
 	}
 
-	return resp.Headers[strconv.Itoa(version)].Header, err
+	return resp.Headers[strconv.Itoa(resp.LatestVersion)].Header, nil
 }
 
 var whitelistKey = func(owner string) error {

@@ -9,7 +9,6 @@ package filesystem
 import "C"
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -30,7 +29,6 @@ import (
 	"sda-filesystem/internal/mountpoint"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/neicnordic/crypt4gh/model/headers"
 )
 
 // Crypt4GH constants
@@ -209,23 +207,6 @@ func ClearPath(path string) error {
 		prefix += "/"
 	}
 
-	projectBuckets := []api.Metadata{{Name: bucket}}
-	sharedBuckets := make(map[string]api.SharedBucketsMeta)
-	// Need to know if bucket is shared or not. This will determine how vault is called
-	ownerProject, err := api.SharedBucketProject(bucket)
-	if err != nil {
-		return fmt.Errorf("could not determine if bucket %s is shared: %w", bucket, err)
-	}
-	if ownerProject != "" {
-		logs.Debugf("Bucket %s in %s is shared by project %s", bucket, rep, ownerProject)
-		projectBuckets = nil
-		sharedBuckets[ownerProject] = api.SharedBucketsMeta{bucket}
-	}
-	batchHeaders, err := api.GetHeaderVersions(rep, projectBuckets, sharedBuckets)
-	if err != nil {
-		return fmt.Errorf("failed to get headers for bucket %s: %w", bucket, err)
-	}
-
 	// Get the objects that fulfill the user's request
 	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), prefix)
 	if err != nil {
@@ -242,13 +223,12 @@ func ClearPath(path string) error {
 		}
 	}
 
-	objMap := make(map[string]metadata, len(objects))
+	objMap := make(map[string]api.Metadata, len(objects))
 	for i := range objects {
-		objMap[bucket+"/"+objects[i].Name] = metadata{
-			objects[i],
-			batchHeaders[bucket][objects[i].Name],
-			segmentSizes[objects[i].Name],
+		if objects[i].Size == 0 {
+			objects[i].Size = segmentSizes[objects[i].Name]
 		}
+		objMap[bucket+"/"+objects[i].Name] = objects[i]
 	}
 
 	oldSize := node.stat.st_size
@@ -261,23 +241,20 @@ func ClearPath(path string) error {
 	return nil
 }
 
-func clearNode(node *C.node_t, pathNodes []string, meta map[string]metadata) (C.off_t, C.time_t) {
+func clearNode(node *C.node_t, pathNodes []string, meta map[string]api.Metadata) (C.off_t, C.time_t) {
 	if node.children == nil {
 		api.DeleteFileFromCache(api.SDConnect, pathNodes, int64(node.stat.st_size))
 		path := strings.Join(pathNodes, "/")
 		obj, ok := meta[path]
 		if ok {
+			fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
 			node.offset = -1
-			delete(fi.headers, node.stat.st_ino)
-			if obj.headerVersion > 0 {
-				fi.headers[node.stat.st_ino] = header{version: obj.headerVersion, owner: obj.Owner}
-			}
-			if obj.Size == 0 {
-				node.stat.st_size = C.off_t(obj.segmentSize)
-			} else {
-				node.stat.st_size = C.off_t(obj.Size)
-			}
+			node.stat.st_size = C.off_t(obj.Size)
 			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
+		} else {
+			delete(fi.headers, node.stat.st_ino)
+			node.stat.st_size = 0
+			node.offset = -2
 		}
 	} else {
 		node.stat.st_size = 0
@@ -324,14 +301,15 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 		object = strings.Join(pathNames[3:], "/")
 	}
 
-	hdr, ok := fi.headers[node.stat.st_ino]
-	if ok {
-		hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.fileID, hdr.version, path)
-		if err != nil {
-			logs.Errorf("Failed to retrieve header from Vault for file %s: %v", path, err)
+	hdr := fi.headers[node.stat.st_ino]
+	hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.fileID)
+	if err != nil {
+		logs.Errorf("Failed to retrieve header from Vault for object %s: %v", path, err)
 
-			return
-		}
+		return
+	}
+
+	if hdrValue != "" {
 		hdr.value = hdrValue
 		fi.headers[node.stat.st_ino] = hdr
 		logs.Debugf("Header found for object %s", path)
@@ -344,22 +322,12 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 
 		hdrValue, offset, err := api.GetReencryptedHeader(bucket, object)
 		if err != nil {
-			logs.Warningf("Failed to retrieve possible header for %s: %w", path, err)
-			logs.Infof("Testing if file %s is encrypted with unknown key", path)
+			logs.Errorf("Failed to retrieve header from Allas for object %s: %w", path, err)
 
-			buffer, err := api.DownloadData(rep, pathNames[3:], path, "", nil,
-				0, 2*CipherBlockSize, 0, int64(node.stat.st_size))
-			if err != nil {
-				logs.Errorf("Could not test if file is encrypted: %v", err)
-
-				return
-			}
-			if _, err = headers.ReadHeader(bytes.NewReader(buffer)); err == nil {
-				fi.headers[node.stat.st_ino] = header{}
-				logs.Infof("File %s is encrypted", path)
-			} else {
-				logs.Warningf("File %s is not encrypted", path)
-			}
+			return
+		}
+		if hdrValue == "" {
+			logs.Errorf("No header found for object %s", path)
 
 			return
 		}
@@ -370,17 +338,17 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 		node.offset = C.int64_t(offset)
 	}
 
-	if hdr.value != "" {
-		bodySize := node.stat.st_size - node.offset
-		if bodySize < 0 {
-			logs.Errorf("File %s is too small (%d bytes) for its header size (%d bytes)", path, bodySize, len(hdr.value))
+	bodySize := node.stat.st_size - node.offset
+	if bodySize < 0 {
+		logs.Errorf("File %s is too small (%d bytes) for its header size (%d bytes)", path, bodySize, len(hdr.value))
+		delete(fi.headers, node.stat.st_ino)
 
-			return
-		}
-		oldSize := node.stat.st_size
-		node.stat.st_size = calculateDecryptedSize(bodySize)
-		updateParentSizes(node, oldSize)
+		return
 	}
+
+	oldSize := node.stat.st_size
+	node.stat.st_size = calculateDecryptedSize(bodySize)
+	updateParentSizes(node, oldSize)
 }
 
 // calculateDecryptedSize calculates the decrypted size of an headerless encrypted file
@@ -409,8 +377,8 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		return -1
 	}
 
-	header, ok := fi.headers[node.stat.st_ino]
-	if !ok {
+	header := fi.headers[node.stat.st_ino]
+	if header.value == "" {
 		logs.Errorf("You do not have permission to access file %s: %s", path,
 			http.StatusText(http.StatusUnavailableForLegalReasons))
 
@@ -428,7 +396,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		pathNames = pathNames[2:]
 	}
 
-	data, err := api.DownloadData(rep, pathNames, path, header.fileID, &header.value,
+	data, err := api.DownloadData(rep, pathNames, path, header.fileID, header.value,
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)
