@@ -7,6 +7,12 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- (users) if a object no longer exist when clearing path, hide the object from the user
+- if a file has offset -2, it is to be hidden from the user
+- do not fetch file header versions in batch during initialization (#62)
+
 ## [2026.3.2] - 2026-03-17
 
 ### Fixed
