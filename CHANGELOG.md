@@ -7,11 +7,19 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.3.3] - 2026-03-26
+
 ### Changed
 
+- include the SD Apply service in S3 endpoints when needed
 - (users) if a object no longer exist when clearing path, hide the object from the user
 - if a file has offset -2, it is to be hidden from the user
 - do not fetch file header versions in batch during initialization (#62)
+
+### Fixed
+
+- fetching non-existent segments bucket when running `clear <path>` command locally, since `docker-keystone-swift` returns `InvalidBucketName`, not `NoSuchBucket`, when bucket does not exist
+- the fields under `customManagers` in `renovate.json`
 
 ## [2026.3.2] - 2026-03-17
 
@@ -469,7 +477,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.2...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.3...HEAD
+[2026.3.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.2...2026.3.3
 [2026.3.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.1...2026.3.2
 [2026.3.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.0...2026.3.1
 [2026.3.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.2.0...2026.3.0
