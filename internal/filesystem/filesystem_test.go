@@ -486,7 +486,7 @@ func TestInitializeFilesystem(t *testing.T) {
 
 		return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
 	}
-	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
 		switch rep {
 		case rep1:
 			switch bucket {

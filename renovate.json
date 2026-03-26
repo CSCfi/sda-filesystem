@@ -21,8 +21,7 @@
       "matchStrings": [
         "go(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
-      "datasourceTemplate": "go",
-      "versioningTemplate": "golang",
+      "datasourceTemplate": "golang-version",
       "depNameTemplate": "go"
     }
   ]

@@ -12,6 +12,8 @@ import (
 	"unsafe"
 
 	"sda-filesystem/internal/api"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 var errExpected = errors.New("expected error for test")
@@ -153,15 +155,14 @@ func TestClearPath(t *testing.T) {
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	time2, _ := time.Parse(time.RFC3339, "2017-01-24T08:30:45Z")
 	time3, _ := time.Parse(time.RFC3339, "2001-05-01T10:04:05Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "bucket_1" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
-		if len(prefix) == 0 {
+		if len(extra) < 2 {
 			t.Errorf("api.GetObjects() should have received prefix")
-		}
-		if prefix[0] != "kansio/" {
-			t.Errorf("api.GetObjects() received incorrect prefix. Expected=kansio/, received=%s", prefix[0])
+		} else if extra[1] != "kansio/" {
+			t.Errorf("api.GetObjects() received incorrect prefix. Expected=kansio/, received=%s", extra[1])
 		}
 
 		return []api.Metadata{
@@ -260,15 +261,14 @@ func TestClearPath_Segments(t *testing.T) {
 	time1, _ := time.Parse(time.RFC3339, "2011-04-24T03:38:45Z")
 	time2, _ := time.Parse(time.RFC3339, "2023-07-10T23:11:00Z")
 	time3, _ := time.Parse(time.RFC3339, "2021-05-01T10:04:05Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "dir+2" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
-		if len(prefix) == 0 {
+		if len(extra) < 2 {
 			t.Errorf("api.GetObjects() should have received prefix")
-		}
-		if prefix[0] != "" {
-			t.Errorf("api.GetObjects() received incorrect prefix. Expected=, received=%s", prefix[0])
+		} else if extra[1] != "" {
+			t.Errorf("api.GetObjects() received incorrect prefix. Expected=, received=%s", extra[1])
 		}
 
 		return []api.Metadata{
@@ -356,12 +356,12 @@ func TestClearPath_SegmentsError(t *testing.T) {
 	fi.headers = map[_Ctype_ino_t]header{33: {value: "bftcdvtuftu"}}
 	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "shared_bucket" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
-		if len(prefix) > 0 && len(prefix[0]) > 0 {
-			t.Errorf("api.GetObjects() should not have received prefix %v", prefix)
+		if len(extra) > 0 && len(extra[0]) > 0 {
+			t.Errorf("api.GetObjects() should not have received extra parameters %v", extra)
 		}
 
 		return []api.Metadata{
@@ -369,7 +369,7 @@ func TestClearPath_SegmentsError(t *testing.T) {
 		}, nil
 	}
 	getObjectSizesFromSegments = func(rep api.Repo, bucket string) (map[string]int64, error) {
-		return nil, errExpected
+		return nil, &types.NoSuchBucket{}
 	}
 
 	diff := _Ctype_off_t(3)
@@ -473,7 +473,7 @@ func TestClearPath_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep api.Repo, bucket, path string, prefix ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
 				return nil, tt.objectErr
 			}
 			fi.nodes = getTestFuse(t)
@@ -554,13 +554,25 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 	}
 }
 
-func TestCheckHeaderExistence_BadPath(t *testing.T) {
+func TestCheckHeaderExistence_ErrorNoChange(t *testing.T) {
 	var tests = []struct {
-		testname string
-		nodeIdx  int
+		testname                                string
+		nodeIdx                                 int
+		allowReencryptedHeader, allowFileHeader bool
+		reencryptedErr                          error
 	}{
-		{"FAIL_1", 6},
-		{"FAIL_2", 20},
+		{
+			"FAIL_BAD_PATH_1", 6, false, false, nil,
+		},
+		{
+			"FAIL_BAD_PATH_2", 20, false, false, nil,
+		},
+		{
+			"FAIL_SDAPPLY", 8, false, true, errExpected,
+		},
+		{
+			"FAIL_NOT_ENCRYPTED", 36, true, true, errExpected,
+		},
 	}
 
 	origGetReencryptedHeader := api.GetReencryptedHeader
@@ -572,19 +584,23 @@ func TestCheckHeaderExistence_BadPath(t *testing.T) {
 		fi.headers = origHeaders
 	}()
 
-	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-		t.Errorf("api.GetReencryptedHeader() should not be called with %s/%s", bucket, object)
-
-		return "", 0, nil
-	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
-		t.Errorf("api.GetFileHeader() should not be called with %s %s/%s", rep, bucket, object)
-
-		return "", nil
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
+			api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
+				if !tt.allowReencryptedHeader {
+					t.Errorf("api.GetReencryptedHeader() should not be called")
+				}
+
+				return "", 0, tt.reencryptedErr
+			}
+			api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
+				if !tt.allowFileHeader {
+					t.Errorf("api.GetFileHeader() should not be called")
+				}
+
+				return "", nil
+			}
+
 			fi.nodes = getTestFuse(t)
 			nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
 
@@ -663,48 +679,7 @@ func TestCheckHeaderExistence_Reencrypted(t *testing.T) {
 	}
 }
 
-func TestCheckHeaderExistence_NotEncrypted(t *testing.T) {
-	fi.nodes = getTestFuse(t)
-	nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
-
-	origGetReencryptedHeader := api.GetReencryptedHeader
-	origGetFileHeader := api.GetFileHeader
-	origHeaders := fi.headers
-	defer func() {
-		api.GetReencryptedHeader = origGetReencryptedHeader
-		api.GetFileHeader = origGetFileHeader
-		fi.headers = origHeaders
-	}()
-
-	api.GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
-		return "", 0, fmt.Errorf("something happened")
-	}
-	api.GetFileHeader = func(rep api.Repo, bucket, object, owner, id string) (string, error) {
-		return "", fmt.Errorf("something happened")
-	}
-
-	node := &nodeSlice[36]
-	node.offset = 0
-	fi.headers = make(map[_Ctype_ino_t]header)
-
-	CheckHeaderExistence(node, node.name) // second argument is only for logs, so is does not matter here what it is
-	if node.offset != 0 {
-		t.Errorf("Node offset incorrect. Expected=0, received=%d", node.offset)
-	}
-	if len(fi.headers) > 0 {
-		t.Errorf("Headers slice should be empty. Received=%v", fi.headers)
-	}
-
-	origFs := getTestFuse(t)
-	nodeSlice = unsafe.Slice(origFs.nodes, fsSize)
-	nodeSlice[36].offset = 0
-
-	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
-		t.Errorf("Checking for header changed filesystem: %s", err.Error())
-	}
-}
-
-func TestCheckHeaderExistence_HeaderError(t *testing.T) {
+func TestCheckHeaderExistence_FileHeaderError(t *testing.T) {
 	fi.nodes = getTestFuse(t)
 	nodeSlice := unsafe.Slice(fi.nodes.nodes, fsSize)
 

@@ -623,7 +623,7 @@ func TestGetObjects(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/YnVja2V0MjM0" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-connect/bucket234" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -676,7 +676,7 @@ func TestGetObjects(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if objects, err := GetObjects(SDApply, "bucket234", "", "prefix"); err != nil {
+	} else if objects, err := GetObjects(SDConnect, "bucket234", "", "____", "prefix"); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
 		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
@@ -698,12 +698,21 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/YnVja2V0MjM" {
+		if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/fega/YnVja2V0MjM" {
 			t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
 		}
+
+		hasPrefix := r.URL.Query().Has("prefix")
+		if hasPrefix {
+			t.Errorf("Server was called with prefix %s", r.URL.Query().Get("prefix"))
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+
 		var xmlData string
 		if token == "" {
 			xmlData = `<?xml version="1.0" encoding="UTF-8"?>
@@ -779,7 +788,7 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if objects, err := GetObjects(SDApply, "bucket23", ""); err != nil {
+	} else if objects, err := GetObjects(SDApply, "bucket23", "", "fega"); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
 		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
@@ -805,12 +814,12 @@ func TestGetObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for SD-Apply/some-bucket: bucket name \"some-bucket\" is not S3 compatible",
+			"failed to list objects for SD-Connect/some-bucket: bucket name \"some-bucket\" is not S3 compatible",
 			http.StatusBadRequest,
 		},
 		{
 			"FAIL_2",
-			"failed to list objects for SD-Apply/some-bucket: api error Unauthorized: Unauthorized",
+			"failed to list objects for SD-Connect/some-bucket: api error Unauthorized: Unauthorized",
 			http.StatusUnauthorized,
 		},
 	}
@@ -846,7 +855,7 @@ func TestGetObjects_Error(t *testing.T) {
 
 			if err := initialiseS3Client(); err != nil {
 				t.Errorf("Failed to initialize S3 client: %v", err.Error())
-			} else if _, err := GetObjects(SDConnect, "some-bucket", "SD-Apply/some-bucket"); err == nil {
+			} else if _, err := GetObjects(SDConnect, "some-bucket", "SD-Connect/some-bucket"); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
@@ -1036,7 +1045,7 @@ func TestGetSegmentedObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for bucket some-bucket in SD Apply: bucket name \"some-bucket\" is not S3 compatible",
+			"failed to list objects for bucket some-bucket in SD Apply: api error InvalidBucketName: UnknownError",
 			http.StatusBadRequest,
 		},
 		{
@@ -1260,7 +1269,7 @@ func TestDownloadData(t *testing.T) {
 				}
 			}
 
-			data, err := DownloadData(SDConnect, nodes, "", "", tt.header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
+			data, err := DownloadData(SDConnect, nodes, "", "", "", tt.header, tt.byteStart, tt.byteEnd, tt.offset, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1319,18 +1328,18 @@ func TestDownloadData_SDApply(t *testing.T) {
 	ai.hi.endpoints = testConfig
 
 	var tests = []struct {
-		testname, objectWithID, objectName, id string
-		byteStart, byteEnd                     int64
-		cachedIdxs                             []int64
+		testname, objectWithID, objectName, owner, id string
+		byteStart, byteEnd                            int64
+		cachedIdxs                                    []int64
 	}{
 		{
-			"OK_1", "new-object.txt.c4gh",
-			"new-object.txt.c4gh", "8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49",
+			"OK_1", "new-object.txt.c4gh", "new-object.txt.c4gh",
+			"bob", "8b8a3c5a-52b5-4a10-bc4b-13cb9c5d9e49",
 			345, 1000, []int64{0},
 		},
 		{
 			"OK_2", "subfolder/another-object.txt.c4gh",
-			"subfolder/another-object.txt.c4gh", "",
+			"subfolder/another-object.txt.c4gh", "", "",
 			33554000, 33564437, []int64{0, 33554432},
 		},
 	}
@@ -1341,7 +1350,11 @@ func TestDownloadData_SDApply(t *testing.T) {
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
 
-				if r.Method != "GET" || r.URL.Path != "/s3-default-endpoint/sd-apply/bmV3X2J1Y2tldA/" {
+				expectedPath := "/s3-default-endpoint/sd-apply/bmV3X2J1Y2tldA/"
+				if tt.owner != "" {
+					expectedPath = "/s3-default-endpoint/sd-apply/" + tt.owner + "/bmV3X2J1Y2tldA/"
+				}
+				if r.Method != "GET" || r.URL.Path != expectedPath {
 					t.Errorf("Server was called with unexpected method %s or path %s", r.Method, r.URL.Path)
 					w.WriteHeader(http.StatusBadRequest)
 
@@ -1382,7 +1395,7 @@ func TestDownloadData_SDApply(t *testing.T) {
 			nodes := append([]string{"new_bucket"}, strings.Split(tt.objectWithID, "/")...)
 			storage.keys = make(map[string][]byte)
 
-			data, err := DownloadData(SDApply, nodes, "", tt.id, header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
+			data, err := DownloadData(SDApply, nodes, "", tt.owner, tt.id, header64, tt.byteStart, tt.byteEnd, 0, int64(decryptedSize))
 			if err != nil {
 				t.Fatalf("Request to mock server failed: %v", err)
 			}
@@ -1501,7 +1514,7 @@ func TestDownloadData_Error(t *testing.T) {
 
 			nodes := []string{"bucket", "obj.txt.c4gh"}
 			storage.keys = make(map[string][]byte)
-			_, err := DownloadData(SDConnect, nodes, "path", "", tt.header, 33554000, 33564437, 0, int64(decryptedSize))
+			_, err := DownloadData(SDConnect, nodes, "path", "", "", tt.header, 33554000, 33564437, 0, int64(decryptedSize))
 			if err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {

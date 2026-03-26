@@ -222,30 +222,31 @@ var initialiseS3Client = func() error {
 	return nil
 }
 
-func getContext(rep Repo, head bool, id string, parent ...context.Context) context.Context {
+func getContext(ctx context.Context, rep Repo, head bool, extra ...string) context.Context {
 	endpoint := ai.hi.endpoints.S3.Default.path
 	if head {
 		endpoint = ai.hi.endpoints.S3.Head.path
 	}
+	endpoint += rep.ForURL()
 
-	ctx := context.Background()
-	if len(parent) > 0 {
-		ctx = parent[0]
-	}
 	if rep == SDApply {
 		var once sync.Once
 		ctx = context.WithValue(ctx, RepositoryKey{}, &once)
-	}
-	if id != "" {
-		ctx = context.WithValue(ctx, FileIDKey{}, id)
+
+		if len(extra) > 0 && len(extra[0]) > 0 { // fega/bp/sd
+			endpoint += "/" + extra[0]
+		}
+		if len(extra) > 1 && len(extra[1]) > 0 { // file ID
+			ctx = context.WithValue(ctx, FileIDKey{}, extra[1])
+		}
 	}
 
-	return context.WithValue(ctx, EndpointKey{}, endpoint+rep.ForURL())
+	return context.WithValue(ctx, EndpointKey{}, endpoint)
 }
 
 // BucketExists checks whether or not bucket already exists in S3 storage
 var BucketExists = func(rep Repo, bucket string) (bool, error) {
-	ctx := getContext(rep, true, "")
+	ctx := getContext(context.Background(), rep, true)
 
 	_, err := ai.hi.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucket),
@@ -272,7 +273,7 @@ var BucketExists = func(rep Repo, bucket string) (bool, error) {
 
 // CreateBucket creates bucket and waits for it to be ready for subsequent requests
 var CreateBucket = func(rep Repo, bucket string) error {
-	ctx := getContext(rep, false, "")
+	ctx := getContext(context.Background(), rep, false)
 
 	_, err := ai.hi.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucket),
@@ -286,7 +287,7 @@ var CreateBucket = func(rep Repo, bucket string) error {
 		return fmt.Errorf("could not create bucket %s: %w", bucket, err)
 	}
 
-	ctx = getContext(rep, true, "")
+	ctx = getContext(context.Background(), rep, true)
 	err = s3.NewBucketExistsWaiter(ai.hi.s3Client).Wait(
 		ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, time.Minute)
 	if err != nil {
@@ -307,7 +308,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, error) {
 	params := &s3.ListBucketsInput{}
 	paginator := s3.NewListBucketsPaginator(ai.hi.s3Client, params)
 
-	ctx := getContext(rep, false, "")
+	ctx := getContext(context.Background(), rep, false)
 
 	var buckets []types.Bucket
 	for paginator.HasMorePages() {
@@ -373,16 +374,29 @@ var GetBuckets = func(rep Repo) ([]Metadata, error) {
 // GetObjects returns metadata for all the objects in a particular bucket.
 // `prefix` is an optional parameter with which function can return only objects that
 // begin with that particular value.
-var GetObjects = func(rep Repo, bucket, path string, prefix ...string) ([]Metadata, error) {
+var GetObjects = func(rep Repo, bucket, path string, extra ...string) ([]Metadata, error) {
+	owner := ""
+	if len(extra) > 0 {
+		owner = extra[0]
+	}
+	ctx := getContext(context.Background(), rep, false, owner)
+
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 	}
-	if len(prefix) > 0 {
-		params.Prefix = aws.String(prefix[0])
+	if len(extra) > 1 {
+		params.Prefix = aws.String(extra[1])
 	}
 
-	meta, err := getObjects(params, rep, bucket)
+	meta, err := getObjects(ctx, params, rep)
 	if err != nil {
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			if ae.ErrorCode() == "InvalidBucketName" {
+				err = fmt.Errorf("bucket name %q is not S3 compatible", bucket)
+			}
+		}
+
 		return nil, fmt.Errorf("failed to list objects for %s: %w", path, err)
 	}
 
@@ -396,7 +410,8 @@ var GetSegmentedObjects = func(rep Repo, bucket string) ([]Metadata, error) {
 		Bucket: aws.String(bucket),
 	}
 
-	meta, err := getObjects(params, rep, bucket)
+	ctx := getContext(context.Background(), rep, false)
+	meta, err := getObjects(ctx, params, rep)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list objects for bucket %s in %s: %w", bucket, rep, err)
 	}
@@ -406,22 +421,14 @@ var GetSegmentedObjects = func(rep Repo, bucket string) ([]Metadata, error) {
 	return meta, nil
 }
 
-func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metadata, error) {
+func getObjects(ctx context.Context, params *s3.ListObjectsV2Input, rep Repo) ([]Metadata, error) {
 	paginator := s3.NewListObjectsV2Paginator(ai.hi.s3Client, params)
-
-	ctx := getContext(rep, false, "")
 
 	var objects []types.Object
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
 
 		if err != nil {
-			var ae smithy.APIError
-			if errors.As(err, &ae) {
-				if ae.ErrorCode() == "InvalidBucketName" {
-					return nil, fmt.Errorf("bucket name %q is not S3 compatible", bucket)
-				}
-			}
 			var re *smithyhttp.ResponseError
 			if errors.As(err, &re) {
 				err = re.Err
@@ -452,23 +459,24 @@ func getObjects(params *s3.ListObjectsV2Input, rep Repo, bucket string) ([]Metad
 // DownloadData requests data between range [startDecrypted, endDecrypted).
 // As we want to split the data into chunks at consistent locations,
 // the requested byte interval may encompass one or two data chunks.
-var DownloadData = func(rep Repo, nodes []string, path, fileID, header string,
+var DownloadData = func(rep Repo, nodes []string, path, owner, fileID, header string,
 	startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	endDecrypted = min(endDecrypted, fileSize)
-
 	chunkStart := startDecrypted / chunkSize
 	chunkEnd := (endDecrypted - 1) / chunkSize
-
 	maxEnd := min((chunkStart+1)*chunkSize, endDecrypted)
-	data, err := getDataChunk(rep, nodes, path, fileID, header,
+
+	ctx := getContext(context.Background(), rep, false, owner, fileID)
+	data, err := getDataChunk(ctx, rep, nodes, path, header,
 		chunkStart, startDecrypted, maxEnd, oldOffset, fileSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get data chunk: %w", err)
 	}
 
 	if chunkStart != chunkEnd {
-		moreData, err := getDataChunk(rep, nodes, path, fileID, header,
+		ctx := getContext(context.Background(), rep, false, owner, fileID)
+		moreData, err := getDataChunk(ctx, rep, nodes, path, header,
 			chunkEnd, chunkEnd*chunkSize, endDecrypted, oldOffset, fileSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get second data chunk: %w", err)
@@ -488,7 +496,7 @@ func CalculateEncryptedSize(decryptedSize int64) int64 {
 }
 
 func getDataChunk(
-	rep Repo, nodes []string, path, fileID, header string,
+	ctx context.Context, rep Repo, nodes []string, path, header string,
 	chunk, startDecrypted, endDecrypted, oldOffset, fileSize int64,
 ) ([]byte, error) {
 	// start coordinate of chunk
@@ -517,8 +525,6 @@ func getDataChunk(
 
 	bucket := nodes[0]
 	object := strings.Join(nodes[1:], "/")
-
-	ctx := getContext(rep, false, fileID)
 
 	resp, err := ai.hi.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -580,7 +586,7 @@ var UploadObject = func(
 		o.Concurrency = 1
 	})
 
-	ctx = getContext(rep, false, "", ctx)
+	ctx = getContext(ctx, rep, false)
 
 	_, err := uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		ContentType: aws.String("application/octet-stream"),
@@ -616,7 +622,7 @@ var DeleteObject = func(rep Repo, bucket, object string) error {
 		Key:    aws.String(object),
 	}
 
-	ctx := getContext(rep, false, "")
+	ctx := getContext(context.Background(), rep, false)
 
 	_, err := ai.hi.s3Client.DeleteObject(ctx, params)
 	if err != nil {

@@ -29,6 +29,7 @@ import (
 	"sda-filesystem/internal/mountpoint"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 // Crypt4GH constants
@@ -208,15 +209,16 @@ func ClearPath(path string) error {
 	}
 
 	// Get the objects that fulfill the user's request
-	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), prefix)
+	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), "", prefix)
 	if err != nil {
 		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
 	}
 	// Need to check if objects are segmented
 	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)
-	var noBucket *types.NoSuchBucket
 	if err != nil {
-		if errors.As(err, &noBucket) {
+		var noBucket *types.NoSuchBucket
+		var ae smithy.APIError
+		if errors.As(err, &noBucket) || (errors.As(err, &ae) && ae.ErrorCode() == "InvalidBucketName") {
 			logs.Debugf("Bucket %s does not have matching segments bucket", bucket)
 		} else {
 			logs.Warningf("File sizes may not be correct: %s", err.Error())
@@ -326,11 +328,6 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 
 			return
 		}
-		if hdrValue == "" {
-			logs.Errorf("No header found for object %s", path)
-
-			return
-		}
 
 		logs.Debugf("Re-encrypted header found for object %s", path)
 		hdr.value = hdrValue
@@ -396,7 +393,7 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		pathNames = pathNames[2:]
 	}
 
-	data, err := api.DownloadData(rep, pathNames, path, header.fileID, header.value,
+	data, err := api.DownloadData(rep, pathNames, path, header.owner, header.fileID, header.value,
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)
