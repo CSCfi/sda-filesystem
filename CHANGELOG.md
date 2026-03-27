@@ -7,6 +7,14 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `postUpgradeTasks` after renovate update changed behaviour
+
+### Changed
+
+- use a fixed version of `wails` when building images in CI job and have renovate take care of updating version
+
 ## [2026.3.3] - 2026-03-26
 
 ### Changed
