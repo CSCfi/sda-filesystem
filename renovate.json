@@ -7,8 +7,9 @@
         "commands": [
           "pnpm --prefix frontend run build",
           "go install github.com/wailsapp/wails/v2/cmd/wails@{{{prettyNewVersion}}}",
-          "mkdir dummy-pkgconfig && cat > dummy-pkgconfig/fuse3.pc <<EOF\nprefix=/usr\nlibdir=\\${prefix}/lib\nincludedir=\\${prefix}/include\n\nName: fuse3\nDescription: Dummy fuse3\nVersion: 3.0.0\nLibs:\nCflags:\nEOF",
-          "export PKG_CONFIG_PATH=$(pwd)/dummy-pkgconfig CGO_CFLAGS='-DRENOVATE=1' && cd cmd/gui && wails generate module"
+          "mkdir -p dummy-pkgconfig",
+          "sh -c \"cat > dummy-pkgconfig/fuse3.pc <<EOF\nprefix=/usr\nlibdir=\\${prefix}/lib\nincludedir=\\${prefix}/include\n\nName: fuse3\nDescription: Dummy fuse3\nVersion: 3.0.0\nLibs:\nCflags:\nEOF\"",
+          "sh -c \"export PKG_CONFIG_PATH=$(pwd)/dummy-pkgconfig CGO_CFLAGS='-DRENOVATE=1' && cd cmd/gui && wails generate module\""
         ],
         "fileFilters": ["frontend/wailsjs/**"]
       }
@@ -23,6 +24,15 @@
       ],
       "datasourceTemplate": "golang-version",
       "depNameTemplate": "go"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [".gitlab-ci.yml"],
+      "matchStrings": [
+        "go install (?<depName>github\\.com/wailsapp/wails/v2)/cmd/wails@(?<currentValue>v[0-9\\.]+)"
+      ],
+      "datasourceTemplate": "go",
+      "versioningTemplate": "semver"
     }
   ]
 }
