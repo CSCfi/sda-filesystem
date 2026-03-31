@@ -9,7 +9,8 @@ LOG ?= info
 SOCKET_DIR := $(HOME)/.clamav
 SOCKET_PATH := $(SOCKET_DIR)/clamd.sock
 
-WAILS_FLAGS =
+version := $(shell jq -r '.info.productVersion // empty' cmd/gui/wails.json)
+WAILS_FLAGS = -ldflags "-X sda-filesystem/internal/api.Version=$(version)"
 ifeq ($(IS_UBUNTU_24_04),true)
 	WAILS_FLAGS += -tags webkit2_41
 endif
@@ -93,11 +94,7 @@ gui: wails_update ## Run GUI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$($(MAKE) envs); \
 	trap 'exit 0' SIGINT; cd cmd/gui; \
-	if [ $(IS_UBUNTU_24_04) = true ]; then \
-		wails dev -tags webkit2_41; \
-	else \
-		wails dev; \
-	fi
+	wails dev $(WAILS_FLAGS);
 
 gui_build: wails_update ## Compile a production-ready GUI binary and save it in build/bin
 	cd cmd/gui; wails build $(WAILS_FLAGS) -trimpath -clean -s

@@ -27,7 +27,8 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-var Port string // Defined at build time if binary is for older Ubuntu
+var Port string    // Defined at build time if binary is for older Ubuntu
+var Version string // Defined at build time to indicate current binary version
 
 var ai = apiInfo{
 	hi: httpInfo{
@@ -192,6 +193,10 @@ func (r Repo) ForURL() string {
 
 func (r Repo) ForPath() string {
 	return string(r)
+}
+
+func GetVersion() string {
+	return Version
 }
 
 // GetEnv looks up environment variable given in `name`

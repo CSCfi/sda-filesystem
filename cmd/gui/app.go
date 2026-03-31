@@ -90,6 +90,10 @@ func (a *App) GetDefaultMountPoint() string {
 	return a.mountpoint
 }
 
+func (a *App) GetVersion() string {
+	return api.GetVersion()
+}
+
 func (a *App) GetUsername() string {
 	return api.GetUsername()
 }
