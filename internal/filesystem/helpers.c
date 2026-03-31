@@ -8,6 +8,10 @@ static int compare_nodes(const void *n1, const void *n2) {
 
 // search_node finds the node at the end of path
 node_t *search_node(nodes_t *n, const char *path) {
+    if (n->count == 0) {
+        return NULL;
+    }
+
 	node_t *node = n->nodes;
     char *path_copy = strdup(path);
 
@@ -32,11 +36,15 @@ void sort_node_children(node_t *node) {
 }
 
 void free_nodes(nodes_t *n) {
-    for (int i = 0; i < n->count; i++) {
-        free(n->nodes[i].name);
-        free(n->nodes[i].orig_name);
-    }
-    free(n->nodes);
-    n->nodes = NULL;
+    // In case someone tries to access nodes when freeing memory
+    int64_t old_count = n->count;
+    node_t *old_nodes = n->nodes;
     n->count = 0;
+    n->nodes = NULL;
+
+    for (int i = 0; i < old_count; i++) {
+        free(old_nodes[i].name);
+        free(old_nodes[i].orig_name);
+    }
+    free(old_nodes);
 }
