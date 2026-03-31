@@ -130,6 +130,23 @@ static int s3_getattr(const char *path, struct stat *stbuf, struct fuse_file_inf
     return 0;
 }
 
+static int s3_write(const char *path, const char *buf, size_t size,
+		            off_t offset, struct fuse_file_info *fi) {
+    return -EROFS;
+}
+
+static int s3_rename(const char *from, const char *to, unsigned int flags) {
+    return -EROFS;
+}
+
+static int s3_unlink(const char *path) {
+    return -EROFS;
+}
+
+static int s3_chmod(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    return -EROFS;
+}
+
 static void *s3_init(struct fuse_conn_info *conn, struct fuse_config *cfg) {
     nodes_t *n = GetFilesystem();
     n->uid = getuid();
@@ -150,6 +167,10 @@ static const struct fuse_operations operations = {
     .opendir	= s3_opendir,
 	.readdir	= s3_readdir,
     .getattr	= s3_getattr,
+    .write		= s3_write,
+    .rename     = s3_rename,
+    .unlink     = s3_unlink,
+    .chmod      = s3_chmod,
     .init       = s3_init,
 };
 
@@ -193,7 +214,7 @@ int mount_filesystem(const char *mount, int debug) {
         errx(3, "ERROR: Out of memory");
     }
 
-    umask(0222);
+    umask(0022);
     int res = fuse_main(args.argc, args.argv, &operations, NULL);
     fuse_opt_free_args(&args);
 

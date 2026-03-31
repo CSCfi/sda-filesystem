@@ -298,7 +298,7 @@ func goNodeToC(node *goNode, name string) C.node_t {
 	}
 
 	if node.children == nil {
-		cNode.stat.st_mode = syscall.S_IFREG | 0444
+		cNode.stat.st_mode = syscall.S_IFREG | 0644
 		cNode.stat.st_nlink = 1
 	} else {
 		cNode.stat.st_mode = syscall.S_IFDIR | 0444
