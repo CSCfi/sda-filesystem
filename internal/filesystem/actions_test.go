@@ -4,19 +4,28 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math/rand"
+	"os"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
 	"sda-filesystem/internal/api"
+	"sda-filesystem/test"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 var errExpected = errors.New("expected error for test")
+var r *rand.Rand
+
+func init() {
+	r = rand.New(rand.NewSource(111)) // #nosec G404
+}
 
 func TestSearchNode(t *testing.T) {
 	fi.nodes = getTestFuse(t)
@@ -114,6 +123,188 @@ func TestGetNodeChildren(t *testing.T) {
 				t.Errorf("Path %s returned incorrect children\nExpected=%v\nReceived=%v", tt.path, tt.children, ret)
 			}
 		})
+	}
+}
+
+func TestCheckPID(t *testing.T) {
+	fi.nodes = getTestFuse(t)
+	tmpMountDir := t.TempDir()
+	fi.mount = tmpMountDir
+
+	err := createFuseFiles(fi.nodes.nodes, tmpMountDir)
+	if err != nil {
+		t.Fatalf("Failed to create filesystem files: %v", err)
+	}
+
+	nonexistent := tmpMountDir + "/Substandard-Repo/non-existent-folder"
+	if err := os.MkdirAll(nonexistent, 0755); err != nil {
+		t.Fatalf("Failed to create folder %s: %s", nonexistent, err.Error())
+	}
+	outsideFilesystem := t.TempDir()
+
+	var tests = []struct {
+		fd, pos []int
+		nodes   []string
+		isLink  []bool
+		resp    bool
+	}{
+		{
+			// One file that should return true
+			[]int{3}, []int{-1},
+			[]string{rep1.ForPath() + "/project/bucket_1/kansio/file_1"},
+			[]bool{true}, true,
+		},
+		{
+			// Four folders and a non-link that should return false
+			[]int{27, 85, 5, 1342, 12}, []int{0, -1, 60, 80, -1},
+			[]string{
+				rep1.ForPath() + "/project/shared_bucket",
+				rep1.ForPath() + "/project/",
+				nonexistent, outsideFilesystem, "",
+			},
+			[]bool{true, true, true, true, false}, false,
+		},
+		{
+			// File, and a folder with pos=0, which should return true
+			[]int{10, 15}, []int{-1, 0},
+			[]string{rep1.ForPath() + "/project/bucket_3/testi", rep1.ForPath() + "/project/shared_bucket"},
+			[]bool{true, true}, true,
+		},
+		{
+			// Three folders that should return true
+			[]int{28, 50, 120}, []int{200, 60, 0},
+			[]string{
+				rep1.ForPath() + "/project/shared_bucket",
+				nonexistent, rep1.ForPath() + "/project/bucket_1",
+			},
+			[]bool{true, true, true}, true,
+		},
+	}
+
+	for i, tt := range tests {
+		testname := fmt.Sprintf("OK_%d", i+1)
+		t.Run(testname, func(t *testing.T) {
+			tmpFdDir := t.TempDir()
+			if err := os.MkdirAll(tmpFdDir+"/fd", 0755); err != nil {
+				t.Fatalf("Failed to create fd folder %s: %s", tmpFdDir+"/fd", err.Error())
+			}
+			if err := os.MkdirAll(tmpFdDir+"/fdinfo", 0755); err != nil {
+				t.Fatalf("Failed to create fdinfo folder %s: %s", tmpFdDir+"/fdinfo", err.Error())
+			}
+
+			for i := range tt.nodes {
+				nodePath := tmpMountDir + "/" + tt.nodes[i]
+				if tt.nodes[i] == outsideFilesystem {
+					nodePath = outsideFilesystem
+				}
+				fdPath := tmpFdDir + "/fd/" + strconv.Itoa(tt.fd[i])
+				if tt.isLink[i] {
+					err = os.Symlink(nodePath, fdPath)
+					if err != nil {
+						t.Fatalf("Failed to create symlink: %s", err.Error())
+					}
+				} else if err := os.WriteFile(fdPath, []byte("I am not a symlink"), 0600); err != nil {
+					t.Fatalf("Failed to create file %s: %s", fdPath, err.Error())
+				}
+
+				// Generate fdinfo file where one of the lines is `pos: <int>`
+				if tt.pos[i] >= 0 {
+					lines := []string{}
+					for range 10 {
+						lines = append(lines, string(test.GenerateRandomText(100)))
+					}
+					lines = slices.Insert(lines, r.Intn(len(lines)), fmt.Sprintf("pos: %d\n", tt.pos[i]))
+
+					fdinfoFile := tmpFdDir + "/fdinfo/" + strconv.Itoa(tt.fd[i])
+					if err := os.WriteFile(fdinfoFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+						t.Fatalf("Failed to create fdinfo file %s: %s", fdinfoFile, err.Error())
+					}
+				}
+			}
+
+			resp, err := checkPID(tmpFdDir + "/fd")
+			if err != nil {
+				t.Fatalf("Function returned unexpected error: %s", err.Error())
+			}
+			if resp != tt.resp {
+				if tt.resp {
+					t.Fatal("Files should be open")
+				} else {
+					t.Fatal("Files should not be open")
+				}
+			}
+		})
+	}
+}
+
+func TestCheckPID_FDExistsError(t *testing.T) {
+	tmpFdDir := t.TempDir()
+	os.RemoveAll(tmpFdDir) // make sure folder does not exist
+
+	errStr := "failed to read fd dir " + tmpFdDir + ": open .: no such file or directory"
+	_, err := checkPID(tmpFdDir)
+	if err == nil {
+		t.Errorf("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+}
+
+func TestCheckPID_PIDError(t *testing.T) {
+	fi.nodes = getTestFuse(t)
+	tmpMountDir := t.TempDir()
+	fi.mount = tmpMountDir
+
+	err := createFuseFiles(fi.nodes.nodes, tmpMountDir)
+	if err != nil {
+		t.Fatalf("Failed to create filesystem files: %v", err)
+	}
+
+	tmpFdDir := t.TempDir()
+	if err := os.MkdirAll(tmpFdDir+"/fd", 0755); err != nil {
+		t.Fatalf("Failed to create fd folder %s: %s", tmpFdDir+"/fd", err.Error())
+	}
+	if err := os.MkdirAll(tmpFdDir+"/fdinfo", 0755); err != nil {
+		t.Fatalf("Failed to create fdinfo folder %s: %s", tmpFdDir+"/fdinfo", err.Error())
+	}
+
+	// Test case 1: pos is not an integer
+	nodePath := tmpMountDir + "/" + rep1.ForPath() + "/project"
+	if err = os.Symlink(nodePath, tmpFdDir+"/fd/42"); err != nil {
+		t.Fatalf("Failed to create symlink: %s", err.Error())
+	}
+
+	lines := []string{}
+	for range 10 {
+		lines = append(lines, string(test.GenerateRandomText(100)))
+	}
+	lines = slices.Insert(lines, r.Intn(len(lines)), "pos: bob\n")
+
+	fdinfoFile := tmpFdDir + "/fdinfo/42"
+	if err := os.WriteFile(fdinfoFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+		t.Fatalf("Failed to create fdinfo file %s: %s", fdinfoFile, err.Error())
+	}
+
+	errStr := "failed to read fdinfo for " + tmpFdDir + "/fd/42: strconv.ParseInt: parsing \"bob\": invalid syntax"
+	_, err = checkPID(tmpFdDir + "/fd")
+	if err == nil {
+		t.Errorf("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
+	}
+
+	// Test case 2: line length too long in fdinfo
+	lines = []string{string(test.GenerateRandomText(100000))}
+	if err := os.WriteFile(fdinfoFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+		t.Fatalf("Failed to create fdinfo file %s: %s", fdinfoFile, err.Error())
+	}
+
+	errStr = "failed to read fdinfo for " + tmpFdDir + "/fd/42: bufio.Scanner: token too long"
+	_, err = checkPID(tmpFdDir + "/fd")
+	if err == nil {
+		t.Errorf("Function did not return error")
+	} else if err.Error() != errStr {
+		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errStr, err.Error())
 	}
 }
 
