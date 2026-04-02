@@ -9,10 +9,13 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- protect `nodes` array from being accessed when it is uninitialized
 - `postUpgradeTasks` after renovate update changed behaviour
 
 ### Changed
 
+- rename `make requirements` as `make setup`
+- file permissions to `0644` so that copied files are writable. Files are not modifiable in filesystem, though (#65)
 - use a fixed version of `wails` when building images in CI job and have renovate take care of updating version
 
 ## [2026.3.3] - 2026-03-26
