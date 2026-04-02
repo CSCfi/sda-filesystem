@@ -154,6 +154,18 @@ static int s3_chmod(const char *path, mode_t mode, struct fuse_file_info *fi) {
     return -EROFS;
 }
 
+static int s3_truncate(const char *path, off_t size, struct fuse_file_info *fi) {
+    return -EROFS;
+}
+
+static int s3_mkdir(const char *path, mode_t mode) {
+    return -EROFS;
+}
+
+static int s3_rmdir(const char *path) {
+    return -EROFS;
+}
+
 static void *s3_init(struct fuse_conn_info *conn, struct fuse_config *cfg) {
     nodes_t *n = GetFilesystem();
     n->uid = getuid();
@@ -178,6 +190,9 @@ static const struct fuse_operations operations = {
     .rename     = s3_rename,
     .unlink     = s3_unlink,
     .chmod      = s3_chmod,
+    .truncate   = s3_truncate,
+    .mkdir      = s3_mkdir,
+    .rmdir      = s3_rmdir,
     .init       = s3_init,
 };
 

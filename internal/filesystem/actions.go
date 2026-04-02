@@ -251,11 +251,10 @@ func checkPID(fdDir string) (bool, error) {
 // readFDPos parses /proc/<pid>/fdinfo/<fd> and returns the pos value
 func readFDPos(fdinfoPath string) (int64, error) {
 	file, err := os.Open(fdinfoPath)
+	if os.IsNotExist(err) { // just in case fd does not exist anymore
+		return 0, nil
+	}
 	if err != nil {
-		if os.IsNotExist(err) { // just in case fd does not exist anymore
-			return 0, nil
-		}
-
 		return 0, err
 	}
 	defer file.Close()
