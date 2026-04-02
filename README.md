@@ -49,7 +49,7 @@ You can run `make` to see the commands available to you.
 Since internal URLs are recommended not to be public, the environmental variable `VAULT_ADDR` has to be defined manually. Follow the instructions [here](https://gitlab.ci.csc.fi/groups/sds-dev/-/wikis/Guides/Development-tools/using-vault#accessing-vault-via-terminal) on how to make the Vault address available to shell commands. Once the address is defined, continue with the following command:
 
 ```
-make requirements
+make setup
 ```
 
 This command ensures that you are logged in to Artifactory, generates the frontend assests for the GUI, and creates an `.env` file under [`dev-tools/compose`](./dev-tools/compose). This file is then filled with secrets from our test Vault, an action which will require you to login via the browser.

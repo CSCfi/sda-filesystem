@@ -1,4 +1,4 @@
-.PHONY: help all remote local cli gui gui_build gui_prod wails_update requirements clean down get_env run_profiles build_profiles exec envs _run_findata_profiles _wait_for_container _follow_logs
+.PHONY: help all remote local cli gui gui_build gui_prod wails_update setup clean down get_env run_profiles build_profiles exec envs _run_findata_profiles _wait_for_container _follow_logs
 
 SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
@@ -65,7 +65,7 @@ help:
 all: down ## Run 'make local gui'
 	$(MAKE) local gui
 
-requirements: ## Install dependencies and create .env file with vault secrets
+setup: ## Install dependencies and create .env file with vault secrets
 	cp dev-tools/.env.example dev-tools/compose/.env
 	@$(MAKE) get_env
 	@export $$(grep ^ARTIFACTORY dev-tools/compose/.env | xargs); docker login $${ARTIFACTORY_SERVER}
