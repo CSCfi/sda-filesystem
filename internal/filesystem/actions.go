@@ -9,9 +9,11 @@ package filesystem
 import "C"
 
 import (
+	"bufio"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
@@ -165,9 +167,27 @@ func IsValidOpen(pid C.int) bool {
 func FilesOpen() bool {
 	switch runtime.GOOS {
 	case "linux":
-		_, err := exec.Command("fuser", "-m", fi.mount).Output()
+		output, err := exec.Command("fuser", "-m", fi.mount).Output()
+		if err != nil {
+			return false
+		}
 
-		return err == nil
+		pids := strings.Fields(string(output))
+		for _, pid := range pids {
+			if strings.HasSuffix(pid, "c") {
+				continue
+			}
+
+			isOpen, err := checkPID("/proc/" + pid + "/fd")
+			if err != nil {
+				logs.Errorf("Update halted, could not determine if files are open: %w", err)
+
+				return true
+			}
+			if isOpen {
+				return true
+			}
+		}
 	case "darwin":
 		output, err := exec.Command("fuser", "-c", fi.mount).Output()
 		if err != nil {
@@ -180,6 +200,81 @@ func FilesOpen() bool {
 	}
 
 	return false
+}
+
+// checkPID goes through the file descriptors of a PID and checks if there are files
+// being used in the filesystem. Naturally, if the fd leads to a regular file, files are being
+// accessed. However, if the fd points to a directory, it may be that, e.g. nautilus,
+// is going through the files. In this case, if the fdinfo has a non-zero 'pos' value, assume files
+// are being read.
+func checkPID(fdDir string) (bool, error) {
+	fdFS := os.DirFS(fdDir)
+
+	entries, err := fs.ReadDir(fdFS, ".")
+	if err != nil {
+		return false, fmt.Errorf("failed to read fd dir %s: %w", fdDir, err)
+	}
+
+	for _, entry := range entries {
+		fdName := entry.Name()
+
+		// Read the symlink target
+		fdPath := fdDir + "/" + fdName
+		target, err := os.Readlink(fdPath)
+		if err != nil {
+			continue // skip unreadable links
+		}
+		if !strings.HasPrefix(target, fi.mount) {
+			continue
+		}
+		node := searchNode(strings.TrimPrefix(target, fi.mount))
+		if node == nil { // Don't know if this could happen
+			continue
+		}
+		if node.children == nil {
+			return true, nil
+		}
+
+		fdinfoPath := fdDir + "info/" + fdName
+		pos, err := readFDPos(fdinfoPath)
+		if err != nil {
+			return false, fmt.Errorf("failed to read fdinfo for %s: %v", fdPath, err)
+		}
+		if pos > 0 {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// readFDPos parses /proc/<pid>/fdinfo/<fd> and returns the pos value
+func readFDPos(fdinfoPath string) (int64, error) {
+	file, err := os.Open(fdinfoPath)
+	if err != nil {
+		if os.IsNotExist(err) { // just in case fd does not exist anymore
+			return 0, nil
+		}
+
+		return 0, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.HasPrefix(line, "pos:") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				continue
+			}
+
+			return strconv.ParseInt(fields[1], 10, 64)
+		}
+	}
+
+	return 0, scanner.Err()
 }
 
 // ClearPath is designed for situations where a file is edited in the repository and the user wants to read this new data

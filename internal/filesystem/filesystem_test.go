@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"syscall"
 	"testing"
 	"time"
 	"unsafe"
@@ -19,45 +20,47 @@ const rep2 = api.SDApply
 const fsSize = 39
 
 var testFuse = `{
-    "name": "",
-    "nameSafe": "",
-    "size": 650,
+	"name": "",
+	"nameSafe": "",
+	"size": 650,
 	"modified": "2025-07-31T23:00:05Z",
-    "children": [
+	"children": [
 		{
 			"name": "Bad-Repo",
-            "nameSafe": "Bad-Repo",
-            "size": 0,
-			"modified": "1970-01-01T00:00:00Z"
+			"nameSafe": "Bad-Repo",
+			"size": 0,
+			"modified": "1970-01-01T00:00:00Z",
+			"dir": true
 		},
 		{
-            "name": "` + rep2 + `",
-            "nameSafe": "` + rep2 + `",
-            "size": 192,
+			"name": "` + rep2 + `",
+			"nameSafe": "` + rep2 + `",
+			"size": 192,
 			"modified": "2025-07-31T23:00:05Z",
-            "children": [
+			"children": [
 				{
-                    "name": "bad-bucket",
-                    "nameSafe": "bad-bucket",
-                    "size": 0,
+					"name": "bad-bucket",
+					"nameSafe": "bad-bucket",
+					"size": 0,
 					"modified": "1970-01-01T00:00:00Z",
-                    "children": []
-                },
+					"children": [],
+					"dir": true
+  				},
 				{
-                    "name": "https://my-example.com",
-                    "nameSafe": "my-example.com",
-                    "size": 5,
+					"name": "https://my-example.com",
+					"nameSafe": "my-example.com",
+					"size": 5,
 					"modified": "2025-07-31T23:00:05Z",
-                    "children": [
-                        {
-                            "name": "tiedosto",
-                            "nameSafe": "tiedosto",
-                            "size": 5,
+					"children": [
+						{
+							"name": "tiedosto",
+							"nameSafe": "tiedosto",
+							"size": 5,
 							"modified": "2025-07-31T23:00:05Z",
-                            "children": null
-                        }
-                    ]
-                },
+							"children": null
+						}
+					]
+				},
 				{
 					"name": "old-bucket",
 					"nameSafe": "old-bucket",
@@ -297,16 +300,17 @@ var testFuse = `{
 						}
 					]
 				}
-            ]
+			]
         },
 		{
 			"name": "Substandard-Repo",
 			"nameSafe": "Substandard-Repo",
 			"size": 0,
 			"modified": "1970-01-01T00:00:00Z",
-			"children": []
+			"children": [],
+			"dir": true
 		}
-    ]
+	]
 }`
 
 type jsonNode struct {
@@ -315,6 +319,7 @@ type jsonNode struct {
 	Size     int64       `json:"size"`
 	Modified *time.Time  `json:"modified"`
 	Children *[]jsonNode `json:"children"`
+	Dir      bool        `json:"dir"` // Force node with no children to be a directory
 }
 
 func TestMain(m *testing.M) {
@@ -356,7 +361,13 @@ func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_
 		nodeSlice[idx+i].offset = -1
 		nodeSlice[idx+i].parent = parent
 
-		if bucket.Children == nil || len(*bucket.Children) == 0 {
+		hasChildren := bucket.Children != nil && len(*bucket.Children) > 0
+
+		nodeSlice[idx+i].stat.st_mode = syscall.S_IFREG | 0644
+		if bucket.Dir || hasChildren {
+			nodeSlice[idx+i].stat.st_mode = syscall.S_IFDIR | 0444
+		}
+		if !hasChildren {
 			continue
 		}
 
@@ -375,6 +386,9 @@ func isValidFuse(origFs *_Ctype_struct_Node, fs *_Ctype_struct_Node, path string
 	}
 	if fs.stat.st_ino != origFs.stat.st_ino {
 		return fmt.Errorf("ino not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_ino, fs.stat.st_ino)
+	}
+	if fs.stat.st_mode != origFs.stat.st_mode {
+		return fmt.Errorf("mode not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_mode, fs.stat.st_mode)
 	}
 	if origFs.last_modified != fs.last_modified {
 		return fmt.Errorf("timestamp not correct at node %q, Expected=%+v, received=%+v", path, origFs.last_modified, fs.last_modified)
@@ -413,6 +427,35 @@ func isValidFuse(origFs *_Ctype_struct_Node, fs *_Ctype_struct_Node, path string
 
 	for i := range keys1 {
 		if err := isValidFuse(&slice1[i], &slice2[i], path+"/"+keys1[i]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createFuseFiles(node *_Ctype_struct_Node, path string) error {
+	nodePath := path + "/" + toGoStr(node.name)
+	if node.stat.st_mode&syscall.S_IFREG > 0 {
+		err := os.WriteFile(nodePath, []byte("I am a file"), 0600)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %s", nodePath, err.Error())
+		}
+
+		return nil
+	}
+
+	if err := os.MkdirAll(nodePath, 0755); err != nil {
+		return fmt.Errorf("failed to create folder %s: %s", nodePath, err.Error())
+	}
+	if node.chld_count == 0 {
+		return nil
+	}
+
+	children := unsafe.Slice(node.children, node.chld_count)
+	for i := range children {
+		err := createFuseFiles(&children[i], nodePath)
+		if err != nil {
 			return err
 		}
 	}
