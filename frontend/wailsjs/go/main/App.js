@@ -30,6 +30,10 @@ export function GetUsername() {
   return window['go']['main']['App']['GetUsername']();
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
 export function InitFuse() {
   return window['go']['main']['App']['InitFuse']();
 }

@@ -4,6 +4,7 @@ import { EventsEmit, EventsOn } from "../../wailsjs/runtime/runtime";
 import { UpdateRepositorySelection } from "../../wailsjs/go/main/App";
 
 import RepositorySelect from "../components/RepositorySelect.vue";
+import PageFooter from "../components/PageFooter.vue";
 
 const props = defineProps<{
   initialized: boolean,
@@ -42,5 +43,6 @@ EventsOn("setRepositories", function(reps: {[key: string]: boolean}) {
     >
       Continue
     </c-button>
+    <PageFooter />
   </div>
 </template>

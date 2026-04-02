@@ -16,6 +16,8 @@ export function GetDefaultMountPoint():Promise<string>;
 
 export function GetUsername():Promise<string>;
 
+export function GetVersion():Promise<string>;
+
 export function InitFuse():Promise<void>;
 
 export function InitializeAPI():Promise<boolean>;
