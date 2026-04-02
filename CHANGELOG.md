@@ -7,8 +7,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.4.0] - 2026-04-02
+
 ### Fixed
 
+- adjust `FilesOpen()` to work in Ubuntu 24 like it worked in Ubuntu 22, i.e., do not prevent refresh due to open directories
 - protect `nodes` array from being accessed when it is uninitialized
 - `postUpgradeTasks` after renovate update changed behaviour
 
@@ -494,7 +497,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.3...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.0...HEAD
+[2026.4.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.3...2026.4.0
 [2026.3.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.2...2026.3.3
 [2026.3.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.1...2026.3.2
 [2026.3.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.0...2026.3.1
