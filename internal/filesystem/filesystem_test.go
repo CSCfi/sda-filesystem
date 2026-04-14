@@ -365,7 +365,7 @@ func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_
 
 		nodeSlice[idx+i].stat.st_mode = syscall.S_IFREG | 0644
 		if bucket.Dir || hasChildren {
-			nodeSlice[idx+i].stat.st_mode = syscall.S_IFDIR | 0444
+			nodeSlice[idx+i].stat.st_mode = syscall.S_IFDIR | 0744
 		}
 		if !hasChildren {
 			continue
