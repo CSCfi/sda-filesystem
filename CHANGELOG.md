@@ -7,6 +7,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- create directories with `0744` permissions to help copying (#67)
+
 ## [2026.4.0] - 2026-04-02
 
 ### Fixed
