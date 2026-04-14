@@ -178,7 +178,7 @@ func ValidateBucket(bucket string) (bool, error) {
 func CheckObjectExistences(set *UploadSet, rd io.Reader) error {
 	// these objects should already be sorted
 	path := api.SDConnect.ForPath() + "/" + api.GetProjectName() + "/" + set.Bucket
-	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, path)
+	existingObjects, err := api.GetObjects(api.SDConnect, set.Bucket, path, "", "")
 	if err != nil {
 		return fmt.Errorf("could not determine if export will overwrite data: %w", err)
 	}

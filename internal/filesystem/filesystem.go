@@ -366,7 +366,7 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 		repository := api.Repo(nodesSafe[1])
 
 		logs.Debugf("Fetching data for %s", filepath.FromSlash(path))
-		objects, err := api.GetObjects(repository, node.meta.Name, path, node.meta.Owner)
+		objects, err := api.GetObjects(repository, node.meta.Name, path, node.meta.Owner, "")
 		if err != nil {
 			logs.Error(err)
 

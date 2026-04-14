@@ -346,14 +346,15 @@ func TestClearPath(t *testing.T) {
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
 	time2, _ := time.Parse(time.RFC3339, "2017-01-24T08:30:45Z")
 	time3, _ := time.Parse(time.RFC3339, "2001-05-01T10:04:05Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "bucket_1" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
-		if len(extra) < 2 {
-			t.Errorf("api.GetObjects() should have received prefix")
-		} else if extra[1] != "kansio/" {
-			t.Errorf("api.GetObjects() received incorrect prefix. Expected=kansio/, received=%s", extra[1])
+		if owner != "" {
+			t.Errorf("api.GetObjects() received owner %s", owner)
+		}
+		if prefix != "kansio/" {
+			t.Errorf("api.GetObjects() received incorrect prefix. Expected=kansio/, received=%s", prefix)
 		}
 
 		return []api.Metadata{
@@ -452,14 +453,15 @@ func TestClearPath_Segments(t *testing.T) {
 	time1, _ := time.Parse(time.RFC3339, "2011-04-24T03:38:45Z")
 	time2, _ := time.Parse(time.RFC3339, "2023-07-10T23:11:00Z")
 	time3, _ := time.Parse(time.RFC3339, "2021-05-01T10:04:05Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "dir+2" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
-		if len(extra) < 2 {
-			t.Errorf("api.GetObjects() should have received prefix")
-		} else if extra[1] != "" {
-			t.Errorf("api.GetObjects() received incorrect prefix. Expected=, received=%s", extra[1])
+		if owner != "" {
+			t.Errorf("api.GetObjects() received owner %s", owner)
+		}
+		if prefix != "" {
+			t.Errorf("api.GetObjects() received prefix %s", prefix)
 		}
 
 		return []api.Metadata{
@@ -547,12 +549,15 @@ func TestClearPath_SegmentsError(t *testing.T) {
 	fi.headers = map[_Ctype_ino_t]header{33: {value: "bftcdvtuftu"}}
 	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {}
 	time1, _ := time.Parse(time.RFC3339, "2008-10-12T22:10:00Z")
-	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 		if rep != rep1 || bucket != "shared_bucket" {
 			t.Errorf("api.GetObjects() received incorrect repository or bucket")
 		}
-		if len(extra) > 0 && len(extra[0]) > 0 {
-			t.Errorf("api.GetObjects() should not have received extra parameters %v", extra)
+		if owner != "" {
+			t.Errorf("api.GetObjects() received owner %s", owner)
+		}
+		if prefix != "" {
+			t.Errorf("api.GetObjects() received prefix %s", prefix)
 		}
 
 		return []api.Metadata{
@@ -664,7 +669,7 @@ func TestClearPath_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 				return nil, tt.objectErr
 			}
 			fi.nodes = getTestFuse(t)

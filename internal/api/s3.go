@@ -41,8 +41,8 @@ const CipherBlockSize = BlockSize + MacSize
 // Metadata standardises the metadata received for both buckets and objects
 type Metadata struct {
 	Name         string
-	Owner        string
-	ID           string
+	Owner        string // Non-empty if data is shared from another project in SD Connect, for SD Apply it is one of bp/fega/sd
+	ID           string // Relevant only for SD Apply
 	Size         int64
 	LastModified *time.Time
 }
@@ -372,20 +372,15 @@ var GetBuckets = func(rep Repo) ([]Metadata, error) {
 }
 
 // GetObjects returns metadata for all the objects in a particular bucket.
-// `prefix` is an optional parameter with which function can return only objects that
-// begin with that particular value.
-var GetObjects = func(rep Repo, bucket, path string, extra ...string) ([]Metadata, error) {
-	owner := ""
-	if len(extra) > 0 {
-		owner = extra[0]
-	}
+// `owner` parameter is only valid for SD Apply, it is not needed for SD Connect
+var GetObjects = func(rep Repo, bucket, path, owner, prefix string) ([]Metadata, error) {
 	ctx := getContext(context.Background(), rep, false, owner)
 
 	params := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 	}
-	if len(extra) > 1 {
-		params.Prefix = aws.String(extra[1])
+	if prefix != "" {
+		params.Prefix = aws.String(prefix)
 	}
 
 	meta, err := getObjects(ctx, params, rep)
