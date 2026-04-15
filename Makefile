@@ -94,7 +94,7 @@ gui: wails_update ## Run GUI version of filesystem on your own computer
 	@$(MAKE) _wait_for_container CONTAINER_NAME=data-upload
 	@export $$($(MAKE) envs); \
 	trap 'exit 0' SIGINT; cd cmd/gui; \
-	wails dev $(WAILS_FLAGS);
+	wails dev -race $(WAILS_FLAGS);
 
 gui_build: wails_update ## Compile a production-ready GUI binary and save it in build/bin
 	cd cmd/gui; wails build $(WAILS_FLAGS) -trimpath -clean -s
