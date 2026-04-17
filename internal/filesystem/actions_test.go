@@ -398,7 +398,7 @@ func TestClearPath(t *testing.T) {
 		t.Errorf("Function did not clear files %v", slices.Collect(maps.Keys(traverse)))
 	}
 	expectedHeaders := map[_Ctype_ino_t]header{
-		29: {}, 30: {owner: "owner"}, 32: {}, 33: {value: "bftcdvtuftu"},
+		30: {owner: "owner"}, 33: {value: "bftcdvtuftu"},
 	}
 	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
 		t.Errorf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
@@ -525,9 +525,8 @@ func TestClearPath_Segments(t *testing.T) {
 	if len(traverse) > 0 {
 		t.Errorf("Function did not clear files %v", slices.Collect(maps.Keys(traverse)))
 	}
-	expectedHeaders := map[_Ctype_ino_t]header{16: {}, 18: {}, 19: {}}
-	if !reflect.DeepEqual(fi.headers, expectedHeaders) {
-		t.Errorf("Headers are incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
+	if len(fi.headers) > 0 {
+		t.Errorf("Unexpected values in headers: %v", fi.headers)
 	}
 }
 

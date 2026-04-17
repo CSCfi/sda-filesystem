@@ -32,8 +32,10 @@ static void s3_destroy(void *private_data) {
 
 static int s3_open(const char *path, struct fuse_file_info *fi) {
     struct fuse_context *fc = fuse_get_context();
+#if defined(__APPLE__)
     if (!IsValidOpen(fc->pid))
         return -ECANCELED;
+#endif
 
     node_t *node = search_node((nodes_t *)fc->private_data, path);
 	if (!node) {

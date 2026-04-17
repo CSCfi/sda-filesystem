@@ -487,12 +487,12 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSa
 	}
 
 	if isDir && name != meta.Name {
-		logs.Warningf("Directory %s under directory %s has had its name changed to %s", meta.Name, pathSafe, name)
+		logs.Warningf("Directory %q under directory %s has had its name changed to %q", meta.Name, pathSafe, name)
 	} else if (!isDir && name != strings.TrimSuffix(meta.Name, ".c4gh")) || newName != "" {
 		if newName == "" {
 			newName = name
 		}
-		logs.Warningf("File %s under directory %s has had its name changed to %s", origName, pathSafe, newName)
+		logs.Warningf("File %q under directory %s has had its name changed to %q", origName, pathSafe, newName)
 	}
 
 	siblings[name] = newGoNode(meta, isDir)

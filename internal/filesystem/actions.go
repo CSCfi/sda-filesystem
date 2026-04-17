@@ -140,21 +140,21 @@ func RefreshFilesystem() {
 	InitialiseFilesystem()
 }
 
+// IsValidOpen is only applicable when running on macOS
+//
 //export IsValidOpen
 func IsValidOpen(pid C.int) bool {
-	if runtime.GOOS == "darwin" {
-		for _, process := range []string{"Finder", "QuickLook"} {
-			grep := exec.Command("pgrep", "-f", process)
-			if res, err := grep.Output(); err == nil {
-				pids := strings.Split(string(res), "\n")
+	for _, process := range []string{"Finder", "QuickLook"} {
+		grep := exec.Command("pgrep", "-f", process)
+		if res, err := grep.Output(); err == nil {
+			pids := strings.Split(string(res), "\n")
 
-				for i := range pids {
-					pidInt, err := strconv.Atoi(pids[i])
-					if err == nil && pidInt == int(pid) {
-						logs.Debugf("%s trying to preview files", process)
+			for i := range pids {
+				pidInt, err := strconv.Atoi(pids[i])
+				if err == nil && pidInt == int(pid) {
+					logs.Debugf("%s trying to preview files", process)
 
-						return false
-					}
+					return false
 				}
 			}
 		}
@@ -340,15 +340,17 @@ func ClearPath(path string) error {
 func clearNode(node *C.node_t, pathNodes []string, meta map[string]api.Metadata) (C.off_t, C.time_t) {
 	if node.children == nil {
 		api.DeleteFileFromCache(api.SDConnect, pathNodes, int64(node.stat.st_size))
+		delete(fi.headers, node.stat.st_ino)
 		path := strings.Join(pathNodes, "/")
 		obj, ok := meta[path]
 		if ok {
-			fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
+			if obj.Owner != "" {
+				fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
+			}
 			node.offset = -1
 			node.stat.st_size = C.off_t(obj.Size)
 			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
 		} else {
-			delete(fi.headers, node.stat.st_ino)
 			node.stat.st_size = 0
 			node.offset = -2
 		}
