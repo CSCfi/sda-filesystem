@@ -108,16 +108,13 @@ func (a *App) InitializeAPI() (bool, error) {
 		wailsruntime.EventsEmit(a.ctx, "setRepositories", reps)
 	}()
 
-	ch := make(chan bool)
-	go a.monitorScans(ch)
-
 	if err := api.Setup(certs.Files); err != nil {
 		logs.Error(err)
 		outer, _ := logs.Wrapper(err)
 
 		return false, errors.New(outer)
 	}
-	access, err := api.GetProfile(ch)
+	access, err := api.GetProfile(a.informSessionExpired, a.informScanningResult)
 	if err != nil {
 		logs.Error(err)
 		outer, _ := logs.Wrapper(err)
@@ -138,16 +135,18 @@ func (a *App) InitializeAPI() (bool, error) {
 	return access, nil
 }
 
-func (a *App) monitorScans(ch <-chan bool) {
-	for ok := range ch {
-		if ok {
-			wailsruntime.EventsEmit(a.ctx, "virusFound")
-		} else {
-			wailsruntime.EventsEmit(
-				a.ctx, "showToast", "Virus scanning was interrupted",
-				"Please check the logs for details or contact servicedesk@csc.fi (subject: SD Services) for support.",
-			)
-		}
+func (a *App) informSessionExpired() {
+	wailsruntime.EventsEmit(a.ctx, "sessionExpired")
+}
+
+func (a *App) informScanningResult(found bool) {
+	if found {
+		wailsruntime.EventsEmit(a.ctx, "virusFound")
+	} else {
+		wailsruntime.EventsEmit(
+			a.ctx, "showToast", "Virus scanning was interrupted",
+			"Please check the logs for details or contact servicedesk@csc.fi (subject: SD Services) for support.",
+		)
 	}
 }
 

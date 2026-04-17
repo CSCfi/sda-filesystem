@@ -167,7 +167,16 @@ var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 		req.Header.Set("CSC-Password", ai.password)
 	}
 
-	return next.HandleFinalize(ctx, in)
+	out, metadata, err = next.HandleFinalize(ctx, in)
+
+	var ae smithy.APIError
+	if errors.As(err, &ae) {
+		if ae.ErrorCode() == "SessionExpired" {
+			ai.sessionExpiredFun()
+		}
+	}
+
+	return
 })
 
 var initialiseS3Client = func() error {

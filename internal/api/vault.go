@@ -134,6 +134,12 @@ var GetReencryptedHeader = func(bucket, object string) (string, int64, error) {
 		Offset int64  `json:"offset"`
 	}{}
 	err := makeRequest("GET", ep, query, headers, nil, &resp)
+	if err != nil {
+		var re *RequestError
+		if errors.As(err, &re) && re.StatusCode == 401 {
+			ai.sessionExpiredFun()
+		}
+	}
 
 	return resp.Header, resp.Offset, err
 }

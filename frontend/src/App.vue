@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { CToastMessage, CToastType } from "@cscfi/csc-ui/dist/types";
 import { ref, computed, onMounted } from "vue";
-import { EventsOn, EventsEmit } from "../wailsjs/runtime";
+import { EventsOn, EventsEmit, EventsOnce } from "../wailsjs/runtime";
 import { InitializeAPI, Quit } from "../wailsjs/go/main/App";
 import { mdiLogoutVariant } from "@mdi/js";
 import { TabType } from "./types/common";
@@ -40,25 +40,29 @@ const visibleTabs = computed(() => componentData.value.filter((data) => data.vis
 // eslint-disable-next-line no-undef
 const toasts = ref<HTMLCToastsElement | null>(null);
 
+const sessionMessage: CToastMessage = {
+  message: "Data Gateway connection needs to be refreshed. Please log out from the virtual machine and SD Desktop, and log in again.",
+  type: "warning" as CToastType,
+  persistent: true,
+  indeterminate: true
+};
+
 onMounted(() => {
   InitializeAPI().then((access: boolean) => {
     console.log("Initializing Data Gateway finished");
     initialized.value = true;
     if (!access) {
       disabled.value = true;
-      const message: CToastMessage = {
-        message: "Data Gateway connection needs to be refreshed. Please log out from the virtual machine and SD Desktop, and log in again.",
-        type: "warning" as CToastType,
-        persistent: true,
-        indeterminate: true
-      };
-
-      toasts.value?.addToast(message);
+      toasts.value?.addToast(sessionMessage);
     }
   }).catch((e) => {
     disabled.value = true;
     EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
   });
+});
+
+EventsOnce("sessionExpired", () => {
+  toasts.value?.addToast(sessionMessage);
 });
 
 EventsOn("showToast", (title: string, err: string) => {
