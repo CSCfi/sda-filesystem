@@ -517,7 +517,7 @@ func TestCheckObjectExistences_UserInput(t *testing.T) {
 				if bucket != "bucket" {
 					t.Errorf("api.GetObjects() received incorrect bucket. Expected=bucket, received=%s", bucket)
 				}
-				if len(prefix) > 0 {
+				if prefix != "" {
 					t.Errorf("api.GetObjects() should not have received prefix")
 				}
 
@@ -624,7 +624,7 @@ func TestCheckObjectExistences_NilReader(t *testing.T) {
 				if bucket != "bucket" {
 					t.Errorf("api.GetObjects() received incorrect bucket. Expected=bucket, received=%s", bucket)
 				}
-				if len(prefix) > 0 {
+				if prefix != "" {
 					t.Errorf("api.GetObjects() should not have received prefix")
 				}
 

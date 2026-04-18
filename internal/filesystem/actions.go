@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -38,6 +39,9 @@ import (
 const BlockSize int64 = 65536
 const MacSize int64 = 28
 const CipherBlockSize = BlockSize + MacSize
+
+// Only used on macOS
+var pidRegex = regexp.MustCompile(`^\d+[a-z]?$`)
 
 // freeNodes calls C function free_nodes()
 // This is a separate Go function so it can be used in tests
@@ -174,10 +178,6 @@ func FilesOpen() bool {
 
 		pids := strings.Fields(string(output))
 		for _, pid := range pids {
-			if strings.HasSuffix(pid, "c") {
-				continue
-			}
-
 			isOpen, err := checkPID("/proc/" + pid + "/fd")
 			if err != nil {
 				logs.Errorf("Update halted, could not determine if files are open: %w", err)
@@ -189,14 +189,22 @@ func FilesOpen() bool {
 			}
 		}
 	case "darwin":
-		output, err := exec.Command("fuser", "-c", fi.mount).Output()
+		// plain stdout trims out the suffix in the pids
+		output, err := exec.Command("fuser", "-c", fi.mount).CombinedOutput()
 		if err != nil {
 			logs.Errorf("Update halted, could not determine if files are open: %w", err)
 
 			return true
 		}
 
-		return len(output) > 0
+		outputLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		pidsLine := outputLines[len(outputLines)-1] // Last non-empty line in output
+
+		pids := slices.DeleteFunc(strings.Fields(pidsLine), func(pid string) bool {
+			return pidRegex.FindString(pid) == "" || strings.HasSuffix(pid, "c")
+		})
+
+		return len(pids) > 0
 	}
 
 	return false
