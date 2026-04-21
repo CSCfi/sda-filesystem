@@ -7,9 +7,23 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.4.1] - 2026-04-21
+
 ### Changed
 
+- use verb `update` instead of `refresh` when referencing the action of recreating the content of the filesystem
+- do not call `IsValidOpen()` at all if running on Linux
+- send information to frontend from `api` package via functions and not channels
 - create directories with `0744` permissions to help copying (#67)
+
+### Fixed
+
+- in macOS, filter out the pids with `c` suffix when determining if files are being used
+
+### Added
+
+- `-race` flag back in the `wails dev` command now that the newest Go version has fixed the segmentation violation
+- show a toast message to user in GUI when session has expired after Data Gateway has been initialized (#68)
 
 ## [2026.4.0] - 2026-04-02
 
@@ -501,7 +515,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.0...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.1...HEAD
+[2026.4.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.0...2026.4.1
 [2026.4.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.3...2026.4.0
 [2026.3.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.2...2026.3.3
 [2026.3.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.1...2026.3.2
