@@ -55,16 +55,17 @@ type FileReader interface {
 
 // apiInfo contains variables required for Data Gateway to work with KrakendD
 type apiInfo struct {
-	proxy         string
-	token         string
-	password      string // base64 encoded
-	repositories  []Repo
-	scan          chan<- bool
-	userProfile   profile
-	findataUpload bool // If findata upload is possible
-	hi            httpInfo
-	vi            vaultInfo
-	ui            unixInfo
+	proxy             string
+	token             string
+	password          string // base64 encoded
+	repositories      []Repo
+	sessionExpiredFun func()
+	scanResultFun     func(bool)
+	userProfile       profile
+	findataUpload     bool // If findata upload is possible
+	hi                httpInfo
+	vi                vaultInfo
+	ui                unixInfo
 }
 
 // httpInfo contains variables used during HTTP requests
@@ -313,7 +314,11 @@ func convertConfig(cfg configResponse) (ep apiEndpoints) {
 	return
 }
 
-func GetProfile(scanChannel ...chan<- bool) (bool, error) {
+func GetProfileCLI() (bool, error) {
+	return GetProfile(func() {}, func(bool) {})
+}
+
+func GetProfile(sessionFun func(), scanFun func(bool)) (bool, error) {
 	err := makeRequest("GET", ai.hi.endpoints.Profile, nil, nil, nil, &ai.userProfile)
 	if err != nil {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
@@ -330,14 +335,11 @@ func GetProfile(scanChannel ...chan<- bool) (bool, error) {
 		ai.repositories = []Repo{SDApply}
 	}
 
+	// To inform GUI that session has expired
+	ai.sessionExpiredFun = sessionFun
+
 	// To inform GUI about virus scan results
-	if len(scanChannel) > 0 {
-		if ai.userProfile.ProjectType != "findata" {
-			close(scanChannel[0]) // Do not need in this case
-		} else {
-			ai.scan = scanChannel[0]
-		}
-	}
+	ai.scanResultFun = scanFun
 
 	return ai.userProfile.S3Access, nil
 }
@@ -554,7 +556,7 @@ var scanForViruses = func(data []byte, path string) {
 	conn, err := ai.ui.dial()
 	if err != nil {
 		logs.Errorf("failed to connect to clamav socket: %w", err)
-		ai.scan <- false
+		ai.scanResultFun(false)
 
 		return
 	}
@@ -583,7 +585,7 @@ var scanForViruses = func(data []byte, path string) {
 	}
 
 	if err != nil {
-		ai.scan <- false
+		ai.scanResultFun(false)
 
 		return
 	}
@@ -592,7 +594,7 @@ var scanForViruses = func(data []byte, path string) {
 	response, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		logs.Errorf("Failed to read ClamAV response: %w", err)
-		ai.scan <- false
+		ai.scanResultFun(false)
 
 		return
 	}
@@ -603,9 +605,9 @@ var scanForViruses = func(data []byte, path string) {
 	}
 	if strings.Contains(response, "FOUND") {
 		logs.Warningf("%s is infected: %s", path, response)
-		ai.scan <- true
+		ai.scanResultFun(true)
 	} else {
 		logs.Errorf("ClamAV did not return a valid response for %s: %s", path, response)
-		ai.scan <- false
+		ai.scanResultFun(false)
 	}
 }

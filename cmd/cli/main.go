@@ -142,7 +142,7 @@ func main() {
 		logs.Fatal(err)
 	}
 
-	access, err := api.GetProfile()
+	access, err := api.GetProfileCLI()
 	if err != nil {
 		logs.Fatal(err)
 	}

@@ -788,7 +788,7 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 
 	if err := initialiseS3Client(); err != nil {
 		t.Errorf("Failed to initialize S3 client: %v", err.Error())
-	} else if objects, err := GetObjects(SDApply, "bucket23", "", "fega"); err != nil {
+	} else if objects, err := GetObjects(SDApply, "bucket23", "", "fega", ""); err != nil {
 		t.Errorf("Request to mock server failed: %v", err)
 	} else if !reflect.DeepEqual(objects, expectedObjects) {
 		t.Errorf("Function returned incorrect objects\nExpected=%v\nReceived=%v", expectedObjects, objects)
@@ -855,7 +855,7 @@ func TestGetObjects_Error(t *testing.T) {
 
 			if err := initialiseS3Client(); err != nil {
 				t.Errorf("Failed to initialize S3 client: %v", err.Error())
-			} else if _, err := GetObjects(SDConnect, "some-bucket", "SD-Connect/some-bucket"); err == nil {
+			} else if _, err := GetObjects(SDConnect, "some-bucket", "SD-Connect/some-bucket", "", ""); err == nil {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())

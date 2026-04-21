@@ -558,12 +558,12 @@ func TestSetup_Error(t *testing.T) {
 
 func TestGetProfile(t *testing.T) {
 	origMakeRequest := makeRequest
-	origRepositories := ai.repositories
 	origGetEnv := GetEnv
+	origAI := ai
 	defer func() {
-		ai.repositories = origRepositories
 		makeRequest = origMakeRequest
 		GetEnv = origGetEnv
+		ai = origAI
 	}()
 
 	ai.hi.endpoints = testConfig
@@ -602,9 +602,10 @@ func TestGetProfile(t *testing.T) {
 	}
 	ai.repositories = []Repo{"mock-repo"}
 	expectedRepos := []Repo{SDApply, SDConnect}
-	testCh := make(chan bool)
+	sessionFun := func() {}
+	scanFun := func(bool) {}
 
-	access, err := GetProfile(testCh)
+	access, err := GetProfile(sessionFun, scanFun)
 	switch {
 	case err != nil:
 		t.Errorf("First call returned error: %s", err.Error())
@@ -614,8 +615,10 @@ func TestGetProfile(t *testing.T) {
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
 	case !reflect.DeepEqual(ai.repositories, expectedRepos):
 		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
-	case ai.scan != testCh:
-		t.Errorf("Incorrect scanning channel\nExpected=%v\nReceived=%v", testCh, ai.scan)
+	case reflect.ValueOf(ai.sessionExpiredFun).Pointer() != reflect.ValueOf(sessionFun).Pointer():
+		t.Error("Incorrect session expiration function")
+	case reflect.ValueOf(ai.scanResultFun).Pointer() != reflect.ValueOf(scanFun).Pointer():
+		t.Error("Incorrect scanning function")
 	case ai.ui.address != "socket_path":
 		t.Errorf("Incorrect ClamAV socket path\nExpected=socket_path\nReceived=%s", ai.ui.address)
 	}
@@ -626,7 +629,7 @@ func TestGetProfile(t *testing.T) {
 
 	expectedRepos = []Repo{SDApply}
 
-	access, err = GetProfile(testCh)
+	access, err = GetProfileCLI()
 	switch {
 	case err != nil:
 		t.Errorf("Second call returned error: %s", err.Error())
@@ -636,12 +639,10 @@ func TestGetProfile(t *testing.T) {
 		t.Errorf("Incorrect token\nExpected=test_token\nReceived=%s", ai.token)
 	case !reflect.DeepEqual(ai.repositories, expectedRepos):
 		t.Errorf("Incorrect repositories\nExpected=%v\nReceived=%v", expectedRepos, ai.repositories)
-	}
-
-	select {
-	case <-testCh:
-	default:
-		t.Error("Scanning channel is not closed")
+	case ai.sessionExpiredFun == nil:
+		t.Error("Nil session expiration function")
+	case ai.scanResultFun == nil:
+		t.Error("Nil scanning function")
 	}
 }
 
@@ -649,10 +650,12 @@ func TestGetProfile_Error(t *testing.T) {
 	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
 	origGetEnv := GetEnv
+	origAI := ai
 	defer func() {
 		ai.repositories = origRepositories
 		makeRequest = origMakeRequest
 		GetEnv = origGetEnv
+		ai = origAI
 	}()
 
 	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
@@ -663,7 +666,7 @@ func TestGetProfile_Error(t *testing.T) {
 	}
 	errText := "failed to get user profile: " + errExpected.Error()
 
-	if _, err := GetProfile(); err == nil {
+	if _, err := GetProfileCLI(); err == nil {
 		t.Error("Function should have returned error")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
@@ -674,10 +677,12 @@ func TestGetProfile_Clamav(t *testing.T) {
 	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
 	origGetEnv := GetEnv
+	origAI := ai
 	defer func() {
 		ai.repositories = origRepositories
 		makeRequest = origMakeRequest
 		GetEnv = origGetEnv
+		ai = origAI
 	}()
 
 	projectType := "findata"
@@ -696,7 +701,7 @@ func TestGetProfile_Clamav(t *testing.T) {
 	}
 	errText := "required environment variables missing: " + errExpected.Error()
 
-	if _, err := GetProfile(); err == nil {
+	if _, err := GetProfileCLI(); err == nil {
 		t.Error("Function should have returned error")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
@@ -704,7 +709,7 @@ func TestGetProfile_Clamav(t *testing.T) {
 
 	projectType = "default"
 
-	if _, err := GetProfile(); err != nil {
+	if _, err := GetProfileCLI(); err != nil {
 		t.Fatalf("Function returned unexpected error: %s", err.Error())
 	}
 }
@@ -1219,10 +1224,10 @@ func TestScanForViruses(t *testing.T) {
 	}
 	defer socket.Close()
 
-	origScan := ai.scan
+	origScan := ai.scanResultFun
 	origAddress := ai.ui.address
 	defer func() {
-		ai.scan = origScan
+		ai.scanResultFun = origScan
 		ai.ui.address = origAddress
 	}()
 
@@ -1240,22 +1245,12 @@ func TestScanForViruses(t *testing.T) {
 		handleConnection(conn, string(data), errc)
 	}()
 
-	testCh := make(chan bool)
-	ai.scan = testCh
+	ai.scanResultFun = func(b bool) {
+		t.Errorf("Scanning channel returned %t", b)
+	}
 	ai.ui.address = tmpdir + "/test.sock"
 
-	done := make(chan bool)
-	go func() {
-		scanForViruses(data, "test.txt")
-		done <- true
-	}()
-
-	select {
-	case v := <-testCh:
-		t.Errorf("Scanning channel returned %t", v)
-	case <-done:
-		break
-	}
+	scanForViruses(data, "test.txt")
 
 	select {
 	case err := <-errc:
@@ -1273,10 +1268,10 @@ func TestScanForViruses_Virus(t *testing.T) {
 	}
 	defer socket.Close()
 
-	origScan := ai.scan
+	origScan := ai.scanResultFun
 	origAddress := ai.ui.address
 	defer func() {
-		ai.scan = origScan
+		ai.scanResultFun = origScan
 		ai.ui.address = origAddress
 	}()
 
@@ -1294,23 +1289,19 @@ func TestScanForViruses_Virus(t *testing.T) {
 		handleConnection(conn, string(data), errc)
 	}()
 
-	testCh := make(chan bool)
-	ai.scan = testCh
-	ai.ui.address = tmpdir + "/test.sock"
-
-	done := make(chan bool)
-	go func() {
-		scanForViruses(data, "test.txt")
-		done <- true
-	}()
-
-	select {
-	case v := <-testCh:
-		if !v {
+	called := false
+	ai.scanResultFun = func(b bool) {
+		if !b {
 			t.Errorf("Scanning channel returned false")
 		}
-	case <-done:
-		t.Errorf("Scanning channel returned nothing")
+		called = true
+	}
+	ai.ui.address = tmpdir + "/test.sock"
+
+	scanForViruses(data, "test.txt")
+
+	if !called {
+		t.Errorf("Scanning function not called")
 	}
 
 	select {
@@ -1329,11 +1320,11 @@ func TestScanForViruses_Closed(t *testing.T) {
 	}
 	socket.Close()
 
-	origScan := ai.scan
+	origScan := ai.scanResultFun
 	origAddress := ai.ui.address
 	origErrorf := logs.Errorf
 	defer func() {
-		ai.scan = origScan
+		ai.scanResultFun = origScan
 		ai.ui.address = origAddress
 		logs.Errorf = origErrorf
 	}()
@@ -1343,24 +1334,20 @@ func TestScanForViruses_Closed(t *testing.T) {
 		errc <- fmt.Errorf(format, args...)
 	}
 
-	testCh := make(chan bool)
-	ai.scan = testCh
-	ai.ui.address = tmpdir + "/test.sock"
-
-	done := make(chan bool)
-	go func() {
-		data := []byte("I am bad data... VIRUS123")
-		scanForViruses(data, "test.txt")
-		done <- true
-	}()
-
-	select {
-	case v := <-testCh:
-		if v {
+	called := false
+	ai.scanResultFun = func(b bool) {
+		if b {
 			t.Errorf("Scanning channel returned true")
 		}
-	case <-done:
-		t.Errorf("Scanning channel returned nothing")
+		called = true
+	}
+	ai.ui.address = tmpdir + "/test.sock"
+
+	data := []byte("I am bad data... VIRUS123")
+	scanForViruses(data, "test.txt")
+
+	if !called {
+		t.Errorf("Scanning function not called")
 	}
 
 	errStr := "failed to connect to clamav socket: dial unix " + tmpdir + "/test.sock" + ": connect: no such file or directory"
@@ -1415,12 +1402,12 @@ func TestScanForViruses_Interrupt(t *testing.T) {
 		{"FAIL_4", "Failed to end streaming to ClamAV: mock write failure", 3},
 	}
 
-	origScan := ai.scan
+	origScan := ai.scanResultFun
 	origAddress := ai.ui.address
 	origErrorf := logs.Errorf
 	origDial := ai.ui.dial
 	defer func() {
-		ai.scan = origScan
+		ai.scanResultFun = origScan
 		ai.ui.address = origAddress
 		logs.Errorf = origErrorf
 		ai.ui.dial = origDial
@@ -1436,24 +1423,20 @@ func TestScanForViruses_Interrupt(t *testing.T) {
 				return &MockConn{errAt: tt.errAt}, nil
 			}
 
-			testCh := make(chan bool)
-			ai.scan = testCh
-			ai.ui.address = "test.sock"
-
-			done := make(chan bool)
-			go func() {
-				data := []byte("I am good data")
-				scanForViruses(data, "test.txt")
-				done <- true
-			}()
-
-			select {
-			case v := <-testCh:
-				if v {
+			called := false
+			ai.scanResultFun = func(b bool) {
+				if b {
 					t.Errorf("Scanning channel returned true")
 				}
-			case <-done:
-				t.Errorf("Scanning channel returned nothing")
+				called = true
+			}
+			ai.ui.address = "test.sock"
+
+			data := []byte("I am good data")
+			scanForViruses(data, "test.txt")
+
+			if !called {
+				t.Errorf("Scanning function not called")
 			}
 
 			select {
@@ -1471,12 +1454,12 @@ func TestScanForViruses_Interrupt(t *testing.T) {
 }
 
 func TestScanForViruses_ReadError(t *testing.T) {
-	origScan := ai.scan
+	origScan := ai.scanResultFun
 	origAddress := ai.ui.address
 	origErrorf := logs.Errorf
 	origDial := ai.ui.dial
 	defer func() {
-		ai.scan = origScan
+		ai.scanResultFun = origScan
 		ai.ui.address = origAddress
 		logs.Errorf = origErrorf
 		ai.ui.dial = origDial
@@ -1490,24 +1473,20 @@ func TestScanForViruses_ReadError(t *testing.T) {
 		return &MockConn{errAt: -1, failRead: true}, nil
 	}
 
-	testCh := make(chan bool)
-	ai.scan = testCh
-	ai.ui.address = "test.sock"
-
-	done := make(chan bool)
-	go func() {
-		data := []byte("I am good data")
-		scanForViruses(data, "test.txt")
-		done <- true
-	}()
-
-	select {
-	case v := <-testCh:
-		if v {
+	called := false
+	ai.scanResultFun = func(b bool) {
+		if b {
 			t.Errorf("Scanning channel returned true")
 		}
-	case <-done:
-		t.Errorf("Scanning channel returned nothing")
+		called = true
+	}
+	ai.ui.address = "test.sock"
+
+	data := []byte("I am good data")
+	scanForViruses(data, "test.txt")
+
+	if !called {
+		t.Errorf("Scanning function not called")
 	}
 
 	errStr := "Failed to read ClamAV response: mock read failure"
@@ -1524,12 +1503,12 @@ func TestScanForViruses_ReadError(t *testing.T) {
 }
 
 func TestScanForViruses_BadResponse(t *testing.T) {
-	origScan := ai.scan
+	origScan := ai.scanResultFun
 	origAddress := ai.ui.address
 	origErrorf := logs.Errorf
 	origDial := ai.ui.dial
 	defer func() {
-		ai.scan = origScan
+		ai.scanResultFun = origScan
 		ai.ui.address = origAddress
 		logs.Errorf = origErrorf
 		ai.ui.dial = origDial
@@ -1543,24 +1522,20 @@ func TestScanForViruses_BadResponse(t *testing.T) {
 		return &MockConn{errAt: -1, failRead: false}, nil
 	}
 
-	testCh := make(chan bool)
-	ai.scan = testCh
-	ai.ui.address = "test.sock"
-
-	done := make(chan bool)
-	go func() {
-		data := []byte("I am good data")
-		scanForViruses(data, "test.txt")
-		done <- true
-	}()
-
-	select {
-	case v := <-testCh:
-		if v {
+	called := false
+	ai.scanResultFun = func(b bool) {
+		if b {
 			t.Errorf("Scanning channel returned true")
 		}
-	case <-done:
-		t.Errorf("Scanning channel returned nothing")
+		called = true
+	}
+	ai.ui.address = "test.sock"
+
+	data := []byte("I am good data")
+	scanForViruses(data, "test.txt")
+
+	if !called {
+		t.Errorf("Scanning function not called")
 	}
 
 	errStr := "ClamAV did not return a valid response for test.txt: hello"

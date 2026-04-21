@@ -4,7 +4,7 @@ import { reactive, ref, onMounted, computed } from "vue";
 import {
   GetDefaultMountPoint,
   OpenFuse,
-  RefreshFuse,
+  UpdateFuse,
   ChangeMountPoint,
   FilesOpen,
   InitFuse,
@@ -93,7 +93,7 @@ EventsOn("updateProjectProgress", (name: string, repository: string, progress: n
 
 EventsOn("fuseReady", () => {pageIdx.value = 4; updating.value = false;});
 
-EventsOn("refresh", () => refresh());
+EventsOn("update", () => update());
 
 EventsOn("virusFound", () => {virusFound.value = true;});
 
@@ -105,14 +105,14 @@ function changeMountPoint() {
   });
 }
 
-function refresh() {
+function update() {
   updating.value = true;
 
   FilesOpen().then((open: boolean) => {
     if (open) {
       EventsEmit(
         "showToast",
-        "Refresh not possible",
+        "Update not possible",
         "You have files in use which prevents updating Data Gateway"
       );
       updating.value = false;
@@ -126,7 +126,7 @@ function refresh() {
       });
       projectKey.value = 0;
 
-      RefreshFuse();
+      UpdateFuse();
     }
   });
 }
@@ -161,10 +161,10 @@ function refresh() {
     <div v-else>
       <h2>{{ pageIdx == 2 ? "Preparing access" : "Access ready" }}</h2>
       <div v-if="pageIdx > 2">
-        <p>If you update the contents of projects, please refresh access.</p>
+        <p>If you update the contents of projects, please update access.</p>
         <c-row gap="20" justify="end">
-          <c-button outlined :disabled="updating" @click="refresh">
-            Refresh access
+          <c-button outlined :disabled="updating" @click="update">
+            Update access
           </c-button>
           <c-button :disabled="updating" @click="OpenFuse">
             Open folder

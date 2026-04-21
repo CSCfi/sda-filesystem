@@ -28,9 +28,9 @@ export function Panic():Promise<void>;
 
 export function Quit():Promise<void>;
 
-export function RefreshFuse():Promise<void>;
-
 export function SelectFiles():Promise<Array<string>>;
+
+export function UpdateFuse():Promise<void>;
 
 export function UpdateRepositorySelection(arg1:Record<string, boolean>):Promise<void>;
 

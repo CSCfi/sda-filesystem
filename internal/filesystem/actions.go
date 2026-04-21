@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -38,6 +39,9 @@ import (
 const BlockSize int64 = 65536
 const MacSize int64 = 28
 const CipherBlockSize = BlockSize + MacSize
+
+// Only used on macOS
+var pidRegex = regexp.MustCompile(`^\d+[a-z]?$`)
 
 // freeNodes calls C function free_nodes()
 // This is a separate Go function so it can be used in tests
@@ -128,9 +132,9 @@ func WaitForLock() {
 	fi.mu.RLock()
 }
 
-// RefreshFilesystem clears cache and creates a new fileystem that will reflect any changes
+// UpdateFilesystem clears cache and creates a new fileystem that will reflect any changes
 // that have occurred in the repositories. Does not unmount fuse at any point.
-func RefreshFilesystem() {
+func UpdateFilesystem() {
 	fi.mu.Lock()
 	defer fi.mu.Unlock()
 
@@ -140,21 +144,21 @@ func RefreshFilesystem() {
 	InitialiseFilesystem()
 }
 
+// IsValidOpen is only applicable when running on macOS
+//
 //export IsValidOpen
 func IsValidOpen(pid C.int) bool {
-	if runtime.GOOS == "darwin" {
-		for _, process := range []string{"Finder", "QuickLook"} {
-			grep := exec.Command("pgrep", "-f", process)
-			if res, err := grep.Output(); err == nil {
-				pids := strings.Split(string(res), "\n")
+	for _, process := range []string{"Finder", "QuickLook"} {
+		grep := exec.Command("pgrep", "-f", process)
+		if res, err := grep.Output(); err == nil {
+			pids := strings.Split(string(res), "\n")
 
-				for i := range pids {
-					pidInt, err := strconv.Atoi(pids[i])
-					if err == nil && pidInt == int(pid) {
-						logs.Debugf("%s trying to preview files", process)
+			for i := range pids {
+				pidInt, err := strconv.Atoi(pids[i])
+				if err == nil && pidInt == int(pid) {
+					logs.Debugf("%s trying to preview files", process)
 
-						return false
-					}
+					return false
 				}
 			}
 		}
@@ -174,10 +178,6 @@ func FilesOpen() bool {
 
 		pids := strings.Fields(string(output))
 		for _, pid := range pids {
-			if strings.HasSuffix(pid, "c") {
-				continue
-			}
-
 			isOpen, err := checkPID("/proc/" + pid + "/fd")
 			if err != nil {
 				logs.Errorf("Update halted, could not determine if files are open: %w", err)
@@ -189,14 +189,22 @@ func FilesOpen() bool {
 			}
 		}
 	case "darwin":
-		output, err := exec.Command("fuser", "-c", fi.mount).Output()
+		// plain stdout trims out the suffix in the pids
+		output, err := exec.Command("fuser", "-c", fi.mount).CombinedOutput()
 		if err != nil {
 			logs.Errorf("Update halted, could not determine if files are open: %w", err)
 
 			return true
 		}
 
-		return len(output) > 0
+		outputLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		pidsLine := outputLines[len(outputLines)-1] // Last non-empty line in output
+
+		pids := slices.DeleteFunc(strings.Fields(pidsLine), func(pid string) bool {
+			return pidRegex.FindString(pid) == "" || strings.HasSuffix(pid, "c")
+		})
+
+		return len(pids) > 0
 	}
 
 	return false
@@ -340,15 +348,17 @@ func ClearPath(path string) error {
 func clearNode(node *C.node_t, pathNodes []string, meta map[string]api.Metadata) (C.off_t, C.time_t) {
 	if node.children == nil {
 		api.DeleteFileFromCache(api.SDConnect, pathNodes, int64(node.stat.st_size))
+		delete(fi.headers, node.stat.st_ino)
 		path := strings.Join(pathNodes, "/")
 		obj, ok := meta[path]
 		if ok {
-			fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
+			if obj.Owner != "" {
+				fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
+			}
 			node.offset = -1
 			node.stat.st_size = C.off_t(obj.Size)
 			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
 		} else {
-			delete(fi.headers, node.stat.st_ino)
 			node.stat.st_size = 0
 			node.offset = -2
 		}

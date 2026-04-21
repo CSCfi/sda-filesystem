@@ -510,14 +510,14 @@ func TestCheckObjectExistences_UserInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 				if rep != api.SDConnect {
 					t.Errorf("api.GetObjects() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}
 				if bucket != "bucket" {
 					t.Errorf("api.GetObjects() received incorrect bucket. Expected=bucket, received=%s", bucket)
 				}
-				if len(extra) > 0 {
+				if prefix != "" {
 					t.Errorf("api.GetObjects() should not have received prefix")
 				}
 
@@ -617,14 +617,14 @@ func TestCheckObjectExistences_NilReader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+			api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 				if rep != api.SDConnect {
 					t.Errorf("api.GetObjects() received incorrect repository. Expected=%s, received=%s", api.SDConnect, rep)
 				}
 				if bucket != "bucket" {
 					t.Errorf("api.GetObjects() received incorrect bucket. Expected=bucket, received=%s", bucket)
 				}
-				if len(extra) > 0 {
+				if prefix != "" {
 					t.Errorf("api.GetObjects() should not have received prefix")
 				}
 
@@ -659,7 +659,7 @@ func TestCheckObjectExistence_Error(t *testing.T) {
 		api.GetObjects = origGetObjects
 	}()
 
-	api.GetObjects = func(rep api.Repo, bucket, path string, extra ...string) ([]api.Metadata, error) {
+	api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
 		return nil, errExpected
 	}
 
