@@ -132,9 +132,9 @@ func WaitForLock() {
 	fi.mu.RLock()
 }
 
-// RefreshFilesystem clears cache and creates a new fileystem that will reflect any changes
+// UpdateFilesystem clears cache and creates a new fileystem that will reflect any changes
 // that have occurred in the repositories. Does not unmount fuse at any point.
-func RefreshFilesystem() {
+func UpdateFilesystem() {
 	fi.mu.Lock()
 	defer fi.mu.Unlock()
 

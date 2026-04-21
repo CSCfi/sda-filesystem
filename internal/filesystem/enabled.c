@@ -60,7 +60,7 @@ static int s3_open(const char *path, struct fuse_file_info *fi) {
 static int s3_read(const char *path, char *buf, size_t size, off_t off, struct fuse_file_info *fi) {
     struct fuse_context *fc = fuse_get_context();
     nodes_t *n = (nodes_t *)fc->private_data;
-    if (n->count == 0) { // Just in case function is called during refresh
+    if (n->count == 0) { // Just in case function is called during update
         return -ECANCELED;
     }
     node_t *node = n->nodes + fi->fh;
@@ -95,7 +95,7 @@ static int s3_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                       off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
     struct fuse_context *fc = fuse_get_context();
     nodes_t *n = (nodes_t *)fc->private_data;
-    if (n->count == 0) { // Just in case function is called during refresh
+    if (n->count == 0) { // Just in case function is called during update
         return -ECANCELED;
     }
     node_t *node = n->nodes + fi->fh;

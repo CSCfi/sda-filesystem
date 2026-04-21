@@ -81,7 +81,7 @@ func applyCommand(ch <-chan []string) {
 			if filesystem.FilesOpen() {
 				logs.Errorf("You have files in use which prevents updating Data Gateway")
 			} else {
-				filesystem.RefreshFilesystem()
+				filesystem.UpdateFilesystem()
 			}
 		case "clear":
 			if len(input) > 1 {

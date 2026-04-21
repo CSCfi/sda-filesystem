@@ -54,12 +54,12 @@ export function Quit() {
   return window['go']['main']['App']['Quit']();
 }
 
-export function RefreshFuse() {
-  return window['go']['main']['App']['RefreshFuse']();
-}
-
 export function SelectFiles() {
   return window['go']['main']['App']['SelectFiles']();
+}
+
+export function UpdateFuse() {
+  return window['go']['main']['App']['UpdateFuse']();
 }
 
 export function UpdateRepositorySelection(arg1) {

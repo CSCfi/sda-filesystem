@@ -194,7 +194,7 @@ func (a *App) InitFuse() {
 			go func() {
 				for {
 					<-cmd
-					wailsruntime.EventsEmit(a.ctx, "refresh")
+					wailsruntime.EventsEmit(a.ctx, "update")
 				}
 			}()
 			go func() {
@@ -243,11 +243,11 @@ func (a *App) FilesOpen() bool {
 	return filesystem.FilesOpen()
 }
 
-func (a *App) RefreshFuse() {
+func (a *App) UpdateFuse() {
 	time.Sleep(200 * time.Millisecond)
 
 	a.ph.DeleteProjects()
-	filesystem.RefreshFilesystem()
+	filesystem.UpdateFilesystem()
 
 	buckets := filesystem.GetNodeChildren(api.SDConnect.ForPath() + "/" + api.GetProjectName())
 	if len(buckets) > 0 {
