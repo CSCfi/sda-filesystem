@@ -82,10 +82,6 @@ func TestCheckMountPoint(t *testing.T) {
 }
 
 func TestCheckMountPoint_Permissions(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping fuse test for ci docker")
-	}
-
 	var tests = []struct {
 		testname, name string
 		mode           uint32
@@ -135,10 +131,6 @@ func TestCheckMountPoint_Fail_Stat(t *testing.T) {
 }
 
 func TestCheckMountPoint_Fail_MkdirAll(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping fuse test for ci docker")
-	}
-
 	node := t.TempDir()
 	if err := os.Chmod(node, os.FileMode(0555)); err != nil {
 		t.Errorf("Changing permission bits failed: %s", err.Error())
@@ -185,10 +177,6 @@ func (t *Testfs) Readdir(_ string,
 }
 
 func TestCheckMountPoint_Fail_Read(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping fuse test for ci docker")
-	}
-
 	node := t.TempDir()
 
 	options := []string{}

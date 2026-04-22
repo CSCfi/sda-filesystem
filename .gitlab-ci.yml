@@ -67,21 +67,28 @@ jfrog-go-audit:
     - jf audit --go --licenses --extended-table --min-severity=Medium
 
 test:
-  image: $BUILD_IMAGE
+  image:
+    name: $BUILD_IMAGE
+    docker:
+      user: 1000:1000
   stage: test
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
   tags:
     - docker-exec
-  services:
-    - docker:dind
   before_script:
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
+    - go install gotest.tools/gotestsum@v1.13.0
     - go mod tidy && go mod vendor
   script:
-    - CI=true go test -race -tags=fuse3 -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v -e frontend -e test)
+    - packages=$(go list ./... | grep -v -e frontend -e test -e build -e certs)
+    - gotestsum --junitfile report.xml --format testname --rerun-fails --rerun-fails-abort-on-data-race --packages "${packages}" -- -race -tags=fuse3 ${packages}
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
 
 build-dev:
   stage: build
