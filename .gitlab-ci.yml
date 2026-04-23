@@ -1,31 +1,54 @@
 stages:
+  - deps
   - lint
   - test
   - build
   - release
 
 variables:
-  BUILD_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
+  DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
   BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci
-  COMMON_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-ci
+  GOCACHE: $CI_PROJECT_DIR/.go-build
 
 include:
   - project: 'sds-dev/releases'
     ref: main
     file: 'releases.yml'
 
-backend-lint:
-  stage: lint
-  image: $BUILD_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
+default:
+  image: $DEV_IMAGE
   tags:
     - docker-exec
-  before_script:
+
+install-deps:
+  stage: deps
+  rules:
+    - when: always
+  script:
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
     - go mod tidy && go mod vendor
+  cache:
+    - &global_pnpm_cache
+      key:
+        files:
+          - frontend/pnpm-lock.yaml
+      paths:
+        - frontend/node_modules/
+    - &global_go_cache
+      key: $CI_COMMIT_REF_SLUG
+      paths:
+        - vendor/
+        - frontend/dist/
+
+backend-lint:
+  stage: lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  cache:
+    <<: *global_go_cache
+    policy: pull
   script:
     - golangci-lint run -v ./... --allow-parallel-runners --timeout 10m --output.code-climate.path stdout | tee gl-code-quality-report.json
     - go fmt ./...
@@ -38,17 +61,14 @@ backend-lint:
 
 frontend-lint:
   stage: lint
-  image: $COMMON_IMAGE
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
-  tags:
-    - docker-exec
-  before_script:
-    - cd frontend
-    - pnpm install
+  cache:
+    <<: *global_pnpm_cache
+    policy: pull
   script:
-    - pnpm run lint
+    - pnpm run --dir frontend lint
 
 jfrog-go-audit:
   stage: test
@@ -68,22 +88,20 @@ jfrog-go-audit:
 
 test:
   image:
-    name: $BUILD_IMAGE
+    name: $DEV_IMAGE
     docker:
       user: 1000:1000
   stage: test
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
-  tags:
-    - docker-exec
+  cache:
+    <<: *global_go_cache
+    policy: pull
   before_script:
-    - pnpm install --dir frontend
-    - pnpm run --dir frontend build
     - go install gotest.tools/gotestsum@v1.13.0
-    - go mod tidy && go mod vendor
   script:
-    - packages=$(go list ./... | grep -v -e frontend -e test -e build -e certs)
+    - packages=$(go list -buildvcs=false ./... | grep -v -e frontend -e test -e build -e certs)
     - gotestsum --junitfile report.xml --format testname --rerun-fails --rerun-fails-abort-on-data-race --packages "${packages}" -- -race -tags=fuse3 ${packages}
   artifacts:
     when: always
@@ -97,13 +115,15 @@ build-dev:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-  tags:
-    - docker-exec
   variables:
     SECURE_FILES_DOWNLOAD_PATH: './certs'
+  cache:
+    - <<: *global_pnpm_cache
+      policy: pull
+    - <<: *global_go_cache
+      policy: pull
   before_script:
     - jf config import "${JF_CONFIG}"
-    - go mod tidy && go mod vendor
   script:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - |
@@ -120,17 +140,17 @@ build-artifacts:
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
-  tags:
-    - docker-exec
   services:
     - docker:dind
   variables:
     SECURE_FILES_DOWNLOAD_PATH: './certs'
+  cache:
+    - <<: *global_pnpm_cache
+      policy: pull
+    - <<: *global_go_cache
+      policy: pull
   before_script:
     - jf config import "${JF_CONFIG}"
-    - pnpm install --dir frontend
-    - pnpm run --dir frontend build
-    - go mod tidy && go mod vendor
   script:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - |
