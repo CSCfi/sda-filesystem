@@ -23,7 +23,6 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/mockauth/Dockerfile
-    image: mockauth
     container_name: mockauth
     env_file:
       - .env.keystone
@@ -194,7 +193,6 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/redis/Dockerfile
-    image: krakend-redis
     container_name: krakend-redis
     profiles:
       - krakend
@@ -202,7 +200,6 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/static/Dockerfile
-    image: krakend-static
     container_name: krakend-static
     env_file:
       - .env
@@ -216,7 +213,6 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/data-upload/Dockerfile
-    image: data-upload
     container_name: data-upload
     env_file:
       - .env
@@ -239,7 +235,6 @@ services:
       dockerfile: dev-tools/containers/clamav/Dockerfile
       args:
         PROXY_URL: "${PROXY_URL}"
-    image: clamav
     container_name: clamav
     healthcheck:
       test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -q PONG"]
@@ -273,7 +268,6 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/data-gateway/Dockerfile
-    image: data-gateway
     container_name: data-gateway
     environment:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"
