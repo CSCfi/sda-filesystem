@@ -111,7 +111,9 @@ func importHandler() (int, error) {
 	go func() {
 		for range s {
 			logs.Info("Shutting down Data Gateway")
-			filesystem.UnmountFilesystem()
+			if err := filesystem.UnmountFilesystem(); err != nil {
+				logs.Error(err)
+			}
 		}
 	}()
 

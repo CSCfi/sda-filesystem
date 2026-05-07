@@ -116,15 +116,12 @@ func updateParentTimestamps(node *C.node_t) {
 }
 
 // UnmountFilesystem unmounts fuse, which automatically frees memory in C
-func UnmountFilesystem() {
+func UnmountFilesystem() error {
 	fi.mu.Lock()
 	api.DeleteWhitelistedKeys()
 	fi.mu.Unlock()
 
-	err := mountpoint.Unmount(fi.mount)
-	if err != nil {
-		logs.Warning(err)
-	}
+	return mountpoint.Unmount(fi.mount)
 }
 
 //export WaitForLock

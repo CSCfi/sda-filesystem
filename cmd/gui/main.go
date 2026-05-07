@@ -28,9 +28,8 @@ func main() {
 			projectHandler.SetContext(ctx)
 			app.startup(ctx)
 		},
-		OnShutdown:    app.shutdown,
 		OnBeforeClose: app.beforeClose,
-		Bind: []interface{}{
+		Bind: []any{
 			app,
 			logHandler,
 			projectHandler,
