@@ -100,13 +100,24 @@ test:
     policy: pull
   before_script:
     - go install gotest.tools/gotestsum@v1.13.0
+    - go install github.com/boumenot/gocover-cobertura@v1.4.0
   script:
     - packages=$(go list -buildvcs=false ./... | grep -v -e frontend -e test -e build -e certs)
-    - gotestsum --junitfile report.xml --format testname --rerun-fails --rerun-fails-abort-on-data-race --packages "${packages}" -- -race -tags=fuse3 ${packages}
+    - >
+      gotestsum --junitfile report.xml --format testname --rerun-fails --rerun-fails-abort-on-data-race --packages "${packages}"
+      --
+      -race -tags=fuse3 -coverprofile=coverage.out -covermode=atomic ${packages}
+    - gocover-cobertura < coverage.out > coverage.xml
+    - go tool cover -func coverage.out
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
   artifacts:
     when: always
     reports:
       junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
 
 build-dev:
   stage: build
