@@ -1,9 +1,5 @@
 # Data Gateway
 
-[![Linting go code](https://github.com/CSCfi/sda-filesystem/actions/workflows/linting.yml/badge.svg)](https://github.com/CSCfi/sda-filesystem/actions/workflows/linting.yml)
-[![Unit Tests](https://github.com/CSCfi/sda-filesystem/actions/workflows/unittest.yml/badge.svg)](https://github.com/CSCfi/sda-filesystem/actions/workflows/unittest.yml)
-[![Coverage Status](https://coveralls.io/repos/github/CSCfi/sda-filesystem/badge.svg?branch=main)](https://coveralls.io/github/CSCfi/sda-filesystem?branch=main)
-
 Data Gateway builds a FUSE (Filesystem in Userspace) layer and uses an [Amazon S3 SDK](https://docs.aws.amazon.com/code-library/latest/ug/go_2_s3_code_examples.html) to import files from [SD Connect](https://research.csc.fi/service/sd-connect/) and [SD Apply](https://research.csc.fi/service/sd-apply/), and export files to SD Connect. It is designed to be used inside an [SD Desktop](https://research.csc.fi/service/sd-desktop/) VM. Software currently supports Linux and macOS for:
 - Graphical User Interface
 - Command Line Interface
