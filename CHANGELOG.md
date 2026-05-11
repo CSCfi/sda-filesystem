@@ -7,6 +7,21 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Cobertura report to artifacts that will show in the `Changes` tab which Go lines are covered by tests
+- total unit test coverage visible in merge requests
+- unit test reports visible directly in merge requests with JUnit
+- caching for Go and pnpm in CI jobs
+
+### Fixed
+
+- all unit tests can now be run in CI since they are no longer run as root
+
+### Removed
+
+- Github actions
+
 ## [2026.4.1] - 2026-04-21
 
 ### Changed
