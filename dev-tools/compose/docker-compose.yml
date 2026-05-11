@@ -171,9 +171,9 @@ services:
       DB_PROJECTS: "${CSC_PROJECT}:${EPOUTA_IP_ADDRESS}"
       DB_DATASETS_FEGA: "${DB_DATASETS_FEGA}"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_USER} -U ${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -d \"${DB_STRING_SDA_BP}\""]
+      interval: 10s
+      timeout: 10s
       retries: 5
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d

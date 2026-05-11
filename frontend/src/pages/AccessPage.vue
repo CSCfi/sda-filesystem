@@ -101,7 +101,7 @@ function changeMountPoint() {
   ChangeMountPoint().then((dir: string) => {
     mountpoint.value = dir;
   }).catch((e) => {
-    EventsEmit("showToast", "Could not change directory", e as string);
+    EventsEmit("showToast", "Could not change folder", e as string);
   });
 }
 
@@ -135,14 +135,17 @@ function update() {
 <template>
   <div class="container">
     <c-steps :value="pageIdx">
-      <c-step>Choose directory</c-step>
+      <c-step>Choose folder</c-step>
       <c-step>Prepare access</c-step>
       <c-step>Access ready</c-step>
     </c-steps>
 
     <div v-if="pageIdx == 1">
-      <h2>Start by creating access to your files</h2>
-      <p>Choose in which local directory your files will be available.</p>
+      <h2>Choose a folder for accessible files</h2>
+      <p>
+        By clicking <b>Continue</b>, Data Gateway creates a <b>Projects</b> folder by default, where files are accessible in read-only mode.
+
+        If the field below is empty, choose an empty folder (no files inside) by clicking <b>Change</b>.</p>
       <c-row gap="20">
         <c-text-field :value="mountpoint" hide-details readonly />
         <c-button outlined @click="changeMountPoint">
@@ -161,7 +164,11 @@ function update() {
     <div v-else>
       <h2>{{ pageIdx == 2 ? "Preparing access" : "Access ready" }}</h2>
       <div v-if="pageIdx > 2">
-        <p>If you update the contents of projects, please update access.</p>
+        <ul>
+          <li><b>Open folder</b>: View your project content by clicking <b>Open folder</b>.</li>
+          <li><b>Update access</b>: After making changes to your project content, close the Projects folder and click <b>Update access</b>.</li>
+          <li><b>Disconnect and sign out</b>: Before closing Data Gateway connection, close the <b>Projects</b> folder and then click <b>Disconnect and sign out</b>.</li>
+        </ul>
         <c-row gap="20" justify="end">
           <c-button outlined :disabled="updating" @click="update">
             Update access
@@ -221,5 +228,9 @@ c-text-field {
 c-alert {
   margin-top: 20px;
   display: block;
+}
+
+li {
+  margin-bottom: 10px;
 }
 </style>
