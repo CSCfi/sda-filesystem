@@ -7,6 +7,12 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.5.1] - 2026-05-11
+
+### Fixed
+
+- location of `wails` command in CI jobs
+
 ## [2026.5.0] - 2026-05-11
 
 ### Added
@@ -542,7 +548,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.0...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.1...HEAD
+[2026.5.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.0...2026.5.1
 [2026.5.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.1...2026.5.0
 [2026.4.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.0...2026.4.1
 [2026.4.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.3...2026.4.0
