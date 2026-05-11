@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"sda-filesystem/certs"
@@ -28,8 +29,9 @@ type App struct {
 	ph          *ProjectHandler
 	lh          *LogHandler
 	mountpoint  string
+	preventQuit atomic.Bool
 	paniced     bool
-	preventQuit bool
+	mounted     bool
 }
 
 // NewApp creates a new App application struct
@@ -44,17 +46,26 @@ func (a *App) startup(ctx context.Context) {
 	filesystem.SetSignalBridge(a.Panic)
 }
 
-func (a *App) shutdown(_ context.Context) {
-	filesystem.UnmountFilesystem()
-}
-
 func (a *App) beforeClose(_ context.Context) (prevent bool) {
-	return a.preventQuit
+	return a.preventQuit.Load()
 }
 
 // Quit can be used in frontend to quit application
 func (a *App) Quit() {
-	a.preventQuit = false
+	if a.mounted {
+		if err := filesystem.UnmountFilesystem(); err != nil {
+			logs.Error(err)
+			outer, _ := logs.Wrapper(err)
+
+			wailsruntime.EventsEmit(
+				a.ctx, "showToast", "Unable to close application", outer,
+			)
+
+			return
+		}
+	}
+
+	a.preventQuit.Store(false)
 	wailsruntime.Quit(a.ctx)
 }
 
@@ -183,11 +194,12 @@ func (a *App) ChangeMountPoint() (string, error) {
 }
 
 func (a *App) InitFuse() {
-	a.preventQuit = true
+	a.preventQuit.Store(true)
 	go func() {
 		var wait = make(chan any)
 		go func() {
 			<-wait // Wait for fuse to be ready
+			a.mounted = true
 
 			var cmd = make(chan []string)
 			go filesystem.WaitForUpdateSignal(cmd)

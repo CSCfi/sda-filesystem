@@ -135,12 +135,20 @@ build-dev:
       policy: pull
   before_script:
     - jf config import "${JF_CONFIG}"
+    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
   script:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - |
       go build -ldflags '-w -s' -o data-gateway-cli-amd64-0000.0.0 ./cmd/cli
       jf s --licenses data-gateway-cli-amd64-0000.0.0 --repo-path ${ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO}
       jf rt u data-gateway-cli-amd64-0000.0.0 $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-0000.0.0
+    - |
+      cd cmd/gui
+      /usr/local/go/bin/wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=0000.0.0"
+      cd ../..
+      mv build/bin/data-gateway data-gateway-gui-amd64-0000.0.0
+      jf s --licenses data-gateway-gui-amd64-0000.0.0 --repo-path ${ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO}
+      jf rt u data-gateway-gui-amd64-0000.0.0 $ARTIFACTORY_SERVER_DESKTOP_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-0000.0.0
 
 build-artifacts:
   stage: build

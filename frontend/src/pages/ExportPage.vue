@@ -394,6 +394,7 @@ function reset() {
         Choose a bucket from the dropdown or create a new one by entering a name.
         It will be created at the root of your project.
       </p>
+      <!-- c-autocomplete is loading so that we can disable the warning prompt when user exports to a new bucket -->
       <c-autocomplete
         ref="exportAutocomplete"
         v-model="selectedBucket"
@@ -402,8 +403,8 @@ function reset() {
         :items="filteredBucketItems"
         items-per-page="5"
         spellcheck="false"
-        no-matching-items-message="You are creating a new bucket"
         return-value
+        loading
         @changeQuery="bucketQuery = $event.detail"
       />
       <ValidationHelper
@@ -524,6 +525,7 @@ function reset() {
 <style scoped>
 c-autocomplete {
   margin-bottom: -0.5rem;
+  --c-spinner-color: rgba(0, 0, 0, 0);
 }
 
 #no-export-page {

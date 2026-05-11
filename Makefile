@@ -115,6 +115,7 @@ wails_update: ## Update Wails version to match go.mod
 	if [ "$$wails_cli_version" != "$$go_mod_version" ]; then \
 		echo "❗ Wails version does not match go.mod. Updating Wails..."; \
 		go install github.com/wailsapp/wails/v2/cmd/wails@$${go_mod_version}; \
+		source ~/.bashrc; \
 	fi
 
 clean: down ## Stop running containers, delete volumes, and remove vault secrets from .env

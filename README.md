@@ -13,6 +13,7 @@ Released binaries are built for Linux and are available in Artifactory. **New re
 ### Prerequisites
 - Go version 1.24+
 - Docker
+- [vault](https://developer.hashicorp.com/vault/install)
 - On Linux, install `pkg-config`, `libfuse3-dev` and `socat` with `apt-get`.
 - On macOS, install `pkg-config` and `socat` with Homebrew, and install [macFUSE](https://github.com/macfuse/macfuse/wiki/Getting-Started)
 
