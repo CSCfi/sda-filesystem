@@ -9,7 +9,7 @@ onMounted(() => {
     if (version != "") {
       binaryVersion.value = version;
     }
-  })
+  });
 });
 </script>
 
