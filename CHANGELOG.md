@@ -7,8 +7,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.5.0] - 2026-05-11
+
 ### Added
 
+- upload a test GUI binary in CI job `build-dev`
 - Cobertura report to artifacts that will show in the `Changes` tab which Go lines are covered by tests
 - total unit test coverage visible in merge requests
 - unit test reports visible directly in merge requests with JUnit
@@ -16,11 +19,20 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- Makefile target `wails_update` now works even when the `wails` command does not exist in the first place
+- data race when closing GUI application
 - all unit tests can now be run in CI since they are no longer run as root
 
 ### Removed
 
+- redundant image references in `docker-compose.yml`
+- warning notification in GUI that tells the user that they are exporting to a new bucket (#69)
 - Github actions
+
+### Changed
+
+- update text in GUI for when user chooses filesystem location and when filesystem has been mounted (#71)
+- GUI cannot be closed before unmounting succeeds (#72)
 
 ## [2026.4.1] - 2026-04-21
 
@@ -530,7 +542,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.1...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.0...HEAD
+[2026.5.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.1...2026.5.0
 [2026.4.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.0...2026.4.1
 [2026.4.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.3...2026.4.0
 [2026.3.3]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.3.2...2026.3.3
