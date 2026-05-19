@@ -39,7 +39,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.3
+    image: ${ARTIFACTORY_SERVER}/docker:29.5
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -99,7 +99,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.4.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.5.0"
     container_name: krakend
     env_file:
       - .env
@@ -251,7 +251,7 @@ services:
       - 3310:3310
 
   terminal-proxy:
-    image: ${ARTIFACTORY_SERVER}/nginx:1.29
+    image: ${ARTIFACTORY_SERVER}/nginx:1.31
     container_name: terminal-proxy
     environment:
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
