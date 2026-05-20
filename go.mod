@@ -7,7 +7,7 @@ toolchain go1.26.3
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.10
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.21
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
 	github.com/aws/smithy-go v1.25.1
 	github.com/dgraph-io/ristretto/v2 v2.4.0
@@ -17,10 +17,10 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/wailsapp/wails/v2 v2.12.0
 	github.com/winfsp/cgofuse v1.6.0
-	golang.org/x/crypto v0.49.0
+	golang.org/x/crypto v0.51.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.42.0
-	golang.org/x/term v0.41.0
+	golang.org/x/sys v0.44.0
+	golang.org/x/term v0.43.0
 )
 
 require (
@@ -65,6 +65,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )
