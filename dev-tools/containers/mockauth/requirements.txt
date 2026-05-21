@@ -1,0 +1,2 @@
+joserfc==1.6.5
+aiohttp==3.13.5
