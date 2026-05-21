@@ -101,12 +101,12 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.5.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.5.1"
     container_name: krakend
     env_file:
       - .env
       - .env.krakend
-    environment: # These are envs that either have a different name or have a different value if keystone is also running
+    environment: # These are envs that either have a different name, or have a different value if keystone is also running
       API_KEY: "${KRAKEND_API_KEY}"
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
       AAI_AUDIENCE: "${AAI_AUDIENCE}"
@@ -124,7 +124,6 @@ services:
       VAULT_ADDR: "${VAULT_ADDR}"
       VAULT_SECRET: "${VAULT_SECRET}"
       VAULT_ROLE: "${VAULT_ROLE}"
-      ARTIFACTORY_SERVER: "https://${ARTIFACTORY_SERVER}"
       DB_STRING_SHARING: "${DB_STRING_SHARING}"
       DB_PWD_SHARING: "${DB_PWD_SHARING}"
       SDAPPLY_PROJECT: ${SDAPPLY_PROJECT}

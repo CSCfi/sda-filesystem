@@ -159,8 +159,6 @@ build-artifacts:
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
-  services:
-    - docker:dind
   variables:
     SECURE_FILES_DOWNLOAD_PATH: './certs'
   cache:
