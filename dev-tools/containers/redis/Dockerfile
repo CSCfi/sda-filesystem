@@ -1,4 +1,5 @@
-FROM redis:8.4-alpine3.22
+ARG ARTIFACTORY_SERVER=
+FROM ${ARTIFACTORY_SERVER}redis:8.4.3-alpine3.22
 
 COPY ./dev-tools/containers/redis/redis.conf /usr/local/etc/redis/redis.conf
 
