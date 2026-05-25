@@ -39,6 +39,8 @@ const componentData = computed<ComponentType[]>(() => ([
 const visibleTabs = computed(() => componentData.value.filter((data) => data.visible));
 // eslint-disable-next-line no-undef
 const toasts = ref<HTMLCToastsElement | null>(null);
+// eslint-disable-next-line no-undef
+const toastsUp = ref<HTMLCToastsElement | null>(null);
 
 const sessionMessage: CToastMessage = {
   message: "Data Gateway connection needs to be refreshed. Please log out from the virtual machine and SD Desktop, and log in again.",
@@ -74,6 +76,17 @@ EventsOn("showToast", (title: string, err: string) => {
   };
 
   toasts.value?.addToast(message);
+});
+
+
+EventsOn("unmountFailed", () => {
+  const message: CToastMessage = {
+    message: "Close \"Project\" folder first and then click \"Disconnect and Sign Out\"",
+    type: "error" as CToastType,
+    persistent: true,
+  };
+
+  toastsUp.value?.addToast(message);
 });
 
 EventsOn("changeTab", (value: TabType) => {
@@ -137,6 +150,7 @@ EventsOn("fuseReady", () => (accessed.value = true));
       />
     </div>
 
+    <c-toasts id="toasts-up" ref="toastsUp" vertical="top" />
     <c-toasts ref="toasts" />
   </div>
 </template>
@@ -177,6 +191,10 @@ c-tab {
 
 c-button {
   align-self: center;
+}
+
+#toasts-up {
+  padding-top: 60px;
 }
 
 #content {

@@ -55,11 +55,7 @@ func (a *App) Quit() {
 	if a.mounted {
 		if err := filesystem.UnmountFilesystem(); err != nil {
 			logs.Error(err)
-			outer, _ := logs.Wrapper(err)
-
-			wailsruntime.EventsEmit(
-				a.ctx, "showToast", "Unable to close application", outer,
-			)
+			wailsruntime.EventsEmit(a.ctx, "unmountFailed")
 
 			return
 		}

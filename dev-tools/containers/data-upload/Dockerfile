@@ -11,8 +11,7 @@ ENV PATH="/scripts/venv/bin:$PATH"
 
 RUN pip install --upgrade pip
 RUN apt-get update \
-    && apt-get -y install libpq-dev gcc \
-    && pip install psycopg2
+    && apt-get -y install libpq-dev gcc
 
 RUN pip install -r /scripts/requirements.txt
 
