@@ -4,6 +4,7 @@
 *.pem
 *.out
 .go-version
+.npmrc
 build/bin
 node_modules
 frontend/dist

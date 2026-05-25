@@ -11,11 +11,12 @@ Released binaries are built for Linux and are available in Artifactory. **New re
 <details><summary>Click to expand</summary>
 
 ### Prerequisites
-- Go version 1.24+
+- Go version 1.25+
 - Docker
 - [vault](https://developer.hashicorp.com/vault/install)
 - On Linux, install `pkg-config`, `libfuse3-dev` and `socat` with `apt-get`.
 - On macOS, install `pkg-config` and `socat` with Homebrew, and install [macFUSE](https://github.com/macfuse/macfuse/wiki/Getting-Started)
+- Define `GOPROXY` according to [these instructions](https://gitlab.ci.csc.fi/groups/sds-dev/-/wikis/Guides/Development-tools/Using-Artifactory#go)
 
 In addition, the GUI requires
 
