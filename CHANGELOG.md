@@ -7,6 +7,21 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- use Docker registry in Artifactory as the source for all images
+
+### Fixed
+
+- do not include upx flag when running `wails dev`
+- the definition of `IS_UBUNTU_24_04` in Makefile
+- in dev-tools, switch to using `joserfc` after `authlib` was deprecated
+- the appearance of the toast that informs users that unmounting has failed
+
+### Added
+
+- prevent renovate from updating Docker image version for Ubuntu
+
 ## [2026.5.1] - 2026-05-11
 
 ### Fixed
