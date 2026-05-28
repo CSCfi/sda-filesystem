@@ -3,12 +3,12 @@ import { SaveLogs } from "../../wailsjs/go/main/LogHandler";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { main } from "../../wailsjs/go/models";
 import { Quit } from "../../wailsjs/go/main/App";
-import {
+import type {
   CDataTableHeader,
   CDataTableData,
   CDataTableDataItem,
   CPaginationOptions,
-} from "@cscfi/csc-ui/dist/types";
+} from "@cscfi/csc-ui";
 import { reactive, ref, watch, computed, onUnmounted } from "vue";
 import { mdiFilterVariant, mdiTrayArrowDown } from "@mdi/js";
 

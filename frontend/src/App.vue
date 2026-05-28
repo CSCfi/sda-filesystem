@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { CToastMessage, CToastType } from "@cscfi/csc-ui/dist/types";
+import { type CToastMessage, CToastType } from "@cscfi/csc-ui";
 import { ref, computed, onMounted } from "vue";
 import { EventsOn, EventsEmit, EventsOnce } from "../wailsjs/runtime";
 import { InitializeAPI, Quit } from "../wailsjs/go/main/App";

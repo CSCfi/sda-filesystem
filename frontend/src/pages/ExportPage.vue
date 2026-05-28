@@ -2,7 +2,7 @@
 import { ref, watch, computed } from "vue";
 import { airlock } from "../../wailsjs/go/models";
 import { EventsOn, EventsEmit, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
-import { CAutocompleteItem, CDataTableHeader, CPaginationOptions } from "@cscfi/csc-ui/dist/types";
+import type { CAutocompleteItem, CDataTableHeader, CPaginationOptions } from "@cscfi/csc-ui";
 import {
   SelectFiles,
   CheckObjectExistences,

@@ -24,6 +24,11 @@ install-deps:
   stage: deps
   rules:
     - when: always
+  before_script:
+    - echo "registry=${ARTIFACTORY_NPM_REGISTRY}" > .npmrc
+    - echo "@jsr:registry=${ARTIFACTORY_NPM_REGISTRY}" >> .npmrc
+    - echo "${ARTIFACTORY_NPM_REGISTRY#https:}:_authToken=${ARTIFACTORY_NPM_TOKEN}" >> .npmrc
+    - pnpm config list
   script:
     - pnpm install --dir frontend
     - pnpm run --dir frontend build

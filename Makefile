@@ -3,6 +3,13 @@
 SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
+override GONOPROXY := none
+export GONOPROXY
+
+ifeq ($(strip $(GOPROXY)),)
+$(error GOPROXY is empty)
+endif
+
 PROFILES := findata fuse krakend keystone
 IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)),$(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
 LOG ?= info
@@ -69,7 +76,12 @@ all: down ## Run 'make local gui'
 setup: ## Install dependencies and create .env file with vault secrets
 	cp dev-tools/.env.example dev-tools/compose/.env
 	@$(MAKE) get_env
-	@export $$(grep ^ARTIFACTORY dev-tools/compose/.env | xargs); docker login $${ARTIFACTORY_SERVER}
+	@export $$(grep ^ARTIFACTORY dev-tools/compose/.env | xargs); \
+	docker login $${ARTIFACTORY_SERVER}; \
+	pnpm login --registry="$${ARTIFACTORY_NPM_REGISTRY}"; \
+	echo "registry=$${ARTIFACTORY_NPM_REGISTRY}" > .npmrc; \
+	echo "@jsr:registry=$${ARTIFACTORY_NPM_REGISTRY}" >> .npmrc
+	pnpm config list
 	pnpm install --prefix frontend
 	pnpm --prefix frontend run build
 	mkdir -p $(SOCKET_DIR)
@@ -139,6 +151,7 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,ARTIFACTORY_SERVER,internal-urls,artifactory-docker) \
 	$(call write_secret,ARTIFACTORY_URL,internal-urls,artifactory) \
 	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
+	$(call write_secret,ARTIFACTORY_NPM_REGISTRY,artifactory,npm-registry) \
 	$(call write_secret,AAI_BASE_URL,internal-urls,test-aai) \
 	$(call write_secret,S3_HOST,internal-urls,test-allas) \
 	$(call write_secret,FINDATA_S3_HOST,krakend/findata,host) \

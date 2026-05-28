@@ -9,11 +9,11 @@ import {
   FilesOpen,
   InitFuse,
 } from "../../wailsjs/go/main/App";
-import {
+import type {
   CDataTableHeader,
   CDataTableData,
   CPaginationOptions,
-} from "@cscfi/csc-ui/dist/types";
+} from "@cscfi/csc-ui";
 import { CAlertType } from "@cscfi/csc-ui";
 import { EventsEmit, EventsOn } from "../../wailsjs/runtime";
 import { TabType } from "../types/common";
