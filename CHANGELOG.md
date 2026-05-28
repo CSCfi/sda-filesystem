@@ -7,12 +7,17 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.5.2] - 2026-05-28
+
 ### Security
 
+- use Artifactory registry for pnpm in both development and CI jobs
+- in `Makefile`, ensure developer has env `GOPROXY` defined
 - use Docker registry in Artifactory as the source for all images
 
 ### Fixed
 
+- in `tsconfig.json`, update `moduleResolution` to `bundler` now that value `Node` is deprecated
 - do not include upx flag when running `wails dev`
 - the definition of `IS_UBUNTU_24_04` in Makefile
 - in dev-tools, switch to using `joserfc` after `authlib` was deprecated
@@ -563,7 +568,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.1...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.2...HEAD
+[2026.5.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.1...2026.5.2
 [2026.5.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.0...2026.5.1
 [2026.5.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.1...2026.5.0
 [2026.4.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.4.0...2026.4.1
