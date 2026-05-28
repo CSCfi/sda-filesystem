@@ -4,7 +4,7 @@ SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 PROFILES := findata fuse krakend keystone
-IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)), $(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
+IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)),$(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
 LOG ?= info
 SOCKET_DIR := $(HOME)/.clamav
 SOCKET_PATH := $(SOCKET_DIR)/clamd.sock
