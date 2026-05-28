@@ -23,6 +23,8 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/mockauth/Dockerfile
+      args:
+        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
     container_name: mockauth
     env_file:
       - .env.keystone
@@ -39,7 +41,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.5
+    image: ${ARTIFACTORY_SERVER}/docker:29.5.1
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -99,12 +101,12 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.5.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.5.1"
     container_name: krakend
     env_file:
       - .env
       - .env.krakend
-    environment: # These are envs that either have a different name or have a different value if keystone is also running
+    environment: # These are envs that either have a different name, or have a different value if keystone is also running
       API_KEY: "${KRAKEND_API_KEY}"
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
       AAI_AUDIENCE: "${AAI_AUDIENCE}"
@@ -122,7 +124,6 @@ services:
       VAULT_ADDR: "${VAULT_ADDR}"
       VAULT_SECRET: "${VAULT_SECRET}"
       VAULT_ROLE: "${VAULT_ROLE}"
-      ARTIFACTORY_SERVER: "https://${ARTIFACTORY_SERVER}"
       DB_STRING_SHARING: "${DB_STRING_SHARING}"
       DB_PWD_SHARING: "${DB_PWD_SHARING}"
       SDAPPLY_PROJECT: ${SDAPPLY_PROJECT}
@@ -163,7 +164,7 @@ services:
     ports:
       - 8082:8082
   krakend-db:
-    image: ${ARTIFACTORY_SERVER}/postgres:18-alpine3.22
+    image: ${ARTIFACTORY_SERVER}/postgres:18.4-alpine3.23
     container_name: krakend-db
     env_file:
       - .env.krakend
@@ -183,7 +184,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2025.10.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2026.5.0"
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
@@ -193,6 +194,8 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/redis/Dockerfile
+      args:
+        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
     container_name: krakend-redis
     profiles:
       - krakend
@@ -200,6 +203,8 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/static/Dockerfile
+      args:
+        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
     container_name: krakend-static
     env_file:
       - .env
@@ -213,6 +218,8 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/data-upload/Dockerfile
+      args:
+        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
     container_name: data-upload
     env_file:
       - .env
@@ -235,6 +242,7 @@ services:
       dockerfile: dev-tools/containers/clamav/Dockerfile
       args:
         PROXY_URL: "${PROXY_URL}"
+        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
     container_name: clamav
     healthcheck:
       test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -q PONG"]
@@ -268,6 +276,8 @@ services:
     build:
       context: ../../
       dockerfile: dev-tools/containers/data-gateway/Dockerfile
+      args:
+        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
     container_name: data-gateway
     environment:
       SDS_ACCESS_TOKEN: "${SDS_ACCESS_TOKEN}"

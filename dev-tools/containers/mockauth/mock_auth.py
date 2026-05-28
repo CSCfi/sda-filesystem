@@ -7,7 +7,8 @@ from time import time
 from typing import Tuple
 
 from aiohttp import web, ClientSession
-from authlib.jose import RSAKey, jwt
+from joserfc import jwt
+from joserfc.jwk import RSAKey
 
 FORMAT = "[%(asctime)s][%(levelname)-8s](L:%(lineno)s) %(funcName)s: %(message)s"
 logging.basicConfig(format=FORMAT, datefmt="%Y-%m-%d %H:%M:%S")
@@ -17,17 +18,8 @@ LOG.setLevel(getenv("LOG_LEVEL", "INFO"))
 
 header = {
     "alg": "RS256",
-    "typ": "at+JWT",
+    "typ": "at+JWT"
 }
-
-
-def generate_token() -> Tuple:
-    """Generate RSA Key pair to be used to sign token."""
-    key = RSAKey.generate_key(is_private=True)
-    public_jwk = key.as_dict(is_private=False, alg="RS256")
-    private_jwk = key.as_dict(is_private=True)
-
-    return (public_jwk, private_jwk)
 
 
 def get_desktop_token() -> str:
@@ -44,7 +36,8 @@ def get_desktop_token() -> str:
         "client_id": "desktop",
         "scope": "desktop",
     }
-    return jwt.encode(header, access_token, jwk_pair[1]).decode("utf-8")
+
+    return jwt.encode(header, access_token, jwk_key)
 
 
 async def get_pouta_token() -> str:
@@ -89,11 +82,10 @@ def parse_visa_issuers() -> dict[str, Tuple]:
         LOG.info("")
 
         service = issuer_name.strip("/").split("/")[-1]
-        service_token = generate_token()
         jwks[service] = {
             "issuer": issuer_name,
             "jku": issuer_jku,
-            "token": service_token
+            "key": RSAKey.generate_key(private=True)
         }
         LOG.info(f"Added visa with parameters {jwks[service]}")
 
@@ -112,7 +104,7 @@ username = environ.get("CSC_USERNAME", "swift")
 password = environ.get("CSC_PASSWORD", "veryfast")
 email = environ.get("USER_EMAIL", "")
 
-jwk_pair = generate_token()
+jwk_key = RSAKey.generate_key(private=True)
 desktop_token = get_desktop_token()
 pouta_token = ""
 
@@ -141,7 +133,7 @@ async def token(req: web.Request) -> web.Response:
                 "scope": post["scope"],
             }
             data = {
-                "access_token": jwt.encode(header, access_token, jwk_pair[1]).decode("utf-8"),
+                "access_token": jwt.encode(header, access_token, jwk_key),
                 "token_type": "Bearer",
                 "expires_in": ttl,
                 "scope": post["scope"],
@@ -155,7 +147,11 @@ async def token(req: web.Request) -> web.Response:
 
 async def jwk_response(req: web.Request) -> web.Response:
     """Mock JSON Web Key server."""
-    data = {"keys": [jwk_pair[0]]}
+    data = {
+        "keys": [
+            jwk_key.as_dict(private=False, alg="RS256")
+        ]
+    }
 
     LOG.info(data)
 
@@ -196,7 +192,11 @@ async def jwk_response_visas(req: web.Request) -> web.Response:
     if service not in visa_jwks:
         return web.Response(status=404, text="invalid service")
 
-    data = {"keys": [visa_jwks[service]["token"][0]]}
+    data = {
+        "keys": [
+            visa_jwks[service]["key"].as_dict(private=False, alg="RS256", kid=f"test-key-{service}")
+        ]
+    }
 
     LOG.info(data)
 
@@ -214,7 +214,8 @@ async def post_visa_dataset(req: web.Request) -> web.Response:
     header = {
         "alg": "RS256",
         "jku": visa_jwks[service]["jku"],
-        "typ": "JWT"
+        "typ": "JWT",
+        "kid": f"test-key-{service}"
     }
     payload = {
         "sub": email,
@@ -227,7 +228,7 @@ async def post_visa_dataset(req: web.Request) -> web.Response:
             "source": visa_jwks[service]["issuer"]
         }
     }
-    visa = jwt.encode(header, payload, visa_jwks[service]["token"][1]).decode("utf-8")
+    visa = jwt.encode(header, payload, visa_jwks[service]["key"])
     passport.append(visa)
 
     return web.Response(status=200)

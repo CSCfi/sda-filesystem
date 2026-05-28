@@ -4,17 +4,17 @@ SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 PROFILES := findata fuse krakend keystone
-IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)), $(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
+IS_UBUNTU_24_04 := $(if $(filter Ubuntu,$(shell lsb_release -si 2>/dev/null)),$(if $(filter 24.04,$(shell lsb_release -sr 2>/dev/null)),true,false),false)
 LOG ?= info
 SOCKET_DIR := $(HOME)/.clamav
 SOCKET_PATH := $(SOCKET_DIR)/clamd.sock
 
 version := $(shell jq -r '.info.productVersion // empty' cmd/gui/wails.json)
-WAILS_FLAGS = -ldflags "-X sda-filesystem/internal/api.Version=$(version)"
+WAILS_FLAGS := -ldflags "-X sda-filesystem/internal/api.Version=$(version)"
 ifeq ($(IS_UBUNTU_24_04),true)
 	WAILS_FLAGS += -tags webkit2_41
 endif
-WAILS_FLAGS += $(shell command -v upx >/dev/null && echo -upx)
+UPX_FLAG := $(shell command -v upx >/dev/null && echo -upx)
 
 profile_args = $(foreach a,$1,--profile $a --env-file .env.$(firstword $(subst -, ,$a)))
 
@@ -97,7 +97,7 @@ gui: wails_update ## Run GUI version of filesystem on your own computer
 	wails dev -race $(WAILS_FLAGS);
 
 gui_build: wails_update ## Compile a production-ready GUI binary and save it in build/bin
-	cd cmd/gui; wails build $(WAILS_FLAGS) -trimpath -clean -s
+	cd cmd/gui; wails build $(WAILS_FLAGS) $(UPX_FLAG) -trimpath -clean -s
 
 gui_prod: ## Build and run a production-ready GUI binary
 	@$(MAKE) gui_build

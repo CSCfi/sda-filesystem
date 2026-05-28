@@ -1,4 +1,5 @@
-FROM python:3.14-slim-bookworm
+ARG ARTIFACTORY_SERVER=
+FROM ${ARTIFACTORY_SERVER}python:3.14.4-slim-trixie
 
 COPY ./dev-tools/containers/data-upload /scripts
 
@@ -10,8 +11,7 @@ ENV PATH="/scripts/venv/bin:$PATH"
 
 RUN pip install --upgrade pip
 RUN apt-get update \
-    && apt-get -y install libpq-dev gcc \
-    && pip install psycopg2
+    && apt-get -y install libpq-dev gcc
 
 RUN pip install -r /scripts/requirements.txt
 
