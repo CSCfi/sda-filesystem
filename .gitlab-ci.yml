@@ -2,6 +2,7 @@ stages:
   - deps
   - lint
   - test
+  - audit
   - build
   - release
 
@@ -75,23 +76,6 @@ frontend-lint:
   script:
     - pnpm run --dir frontend lint
 
-jfrog-go-audit:
-  stage: test
-  image: $BUILDER_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
-  cache:
-    <<: *global_go_cache
-    policy: pull
-  script:
-    # Update upstream package checksums in case they have changed
-    - go mod vendor
-    # Configure JFrog Artifactory repositories
-    - jf config import "${JF_CONFIG}"
-    # Audit Go project
-    - jf audit --go --licenses --extended-table --min-severity=Medium
-
 test:
   image:
     name: $DEV_IMAGE
@@ -124,6 +108,33 @@ test:
         coverage_format: cobertura
         path: coverage.xml
 
+jfrog-go-audit:
+  stage: audit
+  image: $BUILDER_IMAGE
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  cache:
+    - <<: *global_go_cache
+      policy: pull
+  before_script:
+    - jf config import "${JF_CONFIG}"
+  script:
+    - jf audit --go --licenses --extended-table --min-severity=Medium
+
+jfrog-pnpm-audit:
+  stage: audit
+  image: $BUILDER_IMAGE
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  cache:
+    - <<: *global_pnpm_cache
+      policy: pull
+  before_script:
+    - jf config import "${JF_CONFIG}"
+  script:
+    - jf audit --pnpm --licenses --extended-table --min-severity=Medium
 
 build-dev:
   stage: build
