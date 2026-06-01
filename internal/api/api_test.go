@@ -47,7 +47,7 @@ func (m MockReader) ReadFile(name string) ([]byte, error) {
 	return data, nil
 }
 
-func setupCerts(filename string) ([]byte, MockReader, error) {
+func setupCerts(filename string, expired bool) ([]byte, MockReader, error) {
 	ca := &x509.Certificate{
 		Subject:               pkix.Name{CommonName: "Test CA"},
 		NotBefore:             time.Now().Add(-1 * time.Hour),
@@ -75,10 +75,16 @@ func setupCerts(filename string) ([]byte, MockReader, error) {
 		Bytes: caBytes,
 	})
 
+	notBefore := time.Now().Add((-1 * time.Hour))
+	notAfter := time.Now().Add((1 * time.Hour))
+	if expired {
+		notBefore = time.Now().Add((-2 * time.Hour))
+		notAfter = time.Now().Add((-1 * time.Hour))
+	}
 	cert := &x509.Certificate{
 		Subject:     pkix.Name{CommonName: "Data Gateway client"},
-		NotBefore:   time.Now().Add(-1 * time.Hour),
-		NotAfter:    time.Now().Add(1 * time.Hour),
+		NotBefore:   notBefore,
+		NotAfter:    notAfter,
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		DNSNames:    []string{"something"},
@@ -789,7 +795,7 @@ func TestLoadCertificates(t *testing.T) {
 		},
 	}
 
-	caPEM, mockReader, err := setupCerts("localhost")
+	caPEM, mockReader, err := setupCerts("localhost", false)
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
@@ -825,13 +831,66 @@ func TestLoadCertificates(t *testing.T) {
 	}
 }
 
+func TestLoadCertificates_Expired(t *testing.T) {
+	origClient := ai.hi.client
+	origProxy := ai.proxy
+	defer func() {
+		ai.hi.client = origClient
+		ai.proxy = origProxy
+	}()
+
+	ai.proxy = "http://localhost:8080"
+	ai.hi.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // #nosec G402
+			},
+		},
+	}
+
+	caPEM, mockReader, err := setupCerts("localhost", true)
+	if err != nil {
+		t.Fatalf("Could not setup certificates: %s", err.Error())
+	}
+	if err := loadCertificates(mockReader); err != nil {
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
+	}
+
+	certpool := x509.NewCertPool()
+	certpool.AppendCertsFromPEM(caPEM)
+
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv.TLS = &tls.Config{
+		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientCAs:  certpool,
+		MinVersion: tls.VersionTLS13,
+	}
+	srv.StartTLS()
+	t.Cleanup(func() { srv.Close() })
+
+	// Send request to server
+	resp, err := ai.hi.client.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("Request to mock server failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Mock server responded with error: %s", string(body))
+	}
+}
+
 func TestLoadCertificates_InvalidProxy(t *testing.T) {
 	origProxy := ai.proxy
 	defer func() { ai.proxy = origProxy }()
 
 	ai.proxy = "not-a-proper-url"
 
-	_, mockReader, err := setupCerts("localhost")
+	_, mockReader, err := setupCerts("localhost", false)
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
@@ -853,7 +912,7 @@ func TestLoadCertificates_MissingFiles(t *testing.T) {
 
 	ai.proxy = "https://github.com"
 
-	_, mockReader, err := setupCerts("github")
+	_, mockReader, err := setupCerts("github", false)
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
@@ -870,7 +929,7 @@ func TestLoadCertificates_InvalidCertificates(t *testing.T) {
 
 	ai.proxy = "http://localhost:8080"
 
-	caPEM, mockReader, err := setupCerts("localhost")
+	caPEM, mockReader, err := setupCerts("localhost", false)
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}

@@ -54,7 +54,7 @@ func TestBucketExists(t *testing.T) {
 	ai.password = "my-secret-password"
 
 	// This tests is also used to test certificates in S3 client
-	caPEM, mockReader, err := setupCerts("localhost")
+	caPEM, mockReader, err := setupCerts("localhost", false)
 	if err != nil {
 		t.Fatalf("Could not setup certificates: %s", err.Error())
 	}
