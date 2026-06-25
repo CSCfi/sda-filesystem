@@ -226,6 +226,8 @@ release:
       links:
         - name: data-gateway-cli-amd64-${RELEASE_VERSION} (artifactory)
           url: $ARTIFACTORY_URL/artifactory/$ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${RELEASE_VERSION}
+        - name: data-gateway-cli-22-amd64-${RELEASE_VERSION} (artifactory)
+          url: $ARTIFACTORY_URL/artifactory/$ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${RELEASE_VERSION}
         - name: data-gateway-gui-amd64-${RELEASE_VERSION} (artifactory)
           url: $ARTIFACTORY_URL/artifactory/$ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${RELEASE_VERSION}
         - name: data-gateway-gui-22-amd64-${RELEASE_VERSION} (artifactory)
