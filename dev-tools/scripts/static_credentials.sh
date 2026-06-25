@@ -58,5 +58,4 @@ secret=$(echo "${credentials}" | grep secret | awk '{print $4}')
 cat <<EOF >> $env_file
 BIGPICTURE_ACCESS=${access}
 BIGPICTURE_SECRET=${secret}
-
 EOF

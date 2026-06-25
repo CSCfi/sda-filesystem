@@ -276,7 +276,7 @@ def run(
                 print(f'Object:\t\t {upload_data_response.status_code} {file["name"]}')
             else:
                 print(f'Object:\t\tError {upload_data_response.status_code} {file["name"]}')
-                response.raise_for_status()
+                upload_data_response.raise_for_status()
 
 
 
