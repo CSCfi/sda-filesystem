@@ -41,7 +41,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.5.1
+    image: ${ARTIFACTORY_SERVER}/docker:29.5.3
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -101,7 +101,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.5.1"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.6.1"
     container_name: krakend
     env_file:
       - .env
@@ -144,7 +144,7 @@ services:
       DB_PWD_SDA_BP: ${DB_PWD_SDA_BP}
       SDAPPLY_CONFIG_BASE: "${SDAPPLY_CONFIG_BASE}"
     healthcheck:
-      test: curl --fail "http://127.0.0.1:8082/__virtual/backend/__health" || exit 1
+      test: wget -q --spider "http://127.0.0.1:8082/__virtual/backend/__health" || exit 1
       interval: 10s
       timeout: 10s
       retries: 3
@@ -184,7 +184,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2026.5.0"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2026.6.0"
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
