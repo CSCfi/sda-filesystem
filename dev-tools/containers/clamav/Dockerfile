@@ -1,5 +1,5 @@
 ARG ARTIFACTORY_SERVER=
-FROM ${ARTIFACTORY_SERVER}clamav/clamav:1.5.2
+FROM ${ARTIFACTORY_SERVER}clamav/clamav:1.5.2-debian
 ARG PROXY_URL
 
 RUN sed -i '/^DatabaseMirror /s/^/#/' /etc/clamav/freshclam.conf
