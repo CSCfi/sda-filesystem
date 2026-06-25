@@ -69,7 +69,7 @@ func TestGetFileHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 				if method != "GET" {
 					t.Errorf("Request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
@@ -159,7 +159,7 @@ func TestDeleteWhitelistedKeys(t *testing.T) {
 	whitelistedProjects = []string{"", "project-1", "project-2", "chicken"}
 	whitelistedProjectsCopy := slices.Clone(whitelistedProjects)
 
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 		if method != "DELETE" {
 			t.Errorf("Request has incorrect method\nExpected=DELETE\nReceived=%v", method)
 		}
@@ -212,7 +212,7 @@ func TestGetPublicKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method string, ep endpoint, query, headers map[string]string, body io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, body io.ReadSeeker, ret any) error {
 				if method != "GET" {
 					return fmt.Errorf("request has incorrect method\nExpected=GET\nReceived=%v", method)
 				}
@@ -245,7 +245,7 @@ func TestGetPublicKey_InvalidKey(t *testing.T) {
 	origMakeRequest := makeRequest
 	defer func() { makeRequest = origMakeRequest }()
 
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, body io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, body io.ReadSeeker, ret any) error {
 		switch v := ret.(type) {
 		case *keyResponse:
 			v.Key64 = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nSGVsbG8sIHdvcmxkIQ==\n-----END CRYPT4GH PUBLIC KEY-----"

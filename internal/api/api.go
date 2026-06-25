@@ -451,7 +451,7 @@ var IsProjectManager = func() bool {
 }
 
 // makeRequest sends HTTP request to KrakenD and parses the response
-var makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+var makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 	var response *http.Response
 
 	// Build HTTP request
@@ -499,6 +499,14 @@ var makeRequest = func(method string, ep endpoint, query, headers map[string]str
 		}
 		if err == nil {
 			break
+		}
+
+		if reqBody != nil {
+			_, err = reqBody.Seek(0, io.SeekStart)
+			if err != nil {
+				return fmt.Errorf("failed to rewind request body: %w", err)
+			}
+			request.Body = io.NopCloser(reqBody)
 		}
 	}
 	defer response.Body.Close()
