@@ -280,7 +280,7 @@ func TestSetup(t *testing.T) {
 			return "", fmt.Errorf("unknown env %s", name)
 		}
 	}
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 		if ai.proxy != "" {
 			t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
 		}
@@ -429,7 +429,7 @@ func TestSetup_Port(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 				if ai.proxy != "" {
 					t.Errorf("ai.proxy should be empty, received=%s", ai.proxy)
 				}
@@ -532,7 +532,7 @@ func TestSetup_Error(t *testing.T) {
 					return "", fmt.Errorf("unknown env %s", name)
 				}
 			}
-			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 				return tt.reqErr
 			}
 			cache.NewRistrettoCache = func() (*cache.Ristretto, error) {
@@ -575,7 +575,7 @@ func TestGetProfile(t *testing.T) {
 	ai.hi.endpoints = testConfig
 
 	accessOnce := true
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 		if ep.path != "/profile-endpoint" {
 			return fmt.Errorf("Incorrect path\nExpected=/profile-endpoint\nReceived=%s", ep.path)
 		}
@@ -664,7 +664,7 @@ func TestGetProfile_Error(t *testing.T) {
 		ai = origAI
 	}()
 
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 		return errExpected
 	}
 	GetEnv = func(name string, verifyURL bool) (string, error) {
@@ -692,7 +692,7 @@ func TestGetProfile_Clamav(t *testing.T) {
 	}()
 
 	projectType := "findata"
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 		switch v := ret.(type) {
 		case *profile:
 			v.ProjectType = projectType
@@ -731,7 +731,7 @@ func TestAuthenticate(t *testing.T) {
 	password := "passw0rd"
 	ai.hi.endpoints = testConfig
 
-	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 		if ep.path != "/password-endpoint" {
 			return fmt.Errorf("Incorrect path\nExpected=/password-endpoint\nReceived=%s", ep.path)
 		}
@@ -765,7 +765,7 @@ func TestAuthenticate_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testname, func(t *testing.T) {
-			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.Reader, ret any) error {
+			makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
 				return tt.requestErr
 			}
 
@@ -983,7 +983,7 @@ func TestMakeRequest(t *testing.T) {
 		mockHandlerFunc           func(http.ResponseWriter, *http.Request)
 		query                     map[string]string
 		headers                   map[string]string
-		givenBody                 io.Reader
+		givenBody                 io.ReadSeeker
 		expectedBody              any
 	}{
 		{
@@ -1065,6 +1065,38 @@ func TestMakeRequest(t *testing.T) {
 			expectedBody: profile{Username: "me", ProjectName: "myproject", PI: true, S3Access: false},
 		},
 		{
+			testname:  "FAIL_ONCE_BODY",
+			method:    "POST",
+			givenBody: strings.NewReader("I am still here"),
+			mockHandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				if handleCount == 0 {
+					handleCount++
+					// Drop the connection — causes client.Do to return an error
+					if hj, ok := rw.(http.Hijacker); ok {
+						conn, _, err := hj.Hijack()
+						if err == nil {
+							conn.Close()
+						} else {
+							t.Errorf("Connection closing failed: %v", err)
+						}
+					} else {
+						t.Error("Cannot hijack connection")
+					}
+
+					return
+				}
+				// On retry, verify the body arrived intact
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Errorf("Failed to read request body: %v", err)
+				} else if string(body) != "I am still here" {
+					t.Errorf("Request body has incorrect value\nExpected=I am still here\nReceived=%s", string(body))
+				}
+
+				_, _ = rw.Write([]byte(""))
+			},
+		},
+		{
 			testname: "FAIL_ALL",
 			method:   "GET",
 			errText:  "Get \"https://google.com\": Redirecting failed (as expected)",
@@ -1118,6 +1150,7 @@ func TestMakeRequest(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(tt.mockHandlerFunc))
 			ai.hi.client = srv.Client()
 			t.Cleanup(func() { srv.Close() })
+			handleCount = 0
 
 			// Causes client.Do() to fail when redirecting
 			ai.hi.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {

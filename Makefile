@@ -1,7 +1,5 @@
-.PHONY: help all remote local cli gui gui_build gui_prod wails_update setup clean down get_env run_profiles build_profiles exec envs _run_findata_profiles _wait_for_container _follow_logs
-
 SHELL := /bin/bash
-MAKEFLAGS += --no-print-directory
+MAKEFLAGS += --no-print-directory --always-make
 
 override GONOPROXY := none
 export GONOPROXY

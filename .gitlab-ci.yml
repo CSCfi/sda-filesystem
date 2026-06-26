@@ -51,7 +51,6 @@ backend-lint:
   stage: lint
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
   cache:
     <<: *global_go_cache
     policy: pull
@@ -69,7 +68,6 @@ frontend-lint:
   stage: lint
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
   cache:
     <<: *global_pnpm_cache
     policy: pull
@@ -82,9 +80,9 @@ test:
     docker:
       user: 1000:1000
   stage: test
+  needs: [install-deps]
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
   cache:
     <<: *global_go_cache
     policy: pull
@@ -110,10 +108,10 @@ test:
 
 jfrog-go-audit:
   stage: audit
+  needs: [install-deps]
   image: $BUILDER_IMAGE
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
   cache:
     - <<: *global_go_cache
       policy: pull
@@ -124,10 +122,10 @@ jfrog-go-audit:
 
 jfrog-pnpm-audit:
   stage: audit
+  needs: [install-deps]
   image: $BUILDER_IMAGE
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
   cache:
     - <<: *global_pnpm_cache
       policy: pull
@@ -226,6 +224,8 @@ release:
       links:
         - name: data-gateway-cli-amd64-${RELEASE_VERSION} (artifactory)
           url: $ARTIFACTORY_URL/artifactory/$ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${RELEASE_VERSION}
+        - name: data-gateway-cli-22-amd64-${RELEASE_VERSION} (artifactory)
+          url: $ARTIFACTORY_URL/artifactory/$ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${RELEASE_VERSION}
         - name: data-gateway-gui-amd64-${RELEASE_VERSION} (artifactory)
           url: $ARTIFACTORY_URL/artifactory/$ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${RELEASE_VERSION}
         - name: data-gateway-gui-22-amd64-${RELEASE_VERSION} (artifactory)
