@@ -7,6 +7,21 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.6.1] - 2026-06-26
+
+### Changed
+
+- do not run other CI jobs if `install-deps` failed
+- use Debian version of ClamAV image since it supports arm64
+- always include Makefile flag `--always-make` so that targets do not have to be added to the `PHONY` list
+
+### Fixed
+
+- (admins) added missing link to CLI for Ubuntu 22 in the releases page for subsequent releases
+- seek possible request body back to beginning if client.Do() has to be retried
+- `krakend-db` health check since the DB string was empty when running with only profile 'krakend'
+- use wget instead of curl in `krakend` health check now that curl is no longer available
+
 ## [2026.6.0] - 2026-06-01
 
 ### Added
@@ -580,7 +595,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.6.0...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.6.1...HEAD
+[2026.6.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.6.0...2026.6.1
 [2026.6.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.2...2026.6.0
 [2026.5.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.1...2026.5.2
 [2026.5.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.0...2026.5.1
