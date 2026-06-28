@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://go.dev/dl/go1.26.3.linux-amd64.tar.gz \
-    && tar -C /usr/local -xzf go1.26.3.linux-amd64.tar.gz \
-    && rm go1.26.3.linux-amd64.tar.gz
+RUN wget https://go.dev/dl/go1.26.4.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf go1.26.4.linux-amd64.tar.gz \
+    && rm go1.26.4.linux-amd64.tar.gz
 
 ENV PATH="/usr/local/go/bin:${PATH}"
 
