@@ -16,7 +16,7 @@
     },
     {
       "matchPackageNames": ["ubuntu"],
-      "allowedVersions": "<=24.04"
+      "allowedVersions": "24.04"
     }
   ],
   "customManagers": [
