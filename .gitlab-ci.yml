@@ -15,6 +15,9 @@ include:
   - project: 'sds-dev/releases'
     ref: main
     file: 'releases.yml'
+  - project: 'sds-dev/devops/renovate-runner'
+    ref: main
+    file: 'templates/renovate-config-validator.gitlab-ci.yml'
 
 default:
   image: $DEV_IMAGE
@@ -75,6 +78,16 @@ frontend-lint:
     policy: pull
   script:
     - pnpm run --dir frontend lint
+
+# For some reason, this job can cause other jobs to not find cache. It would seem running this
+# job after other lint stage jobs fixes this,
+renovate-config-validator:
+  stage: lint
+  needs:
+    - frontend-lint
+    - backend-lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 test:
   image:
