@@ -42,7 +42,7 @@ install-deps:
         files:
           - frontend/pnpm-lock.yaml
       paths:
-        - frontend/node_modules/
+        - /.pnpm-store
     - &global_go_cache
       key: $CI_COMMIT_REF_SLUG
       paths:
