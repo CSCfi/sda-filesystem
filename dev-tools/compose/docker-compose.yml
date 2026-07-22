@@ -101,7 +101,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.6.1"
+    image: "${ARTIFACTORY_SERVER_OCI}/sds/krakend-api-gateway:2026.7.2"
     container_name: krakend
     env_file:
       - .env
@@ -184,7 +184,7 @@ services:
       krakend-db-setup:
         condition: service_started
   krakend-db-setup:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-test-databases:2026.6.0"
+    image: "${ARTIFACTORY_SERVER_OCI}/sds/krakend-test-databases:2026.7.0"
     container_name: krakend-db-setup
     volumes:
       - postgres-init:/docker-entrypoint-initdb.d
