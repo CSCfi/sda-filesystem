@@ -1,5 +1,5 @@
 ARG ARTIFACTORY_SERVER=
-FROM ${ARTIFACTORY_SERVER}python:3.14.4-slim-trixie
+FROM ${ARTIFACTORY_SERVER}python:3.14.5-slim-trixie
 
 COPY ./dev-tools/containers/data-upload /scripts
 
