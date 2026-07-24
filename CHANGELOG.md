@@ -7,6 +7,19 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- run `test` job in default branch as well in the hopes that this will give us access to a coverage badge
+- interrupt non-tag CI pipelines when new commits are pushed
+- CI job that validates renovate config
+
+### Fixed
+
+- in CI, cache `.pnpm_store` instead of `node_modules`
+- the dependency of CI jobs that caused caches to not be found for some unknown reason
+- prevent `install-deps` CI jobs from running at the same time
+- pull `krakend` and `krakend-test-database` images from OCI registry
+
 ## [2026.6.1] - 2026-06-26
 
 ### Changed
