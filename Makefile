@@ -147,6 +147,7 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,VAULT_ROLE,krakend/vault,role) \
 	$(call write_secret,VAULT_SECRET,krakend/vault,secret) \
 	$(call write_secret,ARTIFACTORY_SERVER,internal-urls,artifactory-docker) \
+	$(call write_secret,ARTIFACTORY_SERVER_OCI,internal-urls,artifactory-oci) \
 	$(call write_secret,ARTIFACTORY_URL,internal-urls,artifactory) \
 	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
 	$(call write_secret,ARTIFACTORY_NPM_REGISTRY,artifactory,npm-registry) \
