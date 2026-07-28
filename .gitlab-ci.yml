@@ -135,7 +135,7 @@ jfrog-go-audit:
     - <<: *global_go_cache
       policy: pull
   before_script:
-    - jf config import "${JF_CONFIG}"
+    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - jf audit --go --licenses --extended-table --min-severity=Medium
 
@@ -148,7 +148,7 @@ jfrog-pnpm-audit:
     - <<: *global_pnpm_cache
       policy: pull
   before_script:
-    - jf config import "${JF_CONFIG}"
+    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - jf audit --pnpm --licenses --extended-table --min-severity=Medium
 
@@ -174,7 +174,7 @@ build-artifacts:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
     - wails doctor
-    - jf config import "${JF_CONFIG}"
+    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - |
       go build -ldflags '-w -s' -o data-gateway-cli-amd64-${UPLOAD_TAG} ./cmd/cli
