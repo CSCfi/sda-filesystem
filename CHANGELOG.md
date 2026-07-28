@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- `push` stage in CI
 - run `test` job in default branch as well in the hopes that this will give us access to a coverage badge
 - interrupt non-tag CI pipelines when new commits are pushed
 - CI job that validates renovate config
@@ -19,6 +20,12 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - the dependency of CI jobs that caused caches to not be found for some unknown reason
 - prevent `install-deps` CI jobs from running at the same time
 - pull `krakend` and `krakend-test-database` images from OCI registry
+
+### Changed
+
+- use env `JF_CONFIG_READ_ONLY` in non-push jobs
+- use proper versions for CI images
+- split build and push steps in CI into separate jobs
 
 ## [2026.6.1] - 2026-06-26
 
