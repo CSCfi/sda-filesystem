@@ -10,8 +10,7 @@ stages:
 variables:
   DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-ci:2026.7.2
   BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci:2026.7.2
-  GOCACHE: $CI_PROJECT_DIR/.go-build
-  PNPM_CONFIG_STORE_DIR: .pnpm-store
+  PNPM_CONFIG_STORE_DIR: $CI_PROJECT_DIR/.pnpm-store
 
 include:
   - project: 'sds-dev/releases'
@@ -25,6 +24,7 @@ default:
   image: $DEV_IMAGE
   tags:
     - docker-exec
+  retry: 2
   interruptible: true
 
 install-deps:
