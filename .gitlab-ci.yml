@@ -8,8 +8,8 @@ stages:
   - release
 
 variables:
-  DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
-  BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci
+  DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-ci:2026.7.2
+  BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci:2026.7.2
   GOCACHE: $CI_PROJECT_DIR/.go-build
   PNPM_CONFIG_STORE_DIR: .pnpm-store
 
@@ -173,7 +173,7 @@ build-artifacts:
   before_script:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
-    - /root/go/bin/wails doctor
+    - wails doctor
     - jf config import "${JF_CONFIG}"
   script:
     - |
@@ -184,13 +184,13 @@ build-artifacts:
       jf s --licenses data-gateway-cli-22-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
     - |
       cd cmd/gui
-      /root/go/bin/wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
+      wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
       cd ../..
       mv build/bin/data-gateway data-gateway-gui-amd64-${UPLOAD_TAG}
       jf s --licenses data-gateway-gui-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
     - |
       cd cmd/gui
-      /root/go/bin/wails build -clean -upx -trimpath -s -ldflags "-X sda-filesystem/internal/api.Port=8283 -X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
+      wails build -clean -upx -trimpath -s -ldflags "-X sda-filesystem/internal/api.Port=8283 -X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
       cd ../..
       mv build/bin/data-gateway data-gateway-gui-22-amd64-${UPLOAD_TAG}
       jf s --licenses data-gateway-gui-22-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
@@ -216,7 +216,7 @@ push-dev:
 push-artifacts:
   stage: push
   image: $BUILDER_IMAGE
-  rules :
+  rules:
     - if: $CI_COMMIT_TAG
       interruptible: false
   before_script:
