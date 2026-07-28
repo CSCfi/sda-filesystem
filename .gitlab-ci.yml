@@ -11,6 +11,7 @@ variables:
   DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
   BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci
   GOCACHE: $CI_PROJECT_DIR/.go-build
+  PNPM_CONFIG_STORE_DIR: .pnpm-store
 
 include:
   - project: 'sds-dev/releases'
@@ -49,7 +50,7 @@ install-deps:
         files:
           - frontend/pnpm-lock.yaml
       paths:
-        - /.pnpm-store
+        - frontend/.pnpm-store
     - &global_go_cache
       key: $CI_COMMIT_REF_SLUG
       paths:
