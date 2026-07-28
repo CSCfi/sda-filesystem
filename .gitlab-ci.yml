@@ -76,6 +76,8 @@ backend-lint:
 
 frontend-lint:
   stage: lint
+  needs:
+    - backend-lint
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   cache:
@@ -88,6 +90,8 @@ frontend-lint:
 # job after other lint stage jobs fixes this.
 renovate-config-validator:
   stage: lint
+  needs:
+    - frontend-lint
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
