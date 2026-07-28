@@ -4,12 +4,14 @@ stages:
   - test
   - audit
   - build
+  - push
   - release
 
 variables:
-  DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-golang-common-ci
-  BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci
+  DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-ci:2026.7.2
+  BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci:2026.7.2
   GOCACHE: $CI_PROJECT_DIR/.go-build
+  PNPM_CONFIG_STORE_DIR: .pnpm-store
 
 include:
   - project: 'sds-dev/releases'
@@ -31,6 +33,7 @@ install-deps:
     - if: $CI_COMMIT_TAG
       interruptible: false
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
   resource_group: setup
   before_script:
     - echo "registry=${ARTIFACTORY_NPM_REGISTRY}" > .npmrc
@@ -47,7 +50,7 @@ install-deps:
         files:
           - frontend/pnpm-lock.yaml
       paths:
-        - /.pnpm-store
+        - frontend/.pnpm-store
     - &global_go_cache
       key: $CI_COMMIT_REF_SLUG
       paths:
@@ -85,9 +88,6 @@ frontend-lint:
 # job after other lint stage jobs fixes this.
 renovate-config-validator:
   stage: lint
-  needs:
-    - frontend-lint
-    - backend-lint
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
@@ -132,7 +132,7 @@ jfrog-go-audit:
     - <<: *global_go_cache
       policy: pull
   before_script:
-    - jf config import "${JF_CONFIG}"
+    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - jf audit --go --licenses --extended-table --min-severity=Medium
 
@@ -145,40 +145,9 @@ jfrog-pnpm-audit:
     - <<: *global_pnpm_cache
       policy: pull
   before_script:
-    - jf config import "${JF_CONFIG}"
+    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - jf audit --pnpm --licenses --extended-table --min-severity=Medium
-
-build-dev:
-  stage: build
-  image: $BUILDER_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
-      allow_failure: true
-  variables:
-    SECURE_FILES_DOWNLOAD_PATH: './certs'
-  cache:
-    - <<: *global_pnpm_cache
-      policy: pull
-    - <<: *global_go_cache
-      policy: pull
-  before_script:
-    - jf config import "${JF_CONFIG}"
-    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
-  script:
-    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
-    - |
-      go build -ldflags '-w -s' -o data-gateway-cli-amd64-0000.0.0 ./cmd/cli
-      jf s --licenses data-gateway-cli-amd64-0000.0.0 --repo-path ${ARTIFACTORY_BINARY_REPO_DESKTOP}
-      jf rt u data-gateway-cli-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-cli-amd64-0000.0.0
-    - |
-      cd cmd/gui
-      /root/go/bin/wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=0000.0.0"
-      cd ../..
-      mv build/bin/data-gateway data-gateway-gui-amd64-0000.0.0
-      jf s --licenses data-gateway-gui-amd64-0000.0.0 --repo-path ${ARTIFACTORY_BINARY_REPO_DESKTOP}
-      jf rt u data-gateway-gui-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-gui-amd64-0000.0.0
 
 build-artifacts:
   stage: build
@@ -186,10 +155,11 @@ build-artifacts:
   rules :
     - if: $CI_COMMIT_TAG
       interruptible: false
-    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
-      when: never
+      variables:
+        UPLOAD_TAG: $CI_COMMIT_TAG
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: never
+      variables:
+        UPLOAD_TAG: 0000.0.0
   variables:
     SECURE_FILES_DOWNLOAD_PATH: './certs'
   cache:
@@ -198,36 +168,67 @@ build-artifacts:
     - <<: *global_go_cache
       policy: pull
   before_script:
+    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
+    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+    - wails doctor
+    - jf config import "${JF_CONFIG_READ_ONLY}"
+  script:
+    - |
+      go build -ldflags '-w -s' -o data-gateway-cli-amd64-${UPLOAD_TAG} ./cmd/cli
+      jf s --licenses data-gateway-cli-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
+    - |
+      go build -ldflags '-w -s -X sda-filesystem/internal/api.Port=8283' -o data-gateway-cli-22-amd64-${UPLOAD_TAG} ./cmd/cli
+      jf s --licenses data-gateway-cli-22-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
+    - |
+      cd cmd/gui
+      wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
+      cd ../..
+      mv build/bin/data-gateway data-gateway-gui-amd64-${UPLOAD_TAG}
+      jf s --licenses data-gateway-gui-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
+    - |
+      cd cmd/gui
+      wails build -clean -upx -trimpath -s -ldflags "-X sda-filesystem/internal/api.Port=8283 -X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
+      cd ../..
+      mv build/bin/data-gateway data-gateway-gui-22-amd64-${UPLOAD_TAG}
+      jf s --licenses data-gateway-gui-22-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
+  artifacts:
+    when: on_success
+    expire_in: 1 hour
+    paths:
+      - data-gateway-*
+
+push-dev:
+  stage: push
+  image: $BUILDER_IMAGE
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+  before_script:
     - jf config import "${JF_CONFIG}"
   script:
-    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
+    - jf rt u data-gateway-cli-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-cli-amd64-0000.0.0
+    - jf rt u data-gateway-gui-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-gui-amd64-0000.0.0
+
+push-artifacts:
+  stage: push
+  image: $BUILDER_IMAGE
+  rules:
+    - if: $CI_COMMIT_TAG
+      interruptible: false
+  before_script:
+    - jf config import "${JF_CONFIG}"
+  script:
     - |
-      go build -ldflags '-w -s' -o data-gateway-cli-amd64-${CI_COMMIT_TAG} ./cmd/cli
-      jf s --licenses data-gateway-cli-amd64-${CI_COMMIT_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
       jf rt u data-gateway-cli-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG}
       jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
     - |
-      go build -ldflags '-w -s -X sda-filesystem/internal/api.Port=8283' -o data-gateway-cli-22-amd64-${CI_COMMIT_TAG} ./cmd/cli
-      jf s --licenses data-gateway-cli-22-amd64-${CI_COMMIT_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
       jf rt u data-gateway-cli-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG}
       jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
     - |
-      go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
-      /root/go/bin/wails doctor
-    - |
-      cd cmd/gui
-      /root/go/bin/wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=${CI_COMMIT_TAG}"
-      cd ../..
-      mv build/bin/data-gateway data-gateway-gui-amd64-${CI_COMMIT_TAG}
-      jf s --licenses data-gateway-gui-amd64-${CI_COMMIT_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
       jf rt u data-gateway-gui-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG}
       jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
     - |
-      cd cmd/gui
-      /root/go/bin/wails build -clean -upx -trimpath -s -ldflags "-X sda-filesystem/internal/api.Port=8283 -X sda-filesystem/internal/api.Version=${CI_COMMIT_TAG}"
-      cd ../..
-      mv build/bin/data-gateway data-gateway-gui-22-amd64-${CI_COMMIT_TAG}
-      jf s --licenses data-gateway-gui-22-amd64-${CI_COMMIT_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
       jf rt u data-gateway-gui-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG}
       jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
 
