@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- CI jobs are retried twice
 - `push` stage in CI
 - run `test` job in default branch as well in the hopes that this will give us access to a coverage badge
 - interrupt non-tag CI pipelines when new commits are pushed
@@ -26,6 +27,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - use env `JF_CONFIG_READ_ONLY` in non-push jobs
 - use proper versions for CI images
 - split build and push steps in CI into separate jobs
+
+### Removed
+
+- `GOCACHE` definition from CI
 
 ## [2026.6.1] - 2026-06-26
 
