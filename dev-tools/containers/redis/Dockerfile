@@ -1,5 +1,5 @@
 ARG ARTIFACTORY_SERVER=
-FROM ${ARTIFACTORY_SERVER}redis:8.4.4-alpine3.22
+FROM ${ARTIFACTORY_SERVER}redis:8.4.5-alpine3.22
 
 COPY ./dev-tools/containers/redis/redis.conf /usr/local/etc/redis/redis.conf
 
