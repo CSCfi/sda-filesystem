@@ -197,11 +197,11 @@ func (a *App) InitFuse() {
 			<-wait // Wait for fuse to be ready
 			a.mounted = true
 
-			var cmd = make(chan []string)
-			go filesystem.WaitForUpdateSignal(cmd)
+			var notify = make(chan any)
+			go filesystem.WaitForUpdateSignal(notify)
 			go func() {
 				for {
-					<-cmd
+					<-notify
 					wailsruntime.EventsEmit(a.ctx, "update")
 				}
 			}()

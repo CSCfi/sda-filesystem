@@ -58,12 +58,27 @@ func toGoStr(str *C.char) string {
 	return C.GoString(str)
 }
 
-func WaitForUpdateSignal(ch chan<- []string) {
+func WaitForUpdateSignal(notify chan<- any) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGUSR2)
-	for {
-		<-s
-		ch <- []string{"update"}
+
+	// 'busy' makes sure that multiple consecutive signals do not cause multiple updates
+	busy := make(chan any, 1)
+	for range s {
+		select {
+		case busy <- nil:
+			go func() {
+				defer func() { <-busy }()
+
+				select {
+				// notify is needed for GUI
+				case notify <- nil:
+				default:
+					UpdateFilesystem()
+				}
+			}()
+		default:
+		}
 	}
 }
 
