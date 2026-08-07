@@ -12,10 +12,12 @@ package filesystem
 #include "helpers.h"
 #include "enabled.h"
 
-static nodes_t fuse_nodes = {0};
+enum { ptr_size = sizeof(void*) };
 
-static inline nodes_t *get_nodes() {
-    return &fuse_nodes;
+static node_t fuse_root = {0};
+
+static inline node_t *get_root() {
+    return &fuse_root;
 }
 */
 import "C"
@@ -46,12 +48,13 @@ var fi = fuseInfo{}
 
 // fuseInfo stores variables relevant to the filesystem
 type fuseInfo struct {
-	mount   string
-	headers map[C.ino_t]header
-	nodes   *C.nodes_t
-	ready   chan<- any
-	guiFun  func(api.Repo, string, int)
-	mu      sync.RWMutex
+	mount     string
+	root      *goNode
+	state     C.fs_state_t // Only needed for lock and session
+	headers   map[C.ino_t]header
+	forgotten map[C.ino_t]*C.node_t
+	ready     chan<- any
+	guiFun    func(api.Repo, string, int)
 }
 
 // bucketInfo is a packet of information sent through a channel to createObjects()
@@ -67,10 +70,12 @@ type header struct {
 	fileID string
 }
 
-// goNode is a representation of a file/directory in Go before it is moved to C
+// goNode is a representation of a file/directory in Go
 type goNode struct {
 	meta     api.Metadata
 	children map[string]*goNode
+	cNode    *C.node_t
+	rootPtr  *goNode // So that we can keep track which nodes are persistent across updates
 }
 
 // SetSignalBridge initializes the signal which informs Wails that program has paniced
@@ -96,11 +101,11 @@ func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<-
 	fi.mount = mount
 	fi.ready = ready
 	fi.guiFun = fun
-	fi.mu = sync.RWMutex{}
+	fi.headers = make(map[C.ino_t]header)
+	fi.forgotten = make(map[C.ino_t]*C.node_t)
 
-	fi.mu.Lock()
-	fi.nodes = C.get_nodes()
-	InitialiseFilesystem()
+	fi.state.root = C.get_root() // C pointer to root node is constant
+	GenerateFilesystem()
 
 	m := C.CString(mount)
 	defer C.free(unsafe.Pointer(m)) //nolint:nlreturn
@@ -111,30 +116,35 @@ func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<-
 		fuseDebug = 1
 	}
 
-	return int(C.mount_filesystem(m, C.int(fuseDebug)))
+	return int(C.mount_filesystem(&fi.state, m, C.int(fuseDebug)))
 }
 
-//export GetFilesystem
-func GetFilesystem() *C.nodes_t {
-	fi.mu.Unlock()
-
-	return fi.nodes
-}
-
-// allocateNodeList reserves memory for a node struct array in C.
+// allocateNodeList reserves memory for an array of node pointers in C.
 // This is a separate Go function so it can be used in tests
-func allocateNodeList(length int) *C.node_t {
-	return (*C.node_t)(C.malloc(C.sizeof_struct_Node * C.size_t(length)))
+func allocateNodeList(length C.size_t) **C.node_t {
+	return (**C.node_t)(C.malloc(C.ptr_size * length))
 }
 
-// InitialiseFilesystem initializes the in-memory filesystem database
-func InitialiseFilesystem() {
-	logs.Info("Initializing in-memory Data Gateway database")
+// allocateNodePointer reserves memory for a single node pointer in C
+// and initializes the memory with zeroes.
+// This is a separate Go function so it can be used in tests
+func allocateNodePointer() *C.node_t {
+	return (*C.node_t)(C.calloc(1, C.sizeof_struct_Node))
+}
+
+// GenerateFilesystem creates the in-memory filesystem. Also used for updating filesystem
+func GenerateFilesystem() {
+	logs.Info("Initializing in-memory Data Gateway filesystem")
 	defer checkPanic()
 
 	//nolint:nlreturn
 	// First get the metadata from S3 and build a tree in Go to represent the filesystem structure
-	root := newGoNode(api.Metadata{Name: "", Size: 0, LastModified: nil}, true)
+	oldRoot := fi.root
+	fi.root = newGoNode(api.Metadata{Name: "", Size: 0, LastModified: nil}, true)
+	fi.root.cNode = C.get_root()
+	if oldRoot != nil {
+		fi.root.children = oldRoot.children
+	}
 
 	numJobs := 0
 	bucketNodes := make(map[string]map[string]*goNode)
@@ -145,9 +155,9 @@ func InitialiseFilesystem() {
 
 		// Create folder for repository
 		meta := api.Metadata{Name: rep.ForPath(), Size: 0, LastModified: nil}
-		makeNode(root.children, meta, true, "")
+		makeNode(fi.root.children, meta, true, false, "")
 
-		parentChildren := root.children[rep.ForPath()].children
+		parentChildren := fi.root.children[rep.ForPath()].children
 		parentPath := rep.ForPath()
 
 		// Get buckets for repository
@@ -164,9 +174,9 @@ func InitialiseFilesystem() {
 		if rep == api.SDConnect {
 			project := api.GetProjectName()
 			projectPath := parentPath + "/" + project
-			logs.Debugf("Creating directory /%s", filepath.FromSlash(projectPath))
+			logs.Debugf("Creating directory %s", filepath.FromSlash(projectPath))
 			meta := api.Metadata{Name: project, Size: 0, LastModified: nil}
-			makeNode(parentChildren, meta, true, parentPath)
+			makeNode(parentChildren, meta, true, false, parentPath)
 
 			parentPath = projectPath
 			parentChildren = parentChildren[project].children
@@ -180,18 +190,10 @@ func InitialiseFilesystem() {
 
 		// Create bucket directories
 		for i := range buckets {
-			origBucketName := buckets[i].Name
-			if rep != api.SDConnect {
-				if u, err := url.ParseRequestURI(buckets[i].Name); err == nil {
-					buckets[i].Name = strings.TrimLeft(strings.TrimPrefix(buckets[i].Name, u.Scheme), ":/")
-				}
-			}
-
 			bucketPath := parentPath + "/" + buckets[i].Name
-			logs.Debugf("Creating directory /%s", filepath.FromSlash(bucketPath))
-			bucketSafe := makeNode(parentChildren, buckets[i], true, parentPath)
+			logs.Debugf("Creating directory %s", filepath.FromSlash(bucketPath))
+			bucketSafe := makeNode(parentChildren, buckets[i], true, true, parentPath)
 
-			parentChildren[bucketSafe].meta.Name = origBucketName
 			bucketNodes[parentPath][bucketSafe] = parentChildren[bucketSafe]
 
 			if rep != api.SDConnect && fi.guiFun != nil {
@@ -232,17 +234,12 @@ func InitialiseFilesystem() {
 
 	wg.Wait()
 
-	// Construct the array of nodes for C
-	num, objs := numberOfNodes(root)
-	fi.headers = make(map[C.ino_t]header, objs)
-	fi.nodes.nodes = allocateNodeList(num)
-	fi.nodes.count = 1
-	nodeSlice := unsafe.Slice(fi.nodes.nodes, num)
-	nodeSlice[0] = goNodeToC(root, "")
-	nodeSlice[0].parent = nil
-	addNodeChildrenToC(nodeSlice, root, 0)
+	// Construct the tree of nodes for C
+	goNodesToC(fi.root, "")
+	fi.root.cNode.stat.st_ino = 1 // FUSE_ROOT_ID
+	fi.root.cNode.parent = nil
 
-	logs.Info("Data Gateway database completed")
+	logs.Info("Data Gateway filesystem completed")
 
 	select {
 	case fi.ready <- nil:
@@ -267,90 +264,101 @@ func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metad
 	return buckets[:lastIdx+1], buckets[lastIdx+1:]
 }
 
-func numberOfNodes(node *goNode) (numNodes int, numObjects int) {
+// goNodesToC sets up the field `cNode` under `node`. The C side of the code
+// has a pointer to the root cNode so when we initialize the cNode field here,
+// the changes will be visible in C. The function also fills in the array of
+// children for `cNode`, recursively initializing the children as well.
+func goNodesToC(node *goNode, name string) {
+	cNode := node.cNode
+	// ino will later give us the pointer to the node directly
+	ino := C.ino_t(uintptr(unsafe.Pointer(cNode)))
+	cNode.stat.st_ino = ino
+
+	oldHeader, ok := fi.headers[ino]
+	if !ok || oldHeader.owner != node.meta.Owner || oldHeader.fileID != node.meta.ID {
+		fi.headers[ino] = header{owner: node.meta.Owner, fileID: node.meta.ID}
+	}
+
+	if cNode.name == nil {
+		cNode.name = C.CString(name)
+	}
+	if cNode.orig_name == nil {
+		cNode.orig_name = C.CString(node.meta.Name)
+	}
+
+	// Prune old nodes that no longer exist in storage
+	for name, child := range node.children {
+		if child.rootPtr != fi.root {
+			collectForgotten(child.cNode)
+			delete(node.children, name)
+		}
+	}
+
+	oldLastModified := cNode.last_modified.tv_sec
+
 	if node.children == nil {
-		return 1, 1
-	}
-
-	numNodes++
-	for i := range node.children {
-		num, obj := numberOfNodes(node.children[i])
-		numNodes += num
-		numObjects += obj
-	}
-
-	return
-}
-
-func goNodeToC(node *goNode, name string) C.node_t {
-	cNode := C.node_t{}
-	cNode.name = C.CString(name)
-	cNode.stat.st_size = C.off_t(node.meta.Size)
-	cNode.chld_count = 0
-	cNode.children = nil
-	cNode.last_modified.tv_sec = 0
-	cNode.last_modified.tv_nsec = 0
-	cNode.offset = -1
-	cNode.orig_name = C.CString(node.meta.Name)
-
-	if node.meta.LastModified != nil {
-		cNode.last_modified.tv_sec = C.time_t(node.meta.LastModified.Unix())
-	}
-
-	if node.children == nil {
+		// File node
 		cNode.stat.st_mode = syscall.S_IFREG | 0644
 		cNode.stat.st_nlink = 1
+
+		newLastModified := C.time_t(node.meta.LastModified.Unix())
+		if newLastModified != cNode.last_modified.tv_sec {
+			cNode.last_modified.tv_sec = newLastModified
+			cNode.stat.st_size = C.off_t(node.meta.Size)
+			cNode.offset = -1
+		}
 	} else {
+		// Directory node
+		childCount := C.size_t(len(node.children))
 		cNode.stat.st_mode = syscall.S_IFDIR | 0744
-		cNode.stat.st_nlink = C.nlink_t(2 + len(node.children))
+		cNode.stat.st_nlink = C.nlink_t(2 + childCount)
+		cNode.stat.st_size = 0
+
+		C.free(unsafe.Pointer(cNode.children))
+		cNode.children = allocateNodeList(childCount)
+		cNode.chld_count = childCount
+		nodeSlice := unsafe.Slice(cNode.children, childCount)
+
+		i := 0
+		for name, child := range node.children {
+			if child.cNode == nil {
+				child.cNode = allocateNodePointer()
+			}
+			goNodesToC(child, name)
+			child.cNode.parent = cNode
+			nodeSlice[i] = child.cNode
+
+			// Now we update the parent node's timestamp and size
+			cNode.stat.st_size += nodeSlice[i].stat.st_size
+			modified := nodeSlice[i].last_modified.tv_sec
+			if modified > cNode.last_modified.tv_sec {
+				cNode.last_modified.tv_sec = modified
+			}
+
+			i++
+		}
 	}
 
-	return cNode
-}
-
-// addNodeChildrenToC adds the children of `prnt` to slice `nodeSlice`, which represents the array of nodes in C.
-func addNodeChildrenToC(nodeSlice []C.node_t, prnt *goNode, prntIdx C.int64_t) (C.off_t, C.time_t) {
-	startIdx := fi.nodes.count
-	chldCount := C.int64_t(len(prnt.children))
-
-	nodeSlice[prntIdx].chld_count = chldCount
-	nodeSlice[prntIdx].children = &nodeSlice[startIdx] // Pointer to first child in array
-
-	// Make sure all the children are placed sequentially in the array
-	fi.nodes.count += chldCount
-
-	i := startIdx
-	for name, chld := range prnt.children {
-		nodeSlice[i] = goNodeToC(chld, name)
-		nodeSlice[i].parent = &nodeSlice[prntIdx]
-		i++
+	if oldLastModified != 0 && oldLastModified != cNode.last_modified.tv_sec {
+		ret := C.invalidate_node(&fi.state, cNode)
+		if ret != 0 {
+			path, _ := getNodePath(cNode)
+			logs.Warningf("kernel was not able to invalidate node %s: %v", path, syscall.Errno(-ret))
+		}
 	}
 
 	// Making sure sorting and searching use the same comparison function (the one in C)
-	C.sort_node_children(&nodeSlice[prntIdx])
+	C.sort_node_children(cNode)
+}
 
-	i = startIdx
-	for ; i < startIdx+chldCount; i++ {
-		ino := C.ino_t(i)
-		nodeSlice[i].stat.st_ino = ino // ino is equivalent to the node's index in the array
-		chld := prnt.children[C.GoString(nodeSlice[i].name)]
-
-		size := nodeSlice[i].stat.st_size
-		modified := nodeSlice[i].last_modified.tv_sec
-
-		if len(chld.children) > 0 {
-			size, modified = addNodeChildrenToC(nodeSlice, chld, i)
-		} else if chld.meta.Owner != "" || chld.meta.ID != "" {
-			fi.headers[ino] = header{owner: chld.meta.Owner, fileID: chld.meta.ID}
-		}
-
-		nodeSlice[prntIdx].stat.st_size += size
-		if modified > nodeSlice[prntIdx].last_modified.tv_sec {
-			nodeSlice[prntIdx].last_modified.tv_sec = modified
-		}
+// collectForgotten is called when a node and all its children need to be removed from kernel cache.
+// It assigns offset as -2 so that any possible lookup() calls dismiss these nodes outright.
+func collectForgotten(node *C.node_t) {
+	node.offset = -2
+	fi.forgotten[node.stat.st_ino] = node
+	for _, child := range unsafe.Slice(node.children, node.chld_count) {
+		collectForgotten(child)
 	}
-
-	return nodeSlice[prntIdx].stat.st_size, nodeSlice[prntIdx].last_modified.tv_sec
 }
 
 var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
@@ -432,7 +440,7 @@ func createLevel(prnt *goNode, meta []api.Metadata, prntPath string) {
 		// If true, create the final object file
 		if len(parts) == 1 {
 			logs.Debugf("Creating file %s", filepath.FromSlash(prntPath+"/"+meta[i].Name))
-			makeNode(prnt.children, meta[i], false, prntPath)
+			makeNode(prnt.children, meta[i], false, false, prntPath)
 
 			continue
 		}
@@ -445,29 +453,54 @@ func createLevel(prnt *goNode, meta []api.Metadata, prntPath string) {
 	for key, value := range childrenMeta {
 		md := api.Metadata{Name: key, Size: 0, LastModified: nil}
 		logs.Debugf("Creating directory %s", filepath.FromSlash(prntPath+"/"+key))
-		dirSafe := makeNode(prnt.children, md, true, prntPath)
+		dirSafe := makeNode(prnt.children, md, true, false, prntPath)
 		createLevel(prnt.children[dirSafe], value, prntPath+"/"+dirSafe)
 	}
 }
 
 // makeNode adds a node into the Go tree structure. Returns node's name in filesystem.
-func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSafe string) string {
-	name := removeInvalidChars(meta.Name) // Redundant for SD Connect buckets and projects
+func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bool, pathSafe string) string {
+	name := meta.Name
+	if isBucket {
+		// SD Apply datasets may be URLs; SD Connect buckets are never URLs, so no need to worry about them running through here
+		if u, err := url.ParseRequestURI(meta.Name); err == nil {
+			name = strings.TrimLeft(strings.TrimPrefix(name, u.Scheme), ":/")
+		}
+	}
+	name = removeInvalidChars(name) // Redundant for SD Connect buckets and projects
 	if !isDir {
 		name = strings.TrimSuffix(name, ".c4gh")
 	}
 
-	possibleTwin, ok := siblings[name]
+	// possibleMatch is either the node itself if the filesystem is currently being updated,
+	// or it can be a new node that just has the same safe name
+	possibleMatch, ok := siblings[name]
 
-	// A folder or a file with the same name already exists
+	// Node already existed
+	if ok && possibleMatch.meta.Name == meta.Name {
+		// We do not want to update size if the timestamp has not changed
+		// since the size that comes from S3 is the encrypted size and
+		// possibleMatch's size might have changed to be the decrypted size
+		// depending on whether CheckHeaderExistence has been called
+		if possibleMatch.meta.LastModified != meta.LastModified {
+			possibleMatch.meta = meta
+		}
+		possibleMatch.rootPtr = fi.root
+
+		return name
+	}
+
+	// A folder or a file with the same safe name already exists
 	newName, origName := "", meta.Name
 	if ok {
+		twin := possibleMatch
 		// Create a unique suffix for file/folder and change name of node (whichever is possibly a file)
-		changeOtherNode := isDir && possibleTwin.children == nil
-		changeDir := isDir && possibleTwin.children != nil
+		// Do not change other node if it is from a previous iteration
+		changeOtherNode := isDir && twin.children == nil && twin.rootPtr == fi.root
+		changeDir := isDir && twin.children != nil
 
 		if changeOtherNode {
-			origName = possibleTwin.meta.Name
+			origName = twin.meta.Name
 		}
 		sum := fmt.Sprintf("%x", sha256.Sum256([]byte(origName)))[0:6]
 
@@ -480,7 +513,8 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSa
 		}
 
 		if changeOtherNode {
-			siblings[newName] = possibleTwin
+			siblings[newName] = twin
+			siblings[newName].rootPtr = fi.root
 		} else {
 			name = newName
 		}
@@ -501,7 +535,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir bool, pathSa
 }
 
 func newGoNode(meta api.Metadata, isDir bool) *goNode {
-	node := goNode{meta, nil}
+	node := goNode{meta, nil, nil, fi.root}
 	if isDir {
 		node.children = make(map[string]*goNode)
 	}
@@ -509,13 +543,13 @@ func newGoNode(meta api.Metadata, isDir bool) *goNode {
 	return &node
 }
 
+var invalidCharReplacer = strings.NewReplacer(
+	"/", "_", "#", "_", "%", "_", "$", "_", "+", "_",
+	"|", "_", "@", "_", ":", "_", "&", "_", "!", "_",
+	"?", "_", "<", "_", ">", "_", "'", "_", "\"", "_",
+)
+
 var removeInvalidChars = func(str string) string {
-	forReplacer := []string{"/", "_", "#", "_", "%", "_", "$", "_", "+",
-		"_", "|", "_", "@", "_", ":", "_", "&", "_", "!", "_", "?", "_",
-		"<", "_", ">", "_", "'", "_", "\"", "_"}
-
 	// Remove characters which may interfere with filesystem structure
-	r := strings.NewReplacer(forReplacer...)
-
-	return r.Replace(str)
+	return invalidCharReplacer.Replace(str)
 }

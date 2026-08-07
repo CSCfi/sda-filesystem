@@ -3,48 +3,54 @@
 #include "helpers.h"
 
 static int compare_nodes(const void *n1, const void *n2) {
-    return strcmp(((node_t *)n1)->name, ((node_t *)n2)->name);
+    return strcmp((*(node_t **)n1)->name, (*(node_t **)n2)->name);
 }
 
 // search_node finds the node at the end of path
-node_t *search_node(nodes_t *n, const char *path) {
-    if (n->count == 0) {
-        return NULL;
-    }
-
-	node_t *node = n->nodes;
+node_t *search_node(const node_t *root, const char *path) {
+	const node_t *node = root;
     char *path_copy = strdup(path);
 
-    for (char *p = strtok(path_copy, "/"); p != NULL; p = strtok(NULL, "/")) {
+    char *save;
+    for (char *p = strtok_r(path_copy, "/", &save); p != NULL; p = strtok_r(NULL, "/", &save)) {
         if (!*p) // empty string
             continue;
 
-        node_t node_find;
-        node_find.name = p;
-        node = bsearch(&node_find, node->children, node->chld_count, sizeof(node_t), compare_nodes);
+        node = find_child_node(node, p);
         if (!node)
             break;
     }
 
     free(path_copy);
 
-	return node;
+	return (node_t *)node;
 }
 
-void sort_node_children(node_t *node) {
-	qsort(node->children, node->chld_count, sizeof(node_t), compare_nodes);
+node_t *find_child_node(const node_t *parent, const char *name) {
+    node_t key;
+    key.name = (char *)name;
+    node_t *key_ptr = &key;
+    node_t **found = bsearch(&key_ptr, parent->children, parent->chld_count, sizeof(node_t*), compare_nodes);
+
+    return found ? *found : NULL;
 }
 
-void free_nodes(nodes_t *n) {
-    // In case someone tries to access nodes when freeing memory
-    int64_t old_count = n->count;
-    node_t *old_nodes = n->nodes;
-    n->count = 0;
-    n->nodes = NULL;
+void sort_node_children(const node_t *node) {
+	qsort(node->children, node->chld_count, sizeof(node_t*), compare_nodes);
+}
 
+// free_nodes frees all the fields in 'node' and recursively goes
+// through all the children and frees their memory as well.
+// The function does not free the memory of the node itself.
+void free_nodes(node_t *node) {
+    int64_t old_count = node->chld_count;
+    node->chld_count = 0;
     for (int i = 0; i < old_count; i++) {
-        free(old_nodes[i].name);
-        free(old_nodes[i].orig_name);
+        free_nodes(node->children[i]);
+        free(node->children[i]);
     }
-    free(old_nodes);
+
+    free(node->children);
+    free(node->name);
+    free(node->orig_name);
 }
