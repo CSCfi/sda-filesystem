@@ -44,7 +44,10 @@ const segmentsSuffix = "_segments"
 
 var signalBridge func()
 
-var fi = fuseInfo{}
+var fi = fuseInfo{
+	headers:   make(map[C.ino_t]header),
+	forgotten: make(map[C.ino_t]*C.node_t),
+}
 
 // fuseInfo stores variables relevant to the filesystem
 type fuseInfo struct {
@@ -74,8 +77,8 @@ type header struct {
 type goNode struct {
 	meta     api.Metadata
 	children map[string]*goNode
-	cNode    *C.node_t
-	rootPtr  *goNode // So that we can keep track which nodes are persistent across updates
+	cNode    *C.node_t // Helps keep track of pointers in C during filesystem updates
+	rootPtr  *goNode   // So that we can keep track which nodes are persistent across updates.
 }
 
 // SetSignalBridge initializes the signal which informs Wails that program has paniced
@@ -95,14 +98,12 @@ var checkPanic = func() {
 	}
 }
 
-// MountFilesystem mounts filesystem to directory 'mount'
+// MountFilesystem mounts filesystem to directory `mount“
 func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<- any) int {
 	logs.Infof("Mounting Data Gateway at %s", mount)
 	fi.mount = mount
 	fi.ready = ready
 	fi.guiFun = fun
-	fi.headers = make(map[C.ino_t]header)
-	fi.forgotten = make(map[C.ino_t]*C.node_t)
 
 	fi.state.root = C.get_root() // C pointer to root node is constant
 	GenerateFilesystem()
@@ -111,12 +112,12 @@ func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<-
 	defer C.free(unsafe.Pointer(m)) //nolint:nlreturn
 	defer C.fflush(nil)
 
-	fuseDebug := 0
+	var fuseDebug C.int = 0
 	if logs.GetLevel() == logrus.TraceLevel {
 		fuseDebug = 1
 	}
 
-	return int(C.mount_filesystem(&fi.state, m, C.int(fuseDebug)))
+	return int(C.mount_filesystem(&fi.state, m, fuseDebug))
 }
 
 // allocateNodeList reserves memory for an array of node pointers in C.
@@ -132,7 +133,7 @@ func allocateNodePointer() *C.node_t {
 	return (*C.node_t)(C.calloc(1, C.sizeof_struct_Node))
 }
 
-// GenerateFilesystem creates the in-memory filesystem. Also used for updating filesystem
+// GenerateFilesystem creates the in-memory filesystem. It is also used for filesystem updates
 func GenerateFilesystem() {
 	logs.Info("Initializing in-memory Data Gateway filesystem")
 	defer checkPanic()
@@ -153,12 +154,9 @@ func GenerateFilesystem() {
 	for _, rep := range repositories {
 		logs.Infof("Beginning filling in %s", rep)
 
-		// Create folder for repository
+		// Create folder for repository (SD Connect/SD Apply)
 		meta := api.Metadata{Name: rep.ForPath(), Size: 0, LastModified: nil}
 		makeNode(fi.root.children, meta, true, false, "")
-
-		parentChildren := fi.root.children[rep.ForPath()].children
-		parentPath := rep.ForPath()
 
 		// Get buckets for repository
 		buckets, err := api.GetBuckets(rep)
@@ -171,6 +169,10 @@ func GenerateFilesystem() {
 		buckets, segmentBuckets := separateSegmentBuckets(buckets)
 		numJobs += len(buckets)
 
+		parentChildren := fi.root.children[rep.ForPath()].children
+		parentPath := rep.ForPath()
+
+		// Create project directory for SD Connect
 		if rep == api.SDConnect {
 			project := api.GetProjectName()
 			projectPath := parentPath + "/" + project
@@ -178,8 +180,8 @@ func GenerateFilesystem() {
 			meta := api.Metadata{Name: project, Size: 0, LastModified: nil}
 			makeNode(parentChildren, meta, true, false, parentPath)
 
-			parentPath = projectPath
 			parentChildren = parentChildren[project].children
+			parentPath = projectPath
 
 			if fi.guiFun != nil {
 				fi.guiFun(rep, project, len(buckets))
@@ -203,8 +205,10 @@ func GenerateFilesystem() {
 
 		for i := range segmentBuckets {
 			bucketName := strings.TrimSuffix(segmentBuckets[i].Name, segmentsSuffix)
-			// Buckets assumed to not have any weird characters so the orignal name and
+			// S3 buckets assumed to not have any weird characters so the orignal name and
 			// safe name should be the same
+			// SD Apply datasets that represent buckets in this filesystem are assumed to
+			// not be segmented
 			if node, ok := parentChildren[bucketName]; ok {
 				node.meta.Name = segmentBuckets[i].Name
 			}
@@ -237,7 +241,6 @@ func GenerateFilesystem() {
 	// Construct the tree of nodes for C
 	goNodesToC(fi.root, "")
 	fi.root.cNode.stat.st_ino = 1 // FUSE_ROOT_ID
-	fi.root.cNode.parent = nil
 
 	logs.Info("Data Gateway filesystem completed")
 
@@ -264,20 +267,16 @@ func separateSegmentBuckets(buckets []api.Metadata) ([]api.Metadata, []api.Metad
 	return buckets[:lastIdx+1], buckets[lastIdx+1:]
 }
 
-// goNodesToC sets up the field `cNode` under `node`. The C side of the code
-// has a pointer to the root cNode so when we initialize the cNode field here,
-// the changes will be visible in C. The function also fills in the array of
-// children for `cNode`, recursively initializing the children as well.
+// goNodesToC sets up the field `cNode` under `node`. The fuse operations
+// have a C pointer to the root so when we initialize the `cNode` field here,
+// the changes will be visible in C. `cNode` fields may already be set if
+// goNodesToC is called during a filesystem update. The function also fills in
+// the array of children for `cNode`, recursively initializing the children as well.
 func goNodesToC(node *goNode, name string) {
 	cNode := node.cNode
 	// ino will later give us the pointer to the node directly
 	ino := C.ino_t(uintptr(unsafe.Pointer(cNode)))
 	cNode.stat.st_ino = ino
-
-	oldHeader, ok := fi.headers[ino]
-	if !ok || oldHeader.owner != node.meta.Owner || oldHeader.fileID != node.meta.ID {
-		fi.headers[ino] = header{owner: node.meta.Owner, fileID: node.meta.ID}
-	}
 
 	if cNode.name == nil {
 		cNode.name = C.CString(name)
@@ -288,8 +287,7 @@ func goNodesToC(node *goNode, name string) {
 
 	// Prune old nodes that no longer exist in storage
 	for name, child := range node.children {
-		// New nodes have nil, old nodes that are kept have fi.root
-		if child.rootPtr != nil && child.rootPtr != fi.root {
+		if child.rootPtr != fi.root {
 			collectForgotten(child.cNode)
 			delete(node.children, name)
 		}
@@ -303,10 +301,19 @@ func goNodesToC(node *goNode, name string) {
 		cNode.stat.st_nlink = 1
 
 		newLastModified := C.time_t(node.meta.LastModified.Unix())
-		if newLastModified != cNode.last_modified.tv_sec {
+		// We do not want to update size if the timestamp has not changed
+		// since the size that comes from S3 is the encrypted size and
+		// node's size might have changed to be the decrypted size
+		// depending on whether CheckHeaderExistence has been called for the node
+		if newLastModified != oldLastModified {
 			cNode.last_modified.tv_sec = newLastModified
 			cNode.stat.st_size = C.off_t(node.meta.Size)
 			cNode.offset = -1
+		}
+
+		oldHeader := fi.headers[ino]
+		if oldHeader.owner != node.meta.Owner || oldHeader.fileID != node.meta.ID {
+			fi.headers[ino] = header{owner: node.meta.Owner, fileID: node.meta.ID}
 		}
 	} else {
 		// Directory node
@@ -396,7 +403,7 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 		meta := make([]api.Metadata, 0, len(objects))
 		for i := range objects {
 			// Prevent the creation of objects that are actually empty directories
-			// Not sure if this is still a problem
+			// Not sure if this is still a problem once we move to S3
 			if strings.HasSuffix(objects[i].Name, "/") {
 				continue
 			}
@@ -482,14 +489,8 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 	possibleMatch, ok := siblings[name]
 
 	// Node already existed
-	if ok && possibleMatch.meta.Name == meta.Name {
-		// We do not want to update size if the timestamp has not changed
-		// since the size that comes from S3 is the encrypted size and
-		// possibleMatch's size might have changed to be the decrypted size
-		// depending on whether CheckHeaderExistence has been called for the node
-		if possibleMatch.meta.LastModified != meta.LastModified {
-			possibleMatch.meta = meta
-		}
+	if ok && possibleMatch.meta.Name == meta.Name && (possibleMatch.children != nil) == isDir {
+		possibleMatch.meta = meta
 		possibleMatch.rootPtr = fi.root
 
 		return name
@@ -500,8 +501,8 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 	if ok {
 		twin := possibleMatch
 		// Create a unique suffix for file/folder and change name of node (whichever is possibly a file)
-		// Do not change other node if it is from a previous iteration
-		changeOtherNode := isDir && twin.children == nil && twin.rootPtr == nil
+		// Do not change other node if it is from a previous iteration so that safe names stay the same across updates
+		changeOtherNode := isDir && twin.children == nil && twin.cNode == nil
 		changeDir := isDir && !changeOtherNode
 
 		if changeOtherNode {
@@ -539,7 +540,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 }
 
 func newGoNode(meta api.Metadata, isDir bool) *goNode {
-	node := goNode{meta, nil, nil, nil}
+	node := goNode{meta, nil, nil, fi.root}
 	if isDir {
 		node.children = make(map[string]*goNode)
 	}

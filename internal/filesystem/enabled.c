@@ -22,7 +22,7 @@ int mount_filesystem(const char *mount, int debug) {
 #endif
 
 // Taken from https://github.com/libfuse/libfuse/blob/9d63190c9c56a24e1095144e8ffaf66124fa0550/example/passthrough_ll.c#L59-L60
-static_assert(sizeof(fuse_ino_t) >= sizeof(uintptr_t), "fuse_ino_t too small to hold uintptr_t values!");
+_Static_assert(sizeof(fuse_ino_t) >= sizeof(uintptr_t), "fuse_ino_t too small to hold uintptr_t values!");
 
 const int MAX_READ = 1 << 20;
 const double FUSE_TIMEOUT = 3600.0;
@@ -65,6 +65,8 @@ static void s3_init(void *userdata, struct fuse_conn_info *conn) {
     conn->max_readahead = MAX_READ;
 #endif
 
+// Indicates that replies are sent from the same thread that received the request
+// (for optimization purposes)
 #ifdef FUSE_CONN_FLAG_SINGLE_ISSUER
     fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
 #endif
@@ -95,7 +97,7 @@ static void s3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
 
         return;
     }
-    if (child->offset == -2) {
+    if (child->offset == -2) { // child node no longer exists
         pthread_rwlock_unlock(&state->lock);
         fuse_reply_err(req, ESTALE);
 
@@ -173,11 +175,12 @@ static void s3_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi) {
         return;
     }
 
-    // At the moment the session only uses one thread so this should not cause a race condition
     if (node->offset == -1) {
         node->offset = CheckHeaderExistence(node);
     }
-    fi->keep_cache = 1;
+    if (node->offset >= 0) {
+        fi->keep_cache = 1;
+    }
     pthread_rwlock_unlock(&state->lock);
     fuse_reply_open(req, fi);
 }
@@ -235,7 +238,7 @@ static void s3_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 }
 
 static size_t dirbuf_add(fuse_req_t req, char *buf, size_t bufsize, const node_t *node,
-                       const char *name, off_t off) {
+                         const char *name, off_t off) {
     struct stat st = {0};
     fill_attr(fuse_req_ctx(req), &st, node);
 
@@ -261,6 +264,10 @@ static void s3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
         return;
     }
+
+    // Entries under a directory each have an index. The current directory "." has index 0, and
+    // the parent directory ".." has index 1. The child nodes have index 2+. `off` indicates the
+    // index at which the listing should begin.
 
     off_t k = 0;
     size_t pos = 0; // Current position in the buffer
@@ -387,14 +394,14 @@ int mount_filesystem(fs_state_t *state, const char *mount, int debug) {
     int len = snprintf(NULL, 0, "defer_permissions,noapplexattr,noappledouble,iosize=%d,volname=%s", MAX_READ, basename);
     char *options = malloc(len + 1);
     if (options == NULL) {
-        err(EXIT_FAILURE, "ERROR: Failed to allocate memory for options");
+        err(EXIT_FAILURE, "ERROR: Out of memory");
     }
     snprintf(options, len + 1, "defer_permissions,noapplexattr,noappledouble,iosize=%d,volname=%s", MAX_READ, basename);
 #elif defined(__linux__)
     int len = snprintf(NULL, 0, "max_read=%d", MAX_READ);
     char *options = malloc(len + 1);
     if (options == NULL) {
-        err(EXIT_FAILURE, "ERROR: Failed to allocate memory for options");
+        err(EXIT_FAILURE, "ERROR: Out of memory");
     }
     snprintf(options, len + 1, "max_read=%d", MAX_READ);
 #endif

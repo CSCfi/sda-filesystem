@@ -39,7 +39,7 @@ void sort_node_children(const node_t *node) {
 	qsort(node->children, node->chld_count, sizeof(node_t*), compare_nodes);
 }
 
-// free_nodes frees all the fields in 'node' and recursively goes
+// free_nodes frees all the fields in `node` and recursively goes
 // through all the children and frees their memory as well.
 // The function does not free the memory of the node itself.
 void free_nodes(node_t *node) {

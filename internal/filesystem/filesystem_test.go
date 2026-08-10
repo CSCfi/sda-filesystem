@@ -327,96 +327,129 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// getTestFuse returns a *Fuse filled in based on variable testFuse
-func getTestFuse(t *testing.T) *_Ctype_struct_Nodes {
+// getTestFuse returns a *FsState filled in based on variable testFuse
+func getTestFuse(t *testing.T) *_Ctype_struct_Node {
 	var root jsonNode
 	if err := json.Unmarshal([]byte(testFuse), &root); err != nil {
 		t.Fatalf("Could not unmarshal json: %s", err.Error())
 	}
 
-	n := &_Ctype_struct_Nodes{}
-	n.count = 0
-	n.nodes = allocateNodeList(fsSize)
-	t.Cleanup(func() { freeNodes(n) })
+	fsRoot := &_Ctype_struct_Node{}
+	t.Cleanup(func() { freeNodes(fsRoot) })
 
-	assignChildren(n, []jsonNode{root}, nil)
+	assignChildren(fsRoot, root)
+	fsRoot.stat.st_ino = 1
 
-	return n
+	return fsRoot
 }
 
-func assignChildren(n *_Ctype_struct_Nodes, template []jsonNode, parent *_Ctype_struct_Node) {
-	idx := int(n.count)
-	n.count += _Ctype_int64_t(len(template))
+func assignChildren(node *_Ctype_struct_Node, template jsonNode) {
+	node.name = toCStr(template.NameSafe)
+	node.orig_name = toCStr(template.Name)
+	node.stat.st_size = _Ctype_off_t(template.Size)
+	node.last_modified.tv_sec = _Ctype_time_t(template.Modified.Unix())
+	node.stat.st_ino = _Ctype_ino_t(uintptr(unsafe.Pointer(node)))
+	node.offset = -1
 
-	for i, bucket := range template {
-		meta := api.Metadata{
-			Name:         bucket.Name,
-			Size:         bucket.Size,
-			LastModified: bucket.Modified,
-		}
+	hasChildren := template.Children != nil && len(*template.Children) > 0
+	isDir := template.Dir || hasChildren
 
-		nodeSlice := unsafe.Slice(n.nodes, fsSize)
-		nodeSlice[idx+i] = goNodeToC(newGoNode(meta, bucket.Children != nil), bucket.NameSafe)
-		nodeSlice[idx+i].stat.st_ino = _Ctype_ino_t(idx + i) // #nosec G115
-		nodeSlice[idx+i].offset = -1
-		nodeSlice[idx+i].parent = parent
+	node.stat.st_mode = syscall.S_IFREG | 0644
+	if isDir {
+		node.stat.st_mode = syscall.S_IFDIR | 0744
+	}
+	if !isDir {
+		return
+	}
 
-		hasChildren := bucket.Children != nil && len(*bucket.Children) > 0
+	// Real directories are always given an allocated children array, even when empty
+	childCount := 0
+	if hasChildren {
+		childCount = len(*template.Children)
+	}
+	node.children = allocateNodeList(_Ctype_size_t(childCount))
+	node.chld_count = _Ctype_size_t(childCount)
+	if !hasChildren {
+		return
+	}
 
-		nodeSlice[idx+i].stat.st_mode = syscall.S_IFREG | 0644
-		if bucket.Dir || hasChildren {
-			nodeSlice[idx+i].stat.st_mode = syscall.S_IFDIR | 0744
-		}
-		if !hasChildren {
-			continue
-		}
+	nodeSlice := unsafe.Slice(node.children, childCount)
 
-		nodeSlice[idx+i].children = &nodeSlice[n.count]
-		nodeSlice[idx+i].chld_count = _Ctype_int64_t(len(*bucket.Children))
-		assignChildren(n, *bucket.Children, &nodeSlice[idx+i])
+	for i, child := range *template.Children {
+		nodeSlice[i] = allocateNodePointer()
+		nodeSlice[i].parent = node
+		assignChildren(nodeSlice[i], child)
 	}
 }
 
-func isValidFuse(origFs *_Ctype_struct_Node, fs *_Ctype_struct_Node, path string) error {
-	if toGoStr(fs.orig_name) != toGoStr(origFs.orig_name) {
-		return fmt.Errorf("original name not correct at node %q. Expected=%s, received=%s", path, toGoStr(origFs.orig_name), toGoStr(fs.orig_name))
+// findChildNode walks down node via child names, matching against each node's
+// safe name in turn. It does not rely on search_node/find_child_node so it can
+// be used to independently compute an expected node in tests.
+func findChildNode(node *_Ctype_struct_Node, names ...string) *_Ctype_struct_Node {
+	for _, name := range names {
+		if node == nil || node.children == nil {
+			return nil
+		}
+
+		var next *_Ctype_struct_Node
+		for _, child := range unsafe.Slice(node.children, node.chld_count) {
+			if toGoStr(child.name) == name {
+				next = child
+
+				break
+			}
+		}
+		node = next
 	}
-	if fs.stat.st_size != origFs.stat.st_size {
-		return fmt.Errorf("size not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_size, fs.stat.st_size)
+
+	return node
+}
+
+func isValidFuse(origNode *_Ctype_struct_Node, node, parent *_Ctype_struct_Node, path string) error {
+	if toGoStr(node.orig_name) != toGoStr(origNode.orig_name) {
+		return fmt.Errorf("original name not correct at node %q. Expected=%s, received=%s", path, toGoStr(origNode.orig_name), toGoStr(node.orig_name))
 	}
-	if fs.stat.st_ino != origFs.stat.st_ino {
-		return fmt.Errorf("ino not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_ino, fs.stat.st_ino)
+	if node.stat.st_size != origNode.stat.st_size {
+		return fmt.Errorf("size not correct at node %q. Expected=%d, received=%d", path, origNode.stat.st_size, node.stat.st_size)
 	}
-	if fs.stat.st_mode != origFs.stat.st_mode {
-		return fmt.Errorf("mode not correct at node %q. Expected=%d, received=%d", path, origFs.stat.st_mode, fs.stat.st_mode)
+	if parent == nil && node.stat.st_ino != 1 {
+		return fmt.Errorf("ino not correct at node %q. Expected=1, received=%d", path, node.stat.st_ino)
+	} else if parent != nil && uintptr(node.stat.st_ino) != uintptr(unsafe.Pointer(node)) {
+		return fmt.Errorf("ino not correct at node %q. Expected=%d, received=%d", path, uintptr(unsafe.Pointer(node)), uintptr(node.stat.st_ino))
 	}
-	if origFs.last_modified != fs.last_modified {
-		return fmt.Errorf("timestamp not correct at node %q, Expected=%+v, received=%+v", path, origFs.last_modified, fs.last_modified)
+	if node.stat.st_mode != origNode.stat.st_mode {
+		return fmt.Errorf("mode not correct at node %q. Expected=%d, received=%d", path, origNode.stat.st_mode, node.stat.st_mode)
 	}
-	if origFs.children == nil && fs.children != nil {
+	if origNode.last_modified != node.last_modified {
+		return fmt.Errorf("timestamp not correct at node %q, Expected=%+v, received=%+v", path, origNode.last_modified, node.last_modified)
+	}
+	if origNode.children == nil && node.children != nil {
 		return fmt.Errorf("node %q should not have children", path)
 	}
-	if origFs.children != nil && fs.children == nil {
+	if origNode.children != nil && node.children == nil {
 		return fmt.Errorf("node %q should have children", path)
 	}
-	if fs.children == nil {
-		if origFs.offset != fs.offset {
-			return fmt.Errorf("node %q should have offset %d, received %d", path, origFs.offset, fs.offset)
+	if node.parent != parent {
+		return fmt.Errorf("parent not correct at node %q. Expected=%p, received=%p", path, parent, node.parent)
+	}
+	if node.children == nil {
+		if origNode.offset != node.offset {
+			return fmt.Errorf("node %q should have offset %d, received %d", path, origNode.offset, node.offset)
 		}
 
 		return nil
 	}
 
-	// Names of children of fs1 and fs2
-	keys1 := make([]string, origFs.chld_count)
-	keys2 := make([]string, fs.chld_count)
+	// Names of children of node and origNode
+	keys1 := make([]string, origNode.chld_count)
+	keys2 := make([]string, node.chld_count)
 
-	slice1 := unsafe.Slice(origFs.children, origFs.chld_count)
+	slice1 := unsafe.Slice(origNode.children, origNode.chld_count)
 	for i := range slice1 {
 		keys1[i] = toGoStr(slice1[i].name)
 	}
 
-	slice2 := unsafe.Slice(fs.children, fs.chld_count)
+	slice2 := unsafe.Slice(node.children, node.chld_count)
 	for i := range slice2 {
 		keys2[i] = toGoStr(slice2[i].name)
 	}
@@ -426,7 +459,7 @@ func isValidFuse(origFs *_Ctype_struct_Node, fs *_Ctype_struct_Node, path string
 	}
 
 	for i := range keys1 {
-		if err := isValidFuse(&slice1[i], &slice2[i], path+"/"+keys1[i]); err != nil {
+		if err := isValidFuse(slice1[i], slice2[i], node, path+"/"+keys1[i]); err != nil {
 			return err
 		}
 	}
@@ -454,7 +487,7 @@ func createFuseFiles(node *_Ctype_struct_Node, path string) error {
 
 	children := unsafe.Slice(node.children, node.chld_count)
 	for i := range children {
-		err := createFuseFiles(&children[i], nodePath)
+		err := createFuseFiles(children[i], nodePath)
 		if err != nil {
 			return err
 		}
@@ -479,8 +512,8 @@ func TestSetSignalBridge_And_CheckPanic(t *testing.T) {
 	panic("Muahahahaa")
 }
 
-func TestInitializeFilesystem(t *testing.T) {
-	origFs := getTestFuse(t)
+func TestGenerateFilesystem(t *testing.T) {
+	testRoot := getTestFuse(t)
 
 	origGetRepositories := api.GetRepositories
 	origGetProjectName := api.GetProjectName
@@ -639,24 +672,38 @@ func TestInitializeFilesystem(t *testing.T) {
 		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
 	}
 
-	fi.nodes = &_Ctype_struct_Nodes{}
-	InitialiseFilesystem()
-	if fi.nodes == origFs {
-		t.Fatal("Global nodes should not point to test nodes")
+	GenerateFilesystem()
+	if fi.root.cNode == testRoot {
+		t.Fatal("Global root should not point to test root")
 	}
-	t.Cleanup(func() { freeNodes(fi.nodes); fi.nodes.count = 0 })
-	if origFs.count != fi.nodes.count {
-		t.Fatalf("Node count incorrect. Expected=%v, received=%v", origFs.count, fi.nodes.count)
+	if fi.state.root != nil {
+		t.Fatal("C state root should not be defined")
 	}
-	if err := isValidFuse(origFs.nodes, fi.nodes.nodes, ""); err != nil {
+	t.Cleanup(func() { freeNodes(fi.root.cNode); fi.root.cNode.chld_count = 0 })
+	if err := isValidFuse(testRoot, fi.root.cNode, nil, ""); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
-	expectedHeaders := map[_Ctype_ino_t]header{
-		8:  {fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
-		37: {owner: "sharing-project-2"}, 38: {owner: "sharing-project-1"},
+	expectedHeaders := map[string]header{
+		"/SD-Apply/my-example.com/tiedosto":                           {fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
+		"/SD-Connect/project/shared_bucket/shared-file.txt":           {owner: "sharing-project-2"},
+		"/SD-Connect/project/shared_bucket(58dca8)/shared-file-2.txt": {owner: "sharing-project-1"},
 	}
-	if !reflect.DeepEqual(expectedHeaders, fi.headers) {
-		t.Fatalf("Headers incorrect\nExpected=%v\nReceived=%v", expectedHeaders, fi.headers)
+	for path, expectedHdr := range expectedHeaders {
+		node := searchNode(path)
+		if node == nil {
+			t.Fatalf("Could not find node %s", path)
+		}
+		header, ok := fi.headers[node.stat.st_ino]
+		if !ok {
+			t.Fatalf("No header found for node %s", path)
+		}
+		if header != expectedHdr {
+			t.Errorf("Incorrect header for node %s\nExpected=%v\nReceived=%v", path, expectedHdr, header)
+		}
+		delete(fi.headers, node.stat.st_ino)
+	}
+	if len(fi.headers) > 0 {
+		t.Fatalf("Too many headers, leftover: %+v", fi.headers)
 	}
 }
 

@@ -54,35 +54,17 @@ func toGoStr(str *C.char) string {
 	return C.GoString(str)
 }
 
-func WaitForUpdateSignal(notify chan<- any) {
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGUSR2)
-
-	// 'busy' makes sure that multiple consecutive signals do not cause multiple updates
-	busy := make(chan any, 1)
-	for range s {
-		select {
-		case busy <- nil:
-			go func() {
-				defer func() { <-busy }()
-
-				select {
-				// notify is needed for GUI
-				case notify <- nil:
-				default:
-					UpdateFilesystem()
-				}
-			}()
-		default:
-		}
-	}
+// toCStr coverts C string to Go string
+// This is a separate Go function so it can be used in tests
+func toCStr(str string) *C.char {
+	return C.CString(str)
 }
 
 func searchNode(path string) *C.node_t {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath)) //nolint:nlreturn
 
-	return C.search_node(fi.state.root, cpath) //nolint:nlreturn
+	return C.search_node(fi.root.cNode, cpath) //nolint:nlreturn
 }
 
 // getNodePath returns the path to the given node in addition to
@@ -116,13 +98,34 @@ func GetNodeChildren(path string) []string {
 	return children
 }
 
-func updateParentSizes(node *C.node_t, oldSize C.off_t) {
-	diff := node.stat.st_size - oldSize
-	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
-		prnt.stat.st_size += diff
+// WaitForUpdateSignal updates the filesystem if it receives a SIGUSR2 signal.
+// The function does not update the filesystem again if it receives a signal while
+// an update is already in progress. In the GUI version, the `notify` channel is used
+// to trigger the update process instead of calling UpdateFilesystem() directly.
+func WaitForUpdateSignal(notify chan<- any) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGUSR2)
+
+	busy := make(chan any, 1)
+	for range s {
+		select {
+		case busy <- nil:
+			go func() {
+				defer func() { <-busy }()
+
+				select {
+				// notify is needed for GUI
+				case notify <- nil:
+				default:
+					UpdateFilesystem()
+				}
+			}()
+		default:
+		}
 	}
 }
 
+// rwLockState is used to hold a lock that the fuse operations in C also share
 func rwLockState() func() {
 	runtime.LockOSThread()
 	C.pthread_rwlock_wrlock(&fi.state.lock)
@@ -142,16 +145,17 @@ func UnmountFilesystem() error {
 	return mountpoint.Unmount(fi.mount)
 }
 
-// UpdateFilesystem clears cache and creates a new fileystem that will reflect any changes
-// that have occurred in the repositories. Does not unmount fuse at any point.
+// UpdateFilesystem updates the filesystem to reflect any changes
+// that have occurred the S3 storage. Does not unmount fuse at any point.
 func UpdateFilesystem() {
-	unlockFun := rwLockState()
 	logs.Info("Updating Data Gateway")
-	api.ClearCache()
+
+	unlockFun := rwLockState()
 	GenerateFilesystem()
 	toDelete := maps.Values(fi.forgotten)
 	unlockFun()
 
+	// delete_node() requires that the lock is not being held here
 	for node := range toDelete {
 		ret := C.delete_node(&fi.state, node)
 		path, pathNames := getNodePath(node)
@@ -165,6 +169,8 @@ func UpdateFilesystem() {
 	}
 }
 
+// ForgetNode is called during the forget operation to free the memory of a single node
+//
 //export ForgetNode
 func ForgetNode(ino C.ino_t) {
 	node, ok := fi.forgotten[ino]
@@ -180,6 +186,9 @@ func ForgetNode(ino C.ino_t) {
 	C.free(unsafe.Pointer(node))
 }
 
+// ForgetAllForgotten is called during the destroy operation to make sure
+// that the memory of all nodes in fi.forgotten is freed
+//
 //export ForgetAllForgotten
 func ForgetAllForgotten() {
 	for ino := range fi.forgotten {
@@ -221,7 +230,7 @@ func FilesOpen() bool {
 
 		pids := strings.Fields(string(output))
 		for _, pid := range pids {
-			isOpen, err := checkPID(pid)
+			isOpen, err := checkPID("/proc/" + pid)
 			if err != nil {
 				logs.Errorf("Update halted, could not determine if files are open: %w", err)
 
@@ -258,9 +267,9 @@ func FilesOpen() bool {
 // accessed. However, if the fd points to a directory, it may be that, e.g. nautilus,
 // is going through the files. In this case, if the fdinfo has a non-zero 'pos' value, assume files
 // are being read.
-func checkPID(pid string) (bool, error) {
-	fdDir := "/proc/" + pid + "/fd"
-	fdinfoDir := "/proc/" + pid + "/fdinfo"
+func checkPID(processDir string) (bool, error) {
+	fdDir := processDir + "/fd"
+	fdinfoDir := processDir + "/fdinfo"
 	fdFS := os.DirFS(fdDir)
 
 	entries, err := fs.ReadDir(fdFS, ".")
@@ -330,9 +339,9 @@ func readFDPos(fdinfoPath string) (int64, error) {
 }
 
 // CheckHeaderExistence tries to confirm the existence of a header for object represented by `node`.
-// If the header is not found in the collection of headers retrieved from vault, the header is
+// If the header is not found in the collection of headers retrieved from Vault, the header is
 // still a part of the file in object storage.
-// The object's size is also updated to from encrypted size to decrypted size.
+// The object's size is also updated from encrypted size to decrypted size.
 // Succesful header retrieval returns node offset, failure returns -1.
 //
 //export CheckHeaderExistence
@@ -411,10 +420,16 @@ var calculateDecryptedSize = func(bodySize C.off_t) C.off_t {
 	return bodySize - nBlocks*C.off_t(MacSize)
 }
 
-// DownloadData uses S3 to download a set amount of bytes to the fuse layer. It returns the amount of bytes that were
-// copied to cbuffer, or, if the request failed, a negative integer, which will be interpreted in the C function
-// calling DownloadData(). If no header is found for node (even an empty one), the file is not encrypted
-// and cannot be read.
+func updateParentSizes(node *C.node_t, oldSize C.off_t) {
+	diff := node.stat.st_size - oldSize
+	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
+		prnt.stat.st_size += diff
+	}
+}
+
+// DownloadData uses S3 to download a maximum of `size` bytes to the fuse layer. It returns a C buffer
+// containing the requested data. The actual length of the buffer must be conveyed to C with `nBytes`.
+// If no header is found for node (even an empty one), the file is not encrypted and, therefore, cannot be read.
 //
 //export DownloadData
 func DownloadData(node *C.node_t, size C.size_t, offset C.off_t, errNo *C.int, nBytes *C.size_t) *C.char {
