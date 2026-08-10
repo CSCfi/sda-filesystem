@@ -12,7 +12,6 @@ import "C"
 import (
 	"bufio"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -33,9 +32,6 @@ import (
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/smithy-go"
 )
 
 // Crypt4GH constants
@@ -127,15 +123,6 @@ func updateParentSizes(node *C.node_t, oldSize C.off_t) {
 	}
 }
 
-func updateParentTimestamps(node *C.node_t) {
-	timestamp := node.last_modified
-	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
-		if prnt.last_modified.tv_sec < timestamp.tv_sec {
-			prnt.last_modified.tv_sec = timestamp.tv_sec
-		}
-	}
-}
-
 func rwLockState() func() {
 	runtime.LockOSThread()
 	C.pthread_rwlock_wrlock(&fi.state.lock)
@@ -146,7 +133,7 @@ func rwLockState() func() {
 	}
 }
 
-// UnmountFilesystem unmounts fuse, which automatically frees memory in C
+// UnmountFilesystem unmounts fuse, causing the memory in C to be freed
 func UnmountFilesystem() error {
 	unlockFun := rwLockState()
 	api.DeleteWhitelistedKeys()
@@ -167,9 +154,13 @@ func UpdateFilesystem() {
 
 	for node := range toDelete {
 		ret := C.delete_node(&fi.state, node)
+		path, pathNames := getNodePath(node)
 		if ret != 0 {
-			path, _ := getNodePath(node)
 			logs.Warningf("kernel was not able to delete node %s: %v", path, syscall.Errno(-ret))
+		}
+		rep := api.Repo(pathNames[1])
+		if node.children == nil && rep == api.SDConnect {
+			api.DeleteFileFromCache(api.SDConnect, pathNames, int64(node.stat.st_size))
 		}
 	}
 }
@@ -336,101 +327,6 @@ func readFDPos(fdinfoPath string) (int64, error) {
 	}
 
 	return 0, scanner.Err()
-}
-
-// ClearPath is designed for situations where a file is edited in the repository and the user wants to read this new data
-// without updating the entire filesystem. Function clears cache for `path` and updates all its file sizes.
-func ClearPath(path string) error {
-	logs.Infof("Clearing path %s", path)
-	defer rwLockState()()
-
-	node := searchNode(path)
-	if node == nil {
-		return fmt.Errorf("path %s is invalid", path)
-	}
-
-	_, pathNames := getNodePath(node)
-	if pathNames[1] != api.SDConnect.ForPath() {
-		return fmt.Errorf("clearing cache only enabled for %s", api.SDConnect)
-	}
-	if len(pathNames) < 4 {
-		return fmt.Errorf("path needs to include at least a bucket")
-	}
-
-	rep := api.SDConnect
-	bucket := pathNames[3]
-	prefix := strings.Join(pathNames[4:], "/")
-	if node.children != nil && prefix != "" {
-		prefix += "/"
-	}
-
-	// Get the objects that fulfill the user's request
-	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), "", prefix)
-	if err != nil {
-		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
-	}
-	// Need to check if objects are segmented
-	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)
-	if err != nil {
-		var noBucket *types.NoSuchBucket
-		var ae smithy.APIError
-		if errors.As(err, &noBucket) || (errors.As(err, &ae) && ae.ErrorCode() == "InvalidBucketName") {
-			logs.Debugf("Bucket %s does not have matching segments bucket", bucket)
-		} else {
-			logs.Warningf("File sizes may not be correct: %s", err.Error())
-		}
-	}
-
-	objMap := make(map[string]api.Metadata, len(objects))
-	for i := range objects {
-		if objects[i].Size == 0 {
-			objects[i].Size = segmentSizes[objects[i].Name]
-		}
-		objMap[bucket+"/"+objects[i].Name] = objects[i]
-	}
-
-	oldSize := node.stat.st_size
-	clearNode(node, pathNames[3:], objMap)
-	updateParentSizes(node, oldSize)
-	updateParentTimestamps(node)
-
-	logs.Info("Path cleared")
-
-	return nil
-}
-
-func clearNode(node *C.node_t, pathNodes []string, meta map[string]api.Metadata) (C.off_t, C.time_t) {
-	if node.children == nil {
-		api.DeleteFileFromCache(api.SDConnect, pathNodes, int64(node.stat.st_size))
-		delete(fi.headers, node.stat.st_ino)
-		path := strings.Join(pathNodes, "/")
-		obj, ok := meta[path]
-		if ok {
-			if obj.Owner != "" {
-				fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
-			}
-			node.offset = -1
-			node.stat.st_size = C.off_t(obj.Size)
-			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
-		} else {
-			node.stat.st_size = 0
-			node.offset = -2
-		}
-	} else {
-		node.stat.st_size = 0
-		node.last_modified.tv_sec = 0
-
-		children := unsafe.Slice(node.children, node.chld_count)
-		for i := range children {
-			size, modified := clearNode(children[i], append(pathNodes, C.GoString(children[i].orig_name)), meta)
-			node.stat.st_size += size
-			if modified > node.last_modified.tv_sec {
-				node.last_modified.tv_sec = modified
-			}
-		}
-	}
-
-	return node.stat.st_size, node.last_modified.tv_sec
 }
 
 // CheckHeaderExistence tries to confirm the existence of a header for object represented by `node`.

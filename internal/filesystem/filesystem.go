@@ -288,7 +288,8 @@ func goNodesToC(node *goNode, name string) {
 
 	// Prune old nodes that no longer exist in storage
 	for name, child := range node.children {
-		if child.rootPtr != fi.root {
+		// New nodes have nil, old nodes that are kept have fi.root
+		if child.rootPtr != nil && child.rootPtr != fi.root {
 			collectForgotten(child.cNode)
 			delete(node.children, name)
 		}
@@ -341,9 +342,13 @@ func goNodesToC(node *goNode, name string) {
 
 	if oldLastModified != 0 && oldLastModified != cNode.last_modified.tv_sec {
 		ret := C.invalidate_node(&fi.state, cNode)
+		path, pathNames := getNodePath(cNode)
 		if ret != 0 {
-			path, _ := getNodePath(cNode)
 			logs.Warningf("kernel was not able to invalidate node %s: %v", path, syscall.Errno(-ret))
+		}
+		rep := api.Repo(pathNames[1])
+		if node.children == nil && rep == api.SDConnect {
+			api.DeleteFileFromCache(api.SDConnect, pathNames, int64(cNode.stat.st_size))
 		}
 	}
 
@@ -481,7 +486,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 		// We do not want to update size if the timestamp has not changed
 		// since the size that comes from S3 is the encrypted size and
 		// possibleMatch's size might have changed to be the decrypted size
-		// depending on whether CheckHeaderExistence has been called
+		// depending on whether CheckHeaderExistence has been called for the node
 		if possibleMatch.meta.LastModified != meta.LastModified {
 			possibleMatch.meta = meta
 		}
@@ -496,8 +501,8 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 		twin := possibleMatch
 		// Create a unique suffix for file/folder and change name of node (whichever is possibly a file)
 		// Do not change other node if it is from a previous iteration
-		changeOtherNode := isDir && twin.children == nil && twin.rootPtr == fi.root
-		changeDir := isDir && twin.children != nil
+		changeOtherNode := isDir && twin.children == nil && twin.rootPtr == nil
+		changeDir := isDir && !changeOtherNode
 
 		if changeOtherNode {
 			origName = twin.meta.Name
@@ -514,7 +519,6 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 
 		if changeOtherNode {
 			siblings[newName] = twin
-			siblings[newName].rootPtr = fi.root
 		} else {
 			name = newName
 		}
@@ -535,7 +539,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 }
 
 func newGoNode(meta api.Metadata, isDir bool) *goNode {
-	node := goNode{meta, nil, nil, fi.root}
+	node := goNode{meta, nil, nil, nil}
 	if isDir {
 		node.children = make(map[string]*goNode)
 	}
