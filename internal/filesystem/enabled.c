@@ -375,9 +375,7 @@ static const struct fuse_lowlevel_ops operations = {
 
 int mount_filesystem(fs_state_t *state, const char *mount, int debug) {
     pthread_rwlock_init(&state->lock, NULL);
-
     struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
-    char *options = NULL;
 
 #if defined(__APPLE__)
     const char *basename = strrchr(mount, '/');
@@ -386,13 +384,19 @@ int mount_filesystem(fs_state_t *state, const char *mount, int debug) {
     else
         basename++; // skip leading slash
 
-    if (asprintf(&options, "defer_permissions,noapplexattr,noappledouble,iosize=%d,volname=%s", MAX_READ, basename) == -1) {
-        err(EXIT_FAILURE, "ERROR: Failed to expand options");
+    int len = snprintf(NULL, 0, "defer_permissions,noapplexattr,noappledouble,iosize=%d,volname=%s", MAX_READ, basename);
+    char *options = malloc(len + 1);
+    if (options == NULL) {
+        err(EXIT_FAILURE, "ERROR: Failed to allocate memory for options");
     }
+    snprintf(options, len + 1, "defer_permissions,noapplexattr,noappledouble,iosize=%d,volname=%s", MAX_READ, basename);
 #elif defined(__linux__)
-    if (asprintf(&options, "max_read=%d", MAX_READ) == -1) {
-        err(EXIT_FAILURE, "ERROR: Failed to expand options");
+    int len = snprintf(NULL, 0, "max_read=%d", MAX_READ);
+    char *options = malloc(len + 1);
+    if (options == NULL) {
+        err(EXIT_FAILURE, "ERROR: Failed to allocate memory for options");
     }
+    snprintf(options, len + 1, "max_read=%d", MAX_READ);
 #endif
 
     int failure = fuse_opt_add_arg(&args, "data-gateway") ||
