@@ -1,5 +1,4 @@
 stages:
-  - deps
   - lint
   - test
   - audit
@@ -8,8 +7,8 @@ stages:
   - release
 
 variables:
-  DEV_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-common-ci:2026.7.2
-  BUILDER_IMAGE: $ARTIFACTORY_SERVER/sds/sdd-ubuntu-golang-builder-ci:2026.7.2
+  DEV_IMAGE: ${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.0
+  BUILDER_IMAGE: ${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.0
   PNPM_CONFIG_STORE_DIR: .pnpm-store
 
 include:
@@ -21,49 +20,23 @@ include:
     file: 'templates/renovate-config-validator.gitlab-ci.yml'
 
 default:
-  image: $DEV_IMAGE
-  tags:
-    - docker-exec
+  image: ${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.0
   retry: 2
   interruptible: true
 
-install-deps:
-  stage: deps
-  rules:
-    - if: $CI_COMMIT_TAG
-      interruptible: false
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
-  resource_group: setup
-  before_script:
-    - echo "registry=${ARTIFACTORY_NPM_REGISTRY}" > .npmrc
-    - echo "@jsr:registry=${ARTIFACTORY_NPM_REGISTRY}" >> .npmrc
-    - echo "${ARTIFACTORY_NPM_REGISTRY#https:}:_authToken=${ARTIFACTORY_NPM_TOKEN}" >> .npmrc
-    - pnpm config list
-  script:
-    - pnpm install --dir frontend
-    - pnpm run --dir frontend build
-    - go mod tidy && go mod vendor
-  cache:
-    - &global_pnpm_cache
-      key:
-        files:
-          - frontend/pnpm-lock.yaml
-      paths:
-        - frontend/.pnpm-store
-    - &global_go_cache
-      key: $CI_COMMIT_REF_SLUG
-      paths:
-        - vendor/
-        - frontend/dist/
+
+########
+# LINT #
+########
 
 backend-lint:
   stage: lint
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  cache:
-    <<: *global_go_cache
-    policy: pull
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  before_script:
+    - mkdir frontend/dist && touch frontend/dist/empty.txt
   script:
     - golangci-lint run -v ./... --allow-parallel-runners --timeout 10m --output.code-climate.path stdout | tee gl-code-quality-report.json
     - go fmt ./...
@@ -76,24 +49,22 @@ backend-lint:
 
 frontend-lint:
   stage: lint
-  needs:
-    - backend-lint
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  cache:
-    <<: *global_pnpm_cache
-    policy: pull
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
   script:
     - pnpm run --dir frontend lint
 
-# For some reason, this job can cause other jobs to not find cache. It would seem running this
-# job after other lint stage jobs fixes this.
 renovate-config-validator:
   stage: lint
-  needs:
-    - frontend-lint
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+
+########
+# TEST #
+########
 
 test:
   image:
@@ -102,12 +73,12 @@ test:
       user: 1000:1000
   stage: test
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
-  cache:
-    <<: *global_go_cache
-    policy: pull
+  tags:
+    - sds-test
   before_script:
+    - mkdir frontend/dist && touch frontend/dist/empty.txt
     - go install gotest.tools/gotestsum@v1.13.0
     - go install github.com/boumenot/gocover-cobertura@v1.4.0
   script:
@@ -127,35 +98,41 @@ test:
         coverage_format: cobertura
         path: coverage.xml
 
-jfrog-go-audit:
+
+#########
+# AUDIT #
+#########
+
+jfrog-audit:
   stage: audit
   image: $BUILDER_IMAGE
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  cache:
-    - <<: *global_go_cache
-      policy: pull
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME != "renovate-bot"'
+      variables:
+        WATCH: sds-watch
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME == "renovate-bot"'
+      variables:
+        WATCH: sds-renovate
   before_script:
+    - pnpm config list
+    - pnpm install --dir frontend
+    - pnpm run --dir frontend build
+    - go mod tidy && go mod vendor
     - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
-    - jf audit --go --licenses --extended-table --min-severity=Medium
+    - jf audit "--$REGISTRY_TYPE" --licenses --extended-table --watches=$WATCH
+  parallel:
+    matrix:
+      - REGISTRY_TYPE: ["go", "pnpm"]
 
-jfrog-pnpm-audit:
-  stage: audit
-  image: $BUILDER_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  cache:
-    - <<: *global_pnpm_cache
-      policy: pull
-  before_script:
-    - jf config import "${JF_CONFIG_READ_ONLY}"
-  script:
-    - jf audit --pnpm --licenses --extended-table --min-severity=Medium
 
-build-artifacts:
+#########
+# BUILD #
+#########
+
+.build-artifacts:
   stage: build
-  image: $BUILDER_IMAGE
+  image: ${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.0
   rules :
     - if: $CI_COMMIT_TAG
       interruptible: false
@@ -164,50 +141,65 @@ build-artifacts:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       variables:
         UPLOAD_TAG: 0000.0.0
+  tags:
+    - sds-build
   variables:
     SECURE_FILES_DOWNLOAD_PATH: './certs'
-  cache:
-    - <<: *global_pnpm_cache
-      policy: pull
-    - <<: *global_go_cache
-      policy: pull
-  before_script:
-    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
-    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
-    - wails doctor
-    - jf config import "${JF_CONFIG_READ_ONLY}"
-  script:
-    - |
-      go build -ldflags '-w -s' -o data-gateway-cli-amd64-${UPLOAD_TAG} ./cmd/cli
-      jf s --licenses data-gateway-cli-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
-    - |
-      go build -ldflags '-w -s -X sda-filesystem/internal/api.Port=8283' -o data-gateway-cli-22-amd64-${UPLOAD_TAG} ./cmd/cli
-      jf s --licenses data-gateway-cli-22-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
-    - |
-      cd cmd/gui
-      wails build -clean -upx -trimpath -s -tags webkit2_41 -ldflags "-X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
-      cd ../..
-      mv build/bin/data-gateway data-gateway-gui-amd64-${UPLOAD_TAG}
-      jf s --licenses data-gateway-gui-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
-    - |
-      cd cmd/gui
-      wails build -clean -upx -trimpath -s -ldflags "-X sda-filesystem/internal/api.Port=8283 -X sda-filesystem/internal/api.Version=${UPLOAD_TAG}"
-      cd ../..
-      mv build/bin/data-gateway data-gateway-gui-22-amd64-${UPLOAD_TAG}
-      jf s --licenses data-gateway-gui-22-amd64-${UPLOAD_TAG} --repo-path ${ARTIFACTORY_BINARY_REPO}
   artifacts:
     when: on_success
     expire_in: 1 hour
     paths:
       - data-gateway-*
 
+build-cli-artifacts:
+  extends: .build-artifacts
+  before_script:
+    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
+    - jf config import "${JF_CONFIG_READ_ONLY}"
+  script:
+    - go build -ldflags "-w -s ${EXTRA_LDFLAGS}" -o "data-gateway-${BINARY_TYPE}-${UPLOAD_TAG}" ./cmd/cli
+  parallel:
+    matrix:
+      - BINARY_TYPE: ["cli-amd64", "cli-22-amd64"]
+        EXTRA_LDFLAGS: ["", "-X sda-filesystem/internal/api.Port=8283"]
+
+build-gui-artifacts:
+  extends: .build-artifacts
+  before_script:
+    - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
+    - pnpm config list
+    - pnpm install --dir frontend
+    - pnpm run --dir frontend build
+    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+    - wails doctor
+    - jf config import "${JF_CONFIG_READ_ONLY}"
+  script:
+    - cd cmd/gui
+    - >
+      wails build
+      -clean -upx -trimpath -s ${EXTRA_WAILS_ARGS}
+      -ldflags "-X sda-filesystem/internal/api.Version=${UPLOAD_TAG} ${EXTRA_LDFLAGS}"
+    - cd ../..
+    - mv build/bin/data-gateway "data-gateway-${BINARY_TYPE}-${UPLOAD_TAG}"
+  parallel:
+    matrix:
+      - BINARY_TYPE: ["gui-amd64", "gui-22-amd64"]
+        EXTRA_WAILS_ARGS : ["", "-tags webkit2_41"]
+        EXTRA_LDFLAGS: ["", "-X sda-filesystem/internal/api.Port=8283"]
+
+
+########
+# PUSH #
+########
+
 push-dev:
   stage: push
-  image: $BUILDER_IMAGE
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
+  tags:
+    - sds-upload
   before_script:
     - jf config import "${JF_CONFIG}"
   script:
@@ -216,30 +208,30 @@ push-dev:
 
 push-artifacts:
   stage: push
-  image: $BUILDER_IMAGE
   rules:
     - if: $CI_COMMIT_TAG
       interruptible: false
+  tags:
+    - sds-upload
   before_script:
     - jf config import "${JF_CONFIG}"
-  script:
-    - |
-      jf rt u data-gateway-cli-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG}
-      jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
-    - |
-      jf rt u data-gateway-cli-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG}
-      jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-cli-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
-    - |
-      jf rt u data-gateway-gui-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG}
-      jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
-    - |
-      jf rt u data-gateway-gui-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG}
-      jf rt cp $ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-gui-22-amd64-${CI_COMMIT_TAG} $ARTIFACTORY_BINARY_REPO_DESKTOP/
+  script: >
+      jf rt u "data-gateway-${BINARY_TYPE}-${CI_COMMIT_TAG}"
+      "${ARTIFACTORY_BINARY_REPO/$CI_PROJECT_NAME/data-gateway-${BINARY_TYPE}-${CI_COMMIT_TAG}
+
+      jf rt cp "${ARTIFACTORY_BINARY_REPO}/${CI_PROJECT_NAME}/data-gateway-${BINARY_TYPE}-${CI_COMMIT_TAG}"
+      "${ARTIFACTORY_BINARY_REPO_DESKTOP}/"
+  parallel:
+    matrix:
+      - BINARY_TYPE: ["cli-amd64", "cli-22-amd64", "gui-amd64", "gui-22-amd64"]
+
+
+###########
+# RELEASE #
+###########
 
 release:
   extends: .automated-release
-  interruptible: false
-
   release:
     description: $(cat release_changes.md)
     assets:
