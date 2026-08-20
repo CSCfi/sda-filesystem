@@ -2,7 +2,7 @@ module sda-filesystem
 
 go 1.25.7
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.42.1
@@ -15,7 +15,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/neicnordic/crypt4gh v1.15.0
 	github.com/sirupsen/logrus v1.9.4
-	github.com/wailsapp/wails/v2 v2.13.0
+	github.com/wailsapp/wails/v2 v2.14.0
 	github.com/winfsp/cgofuse v1.6.0
 	golang.org/x/crypto v0.54.0
 	golang.org/x/sync v0.22.0
