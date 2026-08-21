@@ -14,7 +14,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/neicnordic/crypt4gh v1.15.0
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.0
 	github.com/wailsapp/wails/v2 v2.14.0
 	github.com/winfsp/cgofuse v1.6.0
 	golang.org/x/crypto v0.54.0
