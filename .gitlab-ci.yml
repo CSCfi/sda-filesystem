@@ -240,8 +240,12 @@ push-dev:
   before_script:
     - jf config import "${JF_CONFIG}"
   script:
-    - jf rt u data-gateway-cli-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-cli-amd64-0000.0.0
-    - jf rt u data-gateway-gui-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-gui-amd64-0000.0.0
+    - >
+      jf rt u data-gateway-${BINARY_TYPE}-amd64-0000.0.0
+      $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-${BINARY_TYPE}-amd64-0000.0.0
+  parallel:
+    matrix:
+      - BINARY_TYPE: ["cli", "gui"]
 
 push-artifacts:
   stage: push

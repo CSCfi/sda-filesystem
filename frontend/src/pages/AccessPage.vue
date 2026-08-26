@@ -145,7 +145,8 @@ function update() {
       <p>
         By clicking <b>Continue</b>, Data Gateway creates a <b>Projects</b> folder by default, where files are accessible in read-only mode.
 
-        If the field below is empty, choose an empty folder (no files inside) by clicking <b>Change</b>.</p>
+        If the field below is empty, choose an empty folder (no files inside) by clicking <b>Change</b>.
+      </p>
       <c-row gap="20">
         <c-text-field :value="mountpoint" hide-details readonly />
         <c-button outlined @click="changeMountPoint">
