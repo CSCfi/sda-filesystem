@@ -1,0 +1,7 @@
+[MESSAGES CONTROL]
+# duplicate-code (R0801) is disabled: the dev-tools/containers/* scripts are
+# each built into their own, independently deployed Docker image with no
+# shared package between them, so small overlapping boilerplate (auth
+# requests, header uploads, timing/report printing) is expected rather than
+# a sign that code should be merged.
+disable=duplicate-code,line-too-long

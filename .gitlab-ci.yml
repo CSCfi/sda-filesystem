@@ -52,6 +52,33 @@ frontend-lint:
   script:
     - pnpm run --dir frontend lint
 
+pylint:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  script:
+    - pylint **/*.py
+
+black:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  script:
+    - black --line-length=100 --check --verbose -- .
+
+shellcheck:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  script:
+    - git ls-files -z -- '*.sh' | xargs -0 -r shellcheck
+
 renovate-config-validator:
   stage: lint
   rules:
