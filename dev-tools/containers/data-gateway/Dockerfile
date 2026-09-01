@@ -1,5 +1,5 @@
 ARG ARTIFACTORY_SERVER=
-FROM ${ARTIFACTORY_SERVER}ubuntu:24.04 AS builder
+FROM ${ARTIFACTORY_SERVER}ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS builder
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -22,7 +22,7 @@ RUN go mod tidy
 RUN go build -o /go/bin/gateway ./cmd/cli
 
 
-FROM ${ARTIFACTORY_SERVER}ubuntu:24.04
+FROM ${ARTIFACTORY_SERVER}ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 RUN apt-get update && apt-get install -y \
     build-essential \

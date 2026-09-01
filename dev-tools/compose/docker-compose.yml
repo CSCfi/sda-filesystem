@@ -1,6 +1,6 @@
 services:
   keystone-swift:
-    image: ghcr.io/cscfi/docker-keystone-swift:latest
+    image: ghcr.io/cscfi/docker-keystone-swift:latest@sha256:e8b1ec21120ab9adc6ac6a2b98785fd273676439a8633fe898e37f2aea7e0712
     container_name: keystone-swift
     env_file:
       - .env.keystone
@@ -41,7 +41,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.5.3
+    image: ${ARTIFACTORY_SERVER}/docker:29.5.3@sha256:7278248384185bcbb54c7a76b2f0a7d354c4aac920605cc1ab48968d961052fb
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -56,7 +56,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.4
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.4@sha256:4e33b126a59c0c333b76fb4e894722462659a6bec7c48c9ee8cea56fccfd2569
     container_name: vault
     env_file:
       - .env.keystone
@@ -87,7 +87,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.4
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:1.21.4@sha256:4e33b126a59c0c333b76fb4e894722462659a6bec7c48c9ee8cea56fccfd2569
     container_name: vault-setup
     entrypoint: /vault/helpers/setup.sh
     env_file:
@@ -164,7 +164,7 @@ services:
     ports:
       - 8082:8082
   krakend-db:
-    image: ${ARTIFACTORY_SERVER}/postgres:18.4-alpine3.23
+    image: ${ARTIFACTORY_SERVER}/postgres:18.4-alpine3.23@sha256:996d0920e4ff9df1fc19dacb904492f3c1ec0ec1cc338f0ad7123be7731c5f5e
     container_name: krakend-db
     env_file:
       - .env.krakend
@@ -259,7 +259,7 @@ services:
       - 3310:3310
 
   terminal-proxy:
-    image: ${ARTIFACTORY_SERVER}/nginx:1.31
+    image: ${ARTIFACTORY_SERVER}/nginx:1.31@sha256:b34848eff6db786b6b1282d3a9c3fd0b5563dfb6d261df4923378b419e0d24f0
     container_name: terminal-proxy
     environment:
       KRAKEND_ADDR: "${KRAKEND_ADDR}"
