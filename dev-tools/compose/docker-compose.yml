@@ -41,7 +41,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.5.3@sha256:7278248384185bcbb54c7a76b2f0a7d354c4aac920605cc1ab48968d961052fb
+    image: ${ARTIFACTORY_SERVER}/docker:29.8.0@sha256:5efed980cba3fc126cf54e21a5a6ff8849d05b6e0623d6e7612f48e9cd6cd17e
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -164,7 +164,7 @@ services:
     ports:
       - 8082:8082
   krakend-db:
-    image: ${ARTIFACTORY_SERVER}/postgres:18.4-alpine3.23@sha256:996d0920e4ff9df1fc19dacb904492f3c1ec0ec1cc338f0ad7123be7731c5f5e
+    image: ${ARTIFACTORY_SERVER}/postgres:18.6-alpine3.23@sha256:697c180dbf244d3ce4a8f4cbc0156cde840af055c1bf8b76aebe422a4822086f
     container_name: krakend-db
     env_file:
       - .env.krakend
