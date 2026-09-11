@@ -3,13 +3,9 @@ stages:
   - test
   - audit
   - build
+  - scan
   - push
   - release
-
-variables:
-  DEV_IMAGE: ${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.0
-  BUILDER_IMAGE: ${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.0
-  PNPM_CONFIG_STORE_DIR: .pnpm-store
 
 include:
   - project: 'sds-dev/releases'
@@ -68,7 +64,7 @@ renovate-config-validator:
 
 test:
   image:
-    name: $DEV_IMAGE
+    name: ${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.0
     docker:
       user: 1000:1000
   stage: test
@@ -104,9 +100,9 @@ test:
 # AUDIT #
 #########
 
-jfrog-audit:
+.jfrog-audit:
   stage: audit
-  image: $BUILDER_IMAGE
+  image: ${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.0
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME != "renovate-bot"'
       variables:
@@ -114,17 +110,26 @@ jfrog-audit:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME == "renovate-bot"'
       variables:
         WATCH: sds-renovate
+  script:
+    - jf audit "--$REGISTRY_TYPE" --extended-table --watches=$WATCH
+
+jfrog-go-audit:
+  extends: .jfrog-audit
+  variables:
+    REGISTRY_TYPE: go
+  before_script:
+    - go mod tidy && go mod vendor
+    - jf config import "${JF_CONFIG_READ_ONLY}"
+
+jfrog-pnpm-audit:
+  extends: .jfrog-audit
+  variables:
+    REGISTRY_TYPE: pnpm
   before_script:
     - pnpm config list
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
-    - go mod tidy && go mod vendor
     - jf config import "${JF_CONFIG_READ_ONLY}"
-  script:
-    - jf audit "--$REGISTRY_TYPE" --licenses --extended-table --watches=$WATCH
-  parallel:
-    matrix:
-      - REGISTRY_TYPE: ["go", "pnpm"]
 
 
 #########
@@ -138,10 +143,10 @@ jfrog-audit:
     - if: $CI_COMMIT_TAG
       interruptible: false
       variables:
-        UPLOAD_TAG: $CI_COMMIT_TAG
+        VERSION: $CI_COMMIT_TAG
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       variables:
-        UPLOAD_TAG: 0000.0.0
+        VERSION: 0000.0.0
   tags:
     - sds-build
   variables:
@@ -158,7 +163,7 @@ build-cli-artifacts:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
-    - go build -ldflags "-w -s ${EXTRA_LDFLAGS}" -o "data-gateway-${BINARY_TYPE}-${UPLOAD_TAG}" ./cmd/cli
+    - go build -ldflags "-w -s ${EXTRA_LDFLAGS}" -o "data-gateway-${BINARY_TYPE}-${VERSION}" ./cmd/cli
   parallel:
     matrix:
       - BINARY_TYPE: ["cli-amd64", "cli-22-amd64"]
@@ -179,14 +184,40 @@ build-gui-artifacts:
     - >
       wails build
       -clean -upx -trimpath -s ${EXTRA_WAILS_ARGS}
-      -ldflags "-X sda-filesystem/internal/api.Version=${UPLOAD_TAG} ${EXTRA_LDFLAGS}"
+      -ldflags "-X sda-filesystem/internal/api.Version=${VERSION} ${EXTRA_LDFLAGS}"
     - cd ../..
-    - mv build/bin/data-gateway "data-gateway-${BINARY_TYPE}-${UPLOAD_TAG}"
+    - mv build/bin/data-gateway "data-gateway-${BINARY_TYPE}-${VERSION}"
   parallel:
     matrix:
       - BINARY_TYPE: ["gui-amd64", "gui-22-amd64"]
         EXTRA_WAILS_ARGS : ["", "-tags webkit2_41"]
         EXTRA_LDFLAGS: ["", "-X sda-filesystem/internal/api.Port=8283"]
+
+
+########
+# SCAN #
+########
+
+scan-artifacts:
+  stage: scan
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME != "renovate-bot"'
+      variables:
+        WATCH: sds-watch
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME == "renovate-bot"'
+      variables:
+        WATCH: sds-renovate
+  tags:
+    - sds-test
+  variables:
+    VERSION: 0000.0.0
+  before_script:
+    - jf config import "${JF_CONFIG_READ_ONLY}"
+  script:
+    - jf scan --extended-table --watches=$WATCH "data-gateway-${BINARY_TYPE}-${VERSION}"
+  parallel:
+    matrix:
+      - BINARY_TYPE: ["cli-amd64", "cli-22-amd64", "gui-amd64", "gui-22-amd64"]
 
 
 ########
