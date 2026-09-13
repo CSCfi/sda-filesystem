@@ -24,7 +24,11 @@ services:
       context: ../../
       dockerfile: dev-tools/containers/mockauth/Dockerfile
       args:
-        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
+        ARTIFACTORY_SERVER_GHCR: "${ARTIFACTORY_SERVER_GHCR}/"
+        UV_DEFAULT_INDEX: "artifactory=${ARTIFACTORY_PYPI_REGISTRY}/simple"
+      secrets:
+        - uv_password
+        - uv_username
     container_name: mockauth
     env_file:
       - .env.keystone
@@ -295,3 +299,9 @@ services:
 volumes:
   postgres-init:
   static-config:
+
+secrets:
+  uv_username:
+    environment: ARTIFACTORY_READ_ONLY_USER
+  uv_password:
+    environment: ARTIFACTORY_PYPI_TOKEN

@@ -76,6 +76,7 @@ setup: ## Install dependencies and create .env file with vault secrets
 	@$(MAKE) get_env
 	@export $$(grep ^ARTIFACTORY dev-tools/compose/.env | xargs); \
 	docker login $${ARTIFACTORY_SERVER}; \
+	docker login $${ARTIFACTORY_SERVER_GHCR}; \
 	pnpm login --registry="$${ARTIFACTORY_NPM_REGISTRY}"; \
 	echo "registry=$${ARTIFACTORY_NPM_REGISTRY}" > .npmrc; \
 	echo "@jsr:registry=$${ARTIFACTORY_NPM_REGISTRY}" >> .npmrc
@@ -147,9 +148,13 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,VAULT_ROLE,krakend/vault,role) \
 	$(call write_secret,VAULT_SECRET,krakend/vault,secret) \
 	$(call write_secret,ARTIFACTORY_SERVER,internal-urls,artifactory-docker) \
+	$(call write_secret,ARTIFACTORY_SERVER_GHCR,internal-urls,artifactory-ghcr) \
 	$(call write_secret,ARTIFACTORY_URL,internal-urls,artifactory) \
 	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
 	$(call write_secret,ARTIFACTORY_NPM_REGISTRY,artifactory,npm-registry) \
+	$(call write_secret,ARTIFACTORY_PYPI_REGISTRY,artifactory,pypi-registry) \
+	$(call write_secret,ARTIFACTORY_PYPI_TOKEN,artifactory,pypi-token) \
+	$(call write_secret,ARTIFACTORY_READ_ONLY_USER,robots/artifactory-read-only,username) \
 	$(call write_secret,AAI_BASE_URL,internal-urls,test-aai) \
 	$(call write_secret,S3_HOST,internal-urls,test-allas) \
 	$(call write_secret,FINDATA_S3_HOST,krakend/findata,host) \
