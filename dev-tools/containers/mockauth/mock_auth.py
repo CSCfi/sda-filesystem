@@ -65,9 +65,7 @@ def get_pouta_token() -> str:
     result = resp.json()
 
     if "error" in result:
-        raise RuntimeError(
-            f"Keystone auth failed: {result['error']['message']}"
-        )
+        raise RuntimeError(f"Keystone auth failed: {result['error']['message']}")
 
     return resp.headers["X-Subject-Token"]
 

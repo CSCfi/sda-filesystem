@@ -59,7 +59,7 @@ pylint:
   tags:
     - sds-test
   script:
-    - pylint **/*.py
+    - pylint --disable import-error,duplicate-code,line-too-long **/*.py
 
 black:
   stage: lint

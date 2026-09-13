@@ -112,7 +112,9 @@ def _upload_dataset_files(ctx: UploadContext, conn, dataset_id, ds: dict, file_n
         )
         object_path = f"{ctx.project}/{ctx.container}/{archive_path}"
         send_header_to_vault(ctx.vault, object_path, ctx.timeout, b64_encoded_header)
-        upload_object(ctx.swift, ctx.container, build_path(archive_path), encrypted_data, archive_path)
+        upload_object(
+            ctx.swift, ctx.container, build_path(archive_path), encrypted_data, archive_path
+        )
 
         record = FileRecord(archive_path, submission_path, file_no, len(encrypted_data))
         if not _insert_file(conn, dataset_id, record):
@@ -122,7 +124,9 @@ def _upload_dataset_files(ctx: UploadContext, conn, dataset_id, ds: dict, file_n
     return file_no
 
 
-def run(ctx: UploadContext, db_string: str, n_datasets_for_user: int, n_datasets: int, n_objects: int):
+def run(
+    ctx: UploadContext, db_string: str, n_datasets_for_user: int, n_datasets: int, n_objects: int
+):
     """Generate lorem-ipsum datasets, upload them to swift and record them in the SDA database."""
     data = create_from_lorem(n_datasets, n_objects, True)
 

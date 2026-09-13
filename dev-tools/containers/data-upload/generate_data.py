@@ -251,7 +251,9 @@ def register_visa(target: str, name: str, timeout: float) -> None:
             print("Failed to send dataset to mockauth: " + response.text)
 
 
-def send_header_to_vault(vault: VaultAccess, object_path: str, timeout: float, b64_encoded_header: str) -> None:
+def send_header_to_vault(
+    vault: VaultAccess, object_path: str, timeout: float, b64_encoded_header: str
+) -> None:
     """Send an encrypted object's Crypt4GH header to Vault.
 
     `object_path` is the "project/container/object_name" the header is stored under.
