@@ -6,3 +6,12 @@ overrides:
 
 allowBuilds:
   esbuild: true
+
+registries:
+  https://artifactory.ci.csc.fi/artifactory/api/npm/sds-npm/:
+    scopes: ["@"]
+    prefix: npmjs
+  https://artifactory.ci.csc.fi/artifactory/api/npm/sds-npm-jsr-remote/:
+    scopes: ["@jsr"]
+  https://artifactory.ci.csc.fi/artifactory/api/npm/sds-npm-github-remote/:
+    prefix: gh
