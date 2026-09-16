@@ -16,7 +16,7 @@ include:
     file: 'templates/renovate-config-validator.gitlab-ci.yml'
 
 default:
-  image: "${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.3"
+  image: "${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.3@sha256:f4e479e35c1155e8422bec6d23315f5e6fae997188c6d41076600a6804ab9089"
   retry: 2
   interruptible: true
 
@@ -64,7 +64,7 @@ renovate-config-validator:
 
 test:
   image:
-    name: "${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.3"
+    name: "${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.9.3@sha256:f4e479e35c1155e8422bec6d23315f5e6fae997188c6d41076600a6804ab9089"
     docker:
       user: 1000:1000
   stage: test
@@ -102,7 +102,7 @@ test:
 
 .jfrog-audit:
   stage: audit
-  image: "${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.3"
+  image: "${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.3@sha256:e809dac25274bdea6b9bf0dbe0ef2a09ed73c63a95248919dd855c52f734110b"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME != "renovate-bot"'
       variables:
@@ -138,7 +138,7 @@ jfrog-pnpm-audit:
 
 .build-artifacts:
   stage: build
-  image: "${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.3"
+  image: "${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.3@sha256:e809dac25274bdea6b9bf0dbe0ef2a09ed73c63a95248919dd855c52f734110b"
   rules :
     - if: $CI_COMMIT_TAG
       interruptible: false
