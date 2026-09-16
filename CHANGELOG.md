@@ -9,6 +9,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- build-info metadata to releases
+- a separate scan job in CI
 - CI jobs are retried twice
 - `push` stage in CI
 - run `test` job in default branch as well in the hopes that this will give us access to a coverage badge
@@ -17,6 +19,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- pull krakend-api-gateway images from `sds-docker` instead of `sds-oci`
 - in CI, cache `.pnpm_store` instead of `node_modules`
 - the dependency of CI jobs that caused caches to not be found for some unknown reason
 - prevent `install-deps` CI jobs from running at the same time
@@ -24,12 +27,16 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- split CI job `build-artifacts` into `build-cli-artifacts` and `build-gui-artifacts`
+- use a watch in audit and scan CI jobs
 - use env `JF_CONFIG_READ_ONLY` in non-push jobs
 - use proper versions for CI images
 - split build and push steps in CI into separate jobs
 
 ### Removed
 
+- output of licenses in audit and scan commands in CI
+- caching in CI
 - `GOCACHE` definition from CI
 
 ## [2026.6.1] - 2026-06-26
