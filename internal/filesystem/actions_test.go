@@ -35,15 +35,15 @@ func TestSearchNode(t *testing.T) {
 	}{
 		{
 			"OK_1", rep1.ForPath() + "/project/bucket_2/_folder/",
-			findChildNode(testRoot, rep1.ForPath(), "project", "bucket_2", "_folder"),
+			findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_2", "_folder"),
 		},
 		{
 			"OK_2", rep1.ForPath() + "/project/bucket_1///dir_////another_file",
-			findChildNode(testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file"),
+			findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file"),
 		},
 		{
 			"OK_3", "/" + rep2.ForPath() + "/my-example.com/tiedosto",
-			findChildNode(testRoot, rep2.ForPath(), "my-example.com", "tiedosto"),
+			findChildNode(t, testRoot, rep2.ForPath(), "my-example.com", "tiedosto"),
 		},
 		{
 			"NOT_FOUND_1", "Rep4/bucket_2/folder/file_3", nil,
@@ -76,31 +76,40 @@ func TestGetNodePathNames(t *testing.T) {
 	testRoot := getTestFuse(t)
 
 	var tests = []struct {
-		testname string
-		node     *_Ctype_struct_Node
-		origPath []string
+		testname, expectedPath string
+		expectedOrigPath       []string
+		node                   *_Ctype_struct_Node
 	}{
 		{
-			"OK_1", findChildNode(testRoot, rep1.ForPath(), "project", "bucket_2", "_folder"),
+			"OK_1",
+			rep1.ForPath() + "/project/bucket_2/_folder",
 			[]string{"", rep1.ForPath(), "project", "bucket_2", "?folder"},
+			findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_2", "_folder"),
 		},
 		{
-			"OK_2", findChildNode(testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file"),
+			"OK_2",
+			rep1.ForPath() + "/project/bucket_1/dir_/another_file",
 			[]string{"", rep1.ForPath(), "project", "bucket_1", "dir+", "another_file"},
+			findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file"),
 		},
 		{
-			"OK_3", findChildNode(testRoot, rep2.ForPath(), "my-example.com", "tiedosto"),
+			"OK_3",
+			rep2.ForPath() + "/my-example.com/tiedosto",
 			[]string{"", rep2.ForPath(), "https://my-example.com", "tiedosto"},
+			findChildNode(t, testRoot, rep2.ForPath(), "my-example.com", "tiedosto"),
 		},
 	}
 
 	for _, tt := range tests {
 		testname := tt.testname
 		t.Run(testname, func(t *testing.T) {
-			_, origPath := getNodePath(tt.node)
+			path, origPath := getNodePath(tt.node)
 
-			if !reflect.DeepEqual(origPath, tt.origPath) {
-				t.Errorf("Original path incorrect\nExpected=%v\nReceived=%v", tt.origPath, origPath)
+			if path != tt.expectedPath {
+				t.Errorf("Path incorrect\nExpected=%s\nReceived=%s", tt.expectedPath, path)
+			}
+			if !reflect.DeepEqual(origPath, tt.expectedOrigPath) {
+				t.Errorf("Original path incorrect\nExpected=%v\nReceived=%v", tt.expectedOrigPath, origPath)
 			}
 		})
 	}
@@ -352,7 +361,7 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 		return "hello", nil
 	}
 
-	node := findChildNode(testRoot, rep1.ForPath(), "project", "bucket_2", "_folder", "test")
+	node := findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_2", "_folder", "test")
 	node.stat.st_size = 484
 	fi.headers = map[_Ctype_ino_t]header{node.stat.st_ino: {fileID: "45646746"}}
 
@@ -366,7 +375,7 @@ func TestCheckHeaderExistence_Found(t *testing.T) {
 	// The file's encrypted size (484) decrypts to 456 (one block, minus the 28-byte MAC);
 	// the resulting 28-byte difference should propagate up through every ancestor's size.
 	origFs := getTestFuse(t)
-	origNode := findChildNode(origFs, rep1.ForPath(), "project", "bucket_2", "_folder", "test")
+	origNode := findChildNode(t, origFs, rep1.ForPath(), "project", "bucket_2", "_folder", "test")
 	origNode.stat.st_size = 456
 	diff := origNode.stat.st_size - 484
 	for p := origNode.parent; p != nil; p = p.parent {
@@ -430,7 +439,7 @@ func TestCheckHeaderExistence_ErrorNoChange(t *testing.T) {
 			}
 
 			testRoot := getTestFuse(t)
-			node := findChildNode(testRoot, tt.path...)
+			node := findChildNode(t, testRoot, tt.path...)
 			fi.headers = make(map[_Ctype_ino_t]header)
 
 			if offset := CheckHeaderExistence(node); offset != -1 {
@@ -474,7 +483,7 @@ func TestCheckHeaderExistence_Reencrypted(t *testing.T) {
 		return "", nil
 	}
 
-	node := findChildNode(testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file")
+	node := findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file")
 	fi.headers = make(map[_Ctype_ino_t]header)
 
 	if offset := CheckHeaderExistence(node); offset != 58 {
@@ -488,7 +497,7 @@ func TestCheckHeaderExistence_Reencrypted(t *testing.T) {
 	// Body size is 112-58=54 bytes, one block, decrypts to 54-28=26 bytes;
 	// the resulting 86-byte difference should propagate up through every ancestor's size.
 	origFs := getTestFuse(t)
-	origNode := findChildNode(origFs, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file")
+	origNode := findChildNode(t, origFs, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file")
 	oldSize := origNode.stat.st_size
 	origNode.stat.st_size = 26
 	diff := origNode.stat.st_size - oldSize
@@ -522,7 +531,7 @@ func TestCheckHeaderExistence_FileHeaderError(t *testing.T) {
 		return "", errExpected
 	}
 
-	node := findChildNode(testRoot, rep1.ForPath(), "project", "bucket_3", "testi")
+	node := findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_3", "testi")
 	fi.headers = map[_Ctype_ino_t]header{node.stat.st_ino: {owner: "my-project"}}
 
 	if offset := CheckHeaderExistence(node); offset != -1 {
@@ -566,7 +575,7 @@ func TestCheckHeaderExistence_TooSmall(t *testing.T) {
 		return "", nil
 	}
 
-	node := findChildNode(testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file")
+	node := findChildNode(t, testRoot, rep1.ForPath(), "project", "bucket_1", "dir_", "another_file")
 	fi.headers = make(map[_Ctype_ino_t]header)
 
 	if offset := CheckHeaderExistence(node); offset != -1 {

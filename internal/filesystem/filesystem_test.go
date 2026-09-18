@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -16,8 +17,6 @@ import (
 
 const rep1 = api.SDConnect
 const rep2 = api.SDApply
-
-const fsSize = 39
 
 var testFuse = `{
 	"name": "",
@@ -385,10 +384,10 @@ func assignChildren(node *_Ctype_struct_Node, template jsonNode) {
 // findChildNode walks down node via child names, matching against each node's
 // safe name in turn. It does not rely on search_node/find_child_node so it can
 // be used to independently compute an expected node in tests.
-func findChildNode(node *_Ctype_struct_Node, names ...string) *_Ctype_struct_Node {
+func findChildNode(t *testing.T, node *_Ctype_struct_Node, names ...string) *_Ctype_struct_Node {
 	for _, name := range names {
 		if node == nil || node.children == nil {
-			return nil
+			t.Fatalf("Failed to find node %s", strings.Join(names, "/"))
 		}
 
 		var next *_Ctype_struct_Node

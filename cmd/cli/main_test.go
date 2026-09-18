@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"testing"
 
@@ -29,31 +28,6 @@ func (r testReader) getState() error {
 
 func (r testReader) restoreState() error {
 	return nil
-}
-
-// testStream is an io.Reader
-type testStream struct {
-	data []string
-	done bool
-	idx  int
-	err  error
-}
-
-func (s *testStream) Read(p []byte) (int, error) {
-	if s.err != nil {
-		return 0, s.err
-	}
-	if s.done || s.idx == len(s.data) {
-		s.done = false
-
-		return 0, io.EOF
-	}
-	content := []byte(s.data[s.idx])
-	copy(p, content)
-	s.done = true
-	s.idx++
-
-	return len(content), nil
 }
 
 func TestMain(m *testing.M) {

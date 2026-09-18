@@ -157,7 +157,7 @@ func UpdateFilesystem() {
 
 	// delete_node() requires that the lock is not being held here
 	for node := range toDelete {
-		ret := C.delete_node(&fi.state, node)
+		ret := C.delete_node(&fi.state, node) //nolint:gocritic,nlreturn
 		path, pathNames := getNodePath(node)
 		if ret != 0 {
 			logs.Warningf("kernel was not able to delete node %s: %v", path, syscall.Errno(-ret))
@@ -374,7 +374,7 @@ func CheckHeaderExistence(node *C.node_t) int64 {
 		return -1
 	}
 
-	var offset int64 = 0
+	var offset int64
 	if hdrValue != "" {
 		hdr.value = hdrValue
 		fi.headers[node.stat.st_ino] = hdr
@@ -431,6 +431,7 @@ func updateParentSizes(node *C.node_t, oldSize C.off_t) {
 // containing the requested data. The actual length of the buffer must be conveyed to C with `nBytes`.
 // If no header is found for node (even an empty one), the file is not encrypted and, therefore, cannot be read.
 //
+//nolint:nlreturn
 //export DownloadData
 func DownloadData(node *C.node_t, size C.size_t, offset C.off_t, errNo *C.int, nBytes *C.size_t) *C.char {
 	path, pathNames := getNodePath(node)

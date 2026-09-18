@@ -112,12 +112,12 @@ func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<-
 	defer C.free(unsafe.Pointer(m)) //nolint:nlreturn
 	defer C.fflush(nil)
 
-	var fuseDebug C.int = 0
+	var fuseDebug C.int
 	if logs.GetLevel() == logrus.TraceLevel {
 		fuseDebug = 1
 	}
 
-	return int(C.mount_filesystem(&fi.state, m, fuseDebug))
+	return int(C.mount_filesystem(&fi.state, m, fuseDebug)) //nolint:gocritic,nlreturn
 }
 
 // allocateNodeList reserves memory for an array of node pointers in C.
@@ -348,7 +348,7 @@ func goNodesToC(node *goNode, name string) {
 	}
 
 	if oldLastModified != 0 && oldLastModified != cNode.last_modified.tv_sec {
-		ret := C.invalidate_node(&fi.state, cNode)
+		ret := C.invalidate_node(&fi.state, cNode) //nolint:gocritic,nlreturn
 		path, pathNames := getNodePath(cNode)
 		if ret != 0 {
 			logs.Warningf("kernel was not able to invalidate node %s: %v", path, syscall.Errno(-ret))
