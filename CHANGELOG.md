@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Added
 
+- CI jobs for `black`, `pylint`, and `shellcheck`. Modify code to meet their standards.
 - build-info metadata to releases
 - a separate scan job in CI
 - CI jobs are retried twice
@@ -27,6 +28,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- pull `docker-keystone-swift` image from Artifactory
+- use `uv` to pull Python dependencies via Artifactory
+- configure `pnpm` to use registries from Artifactory. Authentication requires an `.npmrc` file, which is now pulled from Vault with the rest of the secrets.
 - split CI job `build-artifacts` into `build-cli-artifacts` and `build-gui-artifacts`
 - use a watch in audit and scan CI jobs
 - use env `JF_CONFIG_READ_ONLY` in non-push jobs
@@ -35,6 +39,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Removed
 
+- CI audit jobs
 - output of licenses in audit and scan commands in CI
 - caching in CI
 - `GOCACHE` definition from CI
