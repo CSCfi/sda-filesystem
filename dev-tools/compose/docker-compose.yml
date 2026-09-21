@@ -1,6 +1,6 @@
 services:
   keystone-swift:
-    image: ghcr.io/cscfi/docker-keystone-swift:latest@sha256:e8b1ec21120ab9adc6ac6a2b98785fd273676439a8633fe898e37f2aea7e0712
+    image: "${ARTIFACTORY_SERVER}/sds/docker-keystone-swift:2026.9.0"
     container_name: keystone-swift
     env_file:
       - .env.keystone
@@ -24,7 +24,11 @@ services:
       context: ../../
       dockerfile: dev-tools/containers/mockauth/Dockerfile
       args:
-        ARTIFACTORY_SERVER: "${ARTIFACTORY_SERVER}/"
+        ARTIFACTORY_SERVER_GHCR: "${ARTIFACTORY_SERVER_GHCR}/"
+        UV_DEFAULT_INDEX: "artifactory=${ARTIFACTORY_PYPI_REGISTRY}/simple"
+      secrets:
+        - uv_password
+        - uv_username
     container_name: mockauth
     env_file:
       - .env.keystone
@@ -295,3 +299,9 @@ services:
 volumes:
   postgres-init:
   static-config:
+
+secrets:
+  uv_username:
+    environment: ARTIFACTORY_READ_ONLY_USER
+  uv_password:
+    environment: ARTIFACTORY_PYPI_TOKEN

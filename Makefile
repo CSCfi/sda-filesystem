@@ -29,6 +29,10 @@ vault kv get --field=$(3) secret/$(2) >> .env; \
 echo >> .env;
 endef
 
+define write_secret_to_file
+vault kv get --field=$(3) secret/$(2) > $(1);
+endef
+
 define docker_cmd
 cd dev-tools/compose/; docker compose --env-file .env $(call profile_args, $1) $(2)
 endef
@@ -76,12 +80,9 @@ setup: ## Install dependencies and create .env file with vault secrets
 	@$(MAKE) get_env
 	@export $$(grep ^ARTIFACTORY dev-tools/compose/.env | xargs); \
 	docker login $${ARTIFACTORY_SERVER}; \
-	pnpm login --registry="$${ARTIFACTORY_NPM_REGISTRY}"; \
-	echo "registry=$${ARTIFACTORY_NPM_REGISTRY}" > .npmrc; \
-	echo "@jsr:registry=$${ARTIFACTORY_NPM_REGISTRY}" >> .npmrc
-	pnpm config list
-	pnpm install --prefix frontend
-	pnpm --prefix frontend run build
+	docker login $${ARTIFACTORY_SERVER_GHCR}
+	@cd frontend; pnpm config list; \
+	pnpm install && pnpm run build
 	mkdir -p $(SOCKET_DIR)
 
 remote: down ## Only set up mock terminal-proxy and connect to test cluster KrakenD
@@ -147,9 +148,13 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,VAULT_ROLE,krakend/vault,role) \
 	$(call write_secret,VAULT_SECRET,krakend/vault,secret) \
 	$(call write_secret,ARTIFACTORY_SERVER,internal-urls,artifactory-docker) \
+	$(call write_secret,ARTIFACTORY_SERVER_GHCR,internal-urls,artifactory-ghcr) \
 	$(call write_secret,ARTIFACTORY_URL,internal-urls,artifactory) \
 	$(call write_secret,ARTIFACTORY_TOKEN,krakend/artifactory,token) \
 	$(call write_secret,ARTIFACTORY_NPM_REGISTRY,artifactory,npm-registry) \
+	$(call write_secret,ARTIFACTORY_PYPI_REGISTRY,artifactory,pypi-registry) \
+	$(call write_secret,ARTIFACTORY_PYPI_TOKEN,artifactory,pypi-token) \
+	$(call write_secret,ARTIFACTORY_READ_ONLY_USER,robots/artifactory-read-only,username) \
 	$(call write_secret,AAI_BASE_URL,internal-urls,test-aai) \
 	$(call write_secret,S3_HOST,internal-urls,test-allas) \
 	$(call write_secret,FINDATA_S3_HOST,krakend/findata,host) \
@@ -170,7 +175,8 @@ get_env: clean ## Get latest secrets from vault, replacing old secrets
 	$(call write_secret,BIGPICTURE_ACCESS,krakend/bigpicture,access) \
 	$(call write_secret,BIGPICTURE_SECRET,krakend/bigpicture,secret) \
 	$(call write_secret,SDAPPLY_ISSUER_NAME,krakend/rems,issuer) \
-	$(call write_secret,SDAPPLY_ISSUER_JKU,krakend/rems,jku)
+	$(call write_secret,SDAPPLY_ISSUER_JKU,krakend/rems,jku) \
+	cd ../..; $(call write_secret_to_file,.npmrc,artifactory,npmrc)
 	@export $$(grep ^KRAKEND_ADDR= dev-tools/compose/.env | xargs); printf "BACKEND_HOST=$${KRAKEND_ADDR#*://}\n" >> dev-tools/compose/.env
 	@printf "### VAULT SECRETS END ###\n" >> dev-tools/compose/.env
 	@echo "Secrets written successfully"

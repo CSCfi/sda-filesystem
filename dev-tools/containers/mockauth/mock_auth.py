@@ -6,7 +6,8 @@ from os import getenv, environ
 from time import time
 from typing import Tuple
 
-from aiohttp import web, ClientSession
+import requests
+from aiohttp import web
 from joserfc import jwt
 from joserfc.jwk import RSAKey
 
@@ -16,13 +17,11 @@ logging.basicConfig(format=FORMAT, datefmt="%Y-%m-%d %H:%M:%S")
 LOG = logging.getLogger("server")
 LOG.setLevel(getenv("LOG_LEVEL", "INFO"))
 
-header = {
-    "alg": "RS256",
-    "typ": "at+JWT"
-}
+header = {"alg": "RS256", "typ": "at+JWT"}
 
 
 def get_desktop_token() -> str:
+    """Create an access token for the mock SD Desktop client."""
     iat = int(time())
     ttl = 36000
     exp = iat + ttl
@@ -40,7 +39,8 @@ def get_desktop_token() -> str:
     return jwt.encode(header, access_token, jwk_key)
 
 
-async def get_pouta_token() -> str:
+def get_pouta_token() -> str:
+    """Get a Pouta (keystone) access token for the mock user."""
     auth_data = {
         "auth": {
             "identity": {
@@ -56,38 +56,42 @@ async def get_pouta_token() -> str:
         }
     }
 
-    async with ClientSession() as session:
-        async with session.post(f"{mock_keystone_url_docker}/v3/auth/tokens", json=auth_data) as resp:
-            result = await resp.json()
+    resp = requests.post(
+        f"{mock_keystone_url_docker}/v3/auth/tokens",
+        json=auth_data,
+        timeout=5.0,
+    )
 
-            if "error" in result:
-                error_message = result["error"]["message"]
-                raise RuntimeError(f"Keystone auth failed: {error_message}")
+    result = resp.json()
 
-            return resp.headers["X-Subject-Token"]
+    if "error" in result:
+        raise RuntimeError(f"Keystone auth failed: {result['error']['message']}")
+
+    return resp.headers["X-Subject-Token"]
 
 
 def parse_visa_issuers() -> dict[str, Tuple]:
-    issuer_envs = {k: v for k, v in environ.items() if k.endswith('_ISSUER_NAME')}
+    """Build the visa issuer JWKS registry from `*_ISSUER_NAME`/`*_ISSUER_JKU` env vars."""
+    issuer_envs = {k: v for k, v in environ.items() if k.endswith("_ISSUER_NAME")}
     jwks: dict[str, Tuple] = {}
 
     for name_key, issuer_name in issuer_envs.items():
-        prefix = name_key[:-len('_ISSUER_NAME')]
+        prefix = name_key[: -len("_ISSUER_NAME")]
         jku_key = f"{prefix}_ISSUER_JKU"
         issuer_jku = environ.get(jku_key)
 
-        LOG.info(f"Prefix: {prefix}")
-        LOG.info(f"  ISSUER_NAME: {issuer_name}")
-        LOG.info(f"  ISSUER_JKU:  {issuer_jku}")
+        LOG.info("Prefix: %s", prefix)
+        LOG.info("  ISSUER_NAME: %s", issuer_name)
+        LOG.info("  ISSUER_JKU:  %s", issuer_jku)
         LOG.info("")
 
         service = issuer_name.strip("/").split("/")[-1]
         jwks[service] = {
             "issuer": issuer_name,
             "jku": issuer_jku,
-            "key": RSAKey.generate_key(private=True)
+            "key": RSAKey.generate_key(private=True),
         }
-        LOG.info(f"Added visa with parameters {jwks[service]}")
+        LOG.info("Added visa with parameters %s", jwks[service])
 
     return jwks
 
@@ -106,10 +110,11 @@ email = environ.get("USER_EMAIL", "")
 
 jwk_key = RSAKey.generate_key(private=True)
 desktop_token = get_desktop_token()
-pouta_token = ""
+pouta_token = get_pouta_token()
 
 visa_jwks = parse_visa_issuers()
 passport = []
+
 
 async def token(req: web.Request) -> web.Response:
     """Auth endpoint."""
@@ -145,13 +150,9 @@ async def token(req: web.Request) -> web.Response:
             return web.Response(status=400, text="invalid grant_type")
 
 
-async def jwk_response(req: web.Request) -> web.Response:
+async def jwk_response(_: web.Request) -> web.Response:
     """Mock JSON Web Key server."""
-    data = {
-        "keys": [
-            jwk_key.as_dict(private=False, alg="RS256")
-        ]
-    }
+    data = {"keys": [jwk_key.as_dict(private=False, alg="RS256")]}
 
     LOG.info(data)
 
@@ -159,8 +160,9 @@ async def jwk_response(req: web.Request) -> web.Response:
 
 
 async def userinfo(req: web.Request) -> web.Response:
+    """Mock userinfo endpoint."""
     auth = req.headers["Authorization"]
-    if auth != "Bearer " + desktop_token and auth != "Bearer " + sds_access_token:
+    if auth not in ("Bearer " + desktop_token, "Bearer " + sds_access_token):
         return web.Response(status=400, text="invalid token")
 
     findata_projects = ""
@@ -211,11 +213,11 @@ async def post_visa_dataset(req: web.Request) -> web.Response:
     iat = int(time())
     ttl = 36000
     exp = iat + ttl
-    header = {
+    visa_header = {
         "alg": "RS256",
         "jku": visa_jwks[service]["jku"],
         "typ": "JWT",
-        "kid": f"test-key-{service}"
+        "kid": f"test-key-{service}",
     }
     payload = {
         "sub": email,
@@ -225,10 +227,10 @@ async def post_visa_dataset(req: web.Request) -> web.Response:
         "ga4gh_visa_v1": {
             "type": "ControlledAccessGrants",
             "value": dataset,
-            "source": visa_jwks[service]["issuer"]
-        }
+            "source": visa_jwks[service]["issuer"],
+        },
     }
-    visa = jwt.encode(header, payload, visa_jwks[service]["key"])
+    visa = jwt.encode(visa_header, payload, visa_jwks[service]["key"])
     passport.append(visa)
 
     return web.Response(status=200)
@@ -236,7 +238,6 @@ async def post_visa_dataset(req: web.Request) -> web.Response:
 
 async def init() -> web.Application:
     """Start server."""
-    global pouta_token
     app = web.Application()
     app.router.add_post("/idp/profile/oidc/token", token)
     app.router.add_get("/idp/profile/oidc/keyset", jwk_response)
@@ -244,8 +245,6 @@ async def init() -> web.Application:
 
     app.router.add_get("/api/jwk/{service}", jwk_response_visas)
     app.router.add_post("/api/jwk/{service}/{dataset}", post_visa_dataset)
-
-    pouta_token = await get_pouta_token()
 
     return app
 

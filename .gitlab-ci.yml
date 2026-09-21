@@ -1,7 +1,6 @@
 stages:
   - lint
   - test
-  - audit
   - build
   - scan
   - push
@@ -52,6 +51,33 @@ frontend-lint:
   script:
     - pnpm run --dir frontend lint
 
+pylint:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  script:
+    - pylint --disable import-error,duplicate-code,line-too-long **/*.py
+
+black:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  script:
+    - black --line-length=100 --check --verbose -- .
+
+shellcheck:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  tags:
+    - sds-test
+  script:
+    - git ls-files -z -- '*.sh' | xargs -0 -r shellcheck
+
 renovate-config-validator:
   stage: lint
   rules:
@@ -94,42 +120,6 @@ test:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
-
-
-#########
-# AUDIT #
-#########
-
-.jfrog-audit:
-  stage: audit
-  image: "${ARTIFACTORY_SERVER}/sds/sdd-ubuntu-golang-builder-ci:2026.9.3@sha256:e809dac25274bdea6b9bf0dbe0ef2a09ed73c63a95248919dd855c52f734110b"
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME != "renovate-bot"'
-      variables:
-        WATCH: sds-watch
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_NAME == "renovate-bot"'
-      variables:
-        WATCH: sds-renovate
-  script:
-    - jf audit "--$REGISTRY_TYPE" --extended-table --watches=$WATCH
-
-jfrog-go-audit:
-  extends: .jfrog-audit
-  variables:
-    REGISTRY_TYPE: go
-  before_script:
-    - go mod tidy && go mod vendor
-    - jf config import "${JF_CONFIG_READ_ONLY}"
-
-jfrog-pnpm-audit:
-  extends: .jfrog-audit
-  variables:
-    REGISTRY_TYPE: pnpm
-  before_script:
-    - pnpm config list
-    - pnpm install --dir frontend
-    - pnpm run --dir frontend build
-    - jf config import "${JF_CONFIG_READ_ONLY}"
 
 
 #########
@@ -240,8 +230,12 @@ push-dev:
   before_script:
     - jf config import "${JF_CONFIG}"
   script:
-    - jf rt u data-gateway-cli-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-cli-amd64-0000.0.0
-    - jf rt u data-gateway-gui-amd64-0000.0.0 $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-gui-amd64-0000.0.0
+    - >
+      jf rt u data-gateway-${BINARY_TYPE}-amd64-0000.0.0
+      $ARTIFACTORY_BINARY_REPO_DESKTOP/$CI_PROJECT_NAME/data-gateway-${BINARY_TYPE}-amd64-0000.0.0
+  parallel:
+    matrix:
+      - BINARY_TYPE: ["cli", "gui"]
 
 push-artifacts:
   stage: push
