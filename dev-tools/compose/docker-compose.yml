@@ -1,6 +1,6 @@
 services:
   keystone-swift:
-    image: "${ARTIFACTORY_SERVER}/sds/docker-keystone-swift:2026.9.0"
+    image: "${ARTIFACTORY_SERVER}/sds/docker-keystone-swift:2026.9.0@sha256:a99c143387b483a51c624a901c45763e79b9517f348ba605fc4d452c2941ba77"
     container_name: keystone-swift
     env_file:
       - .env.keystone
