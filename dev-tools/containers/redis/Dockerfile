@@ -1,5 +1,5 @@
 ARG ARTIFACTORY_SERVER=
-FROM ${ARTIFACTORY_SERVER}redis:8.4.6-alpine3.22@sha256:12da49daa000c2be4d55118574f889c8cc298140ecf343d04f345c818f227823
+FROM ${ARTIFACTORY_SERVER}redis:8.4.7-alpine3.22@sha256:6935373cd72add2b46b624158d841afdeef5cce1dc6fe9e6d0cb94bb677169ad
 
 COPY ./dev-tools/containers/redis/redis.conf /usr/local/etc/redis/redis.conf
 
