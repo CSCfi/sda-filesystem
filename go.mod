@@ -15,7 +15,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/neicnordic/crypt4gh v1.15.0
 	github.com/sirupsen/logrus v1.10.2
-	github.com/wailsapp/wails/v2 v2.15.0
+	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/winfsp/cgofuse v1.6.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/sync v0.22.0
