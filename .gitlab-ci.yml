@@ -168,7 +168,7 @@ build-gui-artifacts:
     - pnpm config list
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
-    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
     - wails doctor
     - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
