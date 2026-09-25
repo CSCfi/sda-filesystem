@@ -182,10 +182,10 @@ build-gui-artifacts:
   parallel:
     matrix:
       - BINARY_TYPE: gui-amd64
-        EXTRA_WAILS_ARGS: ""
+        EXTRA_WAILS_ARGS: "-tags webkit2_41"
         EXTRA_LDFLAGS: ""
       - BINARY_TYPE: gui-22-amd64
-        EXTRA_WAILS_ARGS: "-tags webkit2_41"
+        EXTRA_WAILS_ARGS: ""
         EXTRA_LDFLAGS: "-X sda-filesystem/internal/api.Port=8283"
 
 
