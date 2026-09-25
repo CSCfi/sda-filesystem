@@ -105,7 +105,7 @@ services:
         condition: service_healthy
 
   krakend:
-    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.9.0@sha256:2a34838ecc22baa37729cbd7fe9b01a4db37d62da6d5016e61c3f1c3c48a42c1"
+    image: "${ARTIFACTORY_SERVER}/sds/krakend-api-gateway:2026.9.2@sha256:8c65fe665eb336f5d819f3fea667d73c32ab34c9fb86444f03b7a5504fe9154f"
     container_name: krakend
     env_file:
       - .env
