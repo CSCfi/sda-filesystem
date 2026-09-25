@@ -323,8 +323,9 @@ func GetProfile(sessionFun func(), scanFun func(bool)) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to get user profile: %w", err)
 	}
+	// Scanning is disabled for old Findata VMs that don't have ClamAV installed, designated by api.Port="8283"
 	ai.ui.address, err = GetEnv("CLAMAV_SOCKET", false)
-	if ai.userProfile.ProjectType == "findata" && err != nil {
+	if ai.userProfile.ProjectType == "findata" && err != nil && Port == "" {
 		return false, fmt.Errorf("required environment variables missing: %w", err)
 	}
 	ai.token = ai.userProfile.DesktopToken

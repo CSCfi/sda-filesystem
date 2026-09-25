@@ -567,7 +567,8 @@ func getDataChunk(
 	downloadCache.Set(cacheKey, buffer, int64(len(buffer)), time.Minute*60)
 	logs.Debugf("File %s stored in cache, with coordinates [%d, %d)", path, chByteStart, chByteEnd)
 
-	if GetProjectType() == "findata" {
+	// Scanning is disabled for old Findata VMs that don't have ClamAV installed, designated by api.Port="8283"
+	if GetProjectType() == "findata" && Port == "" {
 		go scanForViruses(buffer, path)
 	}
 
