@@ -7,8 +7,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.9.0] - 2026-09-28
+
 ### Added
 
+- ubuntu 22 to the list of dev pushes
 - CI jobs for `black`, `pylint`, and `shellcheck`. Modify code to meet their standards.
 - build-info metadata to releases
 - a separate scan job in CI
@@ -20,6 +23,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- put webkit 2.41 back to ubuntu 24 instead of 22 which was accidentally moved in the previous CI runner refactoring
+- allows the program to run on Ubuntu 22 Findata VMs that don't have `CLAMAV_SOCKET` defined (#89)
 - pull krakend-api-gateway images from `sds-docker` instead of `sds-oci`
 - in CI, cache `.pnpm_store` instead of `node_modules`
 - the dependency of CI jobs that caused caches to not be found for some unknown reason
@@ -632,7 +637,8 @@ for checking case insensitivity
 - github action for golangci-lint
 - github action for releasing to linux and darwin system
 
-[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.6.1...HEAD
+[Unreleased]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.9.0...HEAD
+[2026.9.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.6.1...2026.9.0
 [2026.6.1]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.6.0...2026.6.1
 [2026.6.0]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.2...2026.6.0
 [2026.5.2]: https://gitlab.ci.csc.fi/sds-dev/sd-desktop/sda-filesystem/compare/2026.5.1...2026.5.2
