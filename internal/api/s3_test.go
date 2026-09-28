@@ -1747,7 +1747,9 @@ func TestUploadObject_ContextCancel(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
 	origS3Client := ai.hi.s3Client
+	Port = "8283"
 	defer func() {
+		Port = ""
 		ai.hi.client = origClient
 		ai.proxy = origProxy
 		ai.hi.s3Client = origS3Client

@@ -679,11 +679,12 @@ func TestGetProfile_Error(t *testing.T) {
 	}
 }
 
-func TestGetProfile_Clamav(t *testing.T) {
+func TestGetProfile_Clamav24(t *testing.T) {
 	origMakeRequest := makeRequest
 	origRepositories := ai.repositories
 	origGetEnv := GetEnv
 	origAI := ai
+	Port = ""
 	defer func() {
 		ai.repositories = origRepositories
 		makeRequest = origMakeRequest
@@ -711,6 +712,46 @@ func TestGetProfile_Clamav(t *testing.T) {
 		t.Error("Function should have returned error")
 	} else if err.Error() != errText {
 		t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", errText, err.Error())
+	}
+
+	projectType = "default"
+
+	if _, err := GetProfileCLI(); err != nil {
+		t.Fatalf("Function returned unexpected error: %s", err.Error())
+	}
+}
+
+func TestGetProfile_Clamav22(t *testing.T) {
+	origMakeRequest := makeRequest
+	origRepositories := ai.repositories
+	origGetEnv := GetEnv
+	origAI := ai
+	Port = "8283"
+	defer func() {
+		Port = ""
+		ai.repositories = origRepositories
+		makeRequest = origMakeRequest
+		GetEnv = origGetEnv
+		ai = origAI
+	}()
+
+	projectType := "findata"
+	makeRequest = func(method string, ep endpoint, query, headers map[string]string, reqBody io.ReadSeeker, ret any) error {
+		switch v := ret.(type) {
+		case *profile:
+			v.ProjectType = projectType
+
+			return nil
+		default:
+			return fmt.Errorf("ret has incorrect type %v, expected *profile", reflect.TypeOf(v))
+		}
+	}
+	GetEnv = func(name string, verifyURL bool) (string, error) {
+		return "", errExpected
+	}
+
+	if _, err := GetProfileCLI(); err != nil {
+		t.Error("Function should not have returned error")
 	}
 
 	projectType = "default"
