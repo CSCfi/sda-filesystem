@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   static-creds:
-    image: ${ARTIFACTORY_SERVER}/docker:29.9.0@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb
+    image: ${ARTIFACTORY_SERVER}/docker:29.9.1@sha256:3e5756e2b6dad6a5f1f5deacf0a19f9eaa2581b76ae092b2d4a118162e1d4d4e
     container_name: static-creds
     entrypoint: sh /static_credentials.sh
     volumes:
@@ -60,7 +60,7 @@ services:
         condition: service_healthy
 
   vault:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:2.2.0@sha256:e0acd3c681bdf57f002d7214e5d050b876e1704678005c6b0406dd96a65be919
     container_name: vault
     env_file:
       - .env.keystone
@@ -91,7 +91,7 @@ services:
     profiles:
       - keystone
   vault-setup:
-    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    image: ${ARTIFACTORY_SERVER}/hashicorp/vault:2.2.0@sha256:e0acd3c681bdf57f002d7214e5d050b876e1704678005c6b0406dd96a65be919
     container_name: vault-setup
     entrypoint: /vault/helpers/setup.sh
     env_file:
@@ -168,7 +168,7 @@ services:
     ports:
       - 8082:8082
   krakend-db:
-    image: ${ARTIFACTORY_SERVER}/postgres:18.6-alpine3.23@sha256:697c180dbf244d3ce4a8f4cbc0156cde840af055c1bf8b76aebe422a4822086f
+    image: ${ARTIFACTORY_SERVER}/postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     container_name: krakend-db
     env_file:
       - .env.krakend
