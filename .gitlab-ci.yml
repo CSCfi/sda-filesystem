@@ -227,6 +227,14 @@ push-dev:
       allow_failure: true
   tags:
     - sds-upload
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: "$VAULT_SERVER_URL"
+  secrets:
+    JF_CONFIG:
+      vault: gitlab-ci-pipelines-upload-runner/JF_CONFIG@secret
+      token: $VAULT_ID_TOKEN
+      file: false
   before_script:
     - jf config import "${JF_CONFIG}"
   script:
@@ -244,6 +252,14 @@ push-artifacts:
       interruptible: false
   tags:
     - sds-upload
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: "$VAULT_SERVER_URL"
+  secrets:
+    JF_CONFIG:
+      vault: gitlab-ci-pipelines-upload-runner/JF_CONFIG@secret
+      token: $VAULT_ID_TOKEN
+      file: false
   variables:
     JFROG_CLI_BUILD_PROJECT: sds
   before_script:
