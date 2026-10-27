@@ -232,12 +232,12 @@ push-dev:
     VAULT_ID_TOKEN:
       aud: "$VAULT_SERVER_URL"
   secrets:
-    JF_REFERENCE_TOKEN:
-      vault: gitlab-ci-upload-runner/unprotected/JF_REFERENCE_TOKEN@secret
+    JF_IDENTITY_TOKEN:
+      vault: gitlab-ci-upload-runner/unprotected/JF_IDENTITY_TOKEN@secret
       token: $VAULT_ID_TOKEN
       file: false
   before_script:
-    - jf config add --url "$ARTIFACTORY_URL" --access-token "$JF_REFERENCE_TOKEN" --interactive=false
+    - jf config add --url "$ARTIFACTORY_URL" --access-token "$JF_IDENTITY_TOKEN" --interactive=false
   script:
     - >
       jf rt u data-gateway-${BINARY_TYPE}-0000.0.0
