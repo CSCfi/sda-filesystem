@@ -151,7 +151,6 @@ build-cli-artifacts:
   extends: .build-artifacts
   before_script:
     - curl -sSf https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
-    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - go build -ldflags "-w -s ${EXTRA_LDFLAGS}" -o "data-gateway-${BINARY_TYPE}-${VERSION}" ./cmd/cli
   parallel:
@@ -170,7 +169,6 @@ build-gui-artifacts:
     - pnpm run --dir frontend build
     - go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
     - wails doctor
-    - jf config import "${JF_CONFIG_READ_ONLY}"
   script:
     - cd cmd/gui
     - >
@@ -227,8 +225,19 @@ push-dev:
       allow_failure: true
   tags:
     - sds-upload
+  environment:
+    name: unprotected
+    action: access # Do not trigger a deployment
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: "$VAULT_SERVER_URL"
+  secrets:
+    JF_IDENTITY_TOKEN:
+      vault: gitlab-ci-upload-runner/unprotected/JF_IDENTITY_TOKEN@secret
+      token: $VAULT_ID_TOKEN
+      file: false
   before_script:
-    - jf config import "${JF_CONFIG}"
+    - jf config add --url "$ARTIFACTORY_URL" --access-token "$JF_IDENTITY_TOKEN" --interactive=false
   script:
     - >
       jf rt u data-gateway-${BINARY_TYPE}-0000.0.0
@@ -244,6 +253,14 @@ push-artifacts:
       interruptible: false
   tags:
     - sds-upload
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: "$VAULT_SERVER_URL"
+  secrets:
+    JF_CONFIG:
+      vault: gitlab-ci-upload-runner/protected/JF_CONFIG@secret
+      token: $VAULT_ID_TOKEN
+      file: false
   variables:
     JFROG_CLI_BUILD_PROJECT: sds
   before_script:
