@@ -7,6 +7,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- use `JF_IDENTITY_TOKEN` in `push-dev` instead of `JF_CONFIG`,
+- get CI secrets from Vault
+
 ## [2026.9.0] - 2026-09-28
 
 ### Added
