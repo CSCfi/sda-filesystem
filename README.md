@@ -46,7 +46,7 @@ You can run `make` to see the commands available to you.
 
 Since internal URLs are recommended not to be public, the environment variable `VAULT_ADDR` has to be defined manually. Follow the instructions [here](https://gitlab.ci.csc.fi/groups/sds-dev/-/wikis/Guides/Development-tools/using-vault#accessing-vault-via-terminal) on how to make the Vault address available to shell commands. Once the address is defined, continue with the following command:
 
-```
+```bash
 make setup
 ```
 
@@ -56,13 +56,13 @@ Once the `.env` file is created, there is one environment variable, `SDS_ACCESS_
 
 #### Run and build
 
-```
+```bash
 make all
 ```
 
 builds and runs all the components locally and, once they are up and running, starts the GUI version of the filesystem. This command is equivalent to running `make local gui`. Similarly, running `make remote cli` would start up a mock nginx proxy that connects to our test cluster KrakenD, in addition to running the CLI version of the filesystem. These four targets (`local`, `remote`, `cli`, and `gui`) can be combined in the following ways:
 
-```
+```bash
 make local gui   # same as `make all`
 make local cli
 make remote gui
@@ -79,7 +79,7 @@ There are four different profiles defined in [docker-compose.yml](compose/docker
 
 The `Makefile` is written so that these two aforementioned targets can be given the desired profiles as arguments, for example:
 
-```
+```bash
 make build_services krakend keystone
 ```
 
@@ -89,9 +89,9 @@ Profile `keystone` signifies that you do not want to use data from Allas. Instea
 
 Profile `fuse` sets up an Ubuntu 24.04 container, similar to the environment in SD Desktop, which you can use to run the CLI. You just need to run
 
-```
+```bash
 make exec
-````
+```
 
 to access the container, and then type `./gateway` to run the binary. The `fuse` profile is not used in the `local` target because targets `gui` and `cli` run their binaries on the developer's own computer environment.
 
@@ -108,7 +108,7 @@ Another difference occurs during export. Not only are the objects exported to SD
 ### Running the binaries
 
 In case the binaries are run without the help of a `Makefile`, please be reminded that both GUI and CLI versions require environment variables `PROXY_URL`, `CONFIG_ENDPOINT` and `SDS_ACCESS_TOKEN` to function. Findata projects also need `CLAMAV_SOCKET`. After the development environment is set up, you can run
-```
+```bash
 export $(make envs)
 ```
 to get the correct values exported.
@@ -154,7 +154,7 @@ When running the binary, the common arguments are placed before the subcommand, 
 ##### Import
 
 Accepted command line arguments for import:
-```
+```bash
 ./data-gateway-cli import -help
 Usage of import:
   -mount string
@@ -165,7 +165,7 @@ For example, running `./data-gateway-cli import -mount=$HOME/ExampleMount` will 
 ##### Export
 
 Accepted command line arguments for export:
-```
+```bash
 ./data-gateway-cli export -help
 Usage of export:
   -override
@@ -186,9 +186,7 @@ The file that is being uploaded is assumed to be unencrypted; the program encryp
 
 ### User commands
 
-User can update the CLI version of the filesystem by typing in the command line the word `update` while the CLI is running. This requires that no files inside the filesystem are being used. Update also clears cache. As a result of this operation, new files may be added and some old ones removed depending on the current situation in the object storage. The filesystem in the GUI can be updated with a simple click of a button.
-
-The filesystem can be also updated programatically with the `SIGUSR2` signal in both CLI and GUI.
+User can update the filesystem programatically with the `SIGUSR2` signal in both CLI and GUI. An update also clears cache. As a result of this operation, new files may be added and some old ones removed depending on the current situation in the object storage.
 
 To update the filesystem on bash in SD Desktop:
 ```bash
@@ -199,7 +197,7 @@ kill -s SIGUSR2 $(pgrep data-gateway-cli)
 kill -s SIGUSR2 $(pgrep data-gateway-gui)
 ```
 
-If the user wants to update particular SD Connect files inside the filesystem, the user can input command `clear <path>`. `<path>` is the path to the file/folder that the user wishes to update. `<path>` must at least contain a bucket, i.e. `SD-Connect/project/bucket` or `SD-Connect/project/bucket/file` would be acceptable paths, but not, e.g., `SD-Connect/project`. If the user gives a path to a folder, all files inside this folder are updated but no files are added or removed. This operation clears the cache for all the relevant files so that the new content is read from the storage and sizes of these files are updated in the filesystem.
+In addition, the filesystem in the GUI can be updated with a simple click of a button.
 
 ### Libfuse buffer size
 
@@ -222,14 +220,14 @@ Since this requires root access, it may not be possible to implement this in pro
 
 The provided unit tests can be run with:
 
-```sh
+```bash
 go test ./...
 ```
 ### Frontend linting and formatting
 
 Eslint is used for both linting and formatting checks. You can find the defined rules in `eslint.config.js`.
 
-```sh
+```bash
 cd frontend
 
 pnpm run lint
@@ -295,28 +293,32 @@ If you are not part of CSC and our development team, your help is nevertheless v
 
 <details><summary>Click to expand</summary>
 
+### Unauthorized error
+
+If you are testing Data Gateway with the Makefile and you receive an error log `Failed to get static configuration.json file: 401 Unauthorized`, you have probably left the `SDS_ACCESS_TOKEN` environment variable empty in the `.env` file.
+
 ### Cannot open GUI application on MacOS
 
 If clicking the icon produces a message which says that application cannot be opened or the program is killed in command line, decompressing the binary might help.
 
 Install upx with Homebrew
-```
+```bash
 brew install upx
 ```
 
 Decompress the binary
-```
+```bash
 upx -d data-gateway.app/Contents/MacOS/data-gateway
 ```
 
 ### Directory is not unmounted after program crash
 #### Linux
-```
+```bash
 fusermount -u <path>
 ```
 
 #### MacOS
-```
+```bash
 umount <path>
 ```
 
@@ -324,14 +326,14 @@ umount <path>
 #### GUI
 Click on the `Update` button to clear cached files.
 #### CLI
-Write `update` in the terminal where the process is running.
-```
-update
+Update the filesystem with a SIGUSR2 signal:
+```bash
+kill -s SIGUSR2 $(pgrep data-gateway-cli)
 ```
 
 ### Environment variables don't seem to be correct even though I am sure I am running the correct commands
 
-Make sure you have not exported any of the environment variables in you command line when running docker compose. They will override any envs given in the files.
+Make sure you have not exported any of the environment variables to your command line when running docker compose. They will override any envs given in the files.
 
 
 </details>
