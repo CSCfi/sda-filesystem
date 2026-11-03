@@ -7,10 +7,12 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -593,6 +595,176 @@ func TestCheckHeaderExistence_TooSmall(t *testing.T) {
 	origFs := getTestFuse(t)
 	if err := isValidFuse(origFs, testRoot, nil, ""); err != nil {
 		t.Errorf("Filesystem affected: %s", err.Error())
+	}
+}
+
+func TestWaitForUpdateSignal(t *testing.T) {
+	// Catch the signal in the test as well so that the default action of SIGUSR2,
+	// which terminates the process, cannot happen before WaitForUpdateSignal() is ready
+	caught := make(chan os.Signal, 1)
+	signal.Notify(caught, syscall.SIGUSR2)
+	defer signal.Stop(caught)
+
+	// WaitForUpdateSignal() never returns, so it keeps running for the rest of the tests
+	notify := make(chan any, 1)
+	go WaitForUpdateSignal(notify)
+
+	// Keep sending signals until WaitForUpdateSignal() has registered for them
+	timeout := time.After(5 * time.Second)
+	for {
+		if err := syscall.Kill(os.Getpid(), syscall.SIGUSR2); err != nil {
+			t.Fatalf("Failed to send signal: %s", err.Error())
+		}
+
+		select {
+		case <-notify:
+			return
+		case <-timeout:
+			t.Fatal("Signal did not reach notify channel")
+		// retry in next loop
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestHandleUpdateSignals(t *testing.T) {
+	var tests = []struct {
+		testname         string
+		notify           chan any
+		prefilled        bool
+		expectedNotified int
+		expectedUpdates  int32
+	}{
+		{
+			// GUI
+			"OK_NOTIFY", make(chan any, 1), false, 1, 0,
+		},
+		{
+			// CLI
+			"OK_NIL_NOTIFY", nil, false, 0, 1,
+		},
+		{
+			// Nobody is receiving from notify at the moment, GUI should still be the one to update
+			"OK_NO_RECEIVER", make(chan any), false, 0, 0,
+		},
+		{
+			// GUI has not yet started the previous update
+			"OK_NOTIFY_FULL", make(chan any, 1), true, 1, 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			var updates atomic.Int32
+			if tt.prefilled {
+				// Fill up channel -> update should not happen
+				tt.notify <- nil
+			}
+
+			s := make(chan os.Signal, 1)
+			s <- syscall.SIGUSR2
+			close(s)
+			handleUpdateSignals(s, tt.notify, func() { updates.Add(1) })
+
+			if len(tt.notify) != tt.expectedNotified {
+				t.Errorf("Incorrect number of values in notify. Expected=%d, received=%d", tt.expectedNotified, len(tt.notify))
+			}
+			if updates.Load() != tt.expectedUpdates {
+				t.Errorf("Incorrect number of updates. Expected=%d, received=%d", tt.expectedUpdates, updates.Load())
+			}
+		})
+	}
+}
+
+func TestHandleUpdateSignals_Busy(t *testing.T) {
+	var updates atomic.Int32
+	started := make(chan any, 10)
+	release := make(chan any)
+	update := func() {
+		updates.Add(1)
+		started <- nil
+		<-release // Wait until release is read
+	}
+
+	s := make(chan os.Signal, 10)
+	for range cap(s) {
+		s <- syscall.SIGUSR2
+	}
+	close(s)
+
+	done := make(chan any)
+	go func() {
+		handleUpdateSignals(s, nil, update)
+		close(done)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Update did not start")
+	}
+
+	// Signals received while the update is in progress should be ignored
+	timeout := time.After(5 * time.Second)
+	for len(s) > 0 {
+		select {
+		case <-timeout:
+			t.Fatal("Signals were not received")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	// The last signal may still be in processing, so give it time to be ignored before releasing the update.
+	// This also gives possible extra updates time to start before they are counted.
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Function did not return")
+	}
+
+	if updates.Load() != 1 {
+		t.Errorf("Signals received during an update should have been ignored. Expected 1 update, received %d", updates.Load())
+	}
+}
+
+func TestHandleUpdateSignals_Again(t *testing.T) {
+	var tests = []struct {
+		testname string
+		notify   chan any
+	}{
+		{"OK_NOTIFY", make(chan any, 2)},
+		{"OK_NIL_NOTIFY", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testname, func(t *testing.T) {
+			var updates atomic.Int32
+			s := make(chan os.Signal)
+			done := make(chan any)
+			go func() {
+				handleUpdateSignals(s, tt.notify, func() { updates.Add(1) })
+				close(done)
+			}()
+
+			// Once the previous update has finished, the next signal should cause a new update
+			s <- syscall.SIGUSR2
+			time.Sleep(100 * time.Millisecond) // Give the first update time to finish
+			s <- syscall.SIGUSR2
+			close(s)
+
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("Function did not return")
+			}
+
+			// Signals are handled as updates in CLI and as values left in notify in GUI
+			if handled := int(updates.Load()) + len(tt.notify); handled != 2 {
+				t.Errorf("Incorrect number of handled signals. Expected=2, received=%d", handled)
+			}
+		})
 	}
 }
 

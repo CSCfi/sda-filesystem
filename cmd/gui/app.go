@@ -197,7 +197,7 @@ func (a *App) InitFuse() {
 			<-wait // Wait for fuse to be ready
 			a.mounted = true
 
-			var notify = make(chan any)
+			var notify = make(chan any, 1)
 			go filesystem.WaitForUpdateSignal(notify)
 			go func() {
 				for {

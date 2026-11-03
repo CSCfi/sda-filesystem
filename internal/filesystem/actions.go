@@ -108,10 +108,19 @@ func GetNodeChildren(path string) []string {
 // The function does not update the filesystem again if it receives a signal while
 // an update is already in progress. In the GUI version, the `notify` channel is used
 // to trigger the update process instead of calling UpdateFilesystem() directly.
+// `notify` should be buffered so that signals are not lost while the GUI is busy.
 func WaitForUpdateSignal(notify chan<- any) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGUSR2)
 
+	handleUpdateSignals(s, notify, UpdateFilesystem)
+}
+
+// handleUpdateSignals either sends a value to `notify`, or calls `update` if `notify` is nil, for each signal received from `s`.
+// If `notify` already contains a value, the signal is ignored since the GUI has not yet started the previous update.
+// The function returns once `s` is closed and a possible update in progress has finished.
+// This is a separate function so it can be used in tests
+func handleUpdateSignals(s <-chan os.Signal, notify chan<- any, update func()) {
 	busy := make(chan any, 1)
 	for range s {
 		select {
@@ -119,16 +128,23 @@ func WaitForUpdateSignal(notify chan<- any) {
 			go func() {
 				defer func() { <-busy }()
 
-				select {
+				if notify == nil {
+					update()
+
+					return
+				}
+
 				// notify is needed for GUI
+				select {
 				case notify <- nil:
 				default:
-					UpdateFilesystem()
 				}
 			}()
 		default:
 		}
 	}
+
+	busy <- nil // Wait for update in progress
 }
 
 // rwLockState is used to hold a lock that the fuse operations in C also share
