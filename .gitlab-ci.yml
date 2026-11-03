@@ -88,28 +88,33 @@ renovate-config-validator:
 # TEST #
 ########
 
-test:
+.test-job:
   image:
     name: "${ARTIFACTORY_SERVER}/sds/sdd-common-ci:2026.10.0@sha256:4dbef76cae6000a9fed4636a748d6411a7c0959e2f9e5562090eaec572f74c26"
     docker:
       user: 1000:1000
   stage: test
+  tags:
+    - sds-test
+
+test-coverage:
+  extends: .test-job
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: always
     - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
-  tags:
-    - sds-test
   before_script:
     - mkdir frontend/dist && touch frontend/dist/empty.txt
     - go install gotest.tools/gotestsum@v1.13.0
     - go install github.com/boumenot/gocover-cobertura@v1.4.0
   script:
     - packages=$(go list -buildvcs=false ./... | grep -v -e frontend -e test -e build -e certs)
+    # Tests are run twice in random order to catch tests that depend on state left behind by other tests.
+    # Failed tests are not rerun, since a passing rerun would hide these failures.
     - >
-      gotestsum --junitfile report.xml --format testname --rerun-fails --rerun-fails-abort-on-data-race --packages "${packages}"
+      gotestsum --junitfile report.xml --format testname --packages "${packages}"
       --
-      -race -tags=fuse3 -coverprofile=coverage.out -covermode=atomic ${packages}
+      -race -tags=fuse3 -count 2 -shuffle=on -coverprofile=coverage.out -covermode=atomic ${packages}
     - gocover-cobertura < coverage.out > coverage.xml
     - go tool cover -func coverage.out
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
@@ -120,6 +125,16 @@ test:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
+
+# The race detector only checks Go memory, so the memory handled in C is checked
+# with AddressSanitizer. It cannot be used together with the race detector.
+test-asan:
+  extends: .test-job
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+  script:
+    - go test -asan -tags=fuse3 -count 2 -shuffle=on ./internal/filesystem
 
 
 #########

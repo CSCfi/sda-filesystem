@@ -548,7 +548,10 @@ func TestSetup_Error(t *testing.T) {
 			if tt.testname == "FAIL_8" {
 				Port = "8080"
 				os.Setenv("OVERRIDE_PROXY_URL", "")
-				t.Cleanup(func() { os.Unsetenv("OVERRIDE_PROXY_URL") })
+				t.Cleanup(func() {
+					Port = ""
+					os.Unsetenv("OVERRIDE_PROXY_URL")
+				})
 			}
 
 			err := Setup(MockReader{})

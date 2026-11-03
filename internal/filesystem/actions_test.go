@@ -1388,7 +1388,7 @@ func TestDownloadData_Error(t *testing.T) {
 			}
 			if int(errNo) != tt.expectedErrNo {
 				t.Errorf("Function set incorrect errNo. Expected=%v, received=%v",
-					syscall.Errno(tt.expectedErrNo), syscall.Errno(errNo))
+					syscall.Errno(tt.expectedErrNo), syscall.Errno(int(errNo)))
 			}
 			if nBytes != 0 {
 				t.Errorf("Number of bytes should be 0, received %d", nBytes)
