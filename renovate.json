@@ -5,6 +5,7 @@
       "matchPackageNames": ["/wails/"],
       "postUpgradeTasks": {
         "commands": [
+          "sh -c \"pnpm config set ${ARTIFACTORY_NPM_REGISTRY#https:}:_authToken $NPM_TOKEN\"",
           "pnpm --prefix frontend run build",
           "go install github.com/wailsapp/wails/v2/cmd/wails@{{{prettyNewVersion}}}",
           "mkdir -p dummy-pkgconfig",
