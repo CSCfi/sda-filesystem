@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -328,6 +329,8 @@ func TestMain(m *testing.M) {
 
 // getTestFuse returns a *FsState filled in based on variable testFuse
 func getTestFuse(t *testing.T) *_Ctype_struct_Node {
+	t.Helper()
+
 	var root jsonNode
 	if err := json.Unmarshal([]byte(testFuse), &root); err != nil {
 		t.Fatalf("Could not unmarshal json: %s", err.Error())
@@ -381,13 +384,15 @@ func assignChildren(node *_Ctype_struct_Node, template jsonNode) {
 	}
 }
 
-// findChildNode walks down node via child names, matching against each node's
+// findChildNode walks down `node` via child names, matching against each node's
 // safe name in turn. It does not rely on search_node/find_child_node so it can
 // be used to independently compute an expected node in tests.
 func findChildNode(t *testing.T, node *_Ctype_struct_Node, names ...string) *_Ctype_struct_Node {
+	t.Helper()
+
 	for _, name := range names {
 		if node == nil || node.children == nil {
-			t.Fatalf("Failed to find node %s", strings.Join(names, "/"))
+			t.Fatalf("Failed to find node %s (reached parent %q)", strings.Join(names, "/"), name)
 		}
 
 		var next *_Ctype_struct_Node
@@ -400,20 +405,25 @@ func findChildNode(t *testing.T, node *_Ctype_struct_Node, names ...string) *_Ct
 		}
 		node = next
 	}
+	if node == nil {
+		t.Fatalf("Failed to find node %s", strings.Join(names, "/"))
+	}
 
 	return node
 }
 
-func isValidFuse(origNode *_Ctype_struct_Node, node, parent *_Ctype_struct_Node, path string) error {
+// isValidFuse verifies that the filesystem found under `node` matches the filesystem found under `origNode`.
+// `expectedParent` should be the parent of `node`.
+func isValidFuse(origNode, node, expectedParent *_Ctype_struct_Node, path string) error {
 	if toGoStr(node.orig_name) != toGoStr(origNode.orig_name) {
 		return fmt.Errorf("original name not correct at node %q. Expected=%s, received=%s", path, toGoStr(origNode.orig_name), toGoStr(node.orig_name))
 	}
 	if node.stat.st_size != origNode.stat.st_size {
 		return fmt.Errorf("size not correct at node %q. Expected=%d, received=%d", path, origNode.stat.st_size, node.stat.st_size)
 	}
-	if parent == nil && node.stat.st_ino != 1 {
+	if expectedParent == nil && node.stat.st_ino != 1 {
 		return fmt.Errorf("ino not correct at node %q. Expected=1, received=%d", path, node.stat.st_ino)
-	} else if parent != nil && uintptr(node.stat.st_ino) != uintptr(unsafe.Pointer(node)) {
+	} else if expectedParent != nil && uintptr(node.stat.st_ino) != uintptr(unsafe.Pointer(node)) {
 		return fmt.Errorf("ino not correct at node %q. Expected=%d, received=%d", path, uintptr(unsafe.Pointer(node)), uintptr(node.stat.st_ino))
 	}
 	if node.stat.st_mode != origNode.stat.st_mode {
@@ -428,8 +438,8 @@ func isValidFuse(origNode *_Ctype_struct_Node, node, parent *_Ctype_struct_Node,
 	if origNode.children != nil && node.children == nil {
 		return fmt.Errorf("node %q should have children", path)
 	}
-	if node.parent != parent {
-		return fmt.Errorf("parent not correct at node %q. Expected=%p, received=%p", path, parent, node.parent)
+	if node.parent != expectedParent {
+		return fmt.Errorf("parent not correct at node %q. Expected=%p, received=%p", path, expectedParent, node.parent)
 	}
 	if node.children == nil {
 		if origNode.offset != node.offset {
@@ -511,23 +521,148 @@ func TestSetSignalBridge_And_CheckPanic(t *testing.T) {
 	panic("Muahahahaa")
 }
 
-func TestGenerateFilesystem(t *testing.T) {
-	testRoot := getTestFuse(t)
+// testStorage mocks the contents of S3 storage. Modify the fields
+// in order to change what the mocked api functions return.
+type testStorage struct {
+	buckets          map[api.Repo][]api.Metadata
+	objects          map[api.Repo]map[string][]api.Metadata
+	segments         map[api.Repo]map[string][]api.Metadata
+	bucketsErr       map[api.Repo]error
+	objectsErr       map[string]error
+	panicMsg         string
+	deletedFromCache []string // calls to api.DeleteFileFromCache()
+}
 
+func parseTime(t *testing.T, value string) *time.Time {
+	t.Helper()
+
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatalf("Failed to parse time %s: %s", value, err.Error())
+	}
+
+	return &parsed
+}
+
+// getTestStorage returns storage from which GenerateFilesystem() creates the filesystem
+func getTestStorage(t *testing.T) *testStorage {
+	t.Helper()
+
+	return &testStorage{
+		buckets: map[api.Repo][]api.Metadata{
+			rep1: {
+				{Name: "bucket_1_segments"},
+				{Name: "bucket_1"},
+				{Name: "bucket_2_segments"},
+				{Name: "bucket_2"},
+				{Name: "bucket_3"},
+				{Name: "shared#bucket", Owner: "sharing-project-1"},
+				{Name: "shared_bucket", Owner: "sharing-project-2"},
+			},
+			rep2: {
+				{Name: "https://my-example.com", Owner: "muumi"},
+				{Name: "bad-bucket"},
+				{Name: "bad-bucket_segments"},
+				{Name: "old-bucket"},
+				{Name: "old-bucket_segments"},
+			},
+			"Substandard-Repo": nil,
+		},
+		objects: map[api.Repo]map[string][]api.Metadata{
+			rep1: {
+				"bucket_1": {
+					{Size: 10, Name: "kansio/file@3", LastModified: parseTime(t, "2020-12-30T10:00:00Z")},
+					{Size: 10, Name: "kansio/file_3", LastModified: parseTime(t, "2010-01-24T18:34:05Z")},
+					{Size: 45, Name: "kansio/file_2", LastModified: parseTime(t, "2016-11-02T15:04:05Z")},
+					{Size: 23, Name: "kansio/file_1", LastModified: parseTime(t, "2006-01-02T15:04:05Z")},
+					{Size: 0, Name: "dir+/another_file", LastModified: parseTime(t, "2006-01-02T15:04:05Z")},
+				},
+				"bucket_2": {
+					{Size: 62, Name: "?folder/test", LastModified: parseTime(t, "2000-02-22T05:33:05Z")},
+					{Size: 3, Name: "?folder/file_1", LastModified: parseTime(t, "2011-01-02T10:45:55Z")},
+				},
+				"bucket_3": {
+					{Size: 151, Name: "testi", LastModified: parseTime(t, "2000-02-22T05:33:05Z")},
+				},
+				"shared_bucket": {
+					{Size: 42, Name: "shared-file.txt", LastModified: parseTime(t, "1999-09-12T06:30:00Z")},
+				},
+				"shared#bucket": {
+					{Size: 0, Name: "shared-file-2.txt", LastModified: parseTime(t, "2000-01-15T19:00:00Z")},
+				},
+			},
+			rep2: {
+				"https://my-example.com": {
+					{
+						Size: 5, Name: "tiedosto", LastModified: parseTime(t, "2025-07-31T23:00:05Z"),
+						ID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e",
+					},
+				},
+				"old-bucket": {
+					{Size: 0, Name: "dir+2/dir3.2.1/file.c4gh", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 1, Name: "dir+2/dir3.2.1/file/h%e%ll+o", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 1, Name: "dir5/", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 6, Name: "dir+2/dir3.2.1", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 0, Name: "dir+2/logs", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 0, Name: "dir4/another_file", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 0, Name: "dir4/another_file.c4gh", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+					{Size: 27, Name: "dir4/another+file.c4gh", LastModified: parseTime(t, "2020-02-13T12:00:00Z")},
+				},
+			},
+		},
+		segments: map[api.Repo]map[string][]api.Metadata{
+			rep1: {
+				"bucket_1_segments": {
+					{Size: 112, Name: "dir+/another_file/fyvutilbiyni/00000001"},
+				},
+			},
+			rep2: {
+				"https://my-example.com_segments": {
+					{Size: 5, Name: "tiedosto/gybtvtro6vtrob/00000001"},
+				},
+				"old-bucket_segments": {
+					{Size: 4, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000001"},
+					{Size: 5, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000002"},
+					{Size: 50, Name: "dir+2/logs/driyvfyuvfubofyuv/00000001"},
+					{Size: 5, Name: "dir4/another_file.c4gh/ftuovrubotov/00000002"},
+					{Size: 11, Name: "dir+2/logs/driyvfyuvfubofyuv/00000002"},
+					{Size: 40, Name: "dir+2/logs/driyvfyuvfubofyuv/00000003"},
+					{Size: 11, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000003"},
+					{Size: 9, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000004"},
+					{Size: 10, Name: "dir4/another_file/fkuvruycvrurui/00000001"},
+					{Size: 8, Name: "dir4/another_file.c4gh/ftuovrubotov/00000001"},
+				},
+			},
+		},
+		bucketsErr: map[api.Repo]error{},
+		objectsErr: map[string]error{},
+	}
+}
+
+// mockTestStorage mocks the api functions used by GenerateFilesystem() so that they return the contents of `storage`.
+// Buckets and objects that are not found in `storage` return an error.
+func mockTestStorage(t *testing.T, storage *testStorage) {
 	origGetRepositories := api.GetRepositories
 	origGetProjectName := api.GetProjectName
 	origGetBuckets := api.GetBuckets
 	origGetObjects := api.GetObjects
 	origGetSegmentedObjects := api.GetSegmentedObjects
+	origDeleteFileFromCache := api.DeleteFileFromCache
 	origHeaders := fi.headers
-	defer func() {
+	origGuiFun := fi.guiFun
+	t.Cleanup(func() {
 		api.GetRepositories = origGetRepositories
 		api.GetProjectName = origGetProjectName
 		api.GetBuckets = origGetBuckets
 		api.GetObjects = origGetObjects
 		api.GetSegmentedObjects = origGetSegmentedObjects
+		api.DeleteFileFromCache = origDeleteFileFromCache
 		fi.headers = origHeaders
-	}()
+		fi.guiFun = origGuiFun
+	})
+
+	fi.headers = make(map[_Ctype_ino_t]header)
+	fi.guiFun = nil
 
 	api.GetRepositories = func() []api.Repo {
 		return []api.Repo{rep1, rep2, "Bad-Repo", "Substandard-Repo"}
@@ -536,162 +671,87 @@ func TestGenerateFilesystem(t *testing.T) {
 		return "project"
 	}
 	api.GetBuckets = func(rep api.Repo) ([]api.Metadata, error) {
-		switch rep {
-		case rep1:
-			return []api.Metadata{
-				{Name: "bucket_1_segments"},
-				{Name: "bucket_1"},
-				{Name: "bucket_2_segments"},
-				{Name: "bucket_2"},
-				{Name: "bucket_3"},
-				{Name: "shared#bucket", Owner: "sharing-project-1"},
-				{Name: "shared_bucket", Owner: "sharing-project-2"},
-			}, nil
-		case rep2:
-			return []api.Metadata{
-				{Name: "https://my-example.com", Owner: "muumi"},
-				{Name: "bad-bucket"},
-				{Name: "bad-bucket_segments"},
-				{Name: "old-bucket"},
-				{Name: "old-bucket_segments"},
-			}, nil
-		case "Substandard-Repo":
-			return nil, nil
+		if storage.panicMsg != "" {
+			panic(storage.panicMsg)
+		}
+		if err := storage.bucketsErr[rep]; err != nil {
+			return nil, err
+		}
+		buckets, ok := storage.buckets[rep]
+		if !ok {
+			return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
 		}
 
-		return nil, fmt.Errorf("api.GetBuckets() received invalid repository %q", rep)
+		return slices.Clone(buckets), nil
 	}
 	api.GetObjects = func(rep api.Repo, bucket, path, owner, prefix string) ([]api.Metadata, error) {
-		switch rep {
-		case rep1:
-			switch bucket {
-			case "bucket_1":
-				time1, _ := time.Parse(time.RFC3339, "2020-12-30T10:00:00Z")
-				time2, _ := time.Parse(time.RFC3339, "2010-01-24T18:34:05Z")
-				time3, _ := time.Parse(time.RFC3339, "2016-11-02T15:04:05Z")
-				time4, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
-				time5, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
-
-				return []api.Metadata{
-					{Size: 10, Name: "kansio/file@3", LastModified: &time1},
-					{Size: 10, Name: "kansio/file_3", LastModified: &time2},
-					{Size: 45, Name: "kansio/file_2", LastModified: &time3},
-					{Size: 23, Name: "kansio/file_1", LastModified: &time4},
-					{Size: 0, Name: "dir+/another_file", LastModified: &time5},
-				}, nil
-			case "bucket_2":
-				time1, _ := time.Parse(time.RFC3339, "2000-02-22T05:33:05Z")
-				time2, _ := time.Parse(time.RFC3339, "2011-01-02T10:45:55Z")
-
-				return []api.Metadata{
-					{Size: 62, Name: "?folder/test", LastModified: &time1},
-					{Size: 3, Name: "?folder/file_1", LastModified: &time2},
-				}, nil
-			case "bucket_3":
-				time1, _ := time.Parse(time.RFC3339, "2000-02-22T05:33:05Z")
-
-				return []api.Metadata{
-					{Size: 151, Name: "testi", LastModified: &time1},
-				}, nil
-			case "shared_bucket":
-				time1, _ := time.Parse(time.RFC3339, "1999-09-12T06:30:00Z")
-
-				return []api.Metadata{
-					{Size: 42, Name: "shared-file.txt", LastModified: &time1},
-				}, nil
-			case "shared#bucket":
-				time1, _ := time.Parse(time.RFC3339, "2000-01-15T19:00:00Z")
-
-				return []api.Metadata{
-					{Size: 0, Name: "shared-file-2.txt", LastModified: &time1},
-				}, nil
-			default:
-				return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
-			}
-		case rep2:
-			switch bucket {
-			case "https://my-example.com":
-				time1, _ := time.Parse(time.RFC3339, "2025-07-31T23:00:05Z")
-
-				return []api.Metadata{
-					{Size: 5, Name: "tiedosto", LastModified: &time1, ID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e"},
-				}, nil
-			case "old-bucket":
-				time1, _ := time.Parse(time.RFC3339, "2020-02-13T12:00:00Z")
-
-				return []api.Metadata{
-					{Size: 0, Name: "dir+2/dir3.2.1/file.c4gh", LastModified: &time1},
-					{Size: 1, Name: "dir+2/dir3.2.1/file/h%e%ll+o", LastModified: &time1},
-					{Size: 1, Name: "dir5/", LastModified: &time1},
-					{Size: 6, Name: "dir+2/dir3.2.1", LastModified: &time1},
-					{Size: 0, Name: "dir+2/logs", LastModified: &time1},
-					{Size: 0, Name: "dir4/another_file", LastModified: &time1},
-					{Size: 0, Name: "dir4/another_file.c4gh", LastModified: &time1},
-					{Size: 27, Name: "dir4/another+file.c4gh", LastModified: &time1},
-				}, nil
-			}
-
+		if err := storage.objectsErr[bucket]; err != nil {
+			return nil, err
+		}
+		objects, ok := storage.objects[rep][bucket]
+		if !ok {
 			return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
 		}
 
-		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
+		return slices.Clone(objects), nil
 	}
 	api.GetSegmentedObjects = func(rep api.Repo, bucket string) ([]api.Metadata, error) {
-		switch rep {
-		case rep1:
-			if bucket == "bucket_1_segments" {
-				return []api.Metadata{
-					{Size: 112, Name: "dir+/another_file/fyvutilbiyni/00000001", LastModified: nil},
-				}, nil
-			}
-
-			return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
-		case rep2:
-			switch bucket {
-			case "https://my-example.com_segments":
-				return []api.Metadata{{Size: 5, Name: "tiedosto/gybtvtro6vtrob/00000001", LastModified: nil}}, nil
-			case "old-bucket_segments":
-				return []api.Metadata{
-					{Size: 4, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000001", LastModified: nil},
-					{Size: 5, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000002", LastModified: nil},
-					{Size: 50, Name: "dir+2/logs/driyvfyuvfubofyuv/00000001", LastModified: nil},
-					{Size: 5, Name: "dir4/another_file.c4gh/ftuovrubotov/00000002", LastModified: nil},
-					{Size: 11, Name: "dir+2/logs/driyvfyuvfubofyuv/00000002", LastModified: nil},
-					{Size: 40, Name: "dir+2/logs/driyvfyuvfubofyuv/00000003", LastModified: nil},
-					{Size: 11, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000003", LastModified: nil},
-					{Size: 9, Name: "dir+2/dir3.2.1/file.c4gh/ftkuvdticyidtyvi/00000004", LastModified: nil},
-					{Size: 10, Name: "dir4/another_file/fkuvruycvrurui/00000001", LastModified: nil},
-					{Size: 8, Name: "dir4/another_file.c4gh/ftuovrubotov/00000001", LastModified: nil},
-				}, nil
-			}
-
-			return nil, fmt.Errorf("api.GetObjects() received invalid %s bucket %s", rep, bucket)
+		segments, ok := storage.segments[rep][bucket]
+		if !ok {
+			return nil, fmt.Errorf("api.GetSegmentedObjects() received invalid %s bucket %s", rep, bucket)
 		}
 
-		return nil, fmt.Errorf("api.GetObjects() received invalid repository %s", rep)
+		return slices.Clone(segments), nil
 	}
+	api.DeleteFileFromCache = func(rep api.Repo, nodes []string, size int64) {
+		storage.deletedFromCache = append(storage.deletedFromCache, cacheEntry(rep, strings.Join(nodes, "/"), size))
+	}
+}
 
+// cacheEntry formats a call to api.DeleteFileFromCache()
+func cacheEntry(rep api.Repo, origPath string, size int64) string {
+	return fmt.Sprintf("%s:%s:%d", rep.ForPath(), origPath, size)
+}
+
+// generateTestFilesystem calls GenerateFilesystem() and frees the generated filesystem at cleanup
+func generateTestFilesystem(t *testing.T) {
+	origRoot := fi.root
+	t.Cleanup(func() {
+		ForgetAllForgotten()
+		// Reset the static root node so that later calls to GenerateFilesystem() do not use freed memory
+		if fi.root != nil && fi.root.cNode != nil {
+			root := fi.root.cNode
+			freeNodes(root)
+			*root = _Ctype_struct_Node{}
+		}
+		fi.root = origRoot
+	})
+
+	fi.root = nil
 	GenerateFilesystem()
+}
+
+func TestGenerateFilesystem(t *testing.T) {
+	testRoot := getTestFuse(t)
+	mockTestStorage(t, getTestStorage(t))
+
+	generateTestFilesystem(t)
 	if fi.root.cNode == testRoot {
 		t.Fatal("Global root should not point to test root")
 	}
 	if fi.state.root != nil {
 		t.Fatal("C state root should not be defined")
 	}
-	t.Cleanup(func() { freeNodes(fi.root.cNode); fi.root.cNode.chld_count = 0 })
 	if err := isValidFuse(testRoot, fi.root.cNode, nil, ""); err != nil {
 		t.Fatalf("FUSE was not created correctly: %s", err.Error())
 	}
 	expectedHeaders := map[string]header{
-		"/SD-Apply/my-example.com/tiedosto":                           {fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
-		"/SD-Connect/project/shared_bucket/shared-file.txt":           {owner: "sharing-project-2"},
-		"/SD-Connect/project/shared_bucket(58dca8)/shared-file-2.txt": {owner: "sharing-project-1"},
+		"SD-Apply/my-example.com/tiedosto":                           {fileID: "e72b6f25-62df-4a03-bf07-1f0b35a9684e", owner: "muumi"},
+		"SD-Connect/project/shared_bucket/shared-file.txt":           {owner: "sharing-project-2"},
+		"SD-Connect/project/shared_bucket(58dca8)/shared-file-2.txt": {owner: "sharing-project-1"},
 	}
 	for path, expectedHdr := range expectedHeaders {
-		node := searchNode(path)
-		if node == nil {
-			t.Fatalf("Could not find node %s", path)
-		}
+		node := findChildNode(t, fi.root.cNode, strings.Split(path, "/")...)
 		header, ok := fi.headers[node.stat.st_ino]
 		if !ok {
 			t.Fatalf("No header found for node %s", path)

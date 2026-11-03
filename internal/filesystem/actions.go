@@ -60,6 +60,12 @@ func toCStr(str string) *C.char {
 	return C.CString(str)
 }
 
+// freeCPtr frees memory allocated in C
+// This is a separate Go function so it can be used in tests
+func freeCPtr(ptr unsafe.Pointer) {
+	C.free(ptr)
+}
+
 func searchNode(path string) *C.node_t {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath)) //nolint:nlreturn

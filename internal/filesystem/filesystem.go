@@ -321,6 +321,9 @@ func goNodesToC(node *goNode, name string) {
 		cNode.stat.st_mode = syscall.S_IFDIR | 0744
 		cNode.stat.st_nlink = C.nlink_t(2 + childCount)
 		cNode.stat.st_size = 0
+		// Timestamp is recalculated from the children so that it can also move backwards
+		// if the newest child has been removed. An empty directory has timestamp 0.
+		cNode.last_modified.tv_sec = 0
 
 		C.free(unsafe.Pointer(cNode.children))
 		cNode.children = allocateNodeList(childCount)
@@ -353,8 +356,7 @@ func goNodesToC(node *goNode, name string) {
 		if ret != 0 {
 			logs.Warningf("kernel was not able to invalidate node %s: %v", path, syscall.Errno(-ret))
 		}
-		rep := api.Repo(pathNames[1])
-		if node.children == nil && rep == api.SDConnect {
+		if node.children == nil && api.Repo(pathNames[1]) == api.SDConnect {
 			api.DeleteFileFromCache(api.SDConnect, pathNames, int64(cNode.stat.st_size))
 		}
 	}
@@ -489,10 +491,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 	possibleMatch, ok := siblings[name]
 
 	// Node already existed
-	if ok && possibleMatch.meta.Name == meta.Name && (possibleMatch.children != nil) == isDir {
-		possibleMatch.meta = meta
-		possibleMatch.rootPtr = fi.root
-
+	if reuseNode(possibleMatch, meta, isDir) {
 		return name
 	}
 
@@ -522,6 +521,10 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 			siblings[newName] = twin
 		} else {
 			name = newName
+			// Node already existed under the unique name in a previous iteration
+			if reuseNode(siblings[name], meta, isDir) {
+				return name
+			}
 		}
 	}
 
@@ -537,6 +540,19 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 	siblings[name] = newGoNode(meta, isDir)
 
 	return name
+}
+
+// reuseNode checks whether `node` represents the same file/directory as `meta`.
+// If it does, the node is updated with `meta` and marked as persistent.
+func reuseNode(node *goNode, meta api.Metadata, isDir bool) bool {
+	if node == nil || node.meta.Name != meta.Name || (node.children != nil) != isDir {
+		return false
+	}
+
+	node.meta = meta
+	node.rootPtr = fi.root
+
+	return true
 }
 
 func newGoNode(meta api.Metadata, isDir bool) *goNode {
