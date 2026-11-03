@@ -203,7 +203,7 @@ build_profiles: down ## Build and run components with possible profile arguments
 exec: ## Access data-gateway container
 	@trap 'exit 0' SIGINT; docker exec -it data-gateway /bin/bash
 
-envs:
+envs: ## Run 'export $(make envs)' to get the environment variables needed to run binaries
 	@echo "$$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs) CLAMAV_SOCKET=$(SOCKET_PATH)"
 
 ### Following targets are for internal use, but you can still run them ###

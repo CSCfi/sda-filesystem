@@ -11,7 +11,7 @@ Released binaries are built for Linux and are available in Artifactory. **New re
 <details><summary>Click to expand</summary>
 
 ### Prerequisites
-- Go version 1.25+
+- Go version 1.27+
 - Docker
 - [vault](https://developer.hashicorp.com/vault/install)
 - On Linux, install `pkg-config`, `libfuse3-dev` and `socat` with `apt-get`.
