@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
 	"sda-filesystem/internal/logs"
 
@@ -26,7 +27,6 @@ import (
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
-	"github.com/google/uuid"
 	"github.com/neicnordic/crypt4gh/streaming"
 )
 
@@ -451,7 +451,7 @@ func getObjects(ctx context.Context, params *s3.ListObjectsV2Input, rep Repo) ([
 		if rep == SDApply && objects[i].Owner != nil {
 			// The file ID from the database is sent as the Owner ID.
 			// This ID needs to be included in the request when reading a file.
-			if err := uuid.Validate(*objects[i].Owner.ID); err == nil {
+			if _, err := uuid.Parse(*objects[i].Owner.ID); err == nil {
 				meta[i].ID = *objects[i].Owner.ID
 			}
 		}
