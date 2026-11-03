@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"math/rand"
+	"net/http"
 	"os"
 	"reflect"
 	"slices"
@@ -873,6 +874,17 @@ func TestUpdateFilesystem_NoChanges(t *testing.T) {
 	}
 }
 
+// statusError mocks an S3 error that has an HTTP status code
+type statusError int
+
+func (se statusError) Error() string {
+	return fmt.Sprintf("status code %d", int(se))
+}
+
+func (se statusError) HTTPStatusCode() int {
+	return int(se)
+}
+
 func TestUpdateFilesystem_APIError(t *testing.T) {
 	var tests = []struct {
 		testname   string
@@ -881,19 +893,48 @@ func TestUpdateFilesystem_APIError(t *testing.T) {
 		emptied    [][]string // directories that lose all their children in the update
 	}{
 		{
-			// Failing to fetch buckets means the repository appears empty after the update
-			"FAIL_BUCKETS_SD_CONNECT", map[api.Repo]error{rep1: errExpected}, nil,
+			// Temporary errors keep the contents from the previous update
+			"OK_BUCKETS_SD_CONNECT", map[api.Repo]error{rep1: errExpected}, nil, nil,
+		},
+		{
+			// Expired token is not a reason to remove contents either
+			"OK_BUCKETS_SD_APPLY_UNAUTHORIZED", map[api.Repo]error{rep2: statusError(http.StatusUnauthorized)}, nil, nil,
+		},
+		{
+			"OK_OBJECTS", nil,
+			map[string]error{"bucket_2": errExpected, "old-bucket": statusError(http.StatusInternalServerError)}, nil,
+		},
+		{
+			// Revoked access means the repository appears empty after the update
+			"FAIL_BUCKETS_SD_CONNECT_FORBIDDEN", map[api.Repo]error{rep1: statusError(http.StatusForbidden)}, nil,
 			[][]string{{rep1.ForPath()}},
 		},
 		{
 			// SD Apply files are never deleted from cache
-			"FAIL_BUCKETS_SD_APPLY", map[api.Repo]error{rep2: errExpected}, nil,
+			"FAIL_BUCKETS_SD_APPLY_NOT_FOUND", map[api.Repo]error{rep2: statusError(http.StatusNotFound)}, nil,
 			[][]string{{rep2.ForPath()}},
 		},
 		{
-			// Failing to fetch objects means the bucket appears empty after the update
-			"FAIL_OBJECTS", nil, map[string]error{"bucket_2": errExpected, "old-bucket": errExpected},
+			// Revoked access or removed bucket means the bucket appears empty after the update
+			"FAIL_OBJECTS", nil,
+			map[string]error{"bucket_2": statusError(http.StatusForbidden), "old-bucket": statusError(http.StatusNotFound)},
 			[][]string{{rep1.ForPath(), "project", "bucket_2"}, {rep2.ForPath(), "old-bucket"}},
+		},
+		{
+			// Only the bucket with revoked access is emptied
+			"FAIL_OBJECTS_MIXED", nil,
+			map[string]error{"bucket_2": statusError(http.StatusForbidden), "old-bucket": errExpected},
+			[][]string{{rep1.ForPath(), "project", "bucket_2"}},
+		},
+		{
+			// Repository without any buckets appears empty after the update
+			"FAIL_BUCKETS_NO_BUCKETS", map[api.Repo]error{rep2: fmt.Errorf("%w for %s", api.ErrNoBuckets, rep2)}, nil,
+			[][]string{{rep2.ForPath()}},
+		},
+		{
+			"FAIL_OBJECTS_INVALID_BUCKET_NAME", nil,
+			map[string]error{"bucket_2": fmt.Errorf("failed to list objects for bucket_2: %w", api.ErrInvalidBucketName)},
+			[][]string{{rep1.ForPath(), "project", "bucket_2"}},
 		},
 	}
 

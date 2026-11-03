@@ -24,7 +24,9 @@ import "C"
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"runtime/debug"
@@ -162,6 +164,7 @@ func GenerateFilesystem() {
 		buckets, err := api.GetBuckets(rep)
 		if err != nil {
 			logs.Error(err)
+			keepContents(fi.root.children[rep.ForPath()], rep.ForPath(), err)
 
 			continue
 		}
@@ -391,6 +394,7 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 		objects, err := api.GetObjects(repository, node.meta.Name, path, node.meta.Owner, "")
 		if err != nil {
 			logs.Error(err)
+			keepContents(node, path, err)
 
 			continue
 		}
@@ -423,6 +427,44 @@ var createObjects = func(_ int, jobs <-chan bucketInfo, wg *sync.WaitGroup) {
 		if fi.guiFun != nil {
 			fi.guiFun(repository, nodesSafe[2], 1)
 		}
+	}
+}
+
+// keepContents is called when the contents of `node` could not be retrieved from storage during a filesystem update.
+// Unless `err` indicates that the contents are no longer accessible, the contents from the previous update are kept
+// so that a temporary error does not make files disappear from the filesystem.
+func keepContents(node *goNode, path string, err error) {
+	if len(node.children) == 0 || contentsInaccessible(err) {
+		return
+	}
+
+	logs.Warningf("Showing previous contents of %s since they could not be updated", filepath.FromSlash(path))
+	for _, child := range node.children {
+		markPersistent(child)
+	}
+}
+
+// contentsInaccessible checks `err` to see if it indicates that the data is definetly no longer
+// accessible to the user
+func contentsInaccessible(err error) bool {
+	if errors.Is(err, api.ErrNoBuckets) || errors.Is(err, api.ErrInvalidBucketName) {
+		return true
+	}
+
+	var se interface{ HTTPStatusCode() int }
+	if !errors.As(err, &se) {
+		return false
+	}
+
+	return se.HTTPStatusCode() == http.StatusForbidden || se.HTTPStatusCode() == http.StatusNotFound
+}
+
+// markPersistent marks `node` and all its descendants as still existing in storage
+// so that they are not removed from the filesystem
+func markPersistent(node *goNode) {
+	node.rootPtr = fi.root
+	for _, child := range node.children {
+		markPersistent(child)
 	}
 }
 
