@@ -248,7 +248,25 @@ func (a *App) OpenFuse() {
 }
 
 func (a *App) FilesOpen() bool {
-	return filesystem.FilesOpen()
+	isOpen := filesystem.FilesOpen()
+	if isOpen {
+		continueButton := "Continue and update"
+		options := wailsruntime.MessageDialogOptions{
+			Type:          wailsruntime.WarningDialog,
+			Buttons:       []string{continueButton, "Cancel"},
+			DefaultButton: continueButton,
+			Title:         "Files are still in use",
+			Message:       "You are trying to update Data Gateway while you are still actively using it. Are you sure you want to continue?",
+		}
+		result, err := wailsruntime.MessageDialog(a.ctx, options)
+		if err != nil {
+			logs.Errorf("dialog gave an error, could not respond to user decision: %v", err)
+		} else if result == continueButton {
+			isOpen = false // Ignore open files
+		}
+	}
+
+	return isOpen
 }
 
 func (a *App) UpdateFuse() {
