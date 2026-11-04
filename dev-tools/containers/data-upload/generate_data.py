@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate lorem-ipsum containers and objects and upload them to swift object storage."""
+"""Generate fake containers and objects and upload them to swift object storage."""
 
 import argparse
 import os
@@ -12,10 +12,12 @@ from io import BytesIO
 from typing import Tuple
 from urllib.parse import quote
 
-import lorem
 import requests
 from crypt4gh.lib import encrypt, header
 from nacl.public import PrivateKey
+from faker import Faker
+
+fake = Faker()
 
 keystone_base_url = os.environ.get("KEYSTONE_BASE_URL", "http://127.0.0.1:5001")
 vault_base_url = os.environ.get("VAULT_ADDR", "http://127.0.0.1:8200")
@@ -145,19 +147,24 @@ def get_public_key(vault_token: str, project: str) -> bytes:
     return b64decode(keys[str(latest_version)]["public_key_c4gh_64"])
 
 
-def create_from_lorem(n_containers: int, n_objects: int, force_split: bool) -> list:
-    """Generate lorem-ipsum containers, each with a set of lorem-ipsum objects."""
+def _short_sentence() -> str:
+    # 1-3 words, capitalized, ending in a period -- mirrors lorem.get_sentence(word_range=(1, 3))
+    return fake.sentence(nb_words=random.randint(1, 3), variable_nb_words=False)
+
+
+def create_fake_data(n_containers: int, n_objects: int, force_split: bool) -> list:
+    """Generate fake containers, each with a set of fake objects."""
     data = []
     container_names = set()
     while len(container_names) < n_containers:
-        cont_name = lorem.get_sentence(comma=(0, 0), word_range=(1, 3))[:-1]
+        cont_name = _short_sentence()[:-1]
         container_names.add(cont_name.replace(" ", "-").lower())
 
     for cont_name in container_names:
         objects = []
         object_names = set()
         while len(object_names) < n_objects:
-            obj_name = lorem.get_sentence(comma=(0, 0), word_range=(1, 3))
+            obj_name = _short_sentence()
             obj_name = obj_name.replace(" ", "/")
             object_names.add(obj_name)
         for obj_name in object_names:
@@ -166,9 +173,7 @@ def create_from_lorem(n_containers: int, n_objects: int, force_split: bool) -> l
                 obj_name += "old."
             obj_name += "txt.c4gh"
 
-            objects.append(
-                {"name": obj_name, "content": lorem.get_paragraph(), "split_header": split}
-            )
+            objects.append({"name": obj_name, "content": fake.paragraph(), "split_header": split})
         data.append(
             {
                 "name": cont_name,
@@ -337,8 +342,8 @@ def _upload_container(ctx: RunContext, cont: dict) -> None:
 
 
 def run(ctx: RunContext, n_containers: int, n_objects: int, force_split_header: bool):
-    """Generate lorem-ipsum containers and objects and upload them to swift object storage."""
-    data = create_from_lorem(n_containers, n_objects, force_split_header)
+    """Generate fake containers and objects and upload them to swift object storage."""
+    data = create_fake_data(n_containers, n_objects, force_split_header)
 
     for cont in data:
         _upload_container(ctx, cont)

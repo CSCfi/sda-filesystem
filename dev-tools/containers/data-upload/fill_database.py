@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate lorem-ipsum datasets, upload them to swift and record them in the SDA database."""
+"""Generate fake datasets, upload them to swift and record them in the SDA database."""
 
 import argparse
 import os
@@ -17,7 +17,7 @@ from generate_data import (
     VaultAccess,
     authenticate,
     build_path,
-    create_from_lorem,
+    create_fake_data,
     encrypt_data,
     register_visa,
     report_total_time,
@@ -127,8 +127,8 @@ def _upload_dataset_files(ctx: UploadContext, conn, dataset_id, ds: dict, file_n
 def run(
     ctx: UploadContext, db_string: str, n_datasets_for_user: int, n_datasets: int, n_objects: int
 ):
-    """Generate lorem-ipsum datasets, upload them to swift and record them in the SDA database."""
-    data = create_from_lorem(n_datasets, n_objects, True)
+    """Generate fake datasets, upload them to swift and record them in the SDA database."""
+    data = create_fake_data(n_datasets, n_objects, True)
 
     try:
         conn = psycopg2.connect(db_string)

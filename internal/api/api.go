@@ -17,12 +17,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
 	"sda-filesystem/internal/cache"
 	"sda-filesystem/internal/logs"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/google/uuid"
 	"github.com/neicnordic/crypt4gh/keys"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -36,7 +36,7 @@ var ai = apiInfo{
 		client:    &http.Client{Transport: http.DefaultTransport},
 	},
 	vi: vaultInfo{
-		keyName: uuid.NewString(),
+		keyName: uuid.New().String(),
 	},
 	repositories: []Repo{SDApply},
 }
