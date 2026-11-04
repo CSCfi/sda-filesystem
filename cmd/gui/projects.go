@@ -63,5 +63,7 @@ func (ph *ProjectHandler) trackProjectProgress(rep api.Repo, name string, count 
 }
 
 func (ph *ProjectHandler) DeleteProjects() {
+	ph.lock.Lock()
+	defer ph.lock.Unlock()
 	ph.prog = make(map[Project]progress)
 }

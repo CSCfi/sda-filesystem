@@ -53,4 +53,7 @@ void free_nodes(node_t *node) {
     free(node->children);
     free(node->name);
     free(node->orig_name);
+    node->children = NULL;
+    node->name = NULL;
+    node->orig_name = NULL;
 }

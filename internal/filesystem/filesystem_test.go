@@ -717,13 +717,8 @@ func cacheEntry(rep api.Repo, origPath string, size int64) string {
 func generateTestFilesystem(t *testing.T) {
 	origRoot := fi.root
 	t.Cleanup(func() {
-		ForgetAllForgotten()
 		// Reset the static root node so that later calls to GenerateFilesystem() do not use freed memory
-		if fi.root != nil && fi.root.cNode != nil {
-			root := fi.root.cNode
-			freeNodes(root)
-			*root = _Ctype_struct_Node{}
-		}
+		resetFilesystem()
 		fi.root = origRoot
 	})
 
@@ -734,8 +729,8 @@ func generateTestFilesystem(t *testing.T) {
 func TestGenerateFilesystem(t *testing.T) {
 	testRoot := getTestFuse(t)
 	mockTestStorage(t, getTestStorage(t))
-
 	generateTestFilesystem(t)
+
 	if fi.root.cNode == testRoot {
 		t.Fatal("Global root should not point to test root")
 	}
@@ -763,6 +758,33 @@ func TestGenerateFilesystem(t *testing.T) {
 	}
 	if len(fi.headers) > 0 {
 		t.Fatalf("Too many headers, leftover: %+v", fi.headers)
+	}
+}
+
+func TestGenerateFilesystem_Remount(t *testing.T) {
+	mockTestStorage(t, getTestStorage(t))
+	generateTestFilesystem(t)
+
+	root := fi.root.cNode
+	// Simulate s3_destroy() followed by mount_filesystem() returning
+	freeNodes(root)
+	ForgetAllForgotten()
+	resetFilesystem()
+
+	if root.children != nil || root.name != nil || root.orig_name != nil || root.chld_count != 0 {
+		t.Fatal("Root node was not reset")
+	}
+	if fi.root != nil {
+		t.Fatal("Go root should be nil after reset")
+	}
+	if len(fi.headers) > 0 {
+		t.Fatalf("Headers should be empty after reset, got %+v", fi.headers)
+	}
+
+	testRoot := getTestFuse(t)
+	GenerateFilesystem()
+	if err := isValidFuse(testRoot, fi.root.cNode, nil, ""); err != nil {
+		t.Fatalf("FUSE was not created correctly after remount: %s", err.Error())
 	}
 }
 

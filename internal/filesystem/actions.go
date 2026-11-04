@@ -391,7 +391,7 @@ func CheckHeaderExistence(node *C.node_t) int64 {
 	hdr := fi.headers[node.stat.st_ino]
 	hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.fileID)
 	if err != nil {
-		logs.Errorf("Failed to retrieve header from Vault for object %s: %v", path, err)
+		logs.Errorf("Failed to retrieve header from Vault for object %s: %w", path, err)
 
 		return -1
 	}

@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/mail"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,10 +28,13 @@ type App struct {
 	ctx         context.Context
 	ph          *ProjectHandler
 	lh          *LogHandler
+	initLock    sync.Mutex // Frontend may call InitializeAPI() concurrently when reloaded in dev mode
+	mountLock   sync.Mutex
 	mountpoint  string
 	preventQuit atomic.Bool
 	paniced     bool
-	mounted     bool
+	fuseStarted atomic.Bool // Frontend may call InitFuse() again when reloaded in dev mode
+	mounted     atomic.Bool
 }
 
 // NewApp creates a new App application struct
@@ -52,7 +55,7 @@ func (a *App) beforeClose(_ context.Context) (prevent bool) {
 
 // Quit can be used in frontend to quit application
 func (a *App) Quit() {
-	if a.mounted {
+	if a.mounted.Load() {
 		if err := filesystem.UnmountFilesystem(); err != nil {
 			logs.Error(err)
 			wailsruntime.EventsEmit(a.ctx, "unmountFailed")
@@ -81,20 +84,34 @@ func (a *App) Panic() {
 	}
 	result, err := wailsruntime.MessageDialog(a.ctx, options)
 	if err != nil {
-		logs.Error(fmt.Errorf("dialog gave an error, could not respond to user decision: %w", err))
+		logs.Errorf("dialog gave an error, could not respond to user decision: %w", err)
 	} else if result == quitButton {
 		wailsruntime.EventsEmit(a.ctx, "saveLogsAndQuit")
 	}
 }
 
 func (a *App) GetDefaultMountPoint() string {
-	var err error
-	a.mountpoint, err = mountpoint.DefaultMountPoint()
+	mount, err := mountpoint.DefaultMountPoint()
 	if err != nil {
 		logs.Warning(err)
 	}
+	logs.Info("Default mount point is ", mount)
+	a.setMountPoint(mount)
+
+	return mount
+}
+
+func (a *App) getMountPoint() string {
+	a.mountLock.Lock()
+	defer a.mountLock.Unlock()
 
 	return a.mountpoint
+}
+
+func (a *App) setMountPoint(mount string) {
+	a.mountLock.Lock()
+	defer a.mountLock.Unlock()
+	a.mountpoint = mount
 }
 
 func (a *App) GetVersion() string {
@@ -106,6 +123,9 @@ func (a *App) GetUsername() string {
 }
 
 func (a *App) InitializeAPI() (bool, error) {
+	a.initLock.Lock()
+	defer a.initLock.Unlock()
+
 	defer func() {
 		reps := make(map[string]bool)
 		enabled := api.GetRepositories()
@@ -166,7 +186,7 @@ func (a *App) ChangeMountPoint() (string, error) {
 	options := wailsruntime.OpenDialogOptions{DefaultDirectory: home, CanCreateDirectories: true}
 	mount, err := wailsruntime.OpenDirectoryDialog(a.ctx, options)
 	if mount == "" {
-		return a.mountpoint, nil
+		return a.getMountPoint(), nil
 	}
 	if err != nil {
 		logs.Error(err)
@@ -184,18 +204,28 @@ func (a *App) ChangeMountPoint() (string, error) {
 	}
 
 	logs.Infof("Data Gateway will be mounted at %s", mount)
-	a.mountpoint = mount
+	a.setMountPoint(mount)
 
 	return mount, nil
 }
 
 func (a *App) InitFuse() {
+	if !a.fuseStarted.CompareAndSwap(false, true) {
+		logs.Debug("Data Gateway has already been initialized")
+		// If the filesystem has not yet been mounted, fuseReady will be emitted later
+		if a.mounted.Load() {
+			wailsruntime.EventsEmit(a.ctx, "fuseReady")
+		}
+
+		return
+	}
+
 	a.preventQuit.Store(true)
 	go func() {
 		var wait = make(chan any)
 		go func() {
 			<-wait // Wait for fuse to be ready
-			a.mounted = true
+			a.mounted.Store(true)
 
 			var notify = make(chan any, 1)
 			go filesystem.WaitForUpdateSignal(notify)
@@ -213,16 +243,18 @@ func (a *App) InitFuse() {
 				wailsruntime.EventsEmit(a.ctx, "fuseReady")
 			}()
 		}()
-		ret := filesystem.MountFilesystem(a.mountpoint, a.ph.trackProjectProgress, wait)
+		ret := filesystem.MountFilesystem(a.getMountPoint(), a.ph.trackProjectProgress, wait)
 		if ret > 0 {
 			logs.Errorf("Exit status %d", ret)
 		}
+		a.mounted.Store(false)
+		a.fuseStarted.Store(false)
 	}()
 }
 
 func (a *App) OpenFuse() {
 	var cmd *exec.Cmd
-	userPath := a.mountpoint
+	userPath := a.getMountPoint()
 
 	_, err := os.Stat(userPath)
 	if err != nil {
@@ -260,7 +292,7 @@ func (a *App) FilesOpen() bool {
 		}
 		result, err := wailsruntime.MessageDialog(a.ctx, options)
 		if err != nil {
-			logs.Errorf("dialog gave an error, could not respond to user decision: %v", err)
+			logs.Errorf("dialog gave an error, could not respond to user decision: %w", err)
 		} else if result == continueButton {
 			isOpen = false // Ignore open files
 		}
@@ -270,7 +302,7 @@ func (a *App) FilesOpen() bool {
 }
 
 func (a *App) UpdateFuse() {
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond) // So that user can see the progressbar from the beginning
 
 	a.ph.DeleteProjects()
 	filesystem.UpdateFilesystem()
@@ -279,6 +311,8 @@ func (a *App) UpdateFuse() {
 	if len(buckets) > 0 {
 		wailsruntime.EventsEmit(a.ctx, "setBuckets", buckets)
 	}
+
+	time.Sleep(time.Second) // So that progressbar animation is detectable
 	wailsruntime.EventsEmit(a.ctx, "fuseReady")
 }
 

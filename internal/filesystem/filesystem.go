@@ -100,7 +100,7 @@ var checkPanic = func() {
 	}
 }
 
-// MountFilesystem mounts filesystem to directory `mount“
+// MountFilesystem mounts filesystem to directory `mount`
 func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<- any) int {
 	logs.Infof("Mounting Data Gateway at %s", mount)
 	fi.mount = mount
@@ -119,7 +119,29 @@ func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<-
 		fuseDebug = 1
 	}
 
-	return int(C.mount_filesystem(&fi.state, m, fuseDebug)) //nolint:gocritic,nlreturn
+	ret := int(C.mount_filesystem(&fi.state, m, fuseDebug)) //nolint:gocritic,nlreturn
+	resetFilesystem()
+
+	return ret
+}
+
+// resetFilesystem frees the C node tree and clears the Go state after the filesystem
+// has been unmounted, so that the next mount builds the filesystem from scratch
+// instead of reusing freed memory. Safe to call even if the destroy operation already ran.
+// Needed when running GUI in dev mode.
+func resetFilesystem() {
+	// Usually s3_destroy() has already freed the memory, but libfuse skips the destroy
+	// operation if the session ended before receiving INIT. Freeing twice is harmless
+	// since free_nodes() sets the freed pointers to NULL.
+	ForgetAllForgotten()
+	if fi.root != nil && fi.root.cNode != nil {
+		root := fi.root.cNode
+		freeNodes(root)
+		*root = C.node_t{} // reset fuse_root
+	}
+	fi.root = nil
+	fi.state.se = nil // Session was destroyed in mount_filesystem()
+	clear(fi.headers)
 }
 
 // allocateNodeList reserves memory for an array of node pointers in C.
@@ -529,7 +551,7 @@ func makeNode(siblings map[string]*goNode, meta api.Metadata, isDir, isBucket bo
 	}
 
 	// possibleMatch is either the node itself if the filesystem is currently being updated,
-	// or it can be a new node that just has the same safe name
+	// or it can be another node that just has the same safe name
 	possibleMatch, ok := siblings[name]
 
 	// Node already existed
