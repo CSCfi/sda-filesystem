@@ -9,8 +9,14 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- use `uuid` package from standard Go library
+- replace abandoned `python-lorem` with `Faker`
 - use `JF_IDENTITY_TOKEN` in `push-dev` instead of `JF_CONFIG`,
 - get CI secrets from Vault
+
+### Fixed
+
+- authenticate `pnpm` against Artifactory npm registry in renovate `postUpgradeTasks`
 
 ## [2026.9.0] - 2026-09-28
 
