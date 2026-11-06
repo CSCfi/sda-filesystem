@@ -9,6 +9,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Changed
 
+- (users) if listing buckets or objects produces an error when updating filesystem, keep the old metadata unless the error indicates definitively that the data is no longer accessible to the user
+- (users) filesystem can be updated even when files are in use. In GUI, the user is asked to confirm if they are sure they want to update in such cases.
+- run unit tests twice in CI
+- the way the nodes are saved in C. Instead of a single array where the nodes are sorted in a certain way, each node has its own location in memory that does not change across filesystem updates. The fuse can access the node directly by extracting the node's memory address from its inode number (#86)
+- switch to using low level libfuse (#88)
 - use `uuid` package from standard Go library
 - replace abandoned `python-lorem` with `Faker`
 - use `JF_IDENTITY_TOKEN` in `push-dev` instead of `JF_CONFIG`,
@@ -16,7 +21,16 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- data races that occurred when GUI reloaded in dev mode
 - authenticate `pnpm` against Artifactory npm registry in renovate `postUpgradeTasks`
+
+### Added
+
+- CI job `test-asan` which helps detect memory bugs in C
+
+### Removed
+
+- (users) user input commands `update` and `clear` in CLI. Use SIGUSR2 to update filesystem
 
 ## [2026.9.0] - 2026-09-28
 
