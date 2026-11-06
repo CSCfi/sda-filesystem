@@ -202,7 +202,7 @@ async function addFiles(paths: string[]) {
     selectedSet.value.files.push(...set.files);
     selectedSet.value.exists.push(...exists);
   } catch (e) {
-    EventsEmit("showToast", "File selection failed", e as string);
+    EventsEmit("showToast", "File selection failed", e);
   }
 }
 
@@ -245,7 +245,7 @@ async function validateBucketInput(input: string): Promise<ValidationResult> {
       result.ownable = true;
     } catch (e) {
       result.ownable = false;
-      EventsEmit("showToast", "Bucket cannot be selected", e as string);
+      EventsEmit("showToast", "Bucket cannot be selected", e);
     }
   }
 

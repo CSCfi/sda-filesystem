@@ -73,7 +73,7 @@ onMounted(() => {
     }
   }).catch((e) => {
     disabled.value = true;
-    EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
+    EventsEmit("showToast", "Initializing Data Gateway failed", e);
   });
 });
 
@@ -81,10 +81,12 @@ EventsOnce("sessionExpired", () => {
   toasts.value?.addToast(sessionMessage);
 });
 
-EventsOn("showToast", (title: string, err: string) => {
+EventsOn("showToast", (title: string, err: unknown) => {
+  const text = err instanceof Error ? err.message : String(err);
+
   const message: CToastMessage = {
     title: title,
-    message: err,
+    message: text,
     type: "error" as CToastType,
     persistent: true,
   };

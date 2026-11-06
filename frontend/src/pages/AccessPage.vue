@@ -107,7 +107,7 @@ function changeMountPoint() {
   ChangeMountPoint().then((dir: string) => {
     mountpoint.value = dir;
   }).catch((e) => {
-    EventsEmit("showToast", "Could not change folder", e as string);
+    EventsEmit("showToast", "Could not change folder", e);
   });
 }
 
