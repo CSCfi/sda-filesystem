@@ -1,8 +1,7 @@
 <script lang="ts" setup>
 import { DeleteProjects } from "../../wailsjs/go/main/ProjectHandler";
-import { reactive, ref, onMounted, computed } from "vue";
+import { reactive, ref, onMounted, computed, watch } from "vue";
 import {
-  GetDefaultMountPoint,
   OpenFuse,
   UpdateFuse,
   ChangeMountPoint,
@@ -17,6 +16,10 @@ import type {
 import { CAlertType } from "@cscfi/csc-ui";
 import { EventsEmit, EventsOn } from "../../wailsjs/runtime";
 import { TabType } from "../types/common";
+
+const props = defineProps<{
+  defaultMountpoint: string,
+}>();
 
 const projectHeaders: CDataTableHeader[] = [
   { key: "name", value: "Name" },
@@ -61,9 +64,6 @@ const paginationOptions: CPaginationOptions = {
 };
 
 onMounted(() => {
-  GetDefaultMountPoint().then((dir: string) => {
-    mountpoint.value = dir;
-  });
   DeleteProjects(); // so that reloading in development mode does not duplicate data
 });
 
@@ -96,6 +96,12 @@ EventsOn("fuseReady", () => {pageIdx.value = 4; updating.value = false;});
 EventsOn("update", () => update());
 
 EventsOn("virusFound", () => {virusFound.value = true;});
+
+watch(() => props.defaultMountpoint, (newVal: string) => {
+  if (newVal) {
+    mountpoint.value = newVal;
+  }
+});
 
 function changeMountPoint() {
   ChangeMountPoint().then((dir: string) => {

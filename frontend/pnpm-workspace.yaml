@@ -3,6 +3,7 @@ minimumReleaseAge: 4320
 overrides:
   "swiper": "^12.1.2"
   "uuid": "^11.1.1"
+  "minimatch": "^11.0.1"
 
 allowBuilds:
   esbuild: true
