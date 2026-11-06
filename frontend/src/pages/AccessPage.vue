@@ -110,11 +110,6 @@ function update() {
 
   FilesOpen().then((open: boolean) => {
     if (open) {
-      EventsEmit(
-        "showToast",
-        "Update not possible",
-        "You have files in use which prevents updating Data Gateway"
-      );
       updating.value = false;
     } else {
       virusFound.value = false;

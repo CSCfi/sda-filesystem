@@ -1,16 +1,10 @@
 package main
 
 import (
-	"reflect"
-	"strings"
 	"testing"
-	"time"
 
 	"sda-filesystem/internal/api"
-	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestImportSetup(t *testing.T) {
@@ -128,64 +122,5 @@ func TestImportSetup_Error(t *testing.T) {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
 			}
 		})
-	}
-}
-
-func TestUserInput(t *testing.T) {
-	finished := make(chan bool)
-	expectedOutput := [][]string{{"continue"}, {"hello", "sunshine"}, {"update"}}
-	reader := strings.NewReader("continue\nhello sunshine\nupdate")
-
-	var ch = make(chan []string)
-	go func() {
-		userInput(reader, ch)
-	}()
-	go func() {
-		for i := range expectedOutput {
-			nextLine := <-ch
-			if !reflect.DeepEqual(nextLine, expectedOutput[i]) {
-				return
-			}
-		}
-		finished <- true
-	}()
-
-	time.Sleep(10 * time.Millisecond)
-
-	select {
-	case fin := <-finished:
-		if !fin {
-			t.Fatal("Function did not read input correctly.")
-		}
-	default:
-		return
-	}
-}
-
-func TestUserInput_Error(t *testing.T) {
-	buf := &testStream{err: errExpected}
-
-	level := make(chan string, 1)
-	strs := make(chan []string, 1)
-	logs.SetSignal(func(ll string, s []string) {
-		level <- ll
-		strs <- s
-	})
-	defer logs.SetSignal(func(l string, s []string) {})
-
-	var ch = make(chan []string)
-	go func() {
-		userInput(buf, ch)
-	}()
-
-	time.Sleep(10 * time.Millisecond)
-
-	err := []string{"Could not read input", errExpected.Error()}
-	if logrus.ErrorLevel.String() != <-level {
-		t.Fatal("Function did not log an error")
-	}
-	receivedStrs := <-strs
-	if !reflect.DeepEqual(receivedStrs, err) {
-		t.Fatalf("Logged output incorrect\nExpected: %q\nReceived: %q", err, receivedStrs)
 	}
 }

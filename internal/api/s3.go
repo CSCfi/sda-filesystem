@@ -38,6 +38,9 @@ const BlockSize int64 = 65536
 const MacSize int64 = 28
 const CipherBlockSize = BlockSize + MacSize
 
+var ErrNoBuckets = errors.New("no buckets found")
+var ErrInvalidBucketName = errors.New("bucket name is not S3 compatible")
+
 // Metadata standardises the metadata received for both buckets and objects
 type Metadata struct {
 	Name         string
@@ -169,11 +172,8 @@ var customFinalize = middleware.FinalizeMiddlewareFunc("customFinalize", func(
 
 	out, metadata, err = next.HandleFinalize(ctx, in)
 
-	var ae smithy.APIError
-	if errors.As(err, &ae) {
-		if ae.ErrorCode() == "SessionExpired" {
-			ai.sessionExpiredFun()
-		}
+	if ae, ok := errors.AsType[smithy.APIError](err); ok && ae.ErrorCode() == "SessionExpired" {
+		ai.sessionExpiredFun()
 	}
 
 	return
@@ -300,8 +300,7 @@ var CreateBucket = func(rep Repo, bucket string) error {
 	err = s3.NewBucketExistsWaiter(ai.hi.s3Client).Wait(
 		ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, time.Minute)
 	if err != nil {
-		var re *smithyhttp.ResponseError
-		if errors.As(err, &re) {
+		if re, ok := errors.AsType[*smithyhttp.ResponseError](err); ok {
 			err = re.Err
 		}
 
@@ -323,9 +322,9 @@ var GetBuckets = func(rep Repo) ([]Metadata, error) {
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
 		if err != nil {
-			var re *smithyhttp.ResponseError
-			if errors.As(err, &re) {
-				err = re.Err
+			if re, ok := errors.AsType[*smithyhttp.ResponseError](err); ok {
+				// Keep the status code available to the caller
+				err = re
 			}
 
 			return nil, fmt.Errorf("failed to list buckets for %s: %w", rep, err)
@@ -366,7 +365,7 @@ var GetBuckets = func(rep Repo) ([]Metadata, error) {
 	}
 
 	if numBuckets+len(sharedMap) == 0 {
-		return nil, fmt.Errorf("no buckets found for %s", rep)
+		return nil, fmt.Errorf("%w for %s", ErrNoBuckets, rep)
 	}
 
 	for owner := range sharedMap {
@@ -394,11 +393,8 @@ var GetObjects = func(rep Repo, bucket, path, owner, prefix string) ([]Metadata,
 
 	meta, err := getObjects(ctx, params, rep)
 	if err != nil {
-		var ae smithy.APIError
-		if errors.As(err, &ae) {
-			if ae.ErrorCode() == "InvalidBucketName" {
-				err = fmt.Errorf("bucket name %q is not S3 compatible", bucket)
-			}
+		if ae, ok := errors.AsType[smithy.APIError](err); ok && ae.ErrorCode() == "InvalidBucketName" {
+			err = ErrInvalidBucketName
 		}
 
 		return nil, fmt.Errorf("failed to list objects for %s: %w", path, err)
@@ -433,9 +429,9 @@ func getObjects(ctx context.Context, params *s3.ListObjectsV2Input, rep Repo) ([
 		output, err := paginator.NextPage(ctx)
 
 		if err != nil {
-			var re *smithyhttp.ResponseError
-			if errors.As(err, &re) {
-				err = re.Err
+			if re, ok := errors.AsType[*smithyhttp.ResponseError](err); ok {
+				// Keep the status code available to the caller
+				err = re
 			}
 
 			return nil, err
@@ -536,8 +532,7 @@ func getDataChunk(
 		Range:  aws.String(fmt.Sprintf("bytes=%d-%d", startEncrypted, endEncrypted-1)),
 	})
 	if err != nil {
-		var re *smithyhttp.ResponseError
-		if errors.As(err, &re) {
+		if re, ok := errors.AsType[*smithyhttp.ResponseError](err); ok {
 			err = re.Err
 		}
 
@@ -601,8 +596,7 @@ var UploadObject = func(
 		Metadata:    metadata,
 	})
 	if err != nil {
-		var re *smithyhttp.ResponseError
-		if errors.As(err, &re) {
+		if re, ok := errors.AsType[*smithyhttp.ResponseError](err); ok {
 			if re.HTTPStatusCode() == 413 {
 				err = errors.New("object is too large")
 			} else {
@@ -631,8 +625,7 @@ var DeleteObject = func(rep Repo, bucket, object string) error {
 
 	_, err := ai.hi.s3Client.DeleteObject(ctx, params)
 	if err != nil {
-		var re *smithyhttp.ResponseError
-		if errors.As(err, &re) {
+		if re, ok := errors.AsType[*smithyhttp.ResponseError](err); ok {
 			err = re.Err
 		}
 

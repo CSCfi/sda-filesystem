@@ -19,7 +19,7 @@ func TestNewRistrettoCache(t *testing.T) {
 
 	c2, err2 := NewRistrettoCache()
 	if err2 != nil {
-		t.Fatalf("Second call failed: %s", err.Error())
+		t.Fatalf("Second call failed: %s", err2.Error())
 	}
 
 	if c2 != c {

@@ -1,6 +1,7 @@
 package filesystem
 
 /*
+#include <errno.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include "helpers.h"
@@ -11,14 +12,15 @@ import "C"
 import (
 	"bufio"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
@@ -30,9 +32,6 @@ import (
 	"sda-filesystem/internal/api"
 	"sda-filesystem/internal/logs"
 	"sda-filesystem/internal/mountpoint"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/smithy-go"
 )
 
 // Crypt4GH constants
@@ -45,8 +44,8 @@ var pidRegex = regexp.MustCompile(`^\d+[a-z]?$`)
 
 // freeNodes calls C function free_nodes()
 // This is a separate Go function so it can be used in tests
-func freeNodes(n *C.nodes_t) {
-	C.free_nodes(n)
+func freeNodes(root *C.node_t) {
+	C.free_nodes(root)
 }
 
 // toGoStr coverts C string to Go string
@@ -55,31 +54,37 @@ func toGoStr(str *C.char) string {
 	return C.GoString(str)
 }
 
-func WaitForUpdateSignal(ch chan<- []string) {
-	s := make(chan os.Signal, 1)
-	signal.Notify(s, syscall.SIGUSR2)
-	for {
-		<-s
-		ch <- []string{"update"}
-	}
+// toCStr coverts Go string to C string
+// This is a separate Go function so it can be used in tests
+func toCStr(str string) *C.char {
+	return C.CString(str)
+}
+
+// freeCPtr frees memory allocated in C
+// This is a separate Go function so it can be used in tests
+func freeCPtr(ptr unsafe.Pointer) {
+	C.free(ptr)
 }
 
 func searchNode(path string) *C.node_t {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath)) //nolint:nlreturn
 
-	return C.search_node(fi.nodes, cpath) //nolint:nlreturn
+	return C.search_node(fi.root.cNode, cpath) //nolint:nlreturn
 }
 
-// getPathNodeNames returns a slice of strings containing the original names of nodes along the path to `node`
-func getNodePathNames(node *C.node_t) []string {
-	names := []string{}
+// getNodePath returns the path to the given node in addition to
+// a slice of strings containing the original names of nodes along the path
+func getNodePath(node *C.node_t) (string, []string) {
+	names, origNames := []string{}, []string{}
 	for prnt := node; prnt != nil; prnt = prnt.parent {
-		names = append(names, toGoStr((prnt.orig_name)))
+		names = append(names, toGoStr((prnt.name)))
+		origNames = append(origNames, toGoStr((prnt.orig_name)))
 	}
 	slices.Reverse(names)
+	slices.Reverse(origNames)
 
-	return names
+	return filepath.Join(names...), origNames
 }
 
 // GetNodeChildren returns the children of node at the end of `path`
@@ -99,46 +104,118 @@ func GetNodeChildren(path string) []string {
 	return children
 }
 
-func updateParentSizes(node *C.node_t, oldSize C.off_t) {
-	diff := node.stat.st_size - oldSize
-	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
-		prnt.stat.st_size += diff
-	}
+// WaitForUpdateSignal updates the filesystem if it receives a SIGUSR2 signal.
+// The function does not update the filesystem again if it receives a signal while
+// an update is already in progress. In the GUI version, the `notify` channel is used
+// to trigger the update process instead of calling UpdateFilesystem() directly.
+// `notify` should be buffered so that signals are not lost while the GUI is busy.
+func WaitForUpdateSignal(notify chan<- any) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGUSR2)
+
+	handleUpdateSignals(s, notify, UpdateFilesystem)
 }
 
-func updateParentTimestamps(node *C.node_t) {
-	timestamp := node.last_modified
-	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
-		if prnt.last_modified.tv_sec < timestamp.tv_sec {
-			prnt.last_modified.tv_sec = timestamp.tv_sec
+// handleUpdateSignals either sends a value to `notify`, or calls `update` if `notify` is nil, for each signal received from `s`.
+// If `notify` already contains a value, the signal is ignored since the GUI has not yet started the previous update.
+// The function returns once `s` is closed and a possible update in progress has finished.
+// This is a separate function so it can be used in tests
+func handleUpdateSignals(s <-chan os.Signal, notify chan<- any, update func()) {
+	busy := make(chan any, 1)
+	for range s {
+		select {
+		case busy <- nil:
+			go func() {
+				defer func() { <-busy }()
+
+				if notify == nil {
+					update()
+
+					return
+				}
+
+				// notify is needed for GUI
+				select {
+				case notify <- nil:
+				default:
+				}
+			}()
+		default:
 		}
 	}
+
+	busy <- nil // Wait for update in progress
 }
 
-// UnmountFilesystem unmounts fuse, which automatically frees memory in C
+// rwLockState is used to hold a lock that the fuse operations in C also share
+func rwLockState() func() {
+	runtime.LockOSThread()
+	C.pthread_rwlock_wrlock(&fi.state.lock)
+
+	return func() {
+		C.pthread_rwlock_unlock(&fi.state.lock)
+		runtime.UnlockOSThread()
+	}
+}
+
+// UnmountFilesystem unmounts fuse, causing the memory in C to be freed
 func UnmountFilesystem() error {
-	fi.mu.Lock()
+	unlockFun := rwLockState()
 	api.DeleteWhitelistedKeys()
-	fi.mu.Unlock()
+	unlockFun()
 
 	return mountpoint.Unmount(fi.mount)
 }
 
-//export WaitForLock
-func WaitForLock() {
-	fi.mu.RLock()
+// UpdateFilesystem updates the filesystem to reflect any changes
+// that have occurred the S3 storage. Does not unmount fuse at any point.
+func UpdateFilesystem() {
+	logs.Info("Updating Data Gateway")
+
+	unlockFun := rwLockState()
+	GenerateFilesystem()
+	toDelete := maps.Values(fi.forgotten)
+	unlockFun()
+
+	// delete_node() requires that the lock is not being held here
+	for node := range toDelete {
+		ret := C.delete_node(&fi.state, node) //nolint:gocritic,nlreturn
+		path, pathNames := getNodePath(node)
+		if ret != 0 {
+			logs.Warningf("kernel was not able to delete node %s: %v", path, syscall.Errno(-ret))
+		}
+		rep := api.Repo(pathNames[1])
+		if node.children == nil && rep == api.SDConnect {
+			api.DeleteFileFromCache(api.SDConnect, pathNames, int64(node.stat.st_size))
+		}
+	}
 }
 
-// UpdateFilesystem clears cache and creates a new fileystem that will reflect any changes
-// that have occurred in the repositories. Does not unmount fuse at any point.
-func UpdateFilesystem() {
-	fi.mu.Lock()
-	defer fi.mu.Unlock()
+// ForgetNode is called during the forget operation to free the memory of a single node
+//
+//export ForgetNode
+func ForgetNode(ino C.ino_t) {
+	node, ok := fi.forgotten[ino]
+	if !ok {
+		return
+	}
 
-	logs.Info("Updating Data Gateway")
-	freeNodes(fi.nodes)
-	api.ClearCache()
-	InitialiseFilesystem()
+	delete(fi.headers, ino)
+	delete(fi.forgotten, ino)
+	C.free(unsafe.Pointer(node.name))
+	C.free(unsafe.Pointer(node.orig_name))
+	C.free(unsafe.Pointer(node.children))
+	C.free(unsafe.Pointer(node))
+}
+
+// ForgetAllForgotten is called during the destroy operation to make sure
+// that the memory of all nodes in fi.forgotten is freed
+//
+//export ForgetAllForgotten
+func ForgetAllForgotten() {
+	for ino := range fi.forgotten {
+		ForgetNode(ino)
+	}
 }
 
 // IsValidOpen is only applicable when running on macOS
@@ -175,7 +252,7 @@ func FilesOpen() bool {
 
 		pids := strings.Fields(string(output))
 		for _, pid := range pids {
-			isOpen, err := checkPID("/proc/" + pid + "/fd")
+			isOpen, err := checkPID("/proc/" + pid)
 			if err != nil {
 				logs.Errorf("Update halted, could not determine if files are open: %w", err)
 
@@ -212,7 +289,9 @@ func FilesOpen() bool {
 // accessed. However, if the fd points to a directory, it may be that, e.g. nautilus,
 // is going through the files. In this case, if the fdinfo has a non-zero 'pos' value, assume files
 // are being read.
-func checkPID(fdDir string) (bool, error) {
+func checkPID(processDir string) (bool, error) {
+	fdDir := processDir + "/fd"
+	fdinfoDir := processDir + "/fdinfo"
 	fdFS := os.DirFS(fdDir)
 
 	entries, err := fs.ReadDir(fdFS, ".")
@@ -240,7 +319,7 @@ func checkPID(fdDir string) (bool, error) {
 			return true, nil
 		}
 
-		fdinfoPath := fdDir + "info/" + fdName
+		fdinfoPath := fdinfoDir + "/" + fdName
 		pos, err := readFDPos(fdinfoPath)
 		if err != nil {
 			return false, fmt.Errorf("failed to read fdinfo for %s: %v", fdPath, err)
@@ -281,118 +360,23 @@ func readFDPos(fdinfoPath string) (int64, error) {
 	return 0, scanner.Err()
 }
 
-// ClearPath is designed for situations where a file is edited in the repository and the user wants to read this new data
-// without updating the entire filesystem. Function clears cache for `path` and updates all its file sizes.
-// Does not support adding new objects to fuse.
-func ClearPath(path string) error {
-	logs.Infof("Clearing path %s", path)
-
-	node := searchNode(path)
-	if node == nil {
-		return fmt.Errorf("path %s is invalid", path)
-	}
-
-	pathNames := getNodePathNames(node)
-	if pathNames[1] != api.SDConnect.ForPath() {
-		return fmt.Errorf("clearing cache only enabled for %s", api.SDConnect)
-	}
-	if len(pathNames) < 4 {
-		return fmt.Errorf("path needs to include at least a bucket")
-	}
-
-	rep := api.SDConnect
-	bucket := pathNames[3]
-	prefix := strings.Join(pathNames[4:], "/")
-	if node.children != nil && prefix != "" {
-		prefix += "/"
-	}
-
-	// Get the objects that fulfill the user's request
-	objects, err := api.GetObjects(rep, bucket, strings.Join(pathNames[:4], "/"), "", prefix)
-	if err != nil {
-		return fmt.Errorf("cache not cleared since new file sizes could not be obtained: %w", err)
-	}
-	// Need to check if objects are segmented
-	segmentSizes, err := getObjectSizesFromSegments(rep, bucket)
-	if err != nil {
-		var noBucket *types.NoSuchBucket
-		var ae smithy.APIError
-		if errors.As(err, &noBucket) || (errors.As(err, &ae) && ae.ErrorCode() == "InvalidBucketName") {
-			logs.Debugf("Bucket %s does not have matching segments bucket", bucket)
-		} else {
-			logs.Warningf("File sizes may not be correct: %s", err.Error())
-		}
-	}
-
-	objMap := make(map[string]api.Metadata, len(objects))
-	for i := range objects {
-		if objects[i].Size == 0 {
-			objects[i].Size = segmentSizes[objects[i].Name]
-		}
-		objMap[bucket+"/"+objects[i].Name] = objects[i]
-	}
-
-	oldSize := node.stat.st_size
-	clearNode(node, pathNames[3:], objMap)
-	updateParentSizes(node, oldSize)
-	updateParentTimestamps(node)
-
-	logs.Info("Path cleared")
-
-	return nil
-}
-
-func clearNode(node *C.node_t, pathNodes []string, meta map[string]api.Metadata) (C.off_t, C.time_t) {
-	if node.children == nil {
-		api.DeleteFileFromCache(api.SDConnect, pathNodes, int64(node.stat.st_size))
-		delete(fi.headers, node.stat.st_ino)
-		path := strings.Join(pathNodes, "/")
-		obj, ok := meta[path]
-		if ok {
-			if obj.Owner != "" {
-				fi.headers[node.stat.st_ino] = header{owner: obj.Owner}
-			}
-			node.offset = -1
-			node.stat.st_size = C.off_t(obj.Size)
-			node.last_modified.tv_sec = C.time_t(obj.LastModified.Unix())
-		} else {
-			node.stat.st_size = 0
-			node.offset = -2
-		}
-	} else {
-		node.stat.st_size = 0
-		node.last_modified.tv_sec = 0
-
-		children := unsafe.Slice(node.children, node.chld_count)
-		for i := range children {
-			size, modified := clearNode(&children[i], append(pathNodes, C.GoString(children[i].orig_name)), meta)
-			node.stat.st_size += size
-			if modified > node.last_modified.tv_sec {
-				node.last_modified.tv_sec = modified
-			}
-		}
-	}
-
-	return node.stat.st_size, node.last_modified.tv_sec
-}
-
 // CheckHeaderExistence tries to confirm the existence of a header for object represented by `node`.
-// If the header is not found in the collection of headers retrieved from vault, the header is
+// If the header is not found in the collection of headers retrieved from Vault, the header is
 // still a part of the file in object storage.
-// The object's size is also updated to from encrypted size to decrypted size.
+// The object's size is also updated from encrypted size to decrypted size.
+// Succesful header retrieval returns node offset, failure returns -1.
 //
 //export CheckHeaderExistence
-func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
-	path := C.GoString(cpath)
+func CheckHeaderExistence(node *C.node_t) int64 {
+	path, pathNames := getNodePath(node)
 	logs.Debugf("Checking existence of header for object %s", path)
 
-	pathNames := getNodePathNames(node)
 	rep := api.Repo(pathNames[1])
 	if (rep == api.SDApply && len(pathNames) < 4) ||
 		(rep == api.SDConnect && len(pathNames) < 5) {
 		logs.Errorf("Path %s is too short for an object", path)
 
-		return
+		return -1
 	}
 
 	var bucket, object string
@@ -407,11 +391,12 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 	hdr := fi.headers[node.stat.st_ino]
 	hdrValue, err := api.GetFileHeader(rep, bucket, object, hdr.owner, hdr.fileID)
 	if err != nil {
-		logs.Errorf("Failed to retrieve header from Vault for object %s: %v", path, err)
+		logs.Errorf("Failed to retrieve header from Vault for object %s: %w", path, err)
 
-		return
+		return -1
 	}
 
+	var offset int64
 	if hdrValue != "" {
 		hdr.value = hdrValue
 		fi.headers[node.stat.st_ino] = hdr
@@ -420,33 +405,34 @@ func CheckHeaderExistence(node *C.node_t, cpath *C.cchar_t) {
 		if rep != api.SDConnect {
 			logs.Errorf("Object %s has no header", path)
 
-			return
+			return -1
 		}
 
-		hdrValue, offset, err := api.GetReencryptedHeader(bucket, object)
+		hdrValue, offset, err = api.GetReencryptedHeader(bucket, object)
 		if err != nil {
 			logs.Errorf("Failed to retrieve header from Allas for object %s: %w", path, err)
 
-			return
+			return -1
 		}
 
 		logs.Debugf("Re-encrypted header found for object %s", path)
 		hdr.value = hdrValue
 		fi.headers[node.stat.st_ino] = hdr
-		node.offset = C.int64_t(offset)
 	}
 
-	bodySize := node.stat.st_size - node.offset
+	bodySize := node.stat.st_size - C.int64_t(offset)
 	if bodySize < 0 {
 		logs.Errorf("File %s is too small (%d bytes) for its header size (%d bytes)", path, bodySize, len(hdr.value))
 		delete(fi.headers, node.stat.st_ino)
 
-		return
+		return -1
 	}
 
 	oldSize := node.stat.st_size
 	node.stat.st_size = calculateDecryptedSize(bodySize)
 	updateParentSizes(node, oldSize)
+
+	return offset
 }
 
 // calculateDecryptedSize calculates the decrypted size of an headerless encrypted file
@@ -456,35 +442,42 @@ var calculateDecryptedSize = func(bodySize C.off_t) C.off_t {
 	return bodySize - nBlocks*C.off_t(MacSize)
 }
 
-// DownloadData uses s3 to download data to fill `cbuffer`. It returns the amount of bytes that were
-// copied to cbuffer, or, if the request failed, a negative integer, which will be interpreted in the C function
-// calling DownloadData(). If no header is found for node (even an empty one), the file is not encrypted
-// and cannot be read.
+func updateParentSizes(node *C.node_t, oldSize C.off_t) {
+	diff := node.stat.st_size - oldSize
+	for prnt := node.parent; prnt != nil; prnt = prnt.parent {
+		prnt.stat.st_size += diff
+	}
+}
+
+// DownloadData uses S3 to download a maximum of `size` bytes to the fuse layer. It returns a C buffer
+// containing the requested data. The actual length of the buffer must be conveyed to C with `nBytes`.
+// If no header is found for node (even an empty one), the file is not encrypted and, therefore, cannot be read.
 //
+//nolint:nlreturn
 //export DownloadData
-func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size_t, offset C.off_t) C.int {
-	buffer := unsafe.Slice((*byte)(unsafe.Pointer(cbuffer)), C.int(size))
-	pathNames := getNodePathNames(node)
-	path := C.GoString(cpath)
+func DownloadData(node *C.node_t, size C.size_t, offset C.off_t, errNo *C.int, nBytes *C.size_t) *C.char {
+	path, pathNames := getNodePath(node)
 
 	rep := api.Repo(pathNames[1])
 	if (rep == api.SDApply && len(pathNames) < 4) ||
 		(rep == api.SDConnect && len(pathNames) < 5) {
 		logs.Errorf("Path %s is too short for an object", path)
+		*errNo = C.EFAULT
 
-		return -1
+		return nil
 	}
 
 	header := fi.headers[node.stat.st_ino]
 	if header.value == "" {
 		logs.Errorf("You do not have permission to access file %s: %s", path,
 			http.StatusText(http.StatusUnavailableForLegalReasons))
+		*errNo = C.EACCES
 
-		return -2
+		return nil
 	}
 
 	if offset >= node.stat.st_size {
-		return 0
+		return nil
 	}
 
 	// Better for api to not to have to know how filesystem is constructed
@@ -498,9 +491,11 @@ func DownloadData(node *C.node_t, cpath *C.cchar_t, cbuffer *C.char, size C.size
 		int64(offset), int64(offset)+int64(size), int64(node.offset), int64(node.stat.st_size))
 	if err != nil {
 		logs.Errorf("Retrieving data failed for %s: %w", path, err)
+		*errNo = C.EIO
 
-		return -3
+		return nil
 	}
+	*nBytes = C.size_t(len(data))
 
-	return C.int(copy(buffer, data))
+	return (*C.char)(C.CBytes(data))
 }

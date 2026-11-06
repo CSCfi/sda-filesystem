@@ -126,7 +126,6 @@ wails_update: ## Update Wails version to match go.mod
 	if [ "$$wails_cli_version" != "$$go_mod_version" ]; then \
 		echo "❗ Wails version does not match go.mod. Updating Wails..."; \
 		go install github.com/wailsapp/wails/v2/cmd/wails@$${go_mod_version}; \
-		source ~/.bashrc; \
 	fi
 
 clean: down ## Stop running containers, delete volumes, and remove vault secrets from .env
@@ -203,7 +202,7 @@ build_profiles: down ## Build and run components with possible profile arguments
 exec: ## Access data-gateway container
 	@trap 'exit 0' SIGINT; docker exec -it data-gateway /bin/bash
 
-envs:
+envs: ## Run 'export $(make envs)' to get the environment variables needed to run binaries
 	@echo "$$(grep -E 'PROXY_URL|SDS_ACCESS_TOKEN|CONFIG_ENDPOINT' dev-tools/compose/.env | xargs) CLAMAV_SOCKET=$(SOCKET_PATH)"
 
 ### Following targets are for internal use, but you can still run them ###

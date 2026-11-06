@@ -554,26 +554,27 @@ func TestGetBuckets_Error(t *testing.T) {
 		repo             Repo
 		code             int
 		sharedErr        error
+		wantErr          error // sentinel error that should be wrapped, if any
 	}{
 		{
 			"FAIL_1",
 			"no buckets found for SD Apply", SDApply,
-			http.StatusOK, errExpected,
+			http.StatusOK, errExpected, ErrNoBuckets,
 		},
 		{
 			"FAIL_2",
 			"no buckets found for SD Connect", SDConnect,
-			http.StatusOK, nil,
+			http.StatusOK, nil, ErrNoBuckets,
 		},
 		{
 			"FAIL_3",
-			"failed to list buckets for SD Apply: api error Forbidden: Forbidden", SDApply,
-			http.StatusForbidden, nil,
+			"failed to list buckets for SD Apply: http response error StatusCode: 403, api error Forbidden: Forbidden", SDApply,
+			http.StatusForbidden, nil, nil,
 		},
 		{
 			"FAIL_4",
 			"no buckets found for SD Connect", SDConnect,
-			http.StatusOK, errExpected,
+			http.StatusOK, errExpected, ErrNoBuckets,
 		},
 	}
 
@@ -604,6 +605,10 @@ func TestGetBuckets_Error(t *testing.T) {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			} else if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("Error does not wrap %q", tt.wantErr)
+			} else if code := getStatusCode(err); tt.wantErr == nil && code != tt.code {
+				t.Errorf("Error has incorrect status code. Expected=%d, received=%d", tt.code, code)
 			}
 		})
 	}
@@ -795,6 +800,16 @@ func TestGetObjects_MultiplePages(t *testing.T) {
 	}
 }
 
+// getStatusCode returns the HTTP status code available from `err`, or 0 if there is none
+func getStatusCode(err error) int {
+	var se interface{ HTTPStatusCode() int }
+	if errors.As(err, &se) {
+		return se.HTTPStatusCode()
+	}
+
+	return 0
+}
+
 func TestGetObjects_Error(t *testing.T) {
 	origClient := ai.hi.client
 	origProxy := ai.proxy
@@ -811,16 +826,22 @@ func TestGetObjects_Error(t *testing.T) {
 	var tests = []struct {
 		testname, errStr string
 		code             int
+		wantErr          error // sentinel error that should be wrapped, if any
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for SD-Connect/some-bucket: bucket name \"some-bucket\" is not S3 compatible",
-			http.StatusBadRequest,
+			"failed to list objects for SD-Connect/some-bucket: bucket name is not S3 compatible",
+			http.StatusBadRequest, ErrInvalidBucketName,
 		},
 		{
 			"FAIL_2",
-			"failed to list objects for SD-Connect/some-bucket: api error Unauthorized: Unauthorized",
-			http.StatusUnauthorized,
+			"failed to list objects for SD-Connect/some-bucket: http response error StatusCode: 401, api error Unauthorized: Unauthorized",
+			http.StatusUnauthorized, nil,
+		},
+		{
+			"FAIL_3",
+			"failed to list objects for SD-Connect/some-bucket: http response error StatusCode: 404, api error NotFound: Not Found",
+			http.StatusNotFound, nil,
 		},
 	}
 
@@ -859,6 +880,10 @@ func TestGetObjects_Error(t *testing.T) {
 				t.Errorf("Function did not return error")
 			} else if err.Error() != tt.errStr {
 				t.Errorf("Function returned incorrect error\nExpected=%s\nReceived=%s", tt.errStr, err.Error())
+			} else if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("Error does not wrap %q", tt.wantErr)
+			} else if code := getStatusCode(err); tt.wantErr == nil && code != tt.code {
+				t.Errorf("Error has incorrect status code. Expected=%d, received=%d", tt.code, code)
 			}
 		})
 	}
@@ -1045,12 +1070,12 @@ func TestGetSegmentedObjects_Error(t *testing.T) {
 	}{
 		{
 			"FAIL_1",
-			"failed to list objects for bucket some-bucket in SD Apply: api error InvalidBucketName: UnknownError",
+			"failed to list objects for bucket some-bucket in SD Apply: http response error StatusCode: 400, api error InvalidBucketName: UnknownError",
 			http.StatusBadRequest,
 		},
 		{
 			"FAIL_2",
-			"failed to list objects for bucket some-bucket in SD Apply: api error Unauthorized: Unauthorized",
+			"failed to list objects for bucket some-bucket in SD Apply: http response error StatusCode: 401, api error Unauthorized: Unauthorized",
 			http.StatusUnauthorized,
 		},
 	}

@@ -1,5 +1,7 @@
 In case support for Windows is needed in the future, this folder contains Windows-specific code that was removed from the repository. Below are snippets that were moved from various functions. This folder also contains files `mountpoint_windows.txt` and `mountpoint_windows_test.txt` that were under the `mountpoint` package.
 
+If Windows support is brought back, take into account that the C code is not compatible with Windows.
+
 ## Snippets
 
 ### OpenFuse()
@@ -55,3 +57,7 @@ case "windows":
 
 	return strings.Contains(string(output), volume)
 ```
+
+### mount_filesystem()
+
+You might need `umask(0022)`.
