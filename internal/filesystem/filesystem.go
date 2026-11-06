@@ -119,6 +119,7 @@ func MountFilesystem(mount string, fun func(api.Repo, string, int), ready chan<-
 		fuseDebug = 1
 	}
 
+	// mount_filesystem() hangs until unmount
 	ret := int(C.mount_filesystem(&fi.state, m, fuseDebug)) //nolint:gocritic,nlreturn
 	resetFilesystem()
 

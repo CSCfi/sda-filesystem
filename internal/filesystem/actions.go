@@ -54,7 +54,7 @@ func toGoStr(str *C.char) string {
 	return C.GoString(str)
 }
 
-// toCStr coverts C string to Go string
+// toCStr coverts Go string to C string
 // This is a separate Go function so it can be used in tests
 func toCStr(str string) *C.char {
 	return C.CString(str)
