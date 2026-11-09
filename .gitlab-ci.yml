@@ -182,7 +182,7 @@ build-gui-artifacts:
     - pnpm config list
     - pnpm install --dir frontend
     - pnpm run --dir frontend build
-    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+    - go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
     - wails doctor
   script:
     - cd cmd/gui
