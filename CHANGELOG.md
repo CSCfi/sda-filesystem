@@ -21,6 +21,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 
 ### Fixed
 
+- (users) the error toast in GUI now shows the proper error message under the title
+- fetch default mount point before user can proceed to AccessPage
 - data races that occurred when GUI reloaded in dev mode
 - authenticate `pnpm` against Artifactory npm registry in renovate `postUpgradeTasks`
 
