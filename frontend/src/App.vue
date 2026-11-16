@@ -2,7 +2,7 @@
 import { type CToastMessage, CToastType } from "@cscfi/csc-ui";
 import { ref, computed, onMounted } from "vue";
 import { EventsOn, EventsEmit, EventsOnce } from "../wailsjs/runtime";
-import { InitializeAPI, Quit } from "../wailsjs/go/main/App";
+import { InitializeAPI, GetDefaultMountPoint, Quit } from "../wailsjs/go/main/App";
 import { mdiLogoutVariant } from "@mdi/js";
 import { TabType } from "./types/common";
 
@@ -10,7 +10,7 @@ interface ComponentType {
   name: string
   tab: TabType
   visible: boolean
-  props?: {[key:string]:boolean}
+  props?: Record<string, boolean | string | undefined>
   active?: boolean
   disabled?: boolean
 }
@@ -19,6 +19,7 @@ const disabled = ref(false);
 const initialized = ref(false);
 const selected = ref(false);
 const accessed = ref(false);
+const mountpoint = ref("");
 
 const currentTab = ref<TabType>("Log in");
 const componentData = computed<ComponentType[]>(() => ([
@@ -31,7 +32,15 @@ const componentData = computed<ComponentType[]>(() => ([
       disabled: disabled.value,
     },
   },
-  { name: "AccessPage", tab: "Access", visible: selected.value, active: selected.value },
+  {
+    name: "AccessPage",
+    tab: "Access",
+    visible: selected.value,
+    active: selected.value,
+    props: {
+      defaultMountpoint: mountpoint.value,
+    },
+  },
   { name: "ExportPage", tab: "Export", visible: accessed.value },
   { name: "LogsPage", tab: "Logs", visible: true }
 ]));
@@ -51,15 +60,20 @@ const sessionMessage: CToastMessage = {
 
 onMounted(() => {
   InitializeAPI().then((access: boolean) => {
-    console.log("Initializing Data Gateway finished");
-    initialized.value = true;
+    console.log("Initializing Data Gateway finished", initialized.value);
     if (!access) {
       disabled.value = true;
       toasts.value?.addToast(sessionMessage);
+    } else {
+      // This is fetched here so that the mount point is definitely available in AccessPage
+      GetDefaultMountPoint().then((dir: string) => {
+        mountpoint.value = dir;
+      })
+      initialized.value = true;
     }
   }).catch((e) => {
     disabled.value = true;
-    EventsEmit("showToast", "Initializing Data Gateway failed", e as string);
+    EventsEmit("showToast", "Initializing Data Gateway failed", e);
   });
 });
 
@@ -67,10 +81,12 @@ EventsOnce("sessionExpired", () => {
   toasts.value?.addToast(sessionMessage);
 });
 
-EventsOn("showToast", (title: string, err: string) => {
+EventsOn("showToast", (title: string, err: unknown) => {
+  const text = err instanceof Error ? err.message : String(err);
+
   const message: CToastMessage = {
     title: title,
-    message: err,
+    message: text,
     type: "error" as CToastType,
     persistent: true,
   };

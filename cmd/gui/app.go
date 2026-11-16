@@ -94,8 +94,9 @@ func (a *App) GetDefaultMountPoint() string {
 	mount, err := mountpoint.DefaultMountPoint()
 	if err != nil {
 		logs.Warning(err)
+	} else {
+		logs.Info("Default mount point is ", mount)
 	}
-	logs.Info("Default mount point is ", mount)
 	a.setMountPoint(mount)
 
 	return mount
